@@ -32,7 +32,7 @@ namespace S1API.Growing
             seed.Name = name;
             seed.Description = description;
             seed.StackLimit = stackLimit;
-            seed.Category = S1ItemFramework.EItemCategory.Growing;
+            seed.Category = S1ItemFramework.EItemCategory.Agriculture;
 
            // if (icon != null)
            // {
