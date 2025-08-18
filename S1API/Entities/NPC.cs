@@ -554,11 +554,10 @@ namespace S1API.Entities
         public void SendTextMessage(string message, Response[]? responses = null, float responseDelay = 1f, bool network = true)
         {
             S1NPC.SendTextMessage(message);
-            S1NPC.MSGConversation.ClearResponses();
-
             if (responses == null || responses.Length == 0)
                 return;
 
+            S1NPC.MSGConversation.ClearResponses();
             Responses.Clear();
 
             List<S1Messaging.Response> responsesList = new List<S1Messaging.Response>();
