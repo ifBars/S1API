@@ -1,4 +1,4 @@
-#if (IL2CPPMELON || IL2CPPBEPINEX)
+#if (IL2CPPMELON)
 using S1GameTime = Il2CppScheduleOne.GameTime;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1GameTime = ScheduleOne.GameTime;
@@ -34,12 +34,18 @@ namespace S1API.GameTime
         /// </summary>
         public static Action<int> OnSleepEnd = delegate { };
 
+        /// <summary>
+        /// Called at every tick of gametime.
+        /// </summary>
+        public static Action OnTick = delegate { };
+
         static TimeManager()
         {
             if (S1GameTime.TimeManager.Instance != null)
             {
                 S1GameTime.TimeManager.Instance.onDayPass += (Action)(() => OnDayPass());
                 S1GameTime.TimeManager.Instance.onWeekPass += (Action)(() => OnWeekPass());
+                S1GameTime.TimeManager.Instance.onTick += (Action)(() => OnTick());
             }
 
             S1GameTime.TimeManager.onSleepStart += (Action)(() => OnSleepStart());

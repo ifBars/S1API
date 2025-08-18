@@ -1,9 +1,15 @@
-﻿#if (IL2CPPMELON || IL2CPPBEPINEX)
+﻿#if (IL2CPPMELON)
 using S1Loaders = Il2CppScheduleOne.Persistence.Loaders;
 using S1NPCs = Il2CppScheduleOne.NPCs;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Loaders = ScheduleOne.Persistence.Loaders;
 using S1NPCs = ScheduleOne.NPCs;
+#endif
+
+#if (IL2CPPMELON)
+using S1Datas = Il2CppScheduleOne.Persistence.Datas;
+#elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
+using S1Datas = ScheduleOne.Persistence.Datas;
 #endif
 
 #if (IL2CPPMELON || IL2CPPBEPINEX)
@@ -79,7 +85,29 @@ namespace S1API.Internal.Patches
         /// <param name="__instance">Instance of the NPC</param>
         [HarmonyPatch(typeof(S1NPCs.NPC), "OnDestroy")]
         [HarmonyPostfix]
-        private static void NPCOnDestroy(S1NPCs.NPC __instance) =>
-            NPC.All.Remove(NPC.All.First(npc => npc.S1NPC == __instance));
+        private static void NPCOnDestroy(S1NPCs.NPC __instance)
+        {
+            var npcToRemove = NPC.All.FirstOrDefault(npc => npc.S1NPC == __instance);
+            if (npcToRemove != null)
+                NPC.All.Remove(npcToRemove);
+        }
+
+        /// <summary>
+        /// Prevent loading Health for custom NPCs during save load to avoid SyncVar initialization issues.
+        /// Base NPCs continue to use the original method.
+        /// </summary>
+        /// <param name="__instance">NPCHealth instance</param>
+        /// <param name="healthData">Saved health data</param>
+        /// <returns>False to skip original for custom NPCs; true otherwise.</returns>
+        [HarmonyPatch(typeof(S1NPCs.NPCHealth), "Load")]
+        [HarmonyPrefix]
+        private static bool NPCHealthLoad(S1NPCs.NPCHealth __instance, S1Datas.NPCHealthData healthData)
+        {
+            var s1Npc = __instance.GetComponent<S1NPCs.NPC>();
+            var apiNpc = NPC.All.FirstOrDefault(n => n.S1NPC == s1Npc);
+            if (apiNpc != null && apiNpc.IsCustomNPC)
+                return false; // skip original load for custom NPCs
+            return true;
+        }
     }
 }
