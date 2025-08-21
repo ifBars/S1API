@@ -342,8 +342,13 @@ namespace S1API.Entities
         /// </summary>
         public float PanicDuration
         {
-            get => (float)_panicField.GetValue(S1NPC)!;
-            set => _panicField.SetValue(S1NPC, value);
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+            get => DefaultPanicDuration;
+            set { /* no-op under IL2CPP; constant in base game so non accessible */ }
+#else
+            get => _panicField != null ? (float)_panicField.GetValue(S1NPC)! : DefaultPanicDuration;
+            set { _panicField?.SetValue(S1NPC, value); }
+#endif
         }
 
         /// <summary>
@@ -367,8 +372,13 @@ namespace S1API.Entities
         /// </summary>
         public bool RequiresRegionUnlocked
         {
-            get => (bool)_requiresRegionUnlockedField.GetValue(S1NPC)!;
-            set => _panicField.SetValue(S1NPC, value);
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+            get => DefaultRequiresRegionUnlocked;
+            set { /* no-op under IL2CPP; constant in base game so non accessible */ }
+#else
+            get => _requiresRegionUnlockedField != null && (bool)_requiresRegionUnlockedField.GetValue(S1NPC)!;
+            set { _requiresRegionUnlockedField?.SetValue(S1NPC, value); }
+#endif
         }
 
         // TODO: Add CurrentBuilding (currently missing NPCEnterableBuilding abstraction)
@@ -646,8 +656,15 @@ namespace S1API.Entities
 
         internal readonly bool IsCustomNPC;
 
+        private static readonly float DefaultPanicDuration = 20f;
+        private static readonly bool DefaultRequiresRegionUnlocked = true;
+#if (MONOMELON || MONOBEPINEX)
         private readonly FieldInfo _panicField = AccessTools.Field(typeof(S1NPCs.NPC), "PANIC_DURATION");
         private readonly FieldInfo _requiresRegionUnlockedField = AccessTools.Field(typeof(S1NPCs.NPC), "RequiresRegionUnlocked");
+#else
+        private readonly FieldInfo _panicField = null;
+        private readonly FieldInfo _requiresRegionUnlockedField = null;
+#endif
 
         private readonly MethodInfo _unsettleMethod = AccessTools.Method(typeof(S1NPCs.NPC), "SetUnsettled");
         private readonly MethodInfo _removePanicMethod = AccessTools.Method(typeof(S1NPCs.NPC), "RemovePanicked");
