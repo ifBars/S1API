@@ -10,6 +10,11 @@ using System.Reflection;
 using Newtonsoft.Json;
 using S1API.Internal.Utils;
 using S1API.Saveables;
+#if (IL2CPPMELON)
+using S1Datas = Il2CppScheduleOne.Persistence.Datas;
+#elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
+using S1Datas = ScheduleOne.Persistence.Datas;
+#endif
 
 namespace S1API.Internal.Abstraction
 {
@@ -95,6 +100,64 @@ namespace S1API.Internal.Abstraction
             }
 
             OnSaved();
+        }
+
+        /// <summary>
+        /// INTERNAL: Writes fields marked with <see cref="SaveableField"/> into a DynamicSaveData blob
+        /// to support the base game's consolidated JSON save format.
+        /// </summary>
+        /// <param name="dynamicSaveData">The dynamic save data record to write into.</param>
+        internal void SaveToDynamic(S1Datas.DynamicSaveData dynamicSaveData)
+        {
+            if (dynamicSaveData == null)
+                return;
+
+            FieldInfo[] saveableFields = ReflectionUtils.GetAllFields(GetType(), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            foreach (FieldInfo saveableField in saveableFields)
+            {
+                SaveableField? saveableFieldAttribute = saveableField.GetCustomAttribute<SaveableField>();
+                if (saveableFieldAttribute == null)
+                    continue;
+
+                object? value = saveableField.GetValue(this);
+                if (value == null)
+                    continue; // Do not write nulls
+
+                string data = JsonConvert.SerializeObject(value, Formatting.None, ISaveable.SerializerSettings);
+                // Use the declared save name as the dynamic key
+                dynamicSaveData.AddData(saveableFieldAttribute.SaveName, data);
+            }
+
+            OnSaved();
+        }
+
+        /// <summary>
+        /// INTERNAL: Reads fields marked with <see cref="SaveableField"/> from a DynamicSaveData blob
+        /// to support the base game's consolidated JSON save format.
+        /// </summary>
+        /// <param name="dynamicSaveData">The dynamic save data record to read from.</param>
+        internal void LoadFromDynamic(S1Datas.DynamicSaveData dynamicSaveData)
+        {
+            if (dynamicSaveData == null)
+                return;
+
+            FieldInfo[] saveableFields = ReflectionUtils.GetAllFields(GetType(), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            foreach (FieldInfo saveableField in saveableFields)
+            {
+                SaveableField? saveableFieldAttribute = saveableField.GetCustomAttribute<SaveableField>();
+                if (saveableFieldAttribute == null)
+                    continue;
+
+                // Read the raw json for this save name and deserialize to the field type
+                if (!dynamicSaveData.TryGetData(saveableFieldAttribute.SaveName, out string json) || string.IsNullOrEmpty(json))
+                    continue;
+
+                Type type = saveableField.FieldType;
+                object? value = JsonConvert.DeserializeObject(json, type, ISaveable.SerializerSettings);
+                saveableField.SetValue(this, value);
+            }
+
+            OnLoaded();
         }
 
         /// <summary>
