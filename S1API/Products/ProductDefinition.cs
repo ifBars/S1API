@@ -2,16 +2,18 @@
 using Il2CppInterop.Runtime.InteropTypes;
 using S1Product = Il2CppScheduleOne.Product;
 using ItemFramework = Il2CppScheduleOne.ItemFramework;
-using Properties = Il2CppScheduleOne.Properties;
+using S1Properties = Il2CppScheduleOne.Properties;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Product = ScheduleOne.Product;
 using ItemFramework = ScheduleOne.ItemFramework;
-using Properties = ScheduleOne.Properties;
+using S1Properties = ScheduleOne.Properties;
 #endif
 
 using System.Collections.Generic;
 using S1API.Internal.Utils;
 using S1API.Items;
+using S1API.Properties;
+using S1API.Properties.Interfaces;
 using UnityEngine;
 
 namespace S1API.Products
@@ -69,14 +71,26 @@ namespace S1API.Products
         {
             get { return S1ProductDefinition.Icon; }
         }
-#if  IL2CPPMELON
-        private List<Properties.Property> properties; // or however properties are stored
-        public List<Properties.Property> Properties; // or however properties are stored
-#else
-        private List<Properties.Property> properties; // or however properties are stored
-        public IReadOnlyList<Properties.Property> Properties => properties.AsReadOnly();
-#endif
 
+        /// <summary>
+        /// The list of product properties for this definition.
+        /// Returns runtime-agnostic property wrappers that work on both Mono and IL2CPP.
+        /// </summary>
+        public IReadOnlyList<PropertyBase> Properties
+        {
+            get
+            {
+                var s1Properties = S1ProductDefinition.Properties;
+                var wrappers = new List<PropertyBase>(s1Properties.Count);
+                
+                for (int i = 0; i < s1Properties.Count; i++)
+                {
+                    wrappers.Add(new ProductPropertyWrapper(s1Properties[i]));
+                }
+                
+                return wrappers.AsReadOnly();
+            }
+        }
 
 }
 }

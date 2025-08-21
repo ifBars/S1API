@@ -7,6 +7,7 @@ using S1Properties = ScheduleOne.Properties;
 #endif
 using System.Collections.Generic;
 using S1API.Internal.Utils;
+using S1API.Properties.Interfaces;
 using S1ItemInstance = S1API.Items.ItemInstance;
 namespace S1API.Products
 {
@@ -67,6 +68,6 @@ namespace S1API.Products
         /// with the underlying product definition. Each property represents
         /// a specific characteristic or behavior of the corresponding product.
         /// </remarks>
-        public IReadOnlyList<S1Properties.Property> Properties => Definition.Properties;
+        public IReadOnlyList<PropertyBase> Properties => Definition.Properties;
     }
 }

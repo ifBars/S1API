@@ -11,6 +11,8 @@ using S1Properties = ScheduleOne.Properties;
 using System.Collections.Generic;
 using S1API.Internal.Utils;
 using S1API.Items;
+using S1API.Properties;
+using S1API.Properties.Interfaces;
 
 namespace S1API.Products
 {
@@ -45,8 +47,26 @@ namespace S1API.Products
         /// <summary>
         /// Retrieves a list of properties associated with this product definition.
         /// </summary>
-        /// <returns>A list of properties for the product.</returns>
-        public List<S1Properties.Property> GetProperties()
+        /// <returns>A list of runtime-agnostic property wrappers that work on both Mono and IL2CPP.</returns>
+        public List<PropertyBase> GetProperties()
+        {
+            var result = new List<PropertyBase>();
+            var list = S1CocaineDefinition?.Properties;
+            if (list != null)
+            {
+                for (int i = 0; i < list.Count; i++)
+                    result.Add(new ProductPropertyWrapper(list[i]));
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// DEPRECATED: Use GetProperties() which returns IProperty wrappers.
+        /// Retrieves the raw Schedule One properties (may cause assembly reference issues in IL2CPP).
+        /// </summary>
+        /// <returns>A list of raw Schedule One properties.</returns>
+        [System.Obsolete("Use GetProperties() instead for IL2CPP compatibility")]
+        public List<S1Properties.Property> GetRawProperties()
         {
             var result = new List<S1Properties.Property>();
             var list = S1CocaineDefinition?.Properties;
