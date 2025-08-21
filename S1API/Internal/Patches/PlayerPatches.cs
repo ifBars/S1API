@@ -35,5 +35,23 @@ namespace S1API.Internal.Patches
         [HarmonyPostfix]
         private static void PlayerOnDestroy(S1PlayerScripts.Player __instance) =>
             Player.All.Remove(Player.All.First(player => player.S1Player == __instance));
+
+        /// <summary>
+        /// Prevent damage application for invincible players.
+        /// </summary>
+        /// <param name="__instance">Player instance taking damage.</param>
+        /// <param name="damage">Damage amount.</param>
+        /// <param name="flinch">Whether player should flinch.</param>
+        /// <param name="playBloodMist">Whether blood mist VFX should play.</param>
+        /// <returns>False to skip original when invincible, true to apply damage.</returns>
+        [HarmonyPatch(typeof(S1PlayerScripts.Health.PlayerHealth), "TakeDamage")]
+        [HarmonyPrefix]
+        private static bool PlayerHealth_TakeDamage(S1PlayerScripts.Health.PlayerHealth __instance, float damage, bool flinch = true, bool playBloodMist = true)
+        {
+            var player = __instance.Player;
+            if (player != null && Player.IsPlayerInvincible(player))
+                return false;
+            return true;
+        }
     }
 }

@@ -112,11 +112,13 @@ namespace S1API.Entities
 
         /// <summary>
         /// The maximum health of the player.
+        /// Note: In the base game this is a constant (100). Changing it at runtime is unsupported.
+        /// Setting this will clamp the player's current health to the specified value.
         /// </summary>
         public float MaxHealth
         {
-            get => (float)_maxHealthField.GetValue(S1Player.Health)!;
-            set => _maxHealthField.SetValue(S1Player.Health, value);
+            get => MortalHealth;
+            set => S1Player.Health.SetHealth(value);
         }
 
         /// <summary>
@@ -130,11 +132,13 @@ namespace S1API.Entities
         /// </summary>
         public bool IsInvincible
         {
-            get => MaxHealth == InvincibleHealth;
+            get => InvinciblePlayers.Contains(S1Player);
             set
             {
-                MaxHealth = value ? InvincibleHealth : MortalHealth;
-                S1Player.Health.SetHealth(MaxHealth);
+                if (value)
+                    InvinciblePlayers.Add(S1Player);
+                else
+                    InvinciblePlayers.Remove(S1Player);
             }
         }
 
@@ -183,9 +187,8 @@ namespace S1API.Entities
             remove => EventHelper.RemoveListener(value, S1Player.Health.onDie);
         }
 
-        /// <summary>
-        /// INTERNAL: Field access for the MAX_HEALTH const.
-        /// </summary>
-        private readonly FieldInfo _maxHealthField = AccessTools.Field(typeof(S1Health.PlayerHealth), "MAX_HEALTH");
+        private static readonly HashSet<S1PlayerScripts.Player> InvinciblePlayers = new HashSet<S1PlayerScripts.Player>();
+
+        internal static bool IsPlayerInvincible(S1PlayerScripts.Player player) => InvinciblePlayers.Contains(player);
     }
 }
