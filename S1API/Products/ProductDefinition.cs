@@ -92,5 +92,35 @@ namespace S1API.Products
             }
         }
 
+        /// <summary>
+        /// The list of drug types associated with this product definition.
+        /// Returns a C# list for IL2CPP builds to avoid type mismatches.
+        /// </summary>
+#if (IL2CPPMELON)
+        public System.Collections.Generic.IReadOnlyList<S1Product.DrugTypeContainer> DrugTypes
+        {
+            get
+            {
+                var source = S1ProductDefinition.DrugTypes; // Il2CppSystem.Collections.Generic.List<DrugTypeContainer>
+                var converted = new System.Collections.Generic.List<S1Product.DrugTypeContainer>(source != null ? source.Count : 0);
+                if (source != null)
+                {
+                    for (int i = 0; i < source.Count; i++)
+                        converted.Add(source[i]);
+                }
+                return converted.AsReadOnly();
+            }
+        }
+#else
+        public System.Collections.Generic.List<S1Product.DrugTypeContainer> DrugTypes =>
+            S1ProductDefinition.DrugTypes;
+#endif
+
+        /// <summary>
+        /// The primary drug type for this product (convenience property).
+        /// </summary>
+        public S1Product.EDrugType DrugType => 
+            S1ProductDefinition.DrugType;
+
 }
 }
