@@ -57,7 +57,7 @@ namespace S1API.Quests
         /// <summary>
         /// The current quest state for this quest
         /// </summary>
-        protected QuestState QuestState => (QuestState)S1Quest.QuestState;
+        protected QuestState QuestState => (QuestState)S1Quest.State;
 
         // ReSharper disable once MemberCanBePrivate.Global
         /// <summary>
