@@ -158,7 +158,7 @@ namespace S1API.Entities
             S1Vision.VisionCone visionCone = visionObject.AddComponent<S1Vision.VisionCone>();
             visionCone.StatesOfInterest.Add(new S1Vision.VisionCone.StateContainer
             {
-                state = S1PlayerScripts.PlayerVisualState.EVisualState.PettyCrime, RequiredNoticeTime = 0.1f
+                state = S1Vision.EVisualState.PettyCrime, RequiredNoticeTime = 0.1f
             });
             S1NPC.Awareness.VisionCone = visionCone;
 
