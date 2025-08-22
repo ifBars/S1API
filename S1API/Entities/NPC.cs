@@ -45,6 +45,7 @@ using S1API.Entities.Interfaces;
 using S1API.Internal.Abstraction;
 using S1API.Map;
 using S1API.Messaging;
+using S1API.Vehicles;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -384,8 +385,11 @@ namespace S1API.Entities
         // TODO: Add CurrentBuilding (currently missing NPCEnterableBuilding abstraction)
         // public ??? CurrentBuilding { get; set; }
 
-        // TODO: Add CurrentVehicle (currently missing LandVehicle abstraction)
-        // public ??? CurrentVehicle { get; set; }
+        /// <summary>
+        /// The current vehicle the NPC is occupying, if any.
+        /// </summary>
+        public LandVehicle? CurrentVehicle =>
+            S1NPC.CurrentVehicle != null ? new LandVehicle(S1NPC.CurrentVehicle) : null;
 
         // TODO: Add Inventory (currently missing NPCInventory abstraction)
         // public ??? Inventory { get; set; }
