@@ -39,6 +39,8 @@ namespace S1API.GameTime
         /// </summary>
         public static Action OnTick = delegate { };
 
+        private static int _lastSleepSkippedMinutes;
+
         static TimeManager()
         {
             if (S1GameTime.TimeManager.Instance != null)
@@ -46,10 +48,11 @@ namespace S1API.GameTime
                 S1GameTime.TimeManager.Instance.onDayPass += (Action)(() => OnDayPass());
                 S1GameTime.TimeManager.Instance.onWeekPass += (Action)(() => OnWeekPass());
                 S1GameTime.TimeManager.Instance.onTick += (Action)(() => OnTick());
-            }
 
-            S1GameTime.TimeManager.onSleepStart += (Action)(() => OnSleepStart());
-            S1GameTime.TimeManager.onSleepEnd += (Action<int>)(minutes => OnSleepEnd(minutes));
+                S1GameTime.TimeManager.Instance.onSleepStart += (Action)(() => OnSleepStart());
+                S1GameTime.TimeManager.Instance.onTimeSkip += (Action<int>)(minutes => _lastSleepSkippedMinutes = minutes);
+                S1GameTime.TimeManager.Instance.onSleepEnd += (Action)(() => OnSleepEnd(_lastSleepSkippedMinutes));
+            }
         }
 
 
