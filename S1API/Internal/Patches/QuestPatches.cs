@@ -64,11 +64,41 @@ namespace S1API.Internal.Patches
                         saveManager.ApprovedBaseLevelPaths.Add(path);
                 }
 
-                // ✅ Create the directory structure
                 string questsPath = Path.Combine(saveFolderPath, "Modded", "Quests");
                 Directory.CreateDirectory(questsPath);
 
-                // ✅ Save only non-vanilla modded quests
+                try
+                {
+                    string[] existing = Directory.GetDirectories(questsPath);
+                    for (int i = 0; i < existing.Length; i++)
+                    {
+                        string dirName = Path.GetFileName(existing[i]);
+                        if (string.IsNullOrEmpty(dirName))
+                            continue;
+
+                        string guidStr = dirName.StartsWith("Quest_") && dirName.Length > 6 ? dirName.Substring(6) : string.Empty;
+                        bool stillActive = false;
+                        if (!string.IsNullOrEmpty(guidStr))
+                        {
+                            for (int q = 0; q < QuestManager.Quests.Count; q++)
+                            {
+                                var quest = QuestManager.Quests[q];
+                                if (quest != null && quest.S1Quest != null && quest.S1Quest.StaticGUID == guidStr)
+                                {
+                                    stillActive = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (!stillActive)
+                        {
+                            try { Directory.Delete(existing[i], true); } catch { /* ignore */ }
+                        }
+                    }
+                }
+                catch (Exception) { /* ignore cleanup errors */ }
+
                 foreach (Quest quest in QuestManager.Quests)
                 {
                     if (!quest.GetType().Namespace.StartsWith("ScheduleOne"))
@@ -133,6 +163,11 @@ namespace S1API.Internal.Patches
                 Type? questType = ReflectionUtils.GetTypeByName(questData.ClassName);
                 if (questType == null || !typeof(Quest).IsAssignableFrom(questType))
                     continue;
+
+                if (baseQuestData != null && baseQuestData.State != S1Quests.EQuestState.Active)
+                {
+                    continue;
+                }
 
                 Quest quest = QuestManager.CreateQuest(questType, baseQuestData?.GUID);
                 quest.LoadInternal(questDirectoryPath);
