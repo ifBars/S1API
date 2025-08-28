@@ -117,16 +117,16 @@ namespace S1API.Entities
             // Awareness behaviour
             GameObject awarenessObject = new GameObject("NPCAwareness");
             awarenessObject.transform.SetParent(gameObject.transform);
-            S1NPC.awareness = awarenessObject.AddComponent<S1NPCs.NPCAwareness>();
-            S1NPC.awareness.onExplosionHeard = new UnityEvent<S1Noise.NoiseEvent>();
-            S1NPC.awareness.onGunshotHeard = new UnityEvent<S1Noise.NoiseEvent>();
-            S1NPC.awareness.onHitByCar = new UnityEvent<S1Vehicles.LandVehicle>();
-            S1NPC.awareness.onNoticedDrugDealing = new UnityEvent<S1PlayerScripts.Player>();
-            S1NPC.awareness.onNoticedGeneralCrime = new UnityEvent<S1PlayerScripts.Player>();
-            S1NPC.awareness.onNoticedPettyCrime = new UnityEvent<S1PlayerScripts.Player>();
-            S1NPC.awareness.onNoticedPlayerViolatingCurfew = new UnityEvent<S1PlayerScripts.Player>();
-            S1NPC.awareness.onNoticedSuspiciousPlayer = new UnityEvent<S1PlayerScripts.Player>();
-            S1NPC.awareness.Listener = gameObject.AddComponent<S1Noise.Listener>();
+            S1NPC.Awareness = awarenessObject.AddComponent<S1NPCs.NPCAwareness>();
+            S1NPC.Awareness.onExplosionHeard = new UnityEvent<S1Noise.NoiseEvent>();
+            S1NPC.Awareness.onGunshotHeard = new UnityEvent<S1Noise.NoiseEvent>();
+            S1NPC.Awareness.onHitByCar = new UnityEvent<S1Vehicles.LandVehicle>();
+            S1NPC.Awareness.onNoticedDrugDealing = new UnityEvent<S1PlayerScripts.Player>();
+            S1NPC.Awareness.onNoticedGeneralCrime = new UnityEvent<S1PlayerScripts.Player>();
+            S1NPC.Awareness.onNoticedPettyCrime = new UnityEvent<S1PlayerScripts.Player>();
+            S1NPC.Awareness.onNoticedPlayerViolatingCurfew = new UnityEvent<S1PlayerScripts.Player>();
+            S1NPC.Awareness.onNoticedSuspiciousPlayer = new UnityEvent<S1PlayerScripts.Player>();
+            S1NPC.Awareness.Listener = gameObject.AddComponent<S1Noise.Listener>();
 
             /////// START BEHAVIOUR CODE ////////
             // NPCBehaviours behaviour
@@ -144,13 +144,13 @@ namespace S1API.Entities
 
             behaviour.CoweringBehaviour = coweringBehaviour;
             behaviour.FleeBehaviour = fleeBehaviour;
-            S1NPC.behaviour = behaviour;
+            S1NPC.Behaviour = behaviour;
             /////// END BEHAVIOUR CODE ////////
 
             // Response to actions like gunshots, drug deals, etc.
             GameObject responsesObject = new GameObject("NPCResponses");
             responsesObject.transform.SetParent(gameObject.transform);
-            S1NPC.awareness.Responses = responsesObject.AddComponent<S1Responses.NPCResponses_Civilian>();
+            S1NPC.Awareness.Responses = responsesObject.AddComponent<S1Responses.NPCResponses_Civilian>();
 
             // Vision cone object and behaviour
             GameObject visionObject = new GameObject("VisionCone");
@@ -158,12 +158,12 @@ namespace S1API.Entities
             S1Vision.VisionCone visionCone = visionObject.AddComponent<S1Vision.VisionCone>();
             visionCone.StatesOfInterest.Add(new S1Vision.VisionCone.StateContainer
             {
-                state = S1PlayerScripts.PlayerVisualState.EVisualState.PettyCrime, RequiredNoticeTime = 0.1f
+                state = S1Vision.EVisualState.PettyCrime, RequiredNoticeTime = 0.1f
             });
-            S1NPC.awareness.VisionCone = visionCone;
+            S1NPC.Awareness.VisionCone = visionCone;
 
             // Suspicious ? icon in world space
-            S1NPC.awareness.VisionCone.QuestionMarkPopup = gameObject.AddComponent<S1WorkspacePopup.WorldspacePopup>();
+            S1NPC.Awareness.VisionCone.QuestionMarkPopup = gameObject.AddComponent<S1WorkspacePopup.WorldspacePopup>();
 
             // Interaction behaviour
 #if (IL2CPPMELON || IL2CPPBEPINEX)

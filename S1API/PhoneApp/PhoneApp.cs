@@ -247,6 +247,8 @@ namespace S1API.PhoneApp
         {
             for (int i = container.transform.childCount - 1; i >= 0; i--)
                 Object.Destroy(container.transform.GetChild(i).gameObject);
+
+            container.SetActive(false);
         }
 
         /// <summary>
