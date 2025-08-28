@@ -7,10 +7,10 @@
 
     <!-- General properties -->
     <PropertyGroup>
-        <Authors>KaBooMa</Authors>
-        <PackageId>S1API</PackageId>
-        <Description>A Schedule One Mono / Il2Cpp Cross Compatibility Layer</Description>
-        <RepositoryUrl>https://github.com/KaBooMa/S1API</RepositoryUrl>
+        <Authors>ifBars</Authors>
+        <PackageId>S1API.Forked</PackageId>
+        <Description>A Schedule One Mono / Il2Cpp Cross Compatibility Layer (Forked from the original S1API by Kabooma)</Description>
+        <RepositoryUrl>https://github.com/ifBars/S1API</RepositoryUrl>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <Nullable>enable</Nullable>
         <Configurations>MonoMelon;MonoBepInEx;Il2CppMelon;Il2CppBepInEx</Configurations>
@@ -18,6 +18,7 @@
         <RootNamespace>S1API</RootNamespace>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <LangVersion>latest</LangVersion>
+		<Version>1.6.7</Version>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)' == 'MonoMelon' or '$(Configuration)' == 'MonoBepInEx'">
