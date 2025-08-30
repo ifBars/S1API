@@ -4,15 +4,27 @@ using UnityEngine.UI;
 using Object = UnityEngine.Object;
 using S1API.Internal.Abstraction;
 using S1API.Internal.Patches;
-
+using System;
+using MelonLoader;
 #if IL2CPPMELON
+using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne.UI.Phone;
+using Il2CppScheduleOne;
+using Il2CppScheduleOne.DevUtilities;
 using MelonLoader.Utils;
+using Il2CppInterop.Runtime;
+using S1GameInput = Il2CppScheduleOne.GameInput;
 #elif MONOBEPINEX || IL2CPPBEPINEX
 using ScheduleOne.UI.Phone;
+using ScheduleOne;
+using S1GameInput = ScheduleOne.GameInput;
 #elif MONOMELON
+using ScheduleOne.UI;
+using ScheduleOne.DevUtilities;
 using ScheduleOne.UI.Phone;
+using ScheduleOne;
 using MelonLoader.Utils;
+using S1GameInput = ScheduleOne.GameInput;
 #endif
 namespace S1API.PhoneApp
 {
@@ -54,6 +66,21 @@ namespace S1API.PhoneApp
         /// been updated or created.
         /// </summary>
         private bool _iconModified;
+        
+        /// <summary>
+        /// Reference to the home screen instance for managing app state transitions.
+        /// </summary>
+        private HomeScreen? _homeScreenInstance;
+        
+        /// <summary>
+        /// Cached action delegate for closeApps event subscription (IL2CPP compatibility).
+        /// </summary>
+        private System.Action? _closeAppAction;
+        
+        /// <summary>
+        /// Cached exit delegate for GameInput registration (IL2CPP compatibility).
+        /// </summary>
+        private S1GameInput.ExitDelegate? _exitDelegate;
 
         /// <summary>
         /// Gets the unique identifier for the application within the phone system.
@@ -102,6 +129,21 @@ namespace S1API.PhoneApp
         protected abstract string IconFileName { get; }
 
         /// <summary>
+        /// Gets the orientation of the phone app (Horizontal or Vertical).
+        /// Determines how the phone is rotated when the app is opened.
+        /// </summary>
+        protected virtual EOrientation Orientation => EOrientation.Horizontal;
+
+        /// <summary>
+        /// Represents the orientation settings for phone applications.
+        /// </summary>
+        public enum EOrientation
+        {
+            Horizontal = 0,
+            Vertical = 1
+        }
+
+        /// <summary>
         /// Invoked to define the user interface layout when the application panel is created.
         /// The method is used to populate the provided container with custom UI elements specific to the application.
         /// </summary>
@@ -132,6 +174,41 @@ namespace S1API.PhoneApp
 
             _appCreated = false;
             _iconModified = false;
+            
+            // Unsubscribe from phone events if subscribed
+            if (Phone.InstanceExists && _closeAppAction != null)
+            {
+                Phone.Instance.closeApps -= _closeAppAction;
+                _closeAppAction = null;
+            }
+            
+            // Unregister exit listener if registered
+            if (_exitDelegate != null)
+            {
+                GameInput.DeregisterExitListener(_exitDelegate);
+                _exitDelegate = null;
+            }
+        }
+
+        /// <summary>
+        /// Handles exit/home button functionality. Called when user presses escape or home.
+        /// </summary>
+        public virtual void Exit(ExitAction exit)
+        {
+            if (!exit.Used && IsOpen() && Phone.InstanceExists && Phone.Instance.IsOpen)
+            {
+                exit.Used = true;
+                CloseApp();
+            }
+        }
+
+        /// <summary>
+        /// Determines if this phone app is currently open.
+        /// </summary>
+        /// <returns>True if the app is open, false otherwise</returns>
+        public bool IsOpen()
+        {
+            return _appPanel != null && _appPanel.activeInHierarchy && Phone.ActiveApp == _appPanel;
         }
 
         /// <summary>
@@ -142,6 +219,8 @@ namespace S1API.PhoneApp
         /// </summary>
         internal void SpawnUI(HomeScreen homeScreenInstance)
         {
+            _homeScreenInstance = homeScreenInstance;
+            
             GameObject? appsCanvas = homeScreenInstance.transform.parent.Find("AppsCanvas")?.gameObject;
             if (appsCanvas == null)
             {
@@ -178,7 +257,29 @@ namespace S1API.PhoneApp
                 _appCreated = true;
             }
 
-            _appPanel.SetActive(true);
+            _appPanel.SetActive(false);
+            
+            // Add button handler component to detect physical button clicks
+            if (_appPanel.GetComponent<PhoneAppButtonHandler>() == null)
+            {
+                var buttonHandler = _appPanel.AddComponent<PhoneAppButtonHandler>();
+                buttonHandler.phoneApp = this;
+            }
+            
+            // Subscribe to phone close apps event and register exit handler like native apps
+            if (Phone.InstanceExists)
+            {
+                _closeAppAction = new System.Action(CloseApp);
+                Phone.Instance.closeApps += _closeAppAction;
+                
+                // Create IL2CPP-safe delegate instance
+#if IL2CPPMELON
+                _exitDelegate = DelegateSupport.ConvertDelegate<S1GameInput.ExitDelegate>(new System.Action<ExitAction>(Exit));
+#else
+                _exitDelegate = new S1GameInput.ExitDelegate(Exit);
+#endif
+                GameInput.RegisterExitListener(_exitDelegate, 1);
+            }
         }
 
         /// <summary>
@@ -216,8 +317,125 @@ namespace S1API.PhoneApp
 
             // Update image
             _iconModified = ChangeAppIconImage(iconObj, IconFileName);
+            
+            // Set up click handler for the icon
+            Button? iconButton = iconObj.GetComponent<Button>();
+            if (iconButton != null)
+            {
+                iconButton.onClick.RemoveAllListeners();
+                EventHelper.AddListener(OpenApp, iconButton.onClick);
+            }
         }
 
+        /// <summary>
+        /// Opens this phone application, managing proper app state transitions.
+        /// </summary>
+        public void OpenApp()
+        {
+            try
+            {
+                // Close any currently active app first (following native app pattern)
+                if (Phone.ActiveApp != null && Phone.ActiveApp != _appPanel)
+                {
+                    Phone.Instance.RequestCloseApp();
+                }
+
+                // Set app state to open using the same pattern as native apps
+                SetAppOpen(true);
+
+                Logger.Msg($"Opened phone app: {AppName}");
+            }
+            catch (Exception e)
+            {
+                Logger.Error($"Failed to open phone app {AppName}: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Closes this phone application, cleaning up its state.
+        /// </summary>
+        public void CloseApp()
+        {
+            try
+            {
+                // Set app state to closed using the same pattern as native apps
+                if (IsOpen())
+                {
+                    SetAppOpen(false);
+                }
+
+                Logger.Msg($"Closed phone app: {AppName}");
+            }
+            catch (Exception e)
+            {
+                Logger.Error($"Failed to close phone app {AppName}: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Sets the open state of the application following the same pattern as native App class.
+        /// This properly handles orientation, HomeScreen/AppsCanvas visibility, and ActiveApp tracking.
+        /// </summary>
+        /// <param name="open">Whether to open or close the app</param>
+        private void SetAppOpen(bool open)
+        {
+            if (open && Phone.ActiveApp != null && Phone.ActiveApp != _appPanel)
+            {
+                Logger.Warning($"{Phone.ActiveApp.name} is already open");
+                return;
+            }
+
+            // Use singleton instances like native apps do
+            if (AppsCanvas.InstanceExists)
+                AppsCanvas.Instance.SetIsOpen(open);
+                
+            if (HomeScreen.InstanceExists)
+                HomeScreen.Instance.SetIsOpen(!open);
+
+            if (open)
+            {
+                // Handle orientation and camera offset like native apps
+                if (Orientation == EOrientation.Horizontal)
+                {
+                    if (Phone.InstanceExists)
+                    {
+                        Phone.Instance.SetIsHorizontal(true);
+                        Phone.Instance.SetLookOffsetMultiplier(0.6f);
+                    }
+                }
+                else
+                {
+                    if (Phone.InstanceExists)
+                    {
+                        Phone.Instance.SetLookOffsetMultiplier(1f);
+                    }
+                }
+
+                // Set as active app and activate panel
+                Phone.ActiveApp = _appPanel;
+                if (_appPanel != null)
+                    _appPanel.SetActive(true);
+            }
+            else
+            {
+                // Clear active app if it was this app
+                if (Phone.ActiveApp == _appPanel)
+                {
+                    Phone.ActiveApp = null;
+                }
+
+                // Reset orientation and camera offset
+                if (Phone.InstanceExists)
+                {
+                    Phone.Instance.SetIsHorizontal(false);
+                    Phone.Instance.SetLookOffsetMultiplier(1f);
+                }
+
+                // Deactivate panel
+                if (_appPanel != null)
+                    _appPanel.SetActive(false);
+            }
+        }
 
         /// <summary>
         /// Configures an existing app panel by clearing and rebuilding its UI elements if necessary.
@@ -297,6 +515,37 @@ namespace S1API.PhoneApp
                 Logger.Error("Failed to load image: " + e.Message);
             }
 
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// MonoBehaviour component that handles physical button clicks for S1API phone apps.
+    /// This replicates the Update() logic from native App class to detect BoxCollider button clicks.
+    /// </summary>
+#if IL2CPPMELON
+    [RegisterTypeInIl2Cpp]
+#endif
+    internal class PhoneAppButtonHandler : MonoBehaviour
+    {
+        internal PhoneApp phoneApp;
+
+        private void Update()
+        {
+            // Replicate the native App<T> Update logic for physical button detection
+            if (phoneApp != null && phoneApp.IsOpen() && Phone.InstanceExists && Phone.Instance.IsOpen && IsHoveringButton() && GameInput.GetButtonDown(GameInput.ButtonCode.PrimaryClick))
+            {
+                phoneApp.CloseApp();
+            }
+        }
+
+        private bool IsHoveringButton()
+        {
+            // This is the same logic as native App<T>.IsHoveringButton()
+            if (Physics.Raycast(Singleton<GameplayMenu>.Instance.OverlayCamera.ScreenPointToRay(UnityEngine.Input.mousePosition), out var hitInfo, 2f, 1 << LayerMask.NameToLayer("Overlay")) && hitInfo.collider.gameObject.name == "Button")
+            {
+                return true;
+            }
             return false;
         }
     }

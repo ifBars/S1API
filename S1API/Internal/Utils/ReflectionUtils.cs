@@ -46,14 +46,74 @@ namespace S1API.Internal.Utils
         /// <returns>The actual type identified by the name.</returns>
         internal static Type? GetTypeByName(string typeName)
         {
+            // Fast path: allow fully-qualified type names to resolve quickly
+            try
+            {
+                var direct = Type.GetType(typeName, throwOnError: false, ignoreCase: false);
+                if (direct != null)
+                    return direct;
+            }
+            catch { /* ignore */ }
+
+            // Helper to filter out assemblies that are unlikely to contain mod/game types
+            static bool ShouldSkipAssembly(Assembly assembly)
+            {
+                string? fullName = assembly.FullName;
+                if (string.IsNullOrEmpty(fullName))
+                    return false;
+
+                return fullName.StartsWith("System")
+                    || fullName.StartsWith("Unity")
+                    || fullName.StartsWith("Il2Cpp")
+                    || fullName.StartsWith("mscorlib")
+                    || fullName.StartsWith("Mono.")
+                    || fullName.StartsWith("netstandard")
+                    || fullName.StartsWith("com.rlabrecque")
+                    || fullName.StartsWith("__Generated");
+            }
+
+            // Safe wrapper for Assembly.GetTypes() which tolerates ReflectionTypeLoadException
+            static IEnumerable<Type> SafeGetTypes(Assembly asm)
+            {
+                try
+                {
+                    return asm.GetTypes();
+                }
+                catch (ReflectionTypeLoadException ex)
+                {
+                    return ex.Types.Where(t => t != null)!.Cast<Type>();
+                }
+                catch
+                {
+                    return Array.Empty<Type>();
+                }
+            }
+
+            // First search through likely candidate assemblies (skip core/system ones)
             Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            foreach (Assembly assembly in assemblies.Where(a => !ShouldSkipAssembly(a)))
+            {
+                foreach (Type type in SafeGetTypes(assembly))
+                {
+                    if (type == null)
+                        continue;
+
+                    if (type.Name == typeName || type.FullName == typeName)
+                        return type;
+                }
+            }
+
+            // Fallback: search all assemblies but still use SafeGetTypes
             foreach (Assembly assembly in assemblies)
             {
-                Type? foundType = assembly.GetTypes().FirstOrDefault(type => type.Name == typeName);
-                if (foundType == null)
-                    continue;
+                foreach (Type type in SafeGetTypes(assembly))
+                {
+                    if (type == null)
+                        continue;
 
-                return foundType;
+                    if (type.Name == typeName || type.FullName == typeName || (type.FullName != null && type.FullName.EndsWith("." + typeName)))
+                        return type;
+                }
             }
 
             return null;

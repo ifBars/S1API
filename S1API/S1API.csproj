@@ -55,6 +55,7 @@
         <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.dll" />
         <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.CoreModule.dll" />
         <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.UI.dll" />
+        <Reference Include="$(MonoAssembliesPath)\UnityEngine.InputLegacyModule.dll" />
         <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.UIModule.dll" />
         <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.JSONSerializeModule.dll" />
         <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.TextRenderingModule.dll" />
@@ -73,6 +74,7 @@
         <Reference Include="$(MonoAssembliesPath)\UnityEngine.CoreModule.dll" />
         <Reference Include="$(MonoAssembliesPath)\FishNet.Runtime.dll" />
         <Reference Include="$(MonoAssembliesPath)\UnityEngine.UI.dll" />
+		<Reference Include="$(MonoAssembliesPath)\UnityEngine.InputLegacyModule.dll" />
         <Reference Include="$(MonoAssembliesPath)\UnityEngine.AssetBundleModule.dll" />
         <Reference Include="$(MonoAssembliesPath)\UnityEngine.UIModule.dll" />
         <Reference Include="$(MonoAssembliesPath)\UnityEngine.JSONSerializeModule.dll" />
