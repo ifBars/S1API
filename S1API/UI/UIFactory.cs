@@ -378,8 +378,12 @@ namespace S1API.UI
         /// <param name="parent">The transform whose child objects will be destroyed.</param>
         public static void ClearChildren(Transform parent)
         {
-            foreach (Transform child in parent)
+            // Use index-based iteration for IL2CPP compatibility to avoid invalid cast during enumeration
+            for (int i = parent.childCount - 1; i >= 0; i--)
+            {
+                var child = parent.GetChild(i);
                 GameObject.Destroy(child.gameObject);
+            }
         }
 
         /// Configures a GameObject to use a VerticalLayoutGroup with specified spacing and padding.

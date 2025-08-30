@@ -83,6 +83,11 @@ namespace S1API.PhoneApp
         private S1GameInput.ExitDelegate? _exitDelegate;
 
         /// <summary>
+        /// Cached action delegate for phone closed subscription (IL2CPP compatibility).
+        /// </summary>
+        private System.Action? _onPhoneClosedAction;
+
+        /// <summary>
         /// Gets the unique identifier for the application within the phone system.
         /// </summary>
         /// <remarks>
@@ -188,6 +193,13 @@ namespace S1API.PhoneApp
                 GameInput.DeregisterExitListener(_exitDelegate);
                 _exitDelegate = null;
             }
+
+            // Unsubscribe from phone closed event if subscribed
+            if (Phone.InstanceExists && _onPhoneClosedAction != null)
+            {
+                Phone.Instance.onPhoneClosed -= _onPhoneClosedAction;
+                _onPhoneClosedAction = null;
+            }
         }
 
         /// <summary>
@@ -201,6 +213,11 @@ namespace S1API.PhoneApp
                 CloseApp();
             }
         }
+
+        /// <summary>
+        /// Called when the in-game phone is closed. Override in derived apps to reset state.
+        /// </summary>
+        protected virtual void OnPhoneClosed() { }
 
         /// <summary>
         /// Determines if this phone app is currently open.
@@ -257,7 +274,7 @@ namespace S1API.PhoneApp
                 _appCreated = true;
             }
 
-            _appPanel.SetActive(false);
+            _appPanel.SetActive(true);
             
             // Add button handler component to detect physical button clicks
             if (_appPanel.GetComponent<PhoneAppButtonHandler>() == null)
@@ -279,6 +296,10 @@ namespace S1API.PhoneApp
                 _exitDelegate = new S1GameInput.ExitDelegate(Exit);
 #endif
                 GameInput.RegisterExitListener(_exitDelegate, 1);
+
+                // Subscribe to phone closed to notify apps
+                _onPhoneClosedAction = OnPhoneClosed;
+                Phone.Instance.onPhoneClosed += _onPhoneClosedAction;
             }
         }
 
@@ -414,7 +435,12 @@ namespace S1API.PhoneApp
                 // Set as active app and activate panel
                 Phone.ActiveApp = _appPanel;
                 if (_appPanel != null)
-                    _appPanel.SetActive(true);
+                {
+                    var containerTransform = _appPanel.transform.Find("Container");
+                    var container = containerTransform != null ? containerTransform.gameObject : null;
+                    if (container != null)
+                        container.SetActive(true);
+                }
             }
             else
             {
@@ -431,9 +457,14 @@ namespace S1API.PhoneApp
                     Phone.Instance.SetLookOffsetMultiplier(1f);
                 }
 
-                // Deactivate panel
+                // Deactivate container
                 if (_appPanel != null)
-                    _appPanel.SetActive(false);
+                {
+                    var containerTransform = _appPanel.transform.Find("Container");
+                    var container = containerTransform != null ? containerTransform.gameObject : null;
+                    if (container != null)
+                        container.SetActive(false);
+                }
             }
         }
 

@@ -34,6 +34,7 @@ namespace S1API.Internal.Patches
             {
                 // This is a cloned instance used by a custom phone app
                 // Skip the Start method to prevent duplicate event subscriptions
+                __instance.SetOpen(false);
                 return false;
             }
             
