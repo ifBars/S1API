@@ -86,12 +86,12 @@ namespace S1API.Internal.Patches
 						{
 							try
 							{
-								lm.onLoadComplete.RemoveListener(InitializeOnLoadComplete);
+								EventHelper.RemoveListener(InitializeOnLoadComplete, lm.onLoadComplete);
 								((IRegisterable)saveable).CreateInternal();
 							}
 							catch { }
 						}
-						lm.onLoadComplete.AddListener(InitializeOnLoadComplete);
+						EventHelper.AddListener(InitializeOnLoadComplete, lm.onLoadComplete);
 					}
 				}
 			}
