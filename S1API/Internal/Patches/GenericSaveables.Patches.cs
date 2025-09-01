@@ -67,16 +67,32 @@ namespace S1API.Internal.Patches
 			try
 			{
 				string basePath = Path.Combine(S1Persistence.LoadManager.Instance.LoadedGameFolderPath, "Modded", "Saveables");
-				if (!Directory.Exists(basePath))
-					return;
 				foreach (var entry in ModSaveableRegistry.Registered)
 				{
 					var saveable = entry.Saveable;
 					string folder = string.IsNullOrEmpty(entry.FolderName) ? saveable.GetType().Name : entry.FolderName;
 					string path = Path.Combine(basePath, folder);
-					if (!Directory.Exists(path))
-						continue;
-					saveable.LoadInternal(path);
+
+					if (Directory.Exists(path))
+					{
+						// Existing save data found -> load
+						saveable.LoadInternal(path);
+					}
+					else
+					{
+						// No save data yet for this save -> initialize once after full game load
+						var lm = S1Persistence.LoadManager.Instance;
+						void InitializeOnLoadComplete()
+						{
+							try
+							{
+								lm.onLoadComplete.RemoveListener(InitializeOnLoadComplete);
+								((IRegisterable)saveable).CreateInternal();
+							}
+							catch { }
+						}
+						lm.onLoadComplete.AddListener(InitializeOnLoadComplete);
+					}
 				}
 			}
 			catch { }
