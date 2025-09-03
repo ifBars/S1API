@@ -6,6 +6,7 @@ using S1Economy = ScheduleOne.Economy;
 
 using System.Linq;
 using S1API.Internal.Abstraction;
+using S1API.Map;
 using S1API.Storages;
 using UnityEngine;
 
@@ -48,10 +49,40 @@ namespace S1API.DeadDrops
             S1DeadDrop.GUID.ToString();
 
         /// <summary>
+        /// The display name of the dead drop.
+        /// </summary>
+        public string Name =>
+            S1DeadDrop.DeadDropName;
+
+        /// <summary>
+        /// The descriptive label or location hint for the dead drop.
+        /// </summary>
+        public string Description =>
+            S1DeadDrop.DeadDropDescription;
+
+        /// <summary>
+        /// The region this dead drop belongs to.
+        /// </summary>
+        public Region Region =>
+            (Region)(int)S1DeadDrop.Region;
+
+        /// <summary>
         /// The storage container associated with this dead drop.
         /// </summary>
         public StorageInstance Storage =>
             _cachedStorage ??= new StorageInstance(S1DeadDrop.Storage);
+
+        /// <summary>
+        /// The current number of items stored in the dead drop.
+        /// </summary>
+        public int ItemCount =>
+            S1DeadDrop.Storage.ItemCount;
+
+        /// <summary>
+        /// Whether the dead drop contains no items.
+        /// </summary>
+        public bool IsEmpty =>
+            ItemCount == 0;
 
         /// <summary>
         /// The world position of the dead drop.
@@ -60,3 +91,4 @@ namespace S1API.DeadDrops
             S1DeadDrop.transform.position;
     }
 }
+
