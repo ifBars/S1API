@@ -68,6 +68,16 @@ namespace S1API.PhoneApp
         private bool _iconModified;
         
         /// <summary>
+        /// Cached reference to the icon <see cref="Image"/> component for quick sprite updates.
+        /// </summary>
+        private Image? _iconImage;
+        
+        /// <summary>
+        /// If set before the icon exists, this sprite will be applied once the icon spawns.
+        /// </summary>
+        private Sprite? _pendingIconSprite;
+        
+        /// <summary>
         /// Reference to the home screen instance for managing app state transitions.
         /// </summary>
         private HomeScreen? _homeScreenInstance;
@@ -134,6 +144,11 @@ namespace S1API.PhoneApp
         protected abstract string IconFileName { get; }
 
         /// <summary>
+        /// Optional direct icon sprite. If provided, it takes precedence over <see cref="IconFileName"/>.
+        /// </summary>
+        protected virtual Sprite? IconSprite => null;
+
+        /// <summary>
         /// Gets the orientation of the phone app (Horizontal or Vertical).
         /// Determines how the phone is rotated when the app is opened.
         /// </summary>
@@ -179,6 +194,8 @@ namespace S1API.PhoneApp
 
             _appCreated = false;
             _iconModified = false;
+            _iconImage = null;
+            _pendingIconSprite = null;
             
             // Unsubscribe from phone events if subscribed
             if (Phone.InstanceExists && _closeAppAction != null)
@@ -329,6 +346,10 @@ namespace S1API.PhoneApp
 
             GameObject iconObj = lastIcon.gameObject;
             iconObj.name = AppName; // Rename it now
+            
+            // Cache icon image for future updates
+            Transform imageTransform = iconObj.transform.Find("Mask/Image");
+            _iconImage = imageTransform != null ? imageTransform.GetComponent<Image>() : null;
 
             // Update label
             Transform labelTransform = iconObj.transform.Find("Label");
@@ -336,8 +357,25 @@ namespace S1API.PhoneApp
             if (label != null)
                 label.text = IconLabel;
 
-            // Update image
-            _iconModified = ChangeAppIconImage(iconObj, IconFileName);
+            // Update image (prefer provided sprite or pending sprite over file path)
+            if (_iconImage != null)
+            {
+                Sprite? chosen = _pendingIconSprite != null ? _pendingIconSprite : IconSprite;
+                if (chosen != null)
+                {
+                    _iconImage.sprite = chosen;
+                    _iconModified = true;
+                    _pendingIconSprite = null; // consumed
+                }
+                else
+                {
+                    _iconModified = ChangeAppIconImage(iconObj, IconFileName);
+                }
+            }
+            else
+            {
+                _iconModified = ChangeAppIconImage(iconObj, IconFileName);
+            }
             
             // Set up click handler for the icon
             Button? iconButton = iconObj.GetComponent<Button>();
@@ -547,6 +585,44 @@ namespace S1API.PhoneApp
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Sets the app icon directly from a sprite, bypassing file loading.
+        /// If the icon is not yet spawned, stores the sprite to apply later.
+        /// </summary>
+        /// <param name="sprite">Sprite to use for the app icon.</param>
+        /// <returns>True if applied immediately or stored for later application.</returns>
+        public bool SetIconSprite(Sprite sprite)
+        {
+            if (sprite == null)
+                return false;
+
+            if (_iconImage != null)
+            {
+                _iconImage.sprite = sprite;
+                _iconModified = true;
+                _pendingIconSprite = null;
+                return true;
+            }
+
+            // Icon not spawned yet; remember desired sprite for when it appears
+            _pendingIconSprite = sprite;
+            return true;
+        }
+
+        /// <summary>
+        /// Sets the app icon directly from a texture by creating a sprite.
+        /// </summary>
+        /// <param name="texture">Texture to convert into a sprite for the app icon.</param>
+        /// <returns>True if applied or stored; false if texture is null.</returns>
+        public bool SetIconTexture(Texture2D texture)
+        {
+            if (texture == null)
+                return false;
+
+            Sprite sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f));
+            return SetIconSprite(sprite);
         }
     }
 
