@@ -23,11 +23,30 @@ namespace S1API.Internal.Utils
                 .Where(assembly => !ShouldSkipAssembly(assembly))
                 .ToArray();
             foreach (Assembly assembly in applicableAssemblies)
-                derivedClasses.AddRange(SafeGetTypes(assembly)
-                    .Where(type => typeof(TBaseClass).IsAssignableFrom(type)
-                                   && type != typeof(TBaseClass)
-                                   && !type.IsAbstract));
-
+                foreach (Type type in SafeGetTypes(assembly))
+                {
+                    try
+                    {
+                        if (type == null)
+                            continue;
+                        if (typeof(TBaseClass).IsAssignableFrom(type)
+                            && type != typeof(TBaseClass)
+                            && !type.IsAbstract)
+                        {
+                            derivedClasses.Add(type);
+                        }
+                    }
+                    catch (TypeLoadException)
+                    {
+                        // Ideally, we'd log this, but can be noisy and we've got no logger elsewhere
+                        continue;
+                    }
+                    catch (Exception)
+                    {
+                        // Catch-all for anything else (e.g., MissingMethodException)
+                        continue;
+                    }
+                }
             return derivedClasses;
         }
 
