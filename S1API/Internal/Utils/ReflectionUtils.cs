@@ -20,22 +20,33 @@ namespace S1API.Internal.Utils
         {
             List<Type> derivedClasses = new List<Type>();
             Assembly[] applicableAssemblies = AppDomain.CurrentDomain.GetAssemblies()
-                .Where(assembly => !assembly.FullName!.StartsWith("System") &&
-                        !assembly.FullName!.StartsWith("Unity") &&
-                        !assembly.FullName!.StartsWith("Il2Cpp") &&
-                        !assembly.FullName!.StartsWith("mscorlib") &&
-                        !assembly.FullName!.StartsWith("Mono.") &&
-                        !assembly.FullName!.StartsWith("netstandard") &&
-                        // Additional filters to resolve crashes in BepInEx
-                        !assembly.FullName!.StartsWith("com.rlabrecque") &&
-                        !assembly.FullName!.StartsWith("__Generated"))
+                .Where(assembly => !ShouldSkipAssembly(assembly))
                 .ToArray();
             foreach (Assembly assembly in applicableAssemblies)
-                derivedClasses.AddRange(assembly.GetTypes()
-                    .Where(type => typeof(TBaseClass).IsAssignableFrom(type)
-                                   && type != typeof(TBaseClass)
-                                   && !type.IsAbstract));
-
+                foreach (Type type in SafeGetTypes(assembly))
+                {
+                    try
+                    {
+                        if (type == null)
+                            continue;
+                        if (typeof(TBaseClass).IsAssignableFrom(type)
+                            && type != typeof(TBaseClass)
+                            && !type.IsAbstract)
+                        {
+                            derivedClasses.Add(type);
+                        }
+                    }
+                    catch (TypeLoadException)
+                    {
+                        // Ideally, we'd log this, but can be noisy and we've got no logger elsewhere
+                        continue;
+                    }
+                    catch (Exception)
+                    {
+                        // Catch-all for anything else (e.g., MissingMethodException)
+                        continue;
+                    }
+                }
             return derivedClasses;
         }
 
@@ -54,40 +65,6 @@ namespace S1API.Internal.Utils
                     return direct;
             }
             catch { /* ignore */ }
-
-            // Helper to filter out assemblies that are unlikely to contain mod/game types
-            static bool ShouldSkipAssembly(Assembly assembly)
-            {
-                string? fullName = assembly.FullName;
-                if (string.IsNullOrEmpty(fullName))
-                    return false;
-
-                return fullName.StartsWith("System")
-                    || fullName.StartsWith("Unity")
-                    || fullName.StartsWith("Il2Cpp")
-                    || fullName.StartsWith("mscorlib")
-                    || fullName.StartsWith("Mono.")
-                    || fullName.StartsWith("netstandard")
-                    || fullName.StartsWith("com.rlabrecque")
-                    || fullName.StartsWith("__Generated");
-            }
-
-            // Safe wrapper for Assembly.GetTypes() which tolerates ReflectionTypeLoadException
-            static IEnumerable<Type> SafeGetTypes(Assembly asm)
-            {
-                try
-                {
-                    return asm.GetTypes();
-                }
-                catch (ReflectionTypeLoadException ex)
-                {
-                    return ex.Types.Where(t => t != null)!.Cast<Type>();
-                }
-                catch
-                {
-                    return Array.Empty<Type>();
-                }
-            }
 
             // First search through likely candidate assemblies (skip core/system ones)
             Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
@@ -117,6 +94,48 @@ namespace S1API.Internal.Utils
             }
 
             return null;
+        }
+        
+        /// <summary>
+        /// INTERNAL: Determines whether to skip an assembly during reflection searches. Will skip assemblies that are unlikely to contain mod/game types.
+        /// </summary>
+        /// <param name="assembly">The assembly to check.</param>
+        /// <returns>Whether to skip the assembly or not.</returns>
+        internal static bool ShouldSkipAssembly(Assembly assembly)
+        {
+            string? fullName = assembly.FullName;
+            if (string.IsNullOrEmpty(fullName))
+                return false;
+
+            return fullName.StartsWith("System")
+                   || fullName.StartsWith("Unity")
+                   || fullName.StartsWith("Il2Cpp")
+                   || fullName.StartsWith("mscorlib")
+                   || fullName.StartsWith("Mono.")
+                   || fullName.StartsWith("netstandard")
+                   || fullName.StartsWith("com.rlabrecque")
+                   || fullName.StartsWith("__Generated");
+        }
+        
+        /// <summary>
+        /// INTERNAL: Safely gets types from an assembly, even if some types fail to load.
+        /// </summary>
+        /// <param name="asm">The assembly to get types from.</param>
+        /// <returns>The types that were successfully loaded from the assembly.</returns>
+        internal static IEnumerable<Type> SafeGetTypes(Assembly asm)
+        {
+            try
+            {
+                return asm.GetTypes();
+            }
+            catch (ReflectionTypeLoadException ex)
+            {
+                return ex.Types.Where(t => t != null)!.Cast<Type>();
+            }
+            catch
+            {
+                return Array.Empty<Type>();
+            }
         }
 
         /// <summary>
