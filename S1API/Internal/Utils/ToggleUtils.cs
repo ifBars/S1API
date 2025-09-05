@@ -15,6 +15,8 @@ namespace S1API.Internal.Utils
     {
         private static FieldInfo? _onValueChangedField;
         private static PropertyInfo? _onValueChangedProperty;
+        private static FieldInfo? _graphicField;
+        private static PropertyInfo? _graphicProperty;
 
         /// <summary>
         /// Adds a listener to a Toggle's onValueChanged event in an IL2CPP-safe manner.
@@ -80,6 +82,51 @@ namespace S1API.Internal.Utils
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Sets the Toggle's checkmark graphic in a version-agnostic manner (field or property).
+        /// </summary>
+        public static void SetGraphic(Toggle toggle, Graphic graphic)
+        {
+            if (toggle == null)
+                return;
+
+            _graphicField ??= typeof(Toggle).GetField("graphic", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (_graphicField != null)
+            {
+                _graphicField.SetValue(toggle, graphic);
+                return;
+            }
+
+            _graphicProperty ??= typeof(Toggle).GetProperty("graphic", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (_graphicProperty?.SetMethod != null)
+            {
+                _graphicProperty.SetValue(toggle, graphic);
+            }
+        }
+
+        /// <summary>
+        /// Gets the Toggle's checkmark graphic in a version-agnostic manner.
+        /// </summary>
+        public static Graphic? GetGraphic(Toggle toggle)
+        {
+            if (toggle == null)
+                return null;
+
+            _graphicField ??= typeof(Toggle).GetField("graphic", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (_graphicField != null)
+            {
+                return _graphicField.GetValue(toggle) as Graphic;
+            }
+
+            _graphicProperty ??= typeof(Toggle).GetProperty("graphic", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (_graphicProperty?.GetMethod != null)
+            {
+                return _graphicProperty.GetValue(toggle) as Graphic;
+            }
+
+            return null;
         }
     }
 }
