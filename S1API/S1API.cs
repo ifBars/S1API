@@ -1,7 +1,7 @@
 ﻿#if (MONOMELON || IL2CPPMELON)
 using MelonLoader;
 
-[assembly: MelonInfo(typeof(S1API.S1API), "S1API (Forked by Bars)", "1.7.2", "KaBooMa")]
+[assembly: MelonInfo(typeof(S1API.S1API), "S1API (Forked by Bars)", "1.7.3", "KaBooMa")]
 
 namespace S1API
 {
