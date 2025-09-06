@@ -31,6 +31,27 @@ namespace S1API.Internal.Utils
             try
             {
                 byte[] data = File.ReadAllBytes(fullPath);
+                return LoadImageRaw(data);
+            }
+            catch (System.Exception ex)
+            {
+                _loggerInstance.Error("❌ Failed to load sprite: " + ex);
+            }
+
+            return null;
+        }
+        
+        /// <summary>
+        /// Loads an image from a byte array and converts it into a Sprite object.
+        /// <param name="data">The byte array containing the image data to load.</param>
+        /// <returns>
+        /// A Sprite object representing the loaded image, or null if the image could not be loaded.
+        /// </returns>
+        /// </summary>
+        public static Sprite? LoadImageRaw(byte[] data)
+        {
+            try
+            {
                 Texture2D tex = new Texture2D(2, 2);
                 if (tex.LoadImage(data))
                 {
@@ -41,7 +62,6 @@ namespace S1API.Internal.Utils
             {
                 _loggerInstance.Error("❌ Failed to load sprite: " + ex);
             }
-
             return null;
         }
     }
