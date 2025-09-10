@@ -13,3 +13,5 @@ local.*
 ### TODO: ScheduleOneAssemblies is deprecated and needs removed after communications
 ScheduleOneAssemblies/
 *.bin
+
+nuget-upload.txt
