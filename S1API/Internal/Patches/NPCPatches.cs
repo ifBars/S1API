@@ -20,9 +20,9 @@ using System.Collections.Generic;
 
 using System;
 using System.IO;
-using System.Linq;
 using System.Reflection;
 using HarmonyLib;
+using MelonLoader;
 using S1API.Entities;
 using S1API.Internal.Utils;
 
@@ -62,6 +62,33 @@ namespace S1API.Internal.Patches
                     customNPC.LoadInternal(npcPath);
                 }
             }
+        }
+
+        /// <summary>
+        /// Guard NPCInventory fields before Awake_UserLogic runs to prevent NREs on custom NPCs (Issue arises when using Breads Storage Tweaks).
+        /// </summary>
+        /// <param name="__instance">NPCInventory instance</param>
+        [HarmonyPatch(typeof(S1NPCs.NPCInventory), "Awake")]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static void EnsureNPCInventorySafeInit(S1NPCs.NPCInventory __instance)
+        {
+            // Ensure definition arrays are not null before length/enumeration in Awake_UserLogic
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+            if (__instance.TestItems == null)
+                __instance.TestItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Il2CppScheduleOne.ItemFramework.ItemDefinition>(0);
+            if (__instance.StartupItems == null)
+                __instance.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Il2CppScheduleOne.ItemFramework.ItemDefinition>(0);
+            if (__instance.RandomItemDefinitions == null)
+                __instance.RandomItemDefinitions = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Il2CppScheduleOne.ItemFramework.StorableItemDefinition>(0);
+#else
+            if (__instance.TestItems == null)
+                __instance.TestItems = Array.Empty<ScheduleOne.ItemFramework.ItemDefinition>();
+            if (__instance.StartupItems == null)
+                __instance.StartupItems = Array.Empty<ScheduleOne.ItemFramework.ItemDefinition>();
+            if (__instance.RandomItemDefinitions == null)
+                __instance.RandomItemDefinitions = Array.Empty<ScheduleOne.ItemFramework.StorableItemDefinition>();
+#endif
         }
 
         /// <summary>
