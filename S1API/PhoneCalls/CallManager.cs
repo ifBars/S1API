@@ -48,7 +48,7 @@ namespace S1API.PhoneCalls
         /// <summary>
         /// Enqueue a raw in-game PhoneCallData. Used by patches that intercept the base game's queuing.
         /// </summary>
-        public static void QueueCall(S1ScriptableObjects.PhoneCallData phoneCallData)
+        internal static void QueueCall(S1ScriptableObjects.PhoneCallData phoneCallData)
         {
             if (phoneCallData == null)
             {
