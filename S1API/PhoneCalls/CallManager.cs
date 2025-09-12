@@ -82,10 +82,17 @@ namespace S1API.PhoneCalls
                 return;
             }
 
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+            // For IL2CPP, use CombineImpl to properly combine Il2CppSystem.Action instances
+            var systemAction = new System.Action<S1ScriptableObjects.PhoneCallData>(OnCallCompleted);
+            var il2cppAction = (ActionPhoneCall)systemAction;
+            callInterface.CallCompleted = (ActionPhoneCall)(callInterface.CallCompleted?.CombineImpl(il2cppAction) ?? il2cppAction);
+#else
             callInterface.CallCompleted = (ActionPhoneCall)Delegate.Combine(
                 callInterface.CallCompleted,
                 new ActionPhoneCall(OnCallCompleted)
             );
+#endif
 
             subscribedToCallCompleted = true;
         }
