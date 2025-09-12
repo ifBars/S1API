@@ -47,11 +47,12 @@ namespace S1API.Internal.Patches
 
 				string basePath = Path.Combine(saveFolderPath, "Modded", "Saveables");
 				Directory.CreateDirectory(basePath);
-				foreach (var entry in ModSaveableRegistry.Registered)
+				
+				// Use automatic discovery instead of manual registry
+				foreach (var saveable in SaveableAutoRegistry.GetRegisteredSaveables())
 				{
-					var saveable = entry.Saveable;
 					ListString extra = new ListString();
-					string folder = string.IsNullOrEmpty(entry.FolderName) ? saveable.GetType().Name : entry.FolderName;
+					string folder = saveable.GetType().Name;
 					string path = Path.Combine(basePath, folder);
 					Directory.CreateDirectory(path);
 					saveable.SaveInternal(path, ref extra);
@@ -60,17 +61,18 @@ namespace S1API.Internal.Patches
 			catch { }
 		}
 
-		[HarmonyPatch(typeof(S1Loaders.QuestsLoader), "Load")]
+		[HarmonyPatch(typeof(S1Loaders.NPCsLoader), "Load")]
 		[HarmonyPostfix]
 		private static void AfterBaseLoaders(string mainPath)
 		{
 			try
 			{
 				string basePath = Path.Combine(S1Persistence.LoadManager.Instance.LoadedGameFolderPath, "Modded", "Saveables");
-				foreach (var entry in ModSaveableRegistry.Registered)
+				
+				// Use automatic discovery instead of manual registry
+				foreach (var saveable in SaveableAutoRegistry.GetRegisteredSaveables())
 				{
-					var saveable = entry.Saveable;
-					string folder = string.IsNullOrEmpty(entry.FolderName) ? saveable.GetType().Name : entry.FolderName;
+					string folder = saveable.GetType().Name;
 					string path = Path.Combine(basePath, folder);
 
 					if (Directory.Exists(path))
