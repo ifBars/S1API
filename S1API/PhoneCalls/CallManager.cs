@@ -11,6 +11,7 @@ using ActionPhoneCall = System.Action<ScheduleOne.ScriptableObjects.PhoneCallDat
 #endif
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 
 namespace S1API.PhoneCalls
 {
@@ -83,10 +84,39 @@ namespace S1API.PhoneCalls
             }
 
 #if (IL2CPPMELON || IL2CPPBEPINEX)
-            // For IL2CPP, use CombineImpl to properly combine Il2CppSystem.Action instances
-            var systemAction = new System.Action<S1ScriptableObjects.PhoneCallData>(OnCallCompleted);
-            var il2cppAction = (ActionPhoneCall)systemAction;
-            callInterface.CallCompleted = (ActionPhoneCall)(callInterface.CallCompleted?.CombineImpl(il2cppAction) ?? il2cppAction);
+            // For IL2CPP, create System.Action first and let implicit cast handle conversion
+            var systemAction = new Action<S1ScriptableObjects.PhoneCallData>(OnCallCompleted);
+            
+            try
+            {
+                // Try using add_CallCompleted method first (preferred for events)
+                var addMethod = typeof(S1UIPhone.CallInterface).GetMethod("add_CallCompleted");
+                if (addMethod != null)
+                {
+                    addMethod.Invoke(callInterface, new object[] { systemAction });
+                }
+                else
+                {
+                    // Fallback to CombineImpl with proper casting
+                    ActionPhoneCall il2cppAction = systemAction; // Implicit cast
+                    var combined = callInterface.CallCompleted?.CombineImpl(il2cppAction) ?? il2cppAction;
+                    callInterface.CallCompleted = combined.Cast<ActionPhoneCall>();
+                }
+            }
+            catch
+            {
+                // Final fallback - try direct assignment
+                ActionPhoneCall il2cppAction = systemAction; // Implicit cast
+                if (callInterface.CallCompleted == null)
+                {
+                    callInterface.CallCompleted = il2cppAction;
+                }
+                else
+                {
+                    var combined = callInterface.CallCompleted.CombineImpl(il2cppAction);
+                    callInterface.CallCompleted = combined.Cast<ActionPhoneCall>();
+                }
+            }
 #else
             callInterface.CallCompleted = (ActionPhoneCall)Delegate.Combine(
                 callInterface.CallCompleted,
