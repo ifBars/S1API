@@ -31,10 +31,10 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore dependencies
-        run: dotnet restore S1API/S1API.sln
+        run: dotnet restore S1API.sln
 
       - name: Build S1API
-        run: dotnet build S1API/S1API.sln --no-restore -c MonoMelon
+        run: dotnet build S1API/S1API.csproj --no-restore -c MonoMelon
 
       - name: Setup DocFX
         uses: actions/setup-dotnet@v4
