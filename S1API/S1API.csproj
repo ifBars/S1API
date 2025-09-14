@@ -132,8 +132,14 @@
         <PackageReference Include="UnityEngine.Modules" Version="2022.3.32" IncludeAssets="compile" Condition="'$(Configuration)' == 'MonoBepInEx'" />
     </ItemGroup>
     <ItemGroup>
+      <Compile Remove="api\**" />
+      <Compile Remove="docs\**" />
       <Compile Remove="_site\**" />
+      <EmbeddedResource Remove="api\**" />
+      <EmbeddedResource Remove="docs\**" />
       <EmbeddedResource Remove="_site\**" />
+      <None Remove="api\**" />
+      <None Remove="docs\**" />
       <None Remove="_site\**" />
     </ItemGroup>
     <ItemGroup>
