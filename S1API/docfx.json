@@ -4,12 +4,17 @@
     {
       "src": [
         {
+          "src": "bin/MonoMelon/netstandard2.1",
           "files": [
-            "bin/MonoMelon/netstandard2.1/S1API.dll"
+            "S1API.dll"
           ]
         }
       ],
-      "dest": "api"
+      "dest": "api",
+      "disableGitFeatures": false,
+      "disableDefaultFilter": false,
+      "shouldSkipMarkup": false,
+      "force": true
     }
   ],
   "build": {
@@ -36,9 +41,10 @@
       "modern"
     ],
     "globalMetadata": {
-      "_appName": "S1API-Docs",
-      "_appTitle": "S1API-Docs",
+      "_appName": "S1API",
+      "_appTitle": "S1API Documentation",
       "_enableSearch": true,
+      "_navbarTitle": "S1API",
       "pdf": true
     }
   }
