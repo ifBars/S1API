@@ -77,6 +77,9 @@ jobs:
           echo "=== Managed Assemblies ==="
           ls -la S1API/ScheduleOneAssemblies/Managed/ | head -10
           echo ""
+          echo "=== MelonLoader Assemblies ==="
+          ls -la S1API/ScheduleOneAssemblies/MelonLoader/ | head -10
+          echo ""
           echo "=== Critical Assembly Check ==="
           if [ -f S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll ]; then
             echo "✓ Found Assembly-CSharp.dll"
@@ -85,6 +88,16 @@ jobs:
             echo "✗ Missing Assembly-CSharp.dll"
             echo "Attempting auto-discovery..."
             find game-assemblies -name "Assembly-CSharp.dll" -type f -exec ls -l {} \;
+          fi
+          echo ""
+          echo "=== MelonLoader Assembly Check ==="
+          if [ -f S1API/ScheduleOneAssemblies/MelonLoader/0Harmony.dll ]; then
+            echo "✓ Found 0Harmony.dll"
+            ls -l S1API/ScheduleOneAssemblies/MelonLoader/0Harmony.dll
+          else
+            echo "✗ Missing 0Harmony.dll"
+            echo "Looking for MelonLoader assemblies..."
+            find game-assemblies -name "0Harmony.dll" -type f -exec ls -l {} \;
           fi
 
       - name: Create CI Build Properties
@@ -120,6 +133,17 @@ jobs:
             echo "Current directory: $(pwd)"
             echo "Looking for: ./ScheduleOneAssemblies/Managed/Assembly-CSharp.dll"
             ls -la ./ScheduleOneAssemblies/Managed/ || echo "Directory doesn't exist"
+          fi
+          echo ""
+          echo "Testing MelonLoaderAssembliesPath resolution..."
+          if [ -f "./ScheduleOneAssemblies/MelonLoader/0Harmony.dll" ]; then
+            echo "✓ 0Harmony.dll accessible from build context"
+            ls -l ./ScheduleOneAssemblies/MelonLoader/0Harmony.dll
+          else
+            echo "✗ 0Harmony.dll NOT accessible from build context"
+            echo "Current directory: $(pwd)"
+            echo "Looking for: ./ScheduleOneAssemblies/MelonLoader/0Harmony.dll"
+            ls -la ./ScheduleOneAssemblies/MelonLoader/ || echo "Directory doesn't exist"
           fi
 
       - name: Restore dependencies
