@@ -21,26 +21,11 @@ namespace S1API.Internal.Patches
     internal static class ConsolePatches
     {
         private static readonly Logging.Log Logger = new Logging.Log("Console");
-
-#if (IL2CPPMELON)
-        /// <summary>
-        /// Patch to ensure Execute calls correctly in IL2CPP. This may be not needed in ML 0.7.1+
-        /// </summary>
-        /// <param name="__instance">The instance of the ConsoleCommand being executed.</param>
-        /// <param name="args">The list of arguments passed to the command.</param>
-        /// <returns>False to skip the original method execution.</returns>
-        [HarmonyPatch(nameof(S1Console.ConsoleCommand), "Execute")]
-        [HarmonyPrefix]
-        private static bool ExecuteIl2Cpp(S1Console.ConsoleCommand __instance, Il2CppSystem.Collections.Generic.List<string> args)
-        {
-            // call directly, it gets confused in Il2Cpp due to virtual/abstract methods
-            __instance.Execute(args);
-            return false;
-        }
-#endif
+        
 
         /// <summary>
-        /// Patch to add custom console commands derived from BaseConsoleCommand to the game's console command list.
+        /// Discover and register custom console commands derived from BaseConsoleCommand.
+        /// We keep them in a managed registry and route unknown commands to them at submit time.
         /// </summary>
         /// <param name="__instance">The instance of the S1Console being initialized.</param>
         [HarmonyPatch(typeof(S1Console), "Awake")]
@@ -49,24 +34,6 @@ namespace S1API.Internal.Patches
         {
             if (__instance == null)
                 return;
-
-#if (MONOMELON || MONOBEPINEX)
-            var commandsField = typeof(S1Console).GetField("commands", BindingFlags.NonPublic | BindingFlags.Static);
-            if (commandsField == null)
-            {
-                Logger.Warning("Failed to find private static field 'commands' in S1Console");
-                return;
-            }
-
-            var commandsDict = (IDictionary<string, S1Console.ConsoleCommand>?)commandsField.GetValue(null);
-            if (commandsDict == null)
-            {
-                Logger.Warning("'commands' dictionary is null");
-                return;
-            }
-#elif (IL2CPPMELON || IL2CPPBEPINEX)
-            var commandsDict = S1Console.commands;
-#endif
 
             var commandTypes = ReflectionUtils.GetDerivedClasses<BaseConsoleCommand>();
             foreach (var type in commandTypes)
@@ -79,11 +46,8 @@ namespace S1API.Internal.Patches
                 try
                 {
                     var userCommand = (BaseConsoleCommand)Activator.CreateInstance(type)!;
-
-                    var wrapped = new ConsoleCommandWrapper(userCommand);
-
-                    commandsDict.Add(userCommand.CommandWord, wrapped);
-                    S1Console.Commands.Add(wrapped);
+                    CustomConsoleRegistry.Register(userCommand);
+                    Logger.Msg($"Registered custom command '{userCommand.CommandWord}' into managed registry");
                 }
                 catch (Exception e)
                 {
@@ -91,5 +55,84 @@ namespace S1API.Internal.Patches
                 }
             }
         }
+
+#if (MONOMELON || MONOBEPINEX)
+        private static FieldInfo? _monoCommandsField;
+
+        /// <summary>
+        /// Routes unknown commands to our managed registry on Mono.
+        /// </summary>
+        [HarmonyPatch(typeof(S1Console), nameof(S1Console.SubmitCommand), new Type[] { typeof(System.Collections.Generic.List<string>) })]
+        [HarmonyPrefix]
+        private static bool RouteCustomCommandsMono(System.Collections.Generic.List<string> args)
+        {
+            try
+            {
+                if (args == null || args.Count == 0)
+                    return true;
+
+                string? cmd = args[0];
+                if (string.IsNullOrEmpty(cmd))
+                    return true;
+
+                string key = cmd.ToLowerInvariant();
+
+                // If the game's dictionary has this command, let it handle it
+                _monoCommandsField ??= typeof(S1Console).GetField("commands", BindingFlags.NonPublic | BindingFlags.Static);
+                var dict = _monoCommandsField?.GetValue(null) as IDictionary<string, S1Console.ConsoleCommand>;
+                if (dict != null && dict.ContainsKey(key))
+                    return true;
+
+                // Otherwise try our managed registry
+                if (CustomConsoleRegistry.TryExecuteManaged(args))
+                    return false; // handled
+
+                return true;
+            }
+            catch (Exception e)
+            {
+                Logger.Warning($"[Console] Custom command routing failed (Mono): {e.Message}");
+                return true;
+            }
+        }
+#endif
+
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+        /// <summary>
+        /// Routes unknown commands to our managed registry on Il2Cpp.
+        /// </summary>
+        [HarmonyPatch(typeof(S1Console), nameof(S1Console.SubmitCommand), new Type[] { typeof(Il2CppSystem.Collections.Generic.List<string>) })]
+        [HarmonyPrefix]
+        private static bool RouteCustomCommandsIl2Cpp(Il2CppSystem.Collections.Generic.List<string> args)
+        {
+            try
+            {
+                if (args == null || args.Count == 0)
+                    return true;
+
+                var first = args[0];
+                if (first == null)
+                    return true;
+
+                string key = first.ToLower();
+
+                // If the game's dictionary has this command, let it handle it
+                var dict = S1Console.commands;
+                if (dict != null && dict.ContainsKey(key))
+                    return true;
+
+                // Otherwise try our managed registry
+                if (CustomConsoleRegistry.TryExecute(args))
+                    return false; // handled
+
+                return true;
+            }
+            catch (Exception e)
+            {
+                Logger.Warning($"[Console] Custom command routing failed (Il2Cpp): {e.Message}");
+                return true;
+            }
+        }
+#endif
     }
 }

@@ -4,6 +4,7 @@ namespace S1API.Console
 {
     /// <summary>
     /// Abstract base class for creating console commands.
+    /// Inherit from this base class to auto-register a custom command in the API.
     /// </summary>
     public abstract class BaseConsoleCommand
     {
