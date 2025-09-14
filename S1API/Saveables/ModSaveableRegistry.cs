@@ -22,9 +22,7 @@ namespace S1API.Saveables
 		internal static readonly List<Entry> Registered = new List<Entry>();
 
 		/// <summary>
-		/// Register a saveable for persistence. Optional custom folder name under Modded/Saveables.
-		/// 
-		/// [OBSOLETE] This method is deprecated. Classes that directly inherit from Saveable are automatically discovered.
+		/// DEPRECATED: Classes that directly inherit from Saveable are automatically discovered.
 		/// </summary>
 		[Obsolete("Manual registration is no longer required. Classes that directly inherit from Saveable are automatically discovered.")]
 		public static void Register(Saveable saveable, string? folderName = null)

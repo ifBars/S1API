@@ -26,7 +26,9 @@ If you're a player who wants to use mods that require S1API, follow these steps:
 
 ### For Mod Developers
 
-If you're a mod developer who wants to use S1API in your mod, follow these steps:
+For the quickest way to get started making a mod with S1API, you can use the [S1APITemplate project](https://github.com/ifBars/S1APITemplate).
+
+For a more manual approach, follow these steps:
 
 1. **Obtain S1API.Forked**
    - Install S1API.Forked following the steps in the "For Mod Users" section above.

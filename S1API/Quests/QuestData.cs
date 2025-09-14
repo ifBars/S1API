@@ -1,7 +1,7 @@
 ﻿namespace S1API.Quests
 {
     /// <summary>
-    /// INTERNAL: Generic data applied for all custom quests.
+    /// Generic data applied for all custom quests.
     /// </summary>
     public class QuestData
     {

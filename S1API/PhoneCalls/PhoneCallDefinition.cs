@@ -42,7 +42,7 @@ namespace S1API.PhoneCalls
         protected readonly System.Collections.Generic.List<CallStageEntry> StageEntries = new System.Collections.Generic.List<CallStageEntry>();
 
         /// <summary>
-        /// INTERNAL: Public constructor used for instancing a new <see cref="S1ScriptableObjects.PhoneCallData"/>
+        /// Public constructor used for instancing a new <see cref="S1ScriptableObjects.PhoneCallData"/>
         /// </summary>
         /// <param name="name">The name of the caller</param>
         /// <param name="profilePicture">The sprite of the caller</param>
@@ -55,7 +55,7 @@ namespace S1API.PhoneCalls
         }
 
         /// <summary>
-        /// INTERNAL: Creates a new phone call definition using an NPC as the caller.
+        /// Creates a new phone call definition using an NPC as the caller.
         /// Initializes the underlying PhoneCallData and sets up the caller information from the NPC.
         /// </summary>
         /// <param name="npcCallerID">The <see cref="NPC"/> instance to use for the caller information.</param>
