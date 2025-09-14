@@ -157,13 +157,13 @@ jobs:
 
       - name: Build documentation
         run: |
-          cd S1API/S1API
+          cd S1API
           docfx docfx.json
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./S1API/S1API/_site
+          path: ./S1API/_site
 
   deploy:
     environment:
