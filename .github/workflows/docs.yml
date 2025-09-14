@@ -40,46 +40,46 @@ jobs:
 
       - name: Create Assembly Directory Structure
         run: |
-          mkdir -p ScheduleOneAssemblies/Managed
-          mkdir -p ScheduleOneAssemblies/Il2CppAssemblies/MelonLoader
-          mkdir -p ScheduleOneAssemblies/Il2CppAssemblies/BepInEx
-          mkdir -p ScheduleOneAssemblies/MelonLoader
-          mkdir -p ScheduleOneAssemblies/BepInEx
+          mkdir -p S1API/ScheduleOneAssemblies/Managed
+          mkdir -p S1API/ScheduleOneAssemblies/Il2CppAssemblies/MelonLoader
+          mkdir -p S1API/ScheduleOneAssemblies/Il2CppAssemblies/BepInEx
+          mkdir -p S1API/ScheduleOneAssemblies/MelonLoader
+          mkdir -p S1API/ScheduleOneAssemblies/BepInEx
 
       - name: Copy Game Assemblies
         run: |
           # Copy Mono assemblies
-          cp -r game-assemblies/Managed/* ScheduleOneAssemblies/Managed/ || echo "No Mono assemblies found"
+          cp -r game-assemblies/Managed/* S1API/ScheduleOneAssemblies/Managed/ || echo "No Mono assemblies found"
           
           # Copy IL2CPP assemblies for MelonLoader
-          cp -r game-assemblies/Il2CppAssemblies/MelonLoader/* ScheduleOneAssemblies/Il2CppAssemblies/MelonLoader/ || echo "No IL2CPP MelonLoader assemblies found"
+          cp -r game-assemblies/Il2CppAssemblies/MelonLoader/* S1API/ScheduleOneAssemblies/Il2CppAssemblies/MelonLoader/ || echo "No IL2CPP MelonLoader assemblies found"
           
           # Copy IL2CPP assemblies for BepInEx
-          cp -r game-assemblies/Il2CppAssemblies/BepInEx/* ScheduleOneAssemblies/Il2CppAssemblies/BepInEx/ || echo "No IL2CPP BepInEx assemblies found"
+          cp -r game-assemblies/Il2CppAssemblies/BepInEx/* S1API/ScheduleOneAssemblies/Il2CppAssemblies/BepInEx/ || echo "No IL2CPP BepInEx assemblies found"
           
           # Copy mod loader assemblies
-          cp -r game-assemblies/MelonLoader/* ScheduleOneAssemblies/MelonLoader/ || echo "No MelonLoader assemblies found"
-          cp -r game-assemblies/BepInEx/* ScheduleOneAssemblies/BepInEx/ || echo "No BepInEx assemblies found"
+          cp -r game-assemblies/MelonLoader/* S1API/ScheduleOneAssemblies/MelonLoader/ || echo "No MelonLoader assemblies found"
+          cp -r game-assemblies/BepInEx/* S1API/ScheduleOneAssemblies/BepInEx/ || echo "No BepInEx assemblies found"
 
       - name: Create CI Build Properties
         run: |
-          cat > ci.build.props << 'EOF'
+          cat > S1API/ci.build.props << 'EOF'
           <Project>
               <PropertyGroup>
                   <AutomateLocalDeployment>false</AutomateLocalDeployment>
                   
-                  <!-- CI Assembly Paths -->
-                  <MelonLoaderAssembliesPath>./ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
-                  <BepInExAssembliesPath>./ScheduleOneAssemblies/BepInEx</BepInExAssembliesPath>
+                  <!-- CI Assembly Paths (relative to S1API/S1API.csproj) -->
+                  <MelonLoaderAssembliesPath>../ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
+                  <BepInExAssembliesPath>../ScheduleOneAssemblies/BepInEx</BepInExAssembliesPath>
                   
                   <!-- Mono Configuration -->
                   <LocalMonoDeploymentPath>null</LocalMonoDeploymentPath>
-                  <MonoAssembliesPath>./ScheduleOneAssemblies/Managed</MonoAssembliesPath>
+                  <MonoAssembliesPath>../ScheduleOneAssemblies/Managed</MonoAssembliesPath>
                   
                   <!-- Il2Cpp Configuration -->
                   <LocalIl2CppDeploymentPath>null</LocalIl2CppDeploymentPath>
-                  <Il2CppAssembliesPath Condition="'$(Configuration)' == 'Il2CppMelon'">./ScheduleOneAssemblies/Il2CppAssemblies/MelonLoader</Il2CppAssembliesPath>
-                  <Il2CppAssembliesPath Condition="'$(Configuration)' == 'Il2CppBepInEx'">./ScheduleOneAssemblies/Il2CppAssemblies/BepInEx</Il2CppAssembliesPath>
+                  <Il2CppAssembliesPath Condition="'$(Configuration)' == 'Il2CppMelon'">../ScheduleOneAssemblies/Il2CppAssemblies/MelonLoader</Il2CppAssembliesPath>
+                  <Il2CppAssembliesPath Condition="'$(Configuration)' == 'Il2CppBepInEx'">../ScheduleOneAssemblies/Il2CppAssemblies/BepInEx</Il2CppAssembliesPath>
               </PropertyGroup>
           </Project>
           EOF
