@@ -6,7 +6,7 @@ Apps integrate with the native Home Screen, spawn icons, and manage open/close s
 ## Lifecycle
 
 - Derive from `PhoneApp`
-- Construct your app (Registerable base calls `OnCreated` -> registration)
+- Do not manually register; S1API auto-discovers `PhoneApp` subclasses when the phone `HomeScreen` starts
 - Implement `OnCreatedUI(GameObject container)` to build your UI
 - Optionally override `OnPhoneClosed()` and `Exit(ExitAction exit)` for UX
 
@@ -20,10 +20,17 @@ using S1API.UI;
 
 public class HelloWorldApp : PhoneApp
 {
+    public static HelloWorldApp Instance;
     protected override string AppName => "HelloWorld";
     protected override string AppTitle => "Hello World";
     protected override string IconLabel => "Hello";
-    protected override string IconFileName => "hello.png";
+    protected override string IconFileName => "hello.png"; // put this image next to your mod dll
+
+    protected override void OnCreated()
+    {
+        base.OnCreated();
+        Instance = this;
+    }
 
     protected override void OnCreatedUI(GameObject container)
     {
@@ -33,14 +40,10 @@ public class HelloWorldApp : PhoneApp
 }
 ```
 
-Register from your mod entry point:
+Registration is automatic:
 
-```csharp
-public override void OnInitializeMelon()
-{
-    _ = new HelloWorldApp();
-}
-```
+- Ensure your app type is `public`.
+- S1API will instantiate it, register it, and spawn its UI/icon at runtime.
 
 ## Orientation
 
@@ -55,5 +58,3 @@ Override `Orientation` to `Vertical` for portrait-style apps. S1API adjusts phon
 
 - Keep `AppName` unique
 - Use `UIFactory` helpers to match native look
-- Close your app in `Exit` when escape/home is pressed if open
-

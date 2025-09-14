@@ -36,7 +36,12 @@ call.Build();
 S1API.PhoneCalls.CallManager.QueueCall(call);
 ```
 
-S1API queues calls safely and feeds them to the game's queue when it's free. You can clear pending calls with `CallManager.ClearPendingQueue()`.
+S1API queues calls safely and feeds them to the game when it's free. S1API also patches the game's call system to route calls through S1API's queue.
+
+Utilities:
+
+- `CallManager.PendingCount`: how many calls are queued in S1API (not the game's active call)
+- `CallManager.ClearPendingQueue()`: clear all pending S1API calls (does not affect current in-game call)
 
 ## From an NPC
 
