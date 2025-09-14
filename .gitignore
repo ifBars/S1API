@@ -8,6 +8,7 @@ bin/
 
 # Build props
 local.*
+ci.*
 
 # Local assembly references
 ### TODO: ScheduleOneAssemblies is deprecated and needs removed after communications

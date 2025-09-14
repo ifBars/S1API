@@ -5,6 +5,9 @@
     <!-- Imports any local build properties over the GitHub repository one. -->
     <Import Project="../local.build.props" Condition="Exists('../local.build.props')" />
 
+    <!-- Imports CI build properties for GitHub Actions -->
+    <Import Project="../ci.build.props" Condition="Exists('../ci.build.props')" />
+
     <!-- General properties -->
     <PropertyGroup>
         <Authors>ifBars</Authors>

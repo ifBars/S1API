@@ -20,26 +20,75 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout S1API
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Checkout Game Assemblies
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.GAME_ASSEMBLIES_REPO }}
+          token: ${{ secrets.GAME_ASSEMBLIES_TOKEN }}
+          path: game-assemblies
+          fetch-depth: 1
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
+      - name: Create Assembly Directory Structure
+        run: |
+          mkdir -p ScheduleOneAssemblies/Managed
+          mkdir -p ScheduleOneAssemblies/Il2CppAssemblies/MelonLoader
+          mkdir -p ScheduleOneAssemblies/Il2CppAssemblies/BepInEx
+          mkdir -p ScheduleOneAssemblies/MelonLoader
+          mkdir -p ScheduleOneAssemblies/BepInEx
+
+      - name: Copy Game Assemblies
+        run: |
+          # Copy Mono assemblies
+          cp -r game-assemblies/Managed/* ScheduleOneAssemblies/Managed/ || echo "No Mono assemblies found"
+          
+          # Copy IL2CPP assemblies for MelonLoader
+          cp -r game-assemblies/Il2CppAssemblies/MelonLoader/* ScheduleOneAssemblies/Il2CppAssemblies/MelonLoader/ || echo "No IL2CPP MelonLoader assemblies found"
+          
+          # Copy IL2CPP assemblies for BepInEx
+          cp -r game-assemblies/Il2CppAssemblies/BepInEx/* ScheduleOneAssemblies/Il2CppAssemblies/BepInEx/ || echo "No IL2CPP BepInEx assemblies found"
+          
+          # Copy mod loader assemblies
+          cp -r game-assemblies/MelonLoader/* ScheduleOneAssemblies/MelonLoader/ || echo "No MelonLoader assemblies found"
+          cp -r game-assemblies/BepInEx/* ScheduleOneAssemblies/BepInEx/ || echo "No BepInEx assemblies found"
+
+      - name: Create CI Build Properties
+        run: |
+          cat > ci.build.props << 'EOF'
+          <Project>
+              <PropertyGroup>
+                  <AutomateLocalDeployment>false</AutomateLocalDeployment>
+                  
+                  <!-- CI Assembly Paths -->
+                  <MelonLoaderAssembliesPath>./ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
+                  <BepInExAssembliesPath>./ScheduleOneAssemblies/BepInEx</BepInExAssembliesPath>
+                  
+                  <!-- Mono Configuration -->
+                  <LocalMonoDeploymentPath>null</LocalMonoDeploymentPath>
+                  <MonoAssembliesPath>./ScheduleOneAssemblies/Managed</MonoAssembliesPath>
+                  
+                  <!-- Il2Cpp Configuration -->
+                  <LocalIl2CppDeploymentPath>null</LocalIl2CppDeploymentPath>
+                  <Il2CppAssembliesPath Condition="'$(Configuration)' == 'Il2CppMelon'">./ScheduleOneAssemblies/Il2CppAssemblies/MelonLoader</Il2CppAssembliesPath>
+                  <Il2CppAssembliesPath Condition="'$(Configuration)' == 'Il2CppBepInEx'">./ScheduleOneAssemblies/Il2CppAssemblies/BepInEx</Il2CppAssembliesPath>
+              </PropertyGroup>
+          </Project>
+          EOF
+
       - name: Restore dependencies
         run: dotnet restore S1API.sln
 
       - name: Build S1API
         run: dotnet build S1API/S1API.csproj --no-restore -c MonoMelon
-
-      - name: Setup DocFX
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
 
       - name: Install DocFX
         run: dotnet tool install -g docfx
