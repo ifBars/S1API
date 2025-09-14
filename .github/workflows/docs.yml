@@ -46,20 +46,72 @@ jobs:
           mkdir -p S1API/ScheduleOneAssemblies/MelonLoader
           mkdir -p S1API/ScheduleOneAssemblies/BepInEx
 
+      - name: Debug Game Assemblies Structure
+        run: |
+          echo "=== Game Assemblies Repository Structure ==="
+          find game-assemblies -type f -name "*.dll" | head -20
+          echo ""
+          echo "=== Looking for Assembly-CSharp.dll ==="
+          find game-assemblies -name "Assembly-CSharp.dll" -type f
+
       - name: Copy Game Assemblies
         run: |
           # Copy Mono assemblies
-          cp -r game-assemblies/Managed/* S1API/ScheduleOneAssemblies/Managed/ || echo "No Mono assemblies found"
+          if [ -d "game-assemblies/Managed" ]; then
+            cp -r game-assemblies/Managed/* S1API/ScheduleOneAssemblies/Managed/ || echo "Failed to copy Mono assemblies"
+            echo "Copied Mono assemblies from game-assemblies/Managed/"
+          else
+            echo "No game-assemblies/Managed directory found"
+          fi
           
           # Copy IL2CPP assemblies for MelonLoader
-          cp -r game-assemblies/Il2CppAssemblies/MelonLoader/* S1API/ScheduleOneAssemblies/Il2CppAssemblies/MelonLoader/ || echo "No IL2CPP MelonLoader assemblies found"
+          if [ -d "game-assemblies/Il2CppAssemblies/MelonLoader" ]; then
+            cp -r game-assemblies/Il2CppAssemblies/MelonLoader/* S1API/ScheduleOneAssemblies/Il2CppAssemblies/MelonLoader/ || echo "Failed to copy IL2CPP MelonLoader assemblies"
+            echo "Copied IL2CPP MelonLoader assemblies"
+          else
+            echo "No game-assemblies/Il2CppAssemblies/MelonLoader directory found"
+          fi
           
           # Copy IL2CPP assemblies for BepInEx
-          cp -r game-assemblies/Il2CppAssemblies/BepInEx/* S1API/ScheduleOneAssemblies/Il2CppAssemblies/BepInEx/ || echo "No IL2CPP BepInEx assemblies found"
+          if [ -d "game-assemblies/Il2CppAssemblies/BepInEx" ]; then
+            cp -r game-assemblies/Il2CppAssemblies/BepInEx/* S1API/ScheduleOneAssemblies/Il2CppAssemblies/BepInEx/ || echo "Failed to copy IL2CPP BepInEx assemblies"
+            echo "Copied IL2CPP BepInEx assemblies"
+          else
+            echo "No game-assemblies/Il2CppAssemblies/BepInEx directory found"
+          fi
           
           # Copy mod loader assemblies
-          cp -r game-assemblies/MelonLoader/* S1API/ScheduleOneAssemblies/MelonLoader/ || echo "No MelonLoader assemblies found"
-          cp -r game-assemblies/BepInEx/* S1API/ScheduleOneAssemblies/BepInEx/ || echo "No BepInEx assemblies found"
+          if [ -d "game-assemblies/MelonLoader" ]; then
+            cp -r game-assemblies/MelonLoader/* S1API/ScheduleOneAssemblies/MelonLoader/ || echo "Failed to copy MelonLoader assemblies"
+            echo "Copied MelonLoader assemblies"
+          else
+            echo "No game-assemblies/MelonLoader directory found"
+          fi
+          
+          if [ -d "game-assemblies/BepInEx" ]; then
+            cp -r game-assemblies/BepInEx/* S1API/ScheduleOneAssemblies/BepInEx/ || echo "Failed to copy BepInEx assemblies"
+            echo "Copied BepInEx assemblies"
+          else
+            echo "No game-assemblies/BepInEx directory found"
+          fi
+
+      - name: Verify Assembly Copies
+        run: |
+          echo "=== Verifying Assembly Structure ==="
+          ls -la S1API/ScheduleOneAssemblies/
+          echo ""
+          echo "=== Managed Assemblies ==="
+          ls -la S1API/ScheduleOneAssemblies/Managed/ | head -10
+          echo ""
+          echo "=== Critical Assembly Check ==="
+          if [ -f S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll ]; then
+            echo "✓ Found Assembly-CSharp.dll"
+            ls -l S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll
+          else
+            echo "✗ Missing Assembly-CSharp.dll"
+            echo "Attempting auto-discovery..."
+            find game-assemblies -name "Assembly-CSharp.dll" -type f -exec ls -l {} \;
+          fi
 
       - name: Create CI Build Properties
         run: |
@@ -84,11 +136,28 @@ jobs:
           </Project>
           EOF
 
+      - name: Verify Build Properties
+        run: |
+          echo "=== CI Build Properties ==="
+          cat S1API/ci.build.props
+          echo ""
+          echo "=== MSBuild Property Resolution Test ==="
+          cd S1API
+          echo "Testing MonoAssembliesPath resolution..."
+          if [ -f "../ScheduleOneAssemblies/Managed/Assembly-CSharp.dll" ]; then
+            echo "✓ Assembly-CSharp.dll accessible from build context"
+          else
+            echo "✗ Assembly-CSharp.dll NOT accessible from build context"
+            echo "Current directory: $(pwd)"
+            echo "Looking for: ../ScheduleOneAssemblies/Managed/Assembly-CSharp.dll"
+            ls -la ../ScheduleOneAssemblies/Managed/ || echo "Directory doesn't exist"
+          fi
+
       - name: Restore dependencies
         run: dotnet restore S1API.sln
 
       - name: Build S1API
-        run: dotnet build S1API/S1API.csproj --no-restore -c MonoMelon
+        run: dotnet build S1API/S1API.csproj --no-restore -c MonoMelon -v normal
 
       - name: Install DocFX
         run: dotnet tool install -g docfx
