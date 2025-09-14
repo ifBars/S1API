@@ -1,4 +1,6 @@
 # S1API - A Schedule One Mono / Il2Cpp Cross Compatibility Layer
+[![Build and Deploy Documentation](https://github.com/ifBars/S1API/actions/workflows/docs.yml/badge.svg)](https://github.com/ifBars/S1API/actions/workflows/docs.yml)
+
 S1API is an open source collaboration project to help standardize Schedule One modding processes.
 The goal is to provide a standard place for common functionalities so you can focus on making content versus reverse engineering the game.
 
