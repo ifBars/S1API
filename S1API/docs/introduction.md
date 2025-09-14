@@ -13,7 +13,7 @@ The goals are predictable behavior, safe integration with the base game, and a s
 
 ## Highlights
 
-- Cross-runtime configurations: `MonoMelon`, `MonoBepInEx`, `Il2CppMelon`, `Il2CppBepInEx`
+- Cross-runtime configurations: `MonoMelon`, `Il2CppMelon`
 - Phone App lifecycle: registration, icon spawning, open/close handling, input integration
 - UI primitives: panels, lists, buttons, layouts, and helpers via `UIFactory`
 - Saveables: annotate fields and get robust JSON persistence per-save-slot

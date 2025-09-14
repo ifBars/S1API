@@ -6,7 +6,7 @@ _layout: landing
 
 Welcome to the **S1API Documentation** - A Schedule One Mono / IL2CPP Cross Compatibility Layer.
 
-S1API provides a unified API for developing mods that work across both Mono and IL2CPP runtimes in Schedule One, supporting both MelonLoader and BepInEx mod frameworks.
+S1API provides a unified API for developing mods that work across both Mono and IL2CPP runtimes in Schedule One.
 
 ## Quick Start
 
