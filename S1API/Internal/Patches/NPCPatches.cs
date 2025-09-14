@@ -1,9 +1,25 @@
 ﻿#if (IL2CPPMELON)
 using S1Loaders = Il2CppScheduleOne.Persistence.Loaders;
 using S1NPCs = Il2CppScheduleOne.NPCs;
+using Il2CppFishNet;
+using Il2CppScheduleOne.DevUtilities;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Loaders = ScheduleOne.Persistence.Loaders;
 using S1NPCs = ScheduleOne.NPCs;
+using FishNet;
+using ScheduleOne.DevUtilities;
+#endif
+
+#if (IL2CPPMELON)
+using S1Money = Il2CppScheduleOne.Money;
+#elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
+using S1Money = ScheduleOne.Money;
+#endif
+
+#if (IL2CPPMELON)
+using S1Economy = Il2CppScheduleOne.Economy;
+#elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
+using S1Economy = ScheduleOne.Economy;
 #endif
 
 #if (IL2CPPMELON)
@@ -22,6 +38,7 @@ using System;
 using System.IO;
 using System.Reflection;
 using HarmonyLib;
+
 using MelonLoader;
 using S1API.Entities;
 using S1API.Internal.Utils;
@@ -34,6 +51,8 @@ namespace S1API.Internal.Patches
     [HarmonyPatch]
     internal class NPCPatches
     {
+        private static readonly Logging.Log Logger = new Logging.Log("NPCPatches");
+        
         /// <summary>
         /// Patching performed for when game NPCs are loaded.
         /// </summary>
@@ -154,6 +173,64 @@ namespace S1API.Internal.Patches
         }
 
         /// <summary>
+        /// Temporary patch while S1API NPCs are not networked
+        /// Handle NPCLoader.Load for custom S1API NPCs to avoid inventory hydration which uses networking.
+        /// Replicates core parts of the original loader except Inventory and Health (Health already guarded).
+        /// </summary>
+        [HarmonyPatch(typeof(S1Loaders.NPCLoader), nameof(S1Loaders.NPCLoader.Load))]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static bool NPCLoader_Load_Prefix(S1Datas.DynamicSaveData saveData)
+        {
+            if (saveData == null)
+                return true;
+
+            var baseData = saveData.ExtractBaseData<S1Datas.NPCData>();
+            if (baseData == null || string.IsNullOrEmpty(baseData.ID))
+                return true;
+
+            var s1BaseNpc = FindBaseNpcById(baseData.ID);
+            if (s1BaseNpc == null)
+                return true;
+
+            var apiNpc = FindWrapperForS1Npc(s1BaseNpc);
+            if (apiNpc == null || !apiNpc.IsCustomNPC)
+                return true; // run original for base NPCs
+
+            // Custom S1API NPC: perform safe subset of loading and skip original
+            try
+            {
+                s1BaseNpc.Load(saveData, baseData);
+
+                if (saveData.TryGetData("Relationship", out S1Datas.RelationshipData rel))
+                {
+                    if (!float.IsNaN(rel.RelationDelta) && !float.IsInfinity(rel.RelationDelta))
+                        s1BaseNpc.RelationData.SetRelationship(rel.RelationDelta);
+                    if (rel.Unlocked)
+                        s1BaseNpc.RelationData.Unlock(rel.UnlockType, notify: false);
+                }
+
+                if (saveData.TryGetData("MessageConversation", out S1Datas.MSGConversationData convo))
+                {
+                    s1BaseNpc.MSGConversation.Load(convo);
+                }
+
+                if (saveData.TryGetData("CustomerData", out S1Datas.CustomerData cust) && s1BaseNpc.GetComponent<S1Economy.Customer>() != null)
+                {
+                    s1BaseNpc.GetComponent<S1Economy.Customer>().Load(cust);
+                }
+
+                // Intentionally skip Inventory hydration for custom NPCs
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning($"[S1API] NPCLoader.Load guard failed for custom NPC: {ex.Message}");
+            }
+
+            return false; // skip original
+        }
+
+        /// <summary>
         /// Patching performed for when an NPC is destroyed.
         /// </summary>
         /// <param name="__instance">Instance of the NPC</param>
@@ -173,6 +250,7 @@ namespace S1API.Internal.Patches
         }
 
         /// <summary>
+        /// Temporary patch while S1API NPCs are not networked
         /// Prevent loading Health for custom NPCs during save load to avoid SyncVar initialization issues.
         /// Base NPCs continue to use the original method.
         /// </summary>
@@ -188,6 +266,90 @@ namespace S1API.Internal.Patches
             if (apiNpc != null && apiNpc.IsCustomNPC)
                 return false; // skip original load for custom NPCs
             return true;
+        }
+
+        /// <summary>
+        /// Temporary patch while S1API NPCs are not networked
+        /// Skip networking in NPCInventory.OnSleepStart for custom NPCs and perform local-only updates.
+        /// Prevents RPC paths which require FishNet initialization.
+        /// </summary>
+        [HarmonyPatch(typeof(S1NPCs.NPCInventory), "OnSleepStart")]
+        [HarmonyPrefix]
+        private static bool NPCInventory_OnSleepStart_Prefix(S1NPCs.NPCInventory __instance)
+        {
+            var baseNpc = __instance.GetComponent<S1NPCs.NPC>();
+            var apiNpc = baseNpc != null ? FindWrapperForS1Npc(baseNpc) : null;
+            if (apiNpc == null || !apiNpc.IsCustomNPC)
+                return true; // run original for base NPCs
+
+            if (!InstanceFinder.IsServer)
+                return false; // mirror original early-return for clients
+
+            try
+            {
+                // Clear inventory without networking
+                if (__instance.ClearInventoryEachNight)
+                {
+                    for (int i = 0; i < __instance.ItemSlots.Count; i++)
+                    {
+                        var slot = __instance.ItemSlots[i];
+                        if (slot != null)
+                            slot.ClearStoredInstance(true);
+                    }
+                }
+
+                // Respect minimal fill
+                if (__instance.GetItemCount() >= 3)
+                    return false;
+
+                // Random cash (local-only)
+                if (__instance.RandomCash)
+                {
+                    int amount = UnityEngine.Random.Range(__instance.RandomCashMin, __instance.RandomCashMax);
+                    if (amount > 0)
+                    {
+                        var cash = NetworkSingleton<S1Money.MoneyManager>.Instance.GetCashInstance(amount);
+                        __instance.InsertItem(cash, network: false);
+                    }
+                }
+
+                // Random items (local-only)
+                if (__instance.RandomItems && __instance.RandomItemDefinitions != null && __instance.RandomItemDefinitions.Length > 0)
+                {
+                    int count = UnityEngine.Random.Range(__instance.RandomItemMin, __instance.RandomItemMax + 1);
+                    for (int i = 0; i < count; i++)
+                    {
+                        var def = __instance.RandomItemDefinitions[UnityEngine.Random.Range(0, __instance.RandomItemDefinitions.Length)];
+                        var inst = def.GetDefaultInstance();
+                        __instance.InsertItem(inst, network: false);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning($"[S1API] NPCInventory.OnSleepStart guard failed for custom NPC: {ex.Message}");
+            }
+
+            // Skip original method for custom NPCs
+            return false;
+        }
+
+        /// <summary>
+        /// Temporary patch while S1API NPCs are not networked
+        /// Guard Revive() for custom S1API NPCs to avoid Health SyncVar access before FishNet init.
+        /// Applies equivalent revive effects without touching the SyncVar setter path.
+        /// </summary>
+        [HarmonyPatch(typeof(S1NPCs.NPCHealth), nameof(S1NPCs.NPCHealth.Revive))]
+        [HarmonyPrefix]
+        private static bool NPCHealth_Revive_Prefix(S1NPCs.NPCHealth __instance)
+        {
+            var baseNpc = __instance.GetComponent<S1NPCs.NPC>();
+            var apiNpc = baseNpc != null ? FindWrapperForS1Npc(baseNpc) : null;
+            if (apiNpc == null || !apiNpc.IsCustomNPC)
+                return true; // use original for base NPCs
+
+            // Skip S1API NPCs for now
+            return false;
         }
 
         /// <summary>
