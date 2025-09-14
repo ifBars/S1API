@@ -15,3 +15,11 @@ ScheduleOneAssemblies/
 *.bin
 
 nuget-upload.txt
+
+# DocFX
+**/S1API/_site/
+**/S1API/api/
+**/S1API/.docfx/
+**/.docfx/
+**/docfx.json.bak
+**/xrefmap.yml

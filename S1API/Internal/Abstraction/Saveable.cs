@@ -19,20 +19,24 @@ using S1Datas = ScheduleOne.Persistence.Datas;
 namespace S1API.Internal.Abstraction
 {
     /// <summary>
-    /// INTERNAL: Generic wrapper for saveable classes.
-    /// Intended for use within the API only.
+    /// Generic wrapper for saveable classes.
     /// </summary>
     public abstract class Saveable : Registerable, ISaveable
     {
         /// <summary>
-        /// TODO
+        /// INTERNAL: Explicit interface implementation that delegates to the internal LoadInternal method.
+        /// Loads all fields marked with the <see cref="SaveableField"/> attribute from JSON files in the specified folder.
         /// </summary>
+        /// <param name="folderPath">The folder path containing the save files to load.</param>
         void ISaveable.LoadInternal(string folderPath) =>
             LoadInternal(folderPath);
 
         /// <summary>
-        /// TODO
+        /// INTERNAL: Loads all fields marked with the <see cref="SaveableField"/> attribute from JSON files in the specified folder.
+        /// This method uses reflection to find fields with the SaveableField attribute and deserializes their values from JSON files.
+        /// After loading all fields, it calls the <see cref="OnLoaded"/> method to allow derived classes to perform additional initialization.
         /// </summary>
+        /// <param name="folderPath">The folder path containing the save files to load from.</param>
         internal virtual void LoadInternal(string folderPath)
         {
             FieldInfo[] saveableFields = GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -60,14 +64,23 @@ namespace S1API.Internal.Abstraction
         }
 
         /// <summary>
-        /// TODO
+        /// INTERNAL: Explicit interface implementation that delegates to the internal SaveInternal method.
+        /// Saves all fields marked with the <see cref="SaveableField"/> attribute to JSON files in the specified folder.
         /// </summary>
+        /// <param name="folderPath">The folder path where save files should be written.</param>
+        /// <param name="extraSaveables">Reference to a list of extra saveable files that should not be deleted during cleanup.</param>
         void ISaveable.SaveInternal(string folderPath, ref List<string> extraSaveables) =>
             SaveInternal(folderPath, ref extraSaveables);
 
         /// <summary>
-        /// TODO
+        /// INTERNAL: Saves all fields marked with the <see cref="SaveableField"/> attribute to JSON files in the specified folder.
+        /// This method uses reflection to find fields with the SaveableField attribute and serializes their values to JSON files.
+        /// Null fields result in their corresponding save files being deleted. Non-null fields are added to the extraSaveables list
+        /// to prevent the base game from deleting them during cleanup. After saving all fields, it calls the <see cref="OnSaved"/> method
+        /// to allow derived classes to perform additional finalization.
         /// </summary>
+        /// <param name="folderPath">The folder path where save files should be written.</param>
+        /// <param name="extraSaveables">Reference to a list of extra saveable files that should not be deleted during cleanup.</param>
         internal virtual void SaveInternal(string folderPath, ref List<string> extraSaveables)
         {
             FieldInfo[] saveableFields = ReflectionUtils.GetAllFields(GetType(), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -161,22 +174,28 @@ namespace S1API.Internal.Abstraction
         }
 
         /// <summary>
-        /// TODO
+        /// INTERNAL: Explicit interface implementation that delegates to the virtual OnLoaded method.
+        /// Called after all saveable fields have been loaded from their respective JSON files.
         /// </summary>
         void ISaveable.OnLoaded() => OnLoaded();
 
         /// <summary>
-        /// TODO
+        /// Called after all saveable fields have been loaded from their respective JSON files.
+        /// This method can be overridden in derived classes to perform additional initialization
+        /// or processing after the save data has been restored.
         /// </summary>
         protected virtual void OnLoaded() { }
 
         /// <summary>
-        /// TODO
+        /// INTERNAL: Explicit interface implementation that delegates to the virtual OnSaved method.
+        /// Called after all saveable fields have been saved to their respective JSON files.
         /// </summary>
         void ISaveable.OnSaved() => OnSaved();
 
         /// <summary>
-        /// TODO
+        /// Called after all saveable fields have been saved to their respective JSON files.
+        /// This method can be overridden in derived classes to perform additional finalization
+        /// or processing after the save data has been written to disk.
         /// </summary>
         protected virtual void OnSaved() { }
     }

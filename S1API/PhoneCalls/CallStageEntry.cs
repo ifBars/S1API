@@ -35,20 +35,22 @@ namespace S1API.PhoneCalls
 
         // ReSharper disable once MemberCanBePrivate.Global
         /// <summary>
-        /// @TODO: Docs
+        /// INTERNAL: List of system triggers that execute when this call stage starts.
+        /// These triggers are executed before the stage text is displayed to the player.
         /// </summary>
         protected readonly System.Collections.Generic.List<SystemTriggerEntry> StartTriggerEntries = new System.Collections.Generic.List<SystemTriggerEntry>();
 
         // ReSharper disable once MemberCanBePrivate.Global
         /// <summary>
-        /// @TODO: Docs
+        /// INTERNAL: List of system triggers that execute when this call stage completes.
+        /// These triggers are executed after the player has finished reading the stage text.
         /// </summary>
         protected readonly System.Collections.Generic.List<SystemTriggerEntry> DoneTriggerEntries = new System.Collections.Generic.List<SystemTriggerEntry>();
 
         /// <summary>
         /// INTERNAL: Creates a stage entry from an in-game stage instance.
         /// </summary>
-        /// <param name="stage"></param>
+        /// <param name="stage">The underlying game stage instance to wrap.</param>
         internal CallStageEntry(S1ScriptableObjects.PhoneCallData.Stage stage) =>
             S1Stage = stage;
 

@@ -21,7 +21,7 @@ namespace S1API.PhoneCalls
         /// <summary>
         /// INTERNAL: Creates a caller id entry from an in-game caller id instance.
         /// </summary>
-        /// <param name="s1CallerID"></param>
+        /// <param name="s1CallerID">The underlying game caller ID instance to wrap.</param>
         internal CallerDefinition(S1CallerID s1CallerID)
             => S1CallerIDEntry = s1CallerID;
 

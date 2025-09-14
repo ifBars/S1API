@@ -17,6 +17,10 @@ using UnityEngine;
 
 namespace S1API.PhoneCalls
 {
+    /// <summary>
+    /// Abstract base class for defining phone calls in Schedule One.
+    /// Provides methods to create and configure phone call data including caller information and call stages.
+    /// </summary>
     public abstract class PhoneCallDefinition
     {
         // ReSharper disable once MemberCanBePrivate.Global
@@ -51,9 +55,10 @@ namespace S1API.PhoneCalls
         }
 
         /// <summary>
-        /// INTERNAL: Public constructor used for instancing a new <see cref="S1ScriptableObjects.PhoneCallData"/>
+        /// INTERNAL: Creates a new phone call definition using an NPC as the caller.
+        /// Initializes the underlying PhoneCallData and sets up the caller information from the NPC.
         /// </summary>
-        /// <param name="npcCallerID">The <see cref="NPC"/> instance to use for the caller</param>
+        /// <param name="npcCallerID">The <see cref="NPC"/> instance to use for the caller information.</param>
         protected PhoneCallDefinition(NPC? npcCallerID)
         {
             S1PhoneCallData = ScriptableObject.CreateInstance<S1ScriptableObjects.PhoneCallData>();
