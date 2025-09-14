@@ -2,9 +2,9 @@ name: Build and Deploy Documentation
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ master, main, stable ]
   pull_request:
-    branches: [ master, main ]
+    branches: [ master, main, stable ]
   workflow_dispatch:
 
 permissions:
