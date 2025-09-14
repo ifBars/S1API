@@ -41,10 +41,7 @@ jobs:
       - name: Create Assembly Directory Structure
         run: |
           mkdir -p S1API/ScheduleOneAssemblies/Managed
-          mkdir -p S1API/ScheduleOneAssemblies/Il2CppAssemblies/MelonLoader
-          mkdir -p S1API/ScheduleOneAssemblies/Il2CppAssemblies/BepInEx
           mkdir -p S1API/ScheduleOneAssemblies/MelonLoader
-          mkdir -p S1API/ScheduleOneAssemblies/BepInEx
 
       - name: Debug Game Assemblies Structure
         run: |
@@ -64,35 +61,12 @@ jobs:
             echo "No game-assemblies/Managed directory found"
           fi
           
-          # Copy IL2CPP assemblies for MelonLoader
-          if [ -d "game-assemblies/Il2CppAssemblies/MelonLoader" ]; then
-            cp -r game-assemblies/Il2CppAssemblies/MelonLoader/* S1API/ScheduleOneAssemblies/Il2CppAssemblies/MelonLoader/ || echo "Failed to copy IL2CPP MelonLoader assemblies"
-            echo "Copied IL2CPP MelonLoader assemblies"
-          else
-            echo "No game-assemblies/Il2CppAssemblies/MelonLoader directory found"
-          fi
-          
-          # Copy IL2CPP assemblies for BepInEx
-          if [ -d "game-assemblies/Il2CppAssemblies/BepInEx" ]; then
-            cp -r game-assemblies/Il2CppAssemblies/BepInEx/* S1API/ScheduleOneAssemblies/Il2CppAssemblies/BepInEx/ || echo "Failed to copy IL2CPP BepInEx assemblies"
-            echo "Copied IL2CPP BepInEx assemblies"
-          else
-            echo "No game-assemblies/Il2CppAssemblies/BepInEx directory found"
-          fi
-          
           # Copy mod loader assemblies
           if [ -d "game-assemblies/MelonLoader" ]; then
             cp -r game-assemblies/MelonLoader/* S1API/ScheduleOneAssemblies/MelonLoader/ || echo "Failed to copy MelonLoader assemblies"
             echo "Copied MelonLoader assemblies"
           else
             echo "No game-assemblies/MelonLoader directory found"
-          fi
-          
-          if [ -d "game-assemblies/BepInEx" ]; then
-            cp -r game-assemblies/BepInEx/* S1API/ScheduleOneAssemblies/BepInEx/ || echo "Failed to copy BepInEx assemblies"
-            echo "Copied BepInEx assemblies"
-          else
-            echo "No game-assemblies/BepInEx directory found"
           fi
 
       - name: Verify Assembly Copies
@@ -122,16 +96,10 @@ jobs:
                   
                   <!-- CI Assembly Paths (relative to S1API/S1API.csproj) -->
                   <MelonLoaderAssembliesPath>../ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
-                  <BepInExAssembliesPath>../ScheduleOneAssemblies/BepInEx</BepInExAssembliesPath>
                   
                   <!-- Mono Configuration -->
                   <LocalMonoDeploymentPath>null</LocalMonoDeploymentPath>
                   <MonoAssembliesPath>../ScheduleOneAssemblies/Managed</MonoAssembliesPath>
-                  
-                  <!-- Il2Cpp Configuration -->
-                  <LocalIl2CppDeploymentPath>null</LocalIl2CppDeploymentPath>
-                  <Il2CppAssembliesPath Condition="'$(Configuration)' == 'Il2CppMelon'">../ScheduleOneAssemblies/Il2CppAssemblies/MelonLoader</Il2CppAssembliesPath>
-                  <Il2CppAssembliesPath Condition="'$(Configuration)' == 'Il2CppBepInEx'">../ScheduleOneAssemblies/Il2CppAssemblies/BepInEx</Il2CppAssembliesPath>
               </PropertyGroup>
           </Project>
           EOF
