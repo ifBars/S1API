@@ -143,14 +143,15 @@ jobs:
           echo ""
           echo "=== MSBuild Property Resolution Test ==="
           cd S1API
-          echo "Testing MonoAssembliesPath resolution..."
-          if [ -f "../ScheduleOneAssemblies/Managed/Assembly-CSharp.dll" ]; then
+          echo "Testing MonoAssembliesPath resolution (expect ./ScheduleOneAssemblies from project dir)..."
+          if [ -f "./ScheduleOneAssemblies/Managed/Assembly-CSharp.dll" ]; then
             echo "✓ Assembly-CSharp.dll accessible from build context"
+            ls -l ./ScheduleOneAssemblies/Managed/Assembly-CSharp.dll
           else
             echo "✗ Assembly-CSharp.dll NOT accessible from build context"
             echo "Current directory: $(pwd)"
-            echo "Looking for: ../ScheduleOneAssemblies/Managed/Assembly-CSharp.dll"
-            ls -la ../ScheduleOneAssemblies/Managed/ || echo "Directory doesn't exist"
+            echo "Looking for: ./ScheduleOneAssemblies/Managed/Assembly-CSharp.dll"
+            ls -la ./ScheduleOneAssemblies/Managed/ || echo "Directory doesn't exist"
           fi
 
       - name: Restore dependencies

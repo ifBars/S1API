@@ -71,24 +71,52 @@
 
     <!-- Mono Specific Deps -->
     <ItemGroup Condition="'$(Configuration)' == 'MonoMelon' or '$(Configuration)' == 'MonoBepInEx'">
-<!--        <Reference Include="$(MonoAssembliesPath)\Assembly-CSharp.dll" Publicize="true" />-->
-        <Reference Include="$(MonoAssembliesPath)\Assembly-CSharp.dll" />
-        <Reference Include="$(MonoAssembliesPath)\UnityEngine.dll" />
-        <Reference Include="$(MonoAssembliesPath)\UnityEngine.CoreModule.dll" />
-        <Reference Include="$(MonoAssembliesPath)\FishNet.Runtime.dll" />
-        <Reference Include="$(MonoAssembliesPath)\UnityEngine.UI.dll" />
-		<Reference Include="$(MonoAssembliesPath)\UnityEngine.InputLegacyModule.dll" />
-        <Reference Include="$(MonoAssembliesPath)\UnityEngine.AssetBundleModule.dll" />
-        <Reference Include="$(MonoAssembliesPath)\UnityEngine.UIModule.dll" />
-        <Reference Include="$(MonoAssembliesPath)\UnityEngine.JSONSerializeModule.dll" />
-        <Reference Include="$(MonoAssembliesPath)\UnityEngine.TextRenderingModule.dll" />
-        <Reference Include="$(MonoAssembliesPath)\UnityEngine.ImageConversionModule.dll" />
-        <Reference Include="$(MonoAssembliesPath)\UnityEngine.PhysicsModule.dll" />
+        <!--<Reference Include="Assembly-CSharp" Publicize="true">
+            <HintPath>$(MonoAssembliesPath)/Assembly-CSharp.dll</HintPath>
+        </Reference> -->
+        <Reference Include="Assembly-CSharp">
+            <HintPath>$(MonoAssembliesPath)/Assembly-CSharp.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine">
+            <HintPath>$(MonoAssembliesPath)/UnityEngine.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.CoreModule">
+            <HintPath>$(MonoAssembliesPath)/UnityEngine.CoreModule.dll</HintPath>
+        </Reference>
+        <Reference Include="FishNet.Runtime">
+            <HintPath>$(MonoAssembliesPath)/FishNet.Runtime.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.UI">
+            <HintPath>$(MonoAssembliesPath)/UnityEngine.UI.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.InputLegacyModule">
+            <HintPath>$(MonoAssembliesPath)/UnityEngine.InputLegacyModule.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.AssetBundleModule">
+            <HintPath>$(MonoAssembliesPath)/UnityEngine.AssetBundleModule.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.UIModule">
+            <HintPath>$(MonoAssembliesPath)/UnityEngine.UIModule.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.JSONSerializeModule">
+            <HintPath>$(MonoAssembliesPath)/UnityEngine.JSONSerializeModule.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.TextRenderingModule">
+            <HintPath>$(MonoAssembliesPath)/UnityEngine.TextRenderingModule.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.ImageConversionModule">
+            <HintPath>$(MonoAssembliesPath)/UnityEngine.ImageConversionModule.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.PhysicsModule">
+            <HintPath>$(MonoAssembliesPath)/UnityEngine.PhysicsModule.dll</HintPath>
+        </Reference>
     </ItemGroup>
 
     <!-- Melon Deps -->
     <ItemGroup Condition="'$(Configuration)' == 'MonoMelon' or '$(Configuration)' == 'Il2CppMelon'">
-        <Reference Include="$(MelonLoaderAssembliesPath)\0Harmony.dll" />
+        <Reference Include="0Harmony">
+            <HintPath>$(MelonLoaderAssembliesPath)/0Harmony.dll</HintPath>
+        </Reference>
         <PackageReference Include="LavaGang.MelonLoader" Version="0.7.0" />
     </ItemGroup>
 
