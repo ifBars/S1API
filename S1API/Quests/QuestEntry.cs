@@ -60,8 +60,8 @@ namespace S1API.Quests
         }
 
         /// <summary>
-        /// Marks the quest entry as started.
-        /// TODO: Verify integrity of this comment information
+        /// Marks the quest entry as started and transitions its
+        /// <see cref="State"/> to the in-progress state in-game.
         /// </summary>
         public void Begin() => S1QuestEntry.Begin();
 

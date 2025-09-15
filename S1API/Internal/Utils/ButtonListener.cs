@@ -6,8 +6,8 @@ using UnityEngine.UI;
 namespace S1API.Internal.Utils
 {
     /// <summary>
-    /// Utility class for managing UI Buttons.
-    /// TODO (@omar-akermi): Is this intended to be internal instead of public??
+    /// Utility helpers for managing Unity UI <see cref="Button"/>s.
+    /// Note: lives under <c>S1API.Internal</c> and is subject to change.
     /// </summary>
     public static class ButtonUtils
     {

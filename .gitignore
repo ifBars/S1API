@@ -16,6 +16,7 @@ ScheduleOneAssemblies/
 *.bin
 
 nuget-upload.txt
+AGENTS.md
 
 # DocFX
 **/S1API/_site/

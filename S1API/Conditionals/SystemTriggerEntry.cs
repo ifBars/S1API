@@ -18,7 +18,9 @@ using S1API.Quests.Constants;
 namespace S1API.Conditions
 {
     /// <summary>
-    /// @TODO: DOCS
+    /// Wraps an in-game system trigger that evaluates configured
+    /// conditions and applies variable or quest state setters.
+    /// Exposes events for evaluation pass/fail.
     /// </summary>
     public class SystemTriggerEntry
     {

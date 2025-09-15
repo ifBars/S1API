@@ -11,19 +11,21 @@ namespace S1API.Internal.Abstraction
     internal class GUIDReferenceConverter : JsonConverter
     {
         /// <summary>
-        /// TODO
+        /// Returns true if the provided type implements
+        /// <see cref="IGUIDReference"/> and can be converted.
         /// </summary>
-        /// <param name="objectType"></param>
-        /// <returns></returns>
+        /// <param name="objectType">The type to check.</param>
+        /// <returns>True when assignable to <see cref="IGUIDReference"/>.</returns>
         public override bool CanConvert(Type objectType) =>
             typeof(IGUIDReference).IsAssignableFrom(objectType);
 
         /// <summary>
-        /// TODO
+        /// Writes the GUID backing value of an <see cref="IGUIDReference"/>
+        /// instance; writes null if the value is not a reference.
         /// </summary>
-        /// <param name="writer"></param>
-        /// <param name="value"></param>
-        /// <param name="serializer"></param>
+        /// <param name="writer">JSON writer.</param>
+        /// <param name="value">Reference instance.</param>
+        /// <param name="serializer">JSON serializer.</param>
         public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
         {
             if (value is IGUIDReference reference)
@@ -37,14 +39,17 @@ namespace S1API.Internal.Abstraction
         }
 
         /// <summary>
-        /// TODO
+        /// Reads a GUID string and resolves the corresponding
+        /// instance by invoking a non-public static
+        /// <c>GetFromGUID(string guid)</c> method on the target type.
         /// </summary>
-        /// <param name="reader"></param>
-        /// <param name="objectType"></param>
-        /// <param name="existingValue"></param>
-        /// <param name="serializer"></param>
-        /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="reader">JSON reader positioned at the GUID value.</param>
+        /// <param name="objectType">Target reference type.</param>
+        /// <param name="existingValue">Existing value (ignored).</param>
+        /// <param name="serializer">JSON serializer.</param>
+        /// <returns>Resolved reference instance or null.</returns>
+        /// <exception cref="Exception">Thrown if the type does not
+        /// implement the expected <c>GetFromGUID</c> lookup method.</exception>
         public override object? ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
         {
             string? guid = reader.Value?.ToString();
@@ -59,7 +64,7 @@ namespace S1API.Internal.Abstraction
         }
 
         /// <summary>
-        /// TODO
+        /// Indicates the converter supports reading JSON.
         /// </summary>
         public override bool CanRead => true;
     }
