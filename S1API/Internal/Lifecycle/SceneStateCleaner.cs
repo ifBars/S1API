@@ -57,7 +57,7 @@ namespace S1API.Internal.Lifecycle
                 int questCount = QuestManager.Quests.Count;
                 QuestManager.Quests.Clear();
 
-                Logger.Msg($"🧹 S1API cleaned scene state after {(afterUnload ? "unload" : "initialize")} of '{sceneName}' (NPCs: {npcCount} -> 0, Quests: {questCount} -> 0)");
+                Logger.Msg($"[S1API] Cleaned scene state after {(afterUnload ? "unload" : "initialize")} of '{sceneName}' (NPCs: {npcCount} -> 0, Quests: {questCount} -> 0)");
             }
             catch (Exception ex)
             {
