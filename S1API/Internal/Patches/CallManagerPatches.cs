@@ -22,7 +22,7 @@ namespace S1API.Internal.Patches
         /// Intercept game QueueCall and route to S1API queue unless we're currently
         /// dispatching to the game (to avoid recursion).
         /// </summary>
-        [HarmonyPatch(typeof(S1Calling.CallManager), nameof(S1Calling.CallManager.QueueCall))]
+        [HarmonyPatch(typeof(S1Calling.CallManager), "QueueCall")]
         [HarmonyPrefix]
         private static bool QueueCall_Prefix(S1ScriptableObjects.PhoneCallData data)
         {

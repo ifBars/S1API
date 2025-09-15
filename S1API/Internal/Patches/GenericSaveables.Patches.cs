@@ -30,7 +30,7 @@ namespace S1API.Internal.Patches
 	[HarmonyPatch]
 	internal static class GenericSaveablesPatches
 	{
-		[HarmonyPatch(typeof(S1Persistence.SaveManager), nameof(S1Persistence.SaveManager.Save), typeof(string))]
+		[HarmonyPatch(typeof(S1Persistence.SaveManager), "Save")]
 		[HarmonyPostfix]
 		private static void SaveManager_Save_Postfix(string saveFolderPath)
 		{

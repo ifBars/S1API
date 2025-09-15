@@ -40,43 +40,82 @@ namespace S1API.Saveables
         /// </summary>
         private static void DiscoverSaveableTypes()
         {
-            Assembly s1ApiAssembly = Assembly.GetExecutingAssembly();
-            
-            foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+            try
             {
-                try
+                Assembly s1ApiAssembly = Assembly.GetExecutingAssembly();
+                
+                foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
                 {
-                    // Skip S1API assembly to avoid registering internal classes like NPC
-                    if (assembly == s1ApiAssembly)
-                        continue;
-
-                    // Skip system assemblies
-                    if (assembly.FullName?.StartsWith("System") == true ||
-                        assembly.FullName?.StartsWith("Unity") == true ||
-                        assembly.FullName?.StartsWith("mscorlib") == true ||
-                        assembly.FullName?.StartsWith("netstandard") == true)
-                        continue;
-
-                    Type[] types = assembly.GetTypes();
-                    foreach (Type type in types)
+                    try
                     {
+                        // Skip S1API assembly to avoid registering internal classes like NPC
+                        if (assembly == s1ApiAssembly)
+                            continue;
+
+                        // Skip system assemblies and known problematic assemblies
+                        if (assembly.FullName?.StartsWith("System") == true ||
+                            assembly.FullName?.StartsWith("Unity") == true ||
+                            assembly.FullName?.StartsWith("mscorlib") == true ||
+                            assembly.FullName?.StartsWith("netstandard") == true ||
+                            assembly.FullName?.StartsWith("Microsoft") == true ||
+                            assembly.FullName?.StartsWith("Il2Cpp") == true ||
+                            assembly.FullName?.StartsWith("MelonLoader") == true ||
+                            assembly.FullName?.StartsWith("0Harmony") == true ||
+                            assembly.IsDynamic)
+                            continue;
+
+                        Type[] types;
                         try
                         {
-                            // Check if this type directly inherits from Saveable
-                            if (IsDirectSaveableInheritor(type))
-                            {
-                                _discoveredSaveableTypes.Add(type);
-                            }
+                            types = assembly.GetTypes();
+                        }
+                        catch (ReflectionTypeLoadException ex)
+                        {
+                            // Use successfully loaded types if some failed to load
+                            types = ex.Types.Where(t => t != null).ToArray();
                         }
                         catch
                         {
-                            // Skip types that can't be analyzed (e.g., generic types with constraints)
+                            // Skip assemblies that can't have their types loaded
+                            continue;
+                        }
+
+                        foreach (Type type in types)
+                        {
+                            try
+                            {
+                                // Additional safety checks
+                                if (type == null || type.IsAbstract || type.IsInterface || type.IsGenericTypeDefinition)
+                                    continue;
+
+                                // Check if this type directly inherits from Saveable
+                                if (IsDirectSaveableInheritor(type))
+                                {
+                                    _discoveredSaveableTypes.Add(type);
+                                }
+                            }
+                            catch
+                            {
+                                // Skip types that can't be analyzed (e.g., generic types with constraints)
+                            }
                         }
                     }
+                    catch
+                    {
+                        // Skip assemblies that can't be analyzed
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log the error but don't fail startup
+                try
+                {
+                    MelonLoader.MelonLogger.Warning($"[S1API] Error during saveable type discovery: {ex.Message}");
                 }
                 catch
                 {
-                    // Skip assemblies that can't be analyzed
+                    // Even logging failed - continue silently
                 }
             }
         }
