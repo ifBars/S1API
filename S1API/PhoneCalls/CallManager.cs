@@ -1,8 +1,9 @@
-﻿#if (IL2CPPMELON)
+#if (IL2CPPMELON)
 using S1Calling = Il2CppScheduleOne.Calling;
 using S1UIPhone = Il2CppScheduleOne.UI.Phone;
 using S1ScriptableObjects = Il2CppScheduleOne.ScriptableObjects;
 using ActionPhoneCall = Il2CppSystem.Action<Il2CppScheduleOne.ScriptableObjects.PhoneCallData>;
+using Il2CppInterop.Runtime;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Calling = ScheduleOne.Calling;
 using S1UIPhone = ScheduleOne.UI.Phone;
@@ -24,6 +25,12 @@ namespace S1API.PhoneCalls
         private static readonly Queue<S1ScriptableObjects.PhoneCallData> PendingCalls = new Queue<S1ScriptableObjects.PhoneCallData>();
         private static bool subscribedToCallCompleted;
         internal static bool IsDispatchingToGameQueue;
+
+#if IL2CPPMELON
+        // Cache delegates for IL2CPP to prevent GC and invalid function pointers
+        private static System.Action<S1ScriptableObjects.PhoneCallData>? cachedManagedOnCompleted;
+        private static ActionPhoneCall? cachedIl2CppOnCompleted;
+#endif
 
         /// <summary>
         /// Number of calls currently pending in the S1API queue (excluding the game's active/queued call).
@@ -83,45 +90,34 @@ namespace S1API.PhoneCalls
                 return;
             }
 
-#if (IL2CPPMELON || IL2CPPBEPINEX)
-            // For IL2CPP, create System.Action first and let implicit cast handle conversion
-            var systemAction = new Action<S1ScriptableObjects.PhoneCallData>(OnCallCompleted);
-            
-            try
+#if IL2CPPMELON
+            // Build and cache delegates to ensure stable IL2CPP invocation
+            cachedManagedOnCompleted ??= new Action<S1ScriptableObjects.PhoneCallData>(OnCallCompleted);
+            cachedIl2CppOnCompleted ??= DelegateSupport.ConvertDelegate<ActionPhoneCall>(cachedManagedOnCompleted);
+
+            // Prefer the generated add_ accessor if available
+            var addMethod = typeof(S1UIPhone.CallInterface).GetMethod("add_CallCompleted", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (addMethod != null)
             {
-                // Try using add_CallCompleted method first (preferred for events)
-                var addMethod = typeof(S1UIPhone.CallInterface).GetMethod("add_CallCompleted");
-                if (addMethod != null)
-                {
-                    addMethod.Invoke(callInterface, new object[] { systemAction });
-                }
-                else
-                {
-                    // Fallback to CombineImpl with proper casting
-                    ActionPhoneCall il2cppAction = systemAction; // Implicit cast
-                    var combined = callInterface.CallCompleted?.CombineImpl(il2cppAction) ?? il2cppAction;
-                    callInterface.CallCompleted = combined.Cast<ActionPhoneCall>();
-                }
+                addMethod.Invoke(callInterface, new object[] { cachedIl2CppOnCompleted });
             }
-            catch
+            else
             {
-                // Final fallback - try direct assignment
-                ActionPhoneCall il2cppAction = systemAction; // Implicit cast
-                if (callInterface.CallCompleted == null)
+                // Fallback to explicit combine using Il2CppSystem.Delegate
+                var current = callInterface.CallCompleted;
+                if (current == null)
                 {
-                    callInterface.CallCompleted = il2cppAction;
+                    callInterface.CallCompleted = cachedIl2CppOnCompleted;
                 }
                 else
                 {
-                    var combined = callInterface.CallCompleted.CombineImpl(il2cppAction);
-                    callInterface.CallCompleted = combined.Cast<ActionPhoneCall>();
+                    var combined = Il2CppSystem.Delegate.Combine(current, cachedIl2CppOnCompleted);
+                    callInterface.CallCompleted = (ActionPhoneCall)combined;
                 }
             }
 #else
-            callInterface.CallCompleted = (ActionPhoneCall)Delegate.Combine(
-                callInterface.CallCompleted,
-                new ActionPhoneCall(OnCallCompleted)
-            );
+            // Managed backends can use standard subscription semantics
+            callInterface.CallCompleted += new ActionPhoneCall(OnCallCompleted);
 #endif
 
             subscribedToCallCompleted = true;
@@ -165,3 +161,4 @@ namespace S1API.PhoneCalls
         }
     }
 }
+
