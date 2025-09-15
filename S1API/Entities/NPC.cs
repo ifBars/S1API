@@ -558,6 +558,11 @@ namespace S1API.Entities
         public NPCAppearance Appearance { get; private set; }
 
         /// <summary>
+        /// The current <see cref="NPCMovement"/> instance.
+        /// </summary>
+        public NPCMovement Movement => new NPCMovement(this);
+
+        /// <summary>
         /// Sends a text message from this NPC to the players.
         /// Supports responses with callbacks for additional logic.
         /// </summary>
