@@ -16,6 +16,12 @@ using S1Datas = Il2CppScheduleOne.Persistence.Datas;
 using S1Datas = ScheduleOne.Persistence.Datas;
 #endif
 
+#if (IL2CPPMELON)
+using S1Persistence = Il2CppScheduleOne.Persistence;
+#elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
+using S1Persistence = ScheduleOne.Persistence;
+#endif
+
 namespace S1API.Internal.Abstraction
 {
     /// <summary>
@@ -23,6 +29,41 @@ namespace S1API.Internal.Abstraction
     /// </summary>
     public abstract class Saveable : Registerable, ISaveable
     {
+        /// <summary>
+        /// Requests the game to perform a save operation. If a game is not currently loaded,
+        /// the request is ignored and the method returns false.
+        /// </summary>
+        /// <param name="immediate">When true, saves immediately; otherwise schedules a short delayed save.</param>
+        /// <returns>True if a save was requested; false if the game is not in a savable state.</returns>
+        public static bool RequestGameSave(bool immediate = false)
+        {
+            try
+            {
+                var loadManager = S1Persistence.LoadManager.Instance;
+                if (loadManager == null || !loadManager.IsGameLoaded)
+                    return false;
+
+                var saveManager = S1Persistence.SaveManager.Instance;
+                if (saveManager == null)
+                    return false;
+
+                if (immediate)
+                {
+                    saveManager.Save();
+                }
+                else
+                {
+                    saveManager.DelayedSave();
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         /// <summary>
         /// INTERNAL: Explicit interface implementation that delegates to the internal LoadInternal method.
         /// Loads all fields marked with the <see cref="SaveableField"/> attribute from JSON files in the specified folder.
