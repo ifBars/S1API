@@ -17,7 +17,6 @@ S1API provides a unified API for developing mods that work across both Mono and 
 ## Key Features
 
 - **Cross-Runtime Compatibility**: Write once, run on both Mono and IL2CPP
-- **Multiple Mod Loaders**: Support for MelonLoader and BepInEx
 - **Rich API**: Comprehensive set of utilities for Schedule One modding
 - **Well Documented**: Extensive documentation and examples
 
