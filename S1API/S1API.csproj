@@ -176,4 +176,7 @@
         <Copy SourceFiles=".\bin\Il2CppBepInEx\net6.0\S1API.dll" DestinationFiles="$(LocalMonoDeploymentPath)\BepInEx\Plugins\S1API\S1API.Il2Cpp.dll" />
         <Copy SourceFiles=".\bin\MonoBepInEx\netstandard2.1\S1API.dll" DestinationFiles="$(LocalMonoDeploymentPath)\BepInEx\Plugins\S1API\S1API.Mono.dll" />
     </Target>
+    <ItemGroup>
+        <EmbeddedResource Include="AssetBundles\Templates\npctemplate" />
+    </ItemGroup>
 </Project>

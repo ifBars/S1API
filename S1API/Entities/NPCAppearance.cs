@@ -1,4 +1,4 @@
-﻿#if (IL2CPPMELON)
+#if (IL2CPPMELON)
 using S1AvatarFramework = Il2CppScheduleOne.AvatarFramework;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1AvatarFramework = ScheduleOne.AvatarFramework;
@@ -78,6 +78,18 @@ namespace S1API.Entities
                 Sprite iconSprite = Sprite.Create(generatedMugshot, new Rect(0, 0, generatedMugshot.width, generatedMugshot.height), Vector2.zero);
                 NPC.Icon = iconSprite;
             }));
+        }
+
+        /// <summary>
+        /// INTERNAL: Applies the currently configured avatar settings to a runtime avatar instance.
+        /// </summary>
+        /// <param name="avatar">The avatar to apply settings to.</param>
+        internal void ApplyToAvatar(S1AvatarFramework.Avatar avatar)
+        {
+            if (avatar == null)
+                return;
+
+            avatar.LoadAvatarSettings(_customAvatarSettings);
         }
 
         #endregion
@@ -431,3 +443,4 @@ namespace S1API.Entities
 
     }
 }
+
