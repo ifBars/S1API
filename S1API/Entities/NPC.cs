@@ -41,6 +41,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
+using FishNet.Object;
 using S1API.AssetBundles;
 using S1API.Entities.Interfaces;
 using S1API.Internal.Abstraction;
@@ -203,6 +204,7 @@ namespace S1API.Entities
             InitializeInteractables();
             InitializeInventoryComponent();
             InitializeRelationshipData();
+            InitializeNetworkBehaviours();
 
             Appearance = new NPCAppearance(this);
 
@@ -874,6 +876,25 @@ namespace S1API.Entities
 #endif
         }
 
+        private void InitializeNetworkBehaviours()
+        {
+            NetworkBehaviour[] behaviours = gameObject.GetComponentsInChildren<NetworkBehaviour>(true);
+            foreach (NetworkBehaviour behaviour in behaviours)
+            {
+                if (behaviour == null)
+                    continue;
+
+                try
+                {
+                    behaviour.NetworkInitializeIfDisabled();
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[S1API] Failed to initialize network behaviour {behaviour.GetType().Name}: {ex.Message}");
+                }
+            }
+        }
+
         private void RestoreRuntimeAvatarAppearance()
         {
             if (_runtimeAvatar == null)
@@ -905,6 +926,8 @@ namespace S1API.Entities
         #endregion
     }
 }
+
+
 
 
 

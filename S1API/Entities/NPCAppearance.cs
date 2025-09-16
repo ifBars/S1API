@@ -44,11 +44,18 @@ namespace S1API.Entities
             NPC = npc;
 
             S1AvatarFramework.Avatar runtimeAvatar = NPC.S1NPC.Avatar;
+            S1AvatarFramework.AvatarSettings sourceSettings = null;
 
-            if (runtimeAvatar != null && runtimeAvatar.InitialAvatarSettings != null)
+            if (runtimeAvatar != null)
             {
-                _customAvatarSettings = ScriptableObject.Instantiate(runtimeAvatar.InitialAvatarSettings);
+                if (runtimeAvatar.CurrentSettings != null)
+                    sourceSettings = runtimeAvatar.CurrentSettings;
+                else if (runtimeAvatar.InitialAvatarSettings != null)
+                    sourceSettings = runtimeAvatar.InitialAvatarSettings;
             }
+
+            if (sourceSettings != null)
+                _customAvatarSettings = ScriptableObject.Instantiate(sourceSettings);
             else
             {
                 _customAvatarSettings = ScriptableObject.CreateInstance<S1AvatarFramework.AvatarSettings>();
@@ -62,6 +69,8 @@ namespace S1API.Entities
             S1AvatarFramework.AvatarSettings avatarSettings = Resources.Load<S1AvatarFramework.AvatarSettings>($"charactersettings/{NPC.S1NPC.FirstName}");
             if (avatarSettings != null)
                 NPC.S1NPC.Avatar.LoadAvatarSettings(avatarSettings);
+            else
+                NPC.S1NPC.Avatar.LoadAvatarSettings(_customAvatarSettings);
         }
 
         /// <summary>
@@ -452,5 +461,6 @@ namespace S1API.Entities
 
     }
 }
+
 
 
