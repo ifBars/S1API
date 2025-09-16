@@ -43,16 +43,25 @@ namespace S1API.Entities
         {
             NPC = npc;
 
-            // Defaulting to the local player for Avatar
+            S1AvatarFramework.Avatar runtimeAvatar = NPC.S1NPC.Avatar;
+
+            if (runtimeAvatar != null && runtimeAvatar.InitialAvatarSettings != null)
+            {
+                _customAvatarSettings = ScriptableObject.Instantiate(runtimeAvatar.InitialAvatarSettings);
+            }
+            else
+            {
+                _customAvatarSettings = ScriptableObject.CreateInstance<S1AvatarFramework.AvatarSettings>();
+                ApplyDefaultSettings(_customAvatarSettings);
+            }
+
+            // Swap to the mugshot rig for portrait generation.
             NPC.S1NPC.Avatar = S1AvatarFramework.MugshotGenerator.Instance.MugshotRig;
 
-            // Create the new AvatarSettings by default
-            _customAvatarSettings = ScriptableObject.CreateInstance<S1AvatarFramework.AvatarSettings>();
-            ApplyDefaultSettings(_customAvatarSettings);
-
-            // Assign the appearance for already existing NPCs with existing AvatarSettings
+            // For baked NPCs, apply their existing settings if available.
             S1AvatarFramework.AvatarSettings avatarSettings = Resources.Load<S1AvatarFramework.AvatarSettings>($"charactersettings/{NPC.S1NPC.FirstName}");
-            NPC.S1NPC.Avatar.LoadAvatarSettings(avatarSettings);
+            if (avatarSettings != null)
+                NPC.S1NPC.Avatar.LoadAvatarSettings(avatarSettings);
         }
 
         /// <summary>
@@ -443,4 +452,5 @@ namespace S1API.Entities
 
     }
 }
+
 

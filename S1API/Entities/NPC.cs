@@ -1,4 +1,4 @@
-﻿#if (IL2CPPMELON)
+#if (IL2CPPMELON)
 using S1DevUtilities = Il2CppScheduleOne.DevUtilities;
 using S1Interaction = Il2CppScheduleOne.Interaction;
 using S1Messaging = Il2CppScheduleOne.Messaging;
@@ -41,6 +41,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
+using S1API.AssetBundles;
 using S1API.Entities.Interfaces;
 using S1API.Internal.Abstraction;
 using S1API.Map;
@@ -58,6 +59,82 @@ namespace S1API.Entities
     {
         // Protected members intended to be used by modders.
         // Intended to be used from within the class / derived classes ONLY.
+        private const string TemplateBundleResourcePath = "AssetBundles.Templates.npctemplate";
+        private static readonly string[] TemplatePrefabNameHints = { "customnpctemplate", "neutralnpc", "npctemplate", "blanknpc", "BlankNPC" };
+        private static WrappedAssetBundle? TemplateBundle;
+        private static GameObject? TemplatePrefab;
+        private static readonly object TemplateLoadLock = new object();
+        private S1AvatarFramework.Avatar? _runtimeAvatar;
+        
+        #region Template Prefab Helpers
+
+        private static GameObject InstantiateTemplateInstance()
+        {
+            GameObject prefab = GetTemplatePrefab();
+            GameObject instance = UnityEngine.Object.Instantiate(prefab);
+            if (S1NPCs.NPCManager.InstanceExists && S1NPCs.NPCManager.Instance.NPCContainer != null)
+            {
+                instance.transform.SetParent(S1NPCs.NPCManager.Instance.NPCContainer, false);
+            }
+            instance.name = prefab.name;
+            return instance;
+        }
+
+        private static GameObject GetTemplatePrefab()
+        {
+            if (TemplatePrefab != null)
+                return TemplatePrefab;
+
+            lock (TemplateLoadLock)
+            {
+                if (TemplatePrefab != null)
+                    return TemplatePrefab;
+
+                Assembly assembly = typeof(NPC).Assembly;
+                string resourceName = $"{assembly.GetName().Name}.{TemplateBundleResourcePath}";
+                TemplateBundle = AssetLoader.GetAssetBundleFromStream(resourceName, assembly);
+                string assetName = ResolveTemplateAssetName(TemplateBundle);
+                GameObject prefab = TemplateBundle.LoadAsset<GameObject>(assetName);
+                if (prefab == null)
+                    throw new Exception($"Failed to load NPC template prefab '{assetName}' from bundle '{TemplateBundleResourcePath}'.");
+
+                TemplatePrefab = prefab;
+                return TemplatePrefab;
+            }
+        }
+
+        private static string ResolveTemplateAssetName(WrappedAssetBundle bundle)
+        {
+            string[] assetNames = bundle.GetAllAssetNames();
+            if (assetNames == null || assetNames.Length == 0)
+                throw new Exception($"Template bundle '{TemplateBundleResourcePath}' does not contain any assets.");
+
+            foreach (string name in assetNames)
+            {
+                string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(name);
+                string fileName = Path.GetFileName(name);
+                foreach (string hint in TemplatePrefabNameHints)
+                {
+                    if (string.Equals(fileNameWithoutExtension, hint, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(fileName, hint, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(fileName, $"{hint}.prefab", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return name;
+                    }
+                }
+            }
+
+            foreach (string name in assetNames)
+            {
+                if (name.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+                    return name;
+            }
+
+            throw new Exception($"Unable to locate a prefab asset inside template bundle '{TemplateBundleResourcePath}'.");
+        }
+
+        #endregion
+        
         #region Protected Members
 
         /// <summary>
@@ -82,24 +159,36 @@ namespace S1API.Entities
             )
         {
             IsCustomNPC = true;
-            gameObject = new GameObject();
 
-            // Deactivate game object til we're done
+            gameObject = InstantiateTemplateInstance();
             gameObject.SetActive(false);
 
-            // Setup the base NPC class
-            S1NPC = gameObject.AddComponent<S1NPCs.NPC>();
+            S1NPCs.NPC? prefabNpc = gameObject.GetComponent<S1NPCs.NPC>();
+            if (prefabNpc == null)
+                throw new Exception("NPC template is missing the core ScheduleOne.NPCs.NPC component.");
+
+            S1NPC = prefabNpc;
+
+            if (S1NPC.Movement == null)
+                S1NPC.Movement = gameObject.GetComponent<S1NPCs.NPCMovement>();
+
+            S1AvatarFramework.Avatar? runtimeAvatar = S1NPC.Avatar ?? gameObject.GetComponentInChildren<S1AvatarFramework.Avatar>(true);
+            _runtimeAvatar = runtimeAvatar;
+
+            // EnsureTextMeshProFonts();
+
             S1NPC.FirstName = firstName;
             S1NPC.LastName = lastName;
             S1NPC.ID = id;
             S1NPC.MugshotSprite = icon ?? S1DevUtilities.PlayerSingleton<S1ContactApps.ContactsApp>.Instance.AppIcon;
             S1NPC.BakedGUID = Guid.NewGuid().ToString();
 
-            // ReSharper disable once UseObjectOrCollectionInitializer (IL2CPP COMPAT)
-            S1NPC.ConversationCategories = new List<S1Messaging.EConversationCategory>();
+            if (S1NPC.ConversationCategories == null)
+                S1NPC.ConversationCategories = new List<S1Messaging.EConversationCategory>();
+            else
+                S1NPC.ConversationCategories.Clear();
             S1NPC.ConversationCategories.Add(S1Messaging.EConversationCategory.Customer);
 
-            // Create our MessageConversation
 #if (IL2CPPMELON || IL2CPPBEPINEX)
             S1NPC.CreateMessageConversation();
 #elif (MONOMELON || MONOBEPINEX)
@@ -107,85 +196,16 @@ namespace S1API.Entities
             createConvoMethod.Invoke(S1NPC, null);
 #endif
 
-            // Add UnityEvents for NPCHealth
-            S1NPC.Health = gameObject.GetComponent<S1NPCs.NPCHealth>();
-            S1NPC.Health.onDie = new UnityEvent();
-            S1NPC.Health.onKnockedOut = new UnityEvent();
-            S1NPC.Health.Invincible = true;
-            S1NPC.Health.MaxHealth = 100f;
+            InitializeHealthComponent();
+            InitializeAwarenessComponent();
+            InitializeBehaviourComponents();
+            InitializeVisionComponents();
+            InitializeInteractables();
+            InitializeInventoryComponent();
+            InitializeRelationshipData();
 
-            // Awareness behaviour
-            GameObject awarenessObject = new GameObject("NPCAwareness");
-            awarenessObject.transform.SetParent(gameObject.transform);
-            S1NPC.Awareness = awarenessObject.AddComponent<S1NPCs.NPCAwareness>();
-            S1NPC.Awareness.onExplosionHeard = new UnityEvent<S1Noise.NoiseEvent>();
-            S1NPC.Awareness.onGunshotHeard = new UnityEvent<S1Noise.NoiseEvent>();
-            S1NPC.Awareness.onHitByCar = new UnityEvent<S1Vehicles.LandVehicle>();
-            S1NPC.Awareness.onNoticedDrugDealing = new UnityEvent<S1PlayerScripts.Player>();
-            S1NPC.Awareness.onNoticedGeneralCrime = new UnityEvent<S1PlayerScripts.Player>();
-            S1NPC.Awareness.onNoticedPettyCrime = new UnityEvent<S1PlayerScripts.Player>();
-            S1NPC.Awareness.onNoticedPlayerViolatingCurfew = new UnityEvent<S1PlayerScripts.Player>();
-            S1NPC.Awareness.onNoticedSuspiciousPlayer = new UnityEvent<S1PlayerScripts.Player>();
-            S1NPC.Awareness.Listener = gameObject.AddComponent<S1Noise.Listener>();
-
-            /////// START BEHAVIOUR CODE ////////
-            // NPCBehaviours behaviour
-            GameObject behaviourObject = new GameObject("NPCBehaviour");
-            behaviourObject.transform.SetParent(gameObject.transform);
-            S1Behaviour.NPCBehaviour behaviour = behaviourObject.AddComponent<S1Behaviour.NPCBehaviour>();
-
-            GameObject cowingBehaviourObject = new GameObject("CowingBehaviour");
-            cowingBehaviourObject.transform.SetParent(behaviourObject.transform);
-            S1Behaviour.CoweringBehaviour coweringBehaviour = cowingBehaviourObject.AddComponent<S1Behaviour.CoweringBehaviour>();
-
-            GameObject fleeBehaviourObject = new GameObject("FleeBehaviour");
-            fleeBehaviourObject.transform.SetParent(behaviourObject.transform);
-            S1Behaviour.FleeBehaviour fleeBehaviour = fleeBehaviourObject.AddComponent<S1Behaviour.FleeBehaviour>();
-
-            behaviour.CoweringBehaviour = coweringBehaviour;
-            behaviour.FleeBehaviour = fleeBehaviour;
-            S1NPC.Behaviour = behaviour;
-            /////// END BEHAVIOUR CODE ////////
-
-            // Response to actions like gunshots, drug deals, etc.
-            GameObject responsesObject = new GameObject("NPCResponses");
-            responsesObject.transform.SetParent(gameObject.transform);
-            S1NPC.Awareness.Responses = responsesObject.AddComponent<S1Responses.NPCResponses_Civilian>();
-
-            // Vision cone object and behaviour
-            GameObject visionObject = new GameObject("VisionCone");
-            visionObject.transform.SetParent(gameObject.transform);
-            S1Vision.VisionCone visionCone = visionObject.AddComponent<S1Vision.VisionCone>();
-            visionCone.StatesOfInterest.Add(new S1Vision.VisionCone.StateContainer
-            {
-                state = S1Vision.EVisualState.PettyCrime, RequiredNoticeTime = 0.1f
-            });
-            S1NPC.Awareness.VisionCone = visionCone;
-
-            // Suspicious ? icon in world space
-            S1NPC.Awareness.VisionCone.QuestionMarkPopup = gameObject.AddComponent<S1WorkspacePopup.WorldspacePopup>();
-
-            // Interaction behaviour
-#if (IL2CPPMELON || IL2CPPBEPINEX)
-            S1NPC.intObj = gameObject.AddComponent<S1Interaction.InteractableObject>();
-#elif (MONOMELON || MONOBEPINEX)
-            FieldInfo intObjField = AccessTools.Field(typeof(S1NPCs.NPC), "intObj");
-            intObjField.SetValue(S1NPC, gameObject.AddComponent<S1Interaction.InteractableObject>());
-#endif
-
-            // Relationship data
-            S1NPC.RelationData = new S1Relation.NPCRelationData();
-
-            // Inventory behaviour
-            S1NPCs.NPCInventory inventory = gameObject.AddComponent<S1NPCs.NPCInventory>();
-
-            // Pickpocket behaviour
-            inventory.PickpocketIntObj = gameObject.AddComponent<S1Interaction.InteractableObject>();
-
-            // Set the appearance for the NPC
             Appearance = new NPCAppearance(this);
 
-            // Enable our custom gameObjects so they can initialize
             gameObject.name = S1NPC.FirstName ?? "UnknownNPC";
             gameObject.SetActive(true);
 
@@ -205,6 +225,7 @@ namespace S1API.Entities
         protected override void OnCreated()
         {
             Appearance.GenerateMugshot();
+            RestoreRuntimeAvatarAppearance();
         }
 
         #endregion
@@ -661,6 +682,209 @@ namespace S1API.Entities
 
         // Private members used by the NPC class.
         // Please do not attempt to use these members!
+        #region Initialization Helpers
+
+        private void InitializeHealthComponent()
+        {
+            S1NPC.Health = S1NPC.Health ?? gameObject.GetComponent<S1NPCs.NPCHealth>();
+            if (S1NPC.Health == null)
+                S1NPC.Health = gameObject.AddComponent<S1NPCs.NPCHealth>();
+
+            if (S1NPC.Health.onDie == null)
+                S1NPC.Health.onDie = new UnityEvent();
+            if (S1NPC.Health.onKnockedOut == null)
+                S1NPC.Health.onKnockedOut = new UnityEvent();
+
+            S1NPC.Health.Invincible = true;
+            S1NPC.Health.MaxHealth = 100f;
+        }
+
+        private void InitializeAwarenessComponent()
+        {
+            if (S1NPC.Awareness == null)
+            {
+                S1NPC.Awareness = gameObject.GetComponentInChildren<S1NPCs.NPCAwareness>(true);
+                if (S1NPC.Awareness == null)
+                {
+                    GameObject awarenessObject = new GameObject("NPCAwareness");
+                    awarenessObject.transform.SetParent(gameObject.transform, false);
+                    S1NPC.Awareness = awarenessObject.AddComponent<S1NPCs.NPCAwareness>();
+                }
+            }
+
+            if (S1NPC.Awareness.onExplosionHeard == null)
+                S1NPC.Awareness.onExplosionHeard = new UnityEvent<S1Noise.NoiseEvent>();
+            if (S1NPC.Awareness.onGunshotHeard == null)
+                S1NPC.Awareness.onGunshotHeard = new UnityEvent<S1Noise.NoiseEvent>();
+            if (S1NPC.Awareness.onHitByCar == null)
+                S1NPC.Awareness.onHitByCar = new UnityEvent<S1Vehicles.LandVehicle>();
+            if (S1NPC.Awareness.onNoticedDrugDealing == null)
+                S1NPC.Awareness.onNoticedDrugDealing = new UnityEvent<S1PlayerScripts.Player>();
+            if (S1NPC.Awareness.onNoticedGeneralCrime == null)
+                S1NPC.Awareness.onNoticedGeneralCrime = new UnityEvent<S1PlayerScripts.Player>();
+            if (S1NPC.Awareness.onNoticedPettyCrime == null)
+                S1NPC.Awareness.onNoticedPettyCrime = new UnityEvent<S1PlayerScripts.Player>();
+            if (S1NPC.Awareness.onNoticedPlayerViolatingCurfew == null)
+                S1NPC.Awareness.onNoticedPlayerViolatingCurfew = new UnityEvent<S1PlayerScripts.Player>();
+            if (S1NPC.Awareness.onNoticedSuspiciousPlayer == null)
+                S1NPC.Awareness.onNoticedSuspiciousPlayer = new UnityEvent<S1PlayerScripts.Player>();
+
+            if (S1NPC.Awareness.Listener == null)
+                S1NPC.Awareness.Listener = gameObject.GetComponent<S1Noise.Listener>() ?? gameObject.AddComponent<S1Noise.Listener>();
+
+            if (S1NPC.Responses == null)
+            {
+                S1NPC.Responses = gameObject.GetComponentInChildren<S1Responses.NPCResponses>(true);
+                if (S1NPC.Responses == null)
+                {
+                    GameObject responsesObject = new GameObject("NPCResponses");
+                    responsesObject.transform.SetParent(gameObject.transform, false);
+                    S1NPC.Responses = responsesObject.AddComponent<S1Responses.NPCResponses_Civilian>();
+                }
+            }
+
+            if (S1NPC.Awareness.Responses == null && S1NPC.Responses is S1Responses.NPCResponses_Civilian civilianResponses)
+                S1NPC.Awareness.Responses = civilianResponses;
+        }
+
+        private void InitializeBehaviourComponents()
+        {
+            if (S1NPC.Behaviour == null)
+            {
+                GameObject behaviourObject = new GameObject("NPCBehaviour");
+                behaviourObject.transform.SetParent(gameObject.transform, false);
+                S1NPC.Behaviour = behaviourObject.AddComponent<S1Behaviour.NPCBehaviour>();
+            }
+
+            if (S1NPC.Behaviour.CoweringBehaviour == null)
+            {
+                S1Behaviour.CoweringBehaviour existing = S1NPC.Behaviour.GetComponentInChildren<S1Behaviour.CoweringBehaviour>(true);
+                if (existing == null)
+                {
+                    GameObject coweringObject = new GameObject("CowingBehaviour");
+                    coweringObject.transform.SetParent(S1NPC.Behaviour.transform, false);
+                    existing = coweringObject.AddComponent<S1Behaviour.CoweringBehaviour>();
+                }
+
+                S1NPC.Behaviour.CoweringBehaviour = existing;
+            }
+
+            if (S1NPC.Behaviour.FleeBehaviour == null)
+            {
+                S1Behaviour.FleeBehaviour existing = S1NPC.Behaviour.GetComponentInChildren<S1Behaviour.FleeBehaviour>(true);
+                if (existing == null)
+                {
+                    GameObject fleeObject = new GameObject("FleeBehaviour");
+                    fleeObject.transform.SetParent(S1NPC.Behaviour.transform, false);
+                    existing = fleeObject.AddComponent<S1Behaviour.FleeBehaviour>();
+                }
+
+                S1NPC.Behaviour.FleeBehaviour = existing;
+            }
+        }
+
+        private void InitializeVisionComponents()
+        {
+            if (S1NPC.Awareness == null)
+                return;
+
+            if (S1NPC.Awareness.VisionCone == null)
+            {
+                S1Vision.VisionCone existing = gameObject.GetComponentInChildren<S1Vision.VisionCone>(true);
+                if (existing == null)
+                {
+                    GameObject visionObject = new GameObject("VisionCone");
+                    visionObject.transform.SetParent(gameObject.transform, false);
+                    existing = visionObject.AddComponent<S1Vision.VisionCone>();
+                }
+
+                S1NPC.Awareness.VisionCone = existing;
+            }
+
+            if (S1NPC.Awareness.VisionCone.StatesOfInterest == null || S1NPC.Awareness.VisionCone.StatesOfInterest.Count == 0)
+            {
+                S1NPC.Awareness.VisionCone.StatesOfInterest.Add(new S1Vision.VisionCone.StateContainer
+                {
+                    state = S1Vision.EVisualState.PettyCrime,
+                    RequiredNoticeTime = 0.1f
+                });
+            }
+
+            if (S1NPC.Awareness.VisionCone.QuestionMarkPopup == null)
+            {
+                S1WorkspacePopup.WorldspacePopup popup =
+                    gameObject.GetComponent<S1WorkspacePopup.WorldspacePopup>() ??
+                    gameObject.AddComponent<S1WorkspacePopup.WorldspacePopup>();
+                S1NPC.Awareness.VisionCone.QuestionMarkPopup = popup;
+            }
+        }
+
+        private void InitializeInteractables()
+        {
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+            if (S1NPC.intObj == null)
+            {
+                S1Interaction.InteractableObject interactable = gameObject.GetComponentInChildren<S1Interaction.InteractableObject>(true) ??
+                    gameObject.AddComponent<S1Interaction.InteractableObject>();
+                S1NPC.intObj = interactable;
+            }
+#elif (MONOMELON || MONOBEPINEX)
+            FieldInfo intObjField = AccessTools.Field(typeof(S1NPCs.NPC), "intObj");
+            if (intObjField.GetValue(S1NPC) == null)
+            {
+                S1Interaction.InteractableObject interactable = gameObject.GetComponentInChildren<S1Interaction.InteractableObject>(true) ??
+                    gameObject.AddComponent<S1Interaction.InteractableObject>();
+                intObjField.SetValue(S1NPC, interactable);
+            }
+#endif
+        }
+
+        private void InitializeInventoryComponent()
+        {
+            if (S1NPC.Inventory == null)
+                S1NPC.Inventory = gameObject.GetComponentInChildren<S1NPCs.NPCInventory>(true) ?? gameObject.AddComponent<S1NPCs.NPCInventory>();
+
+            if (S1NPC.Inventory.PickpocketIntObj == null)
+            {
+                S1Interaction.InteractableObject? talkInteractable = GetPrimaryInteractable();
+                S1Interaction.InteractableObject[] interactables = gameObject.GetComponentsInChildren<S1Interaction.InteractableObject>(true);
+                S1Interaction.InteractableObject? pickpocket = interactables.FirstOrDefault(io => io != null && io != talkInteractable);
+                if (pickpocket == null)
+                    pickpocket = gameObject.AddComponent<S1Interaction.InteractableObject>();
+
+                S1NPC.Inventory.PickpocketIntObj = pickpocket;
+            }
+        }
+
+        private void InitializeRelationshipData()
+        {
+            if (S1NPC.RelationData == null)
+                S1NPC.RelationData = new S1Relation.NPCRelationData();
+        }
+
+        private S1Interaction.InteractableObject? GetPrimaryInteractable()
+        {
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+            return S1NPC.intObj;
+#elif (MONOMELON || MONOBEPINEX)
+            FieldInfo intObjField = AccessTools.Field(typeof(S1NPCs.NPC), "intObj");
+            return intObjField.GetValue(S1NPC) as S1Interaction.InteractableObject;
+#else
+            return null;
+#endif
+        }
+
+        private void RestoreRuntimeAvatarAppearance()
+        {
+            if (_runtimeAvatar == null)
+                return;
+
+            S1NPC.Avatar = _runtimeAvatar;
+            Appearance.ApplyToAvatar(_runtimeAvatar);
+        }
+
+        #endregion
+
         #region Private Members
 
         internal readonly bool IsCustomNPC;
@@ -681,3 +905,9 @@ namespace S1API.Entities
         #endregion
     }
 }
+
+
+
+
+
+
