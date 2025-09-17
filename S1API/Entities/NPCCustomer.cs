@@ -15,6 +15,7 @@ using System;
 using System.Reflection;
 using UnityEngine;
 using FishNet.Object;
+using MelonLoader;
 #if (IL2CPPMELON)
 using Il2CppFishNet;
 using Il2CppFishNet.Managing;
@@ -66,22 +67,6 @@ namespace S1API.Entities
                 TryNetworkInitialize(Component);
                 EnsureScheduleArtifacts();
             }
-        }
-
-        /// <summary>
-        /// Assigns Customer settings from a Resources path to a CustomerData asset.
-        /// Returns true on success.
-        /// </summary>
-        public bool SetCustomerDataByResource(string resourcePath)
-        {
-            EnsureCustomer();
-            if (Component == null || string.IsNullOrEmpty(resourcePath))
-                return false;
-            var data = UnityEngine.Resources.Load<S1Economy.CustomerData>(resourcePath);
-            if (data == null)
-                return false;
-            customerDataField?.SetValue(Component, data);
-            return true;
         }
 
         /// <summary>
@@ -169,6 +154,8 @@ namespace S1API.Entities
             try
             {
                 // Initialize the NetworkBehaviour lifecycle if it hasn't been already.
+                var nm = InstanceFinder.NetworkManager;
+                if (nm.IsClient && !nm.IsServer) return;
                 customer.NetworkInitializeIfDisabled();
 
                 // If the NPC is already spawned, make sure late-added behaviours are ready on server/clients.
