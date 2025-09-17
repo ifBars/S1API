@@ -384,6 +384,11 @@ namespace S1API.Entities
             S1NPC.isVisible;
 
         /// <summary>
+        /// Override this as true to make your NPC visible in the world.
+        /// </summary>
+        protected virtual bool IsPhysical => false;
+        
+        /// <summary>
         /// How aggressive this NPC is towards others.
         /// </summary>
         public float Aggressiveness
@@ -1059,7 +1064,7 @@ namespace S1API.Entities
                 if (owner != null)
                 {
                     bool broadcastVisibility = InstanceFinder.IsServer;
-                    owner.S1NPC.SetVisible(true, networked: broadcastVisibility);
+                    owner.S1NPC.SetVisible(owner.IsPhysical, networked: broadcastVisibility);
                 }
             }
             catch (Exception ex)
