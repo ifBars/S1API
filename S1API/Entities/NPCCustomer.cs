@@ -3,12 +3,20 @@ using S1Economy = Il2CppScheduleOne.Economy;
 using S1Player = Il2CppScheduleOne.PlayerScripts.Player;
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
+using S1Product = Il2CppScheduleOne.Product;
+using S1Messaging = Il2CppScheduleOne.Messaging;
+using S1Map = Il2CppScheduleOne.Map;
+using S1DevUtilities = Il2CppScheduleOne.DevUtilities;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1NPCs = ScheduleOne.NPCs;
 using S1Economy = ScheduleOne.Economy;
 using S1Player = ScheduleOne.PlayerScripts.Player;
 using S1NPCsActions = ScheduleOne.NPCs.Actions;
 using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
+using S1Product = ScheduleOne.Product;
+using S1Messaging = ScheduleOne.Messaging;
+using S1Map = ScheduleOne.Map;
+using S1DevUtilities = ScheduleOne.DevUtilities;
 #endif
 
 using System;
@@ -54,15 +62,20 @@ namespace S1API.Entities
             if (Component == null)
             {
                 var c = NPC.gameObject.GetComponentInChildren<S1Economy.Customer>() ?? NPC.gameObject.AddComponent<S1Economy.Customer>();
-                // Wire critical references before initialization
+                // Ensure minimal data exists prior to any runtime use
+                EnsureCustomerData(c);
+                // Wire critical references and runtime state
                 WireCoreReferences(c);
+                InitializeRuntimeState(c);
                 c.enabled = true;
                 c.InitializeSaveable();
                 TryNetworkInitialize(c);
             }
             else
             {
+                EnsureCustomerData(Component);
                 WireCoreReferences(Component);
+                InitializeRuntimeState(Component);
                 TryNetworkInitialize(Component);
             }
         }
@@ -81,6 +94,8 @@ namespace S1API.Entities
             configure(builder);
             var data = builder.BuildInternal();
             customerDataField?.SetValue(Component, data);
+            // Refresh runtime caches and defaults now that data is present
+            InitializeRuntimeState(Component);
         }
 
         /// <summary>
@@ -125,7 +140,7 @@ namespace S1API.Entities
                 Component.RequestProduct(player.S1Player);
             }
         }
-
+        
         /// <summary>
         /// Sets whether the customer is awaiting delivery.
         /// </summary>
@@ -139,7 +154,7 @@ namespace S1API.Entities
         /// <summary>
         /// INTERNAL: Direct access to underlying customer component.
         /// </summary>
-        internal S1Economy.Customer Component => NPC.gameObject.GetComponent<S1Economy.Customer>() ?? NPC.gameObject.AddComponent<S1Economy.Customer>();
+        internal S1Economy.Customer Component => NPC.gameObject.GetComponent<S1Economy.Customer>();
 
         /// <summary>
         /// INTERNAL: Ensures the newly added Customer component is initialized with FishNet.
@@ -154,7 +169,8 @@ namespace S1API.Entities
                 // Initialize the NetworkBehaviour lifecycle if it hasn't been already.
                 var nm = InstanceFinder.NetworkManager;
                 if (nm.IsClient && !nm.IsServer) return;
-                // customer.NetworkInitializeIfDisabled();
+                customer.NetworkInitializeIfDisabled();
+                setupDialogueMethod?.Invoke(customer, null);
 
                 // If the NPC is already spawned, make sure late-added behaviours are ready on server/clients.
                 var no = NPC.gameObject.GetComponent<NetworkObject>();
@@ -188,7 +204,102 @@ namespace S1API.Entities
             }
         }
 
+        private void EnsureCustomerData(S1Economy.Customer customer)
+        {
+            try
+            {
+                var data = (S1Economy.CustomerData)customerDataField?.GetValue(customer);
+                if (data == null)
+                {
+                    // Create a minimal, safe CustomerData so base game logic has sane defaults
+                    data = ScriptableObject.CreateInstance<S1Economy.CustomerData>();
+                    data.DefaultAffinityData = new S1Economy.CustomerAffinityData();
+                    // Seed affinities for all product types with neutral preference
+                    Array drugTypes = Enum.GetValues(typeof(S1Product.EDrugType));
+                    foreach (var dt in drugTypes)
+                    {
+                        data.DefaultAffinityData.ProductAffinities.Add(new S1Economy.ProductTypeAffinity
+                        {
+                            DrugType = (S1Product.EDrugType)dt,
+                            Affinity = 0f
+                        });
+                    }
+                    // Reasonable defaults
+                    data.MinWeeklySpend = 100f;
+                    data.MaxWeeklySpend = 400f;
+                    data.MinOrdersPerWeek = 1;
+                    data.MaxOrdersPerWeek = 3;
+                    data.OrderTime = 1200;
+                    data.CanBeDirectlyApproached = true;
+                    data.DependenceMultiplier = 1f;
+                    data.BaseAddiction = 0f;
+
+                    customerDataField?.SetValue(customer, data);
+                }
+            }
+            catch (Exception)
+            {
+                // ignore; best-effort defaults
+            }
+        }
+
+        private void InitializeRuntimeState(S1Economy.Customer customer)
+        {
+            try
+            {
+                var data = (S1Economy.CustomerData)customerDataField?.GetValue(customer);
+                if (data == null)
+                {
+                    EnsureCustomerData(customer);
+                    data = (S1Economy.CustomerData)customerDataField?.GetValue(customer);
+                }
+
+                // currentAffinityData = new CustomerAffinityData(); data.DefaultAffinityData.CopyTo(currentAffinityData)
+                var currentAffinityField = typeof(S1Economy.Customer).GetField("currentAffinityData", BindingFlags.NonPublic | BindingFlags.Instance);
+                var currentAffinity = currentAffinityField?.GetValue(customer) as S1Economy.CustomerAffinityData;
+                if (currentAffinity == null)
+                {
+                    currentAffinity = new S1Economy.CustomerAffinityData();
+                    // Copy default affinities if present
+                    if (data != null && data.DefaultAffinityData != null)
+                    {
+                        data.DefaultAffinityData.CopyTo(currentAffinity);
+                    }
+                    currentAffinityField?.SetValue(customer, currentAffinity);
+                }
+
+                // Set starting addiction from data.BaseAddiction
+                var currentAddictionProp = typeof(S1Economy.Customer).GetProperty("CurrentAddiction", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                currentAddictionProp?.SetValue(customer, (float)(data?.BaseAddiction ?? 0f));
+
+                // Ensure a valid default delivery location to avoid nulls during contract creation
+                try
+                {
+                    if (customer.DefaultDeliveryLocation == null)
+                    {
+                        var map = S1DevUtilities.Singleton<S1Map.Map>.Instance;
+                        if (map != null)
+                        {
+                            var regionData = map.GetRegionData(NPC.S1NPC.Region);
+                            var loc = (regionData != null) ? regionData.GetRandomUnscheduledDeliveryLocation() : null;
+                            if (loc != null)
+                            {
+                                customer.DefaultDeliveryLocation = loc;
+                            }
+                        }
+                    }
+                }
+                catch { /* ignore */ }
+            }
+            catch (Exception)
+            {
+                // ignore; best-effort runtime init
+            }
+        }
+
         private FieldInfo customerDataField = typeof(S1Economy.Customer).GetField("customerData",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        private MethodInfo setupDialogueMethod = typeof(S1Economy.Customer).GetMethod("SetUpDialogue",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
     }
 }

@@ -1067,6 +1067,19 @@ namespace S1API.Entities
                 {
                     bool broadcastVisibility = InstanceFinder.IsServer;
                     owner.S1NPC.SetVisible(owner.IsPhysical, networked: broadcastVisibility);
+
+                    // Ensure Customer component for custom NPCs is present and initialized early
+                    try
+                    {
+                        if (owner.IsCustomNPC)
+                        {
+                            owner.Customer.EnsureCustomer();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"[S1API] Failed to ensure Customer on NPC: {ex.Message}");
+                    }
                 }
             }
             catch (Exception ex)
