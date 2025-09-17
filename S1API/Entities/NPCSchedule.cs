@@ -93,13 +93,13 @@ namespace S1API.Entities
         internal void EnsureManager()
         {
             if (Manager == null)
-                NPC.gameObject.AddComponent<S1NPCs.NPCScheduleManager>();
+                NPC.gameObject.GetComponentInChildren<S1NPCs.NPCScheduleManager>();
         }
 
         /// <summary>
         /// INTERNAL: Direct access to the underlying manager.
         /// </summary>
-        internal S1NPCs.NPCScheduleManager Manager => NPC.gameObject.GetComponent<S1NPCs.NPCScheduleManager>();
+        internal S1NPCs.NPCScheduleManager Manager => NPC.gameObject.GetComponentInChildren<S1NPCs.NPCScheduleManager>();
     }
 }
 

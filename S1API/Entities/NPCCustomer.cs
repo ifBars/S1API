@@ -53,19 +53,17 @@ namespace S1API.Entities
         {
             if (Component == null)
             {
-                var c = NPC.gameObject.AddComponent<S1Economy.Customer>();
+                var c = NPC.gameObject.GetComponentInChildren<S1Economy.Customer>() ?? NPC.gameObject.AddComponent<S1Economy.Customer>();
                 // Wire critical references before initialization
                 WireCoreReferences(c);
                 c.enabled = true;
                 c.InitializeSaveable();
                 TryNetworkInitialize(c);
-                EnsureScheduleArtifacts();
             }
             else
             {
                 WireCoreReferences(Component);
                 TryNetworkInitialize(Component);
-                EnsureScheduleArtifacts();
             }
         }
 
@@ -141,7 +139,7 @@ namespace S1API.Entities
         /// <summary>
         /// INTERNAL: Direct access to underlying customer component.
         /// </summary>
-        internal S1Economy.Customer Component => NPC.gameObject.GetComponent<S1Economy.Customer>();
+        internal S1Economy.Customer Component => NPC.gameObject.GetComponent<S1Economy.Customer>() ?? NPC.gameObject.AddComponent<S1Economy.Customer>();
 
         /// <summary>
         /// INTERNAL: Ensures the newly added Customer component is initialized with FishNet.
@@ -156,7 +154,7 @@ namespace S1API.Entities
                 // Initialize the NetworkBehaviour lifecycle if it hasn't been already.
                 var nm = InstanceFinder.NetworkManager;
                 if (nm.IsClient && !nm.IsServer) return;
-                customer.NetworkInitializeIfDisabled();
+                // customer.NetworkInitializeIfDisabled();
 
                 // If the NPC is already spawned, make sure late-added behaviours are ready on server/clients.
                 var no = NPC.gameObject.GetComponent<NetworkObject>();
@@ -187,38 +185,6 @@ namespace S1API.Entities
             catch (Exception)
             {
                 // ignore
-            }
-        }
-
-        /// <summary>
-        /// INTERNAL: Ensures schedule manager and a DealSignal action exist so Customer can function.
-        /// </summary>
-        private void EnsureScheduleArtifacts()
-        {
-            try
-            {
-                var schedule = NPC.gameObject.GetComponentInChildren<S1NPCs.NPCScheduleManager>(true);
-                if (schedule == null)
-                {
-                    var go = new GameObject("NPCSchedule");
-                    go.transform.SetParent(NPC.gameObject.transform, false);
-                    schedule = go.AddComponent<S1NPCs.NPCScheduleManager>();
-                }
-
-                var existing = schedule.GetComponentInChildren<S1NPCsSchedules.NPCSignal_WaitForDelivery>(true);
-                if (existing == null)
-                {
-                    var dealGo = new GameObject("DealSignal");
-                    dealGo.transform.SetParent(schedule.transform, false);
-                    existing = dealGo.AddComponent<S1NPCsSchedules.NPCSignal_WaitForDelivery>();
-                }
-                // Keep disabled by default; Customer will toggle as needed
-                if (existing != null && existing.gameObject != null)
-                    existing.gameObject.SetActive(false);
-            }
-            catch (Exception)
-            {
-                // no-op; safe fallback if schedule system is not present
             }
         }
 
