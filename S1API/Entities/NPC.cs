@@ -81,7 +81,6 @@ namespace S1API.Entities
             GameObject prefab = GetTemplatePrefab();
             NetworkObject netPrefab = prefab.GetComponent<NetworkObject>() ?? prefab.AddComponent<NetworkObject>();
 
-            // Prefer instantiating from SpawnablePrefabs, mirroring MainMod behaviour.
             NetworkObject spawnableNetPrefab = null;
             try
             {
@@ -249,7 +248,6 @@ namespace S1API.Entities
 
             gameObject.name = S1NPC.FirstName ?? "UnknownNPC";
 
-            // Server-side: schedule activation and spawn through FishNet to mirror MainMod timing.
             TrySpawnNetworkInstance();
 
             All.Add(this);
@@ -627,6 +625,21 @@ namespace S1API.Entities
         public NPCMovement Movement => new NPCMovement(this);
 
         /// <summary>
+        /// The current <see cref="NPCDialogue"/> instance.
+        /// </summary>
+        public NPCDialogue Dialogue => _dialogue ?? (_dialogue = new NPCDialogue(this));
+
+        /// <summary>
+        /// The current <see cref="NPCSchedule"/> instance.
+        /// </summary>
+        public NPCSchedule Schedule => _schedule ?? (_schedule = new NPCSchedule(this));
+
+        /// <summary>
+        /// The current <see cref="NPCCustomer"/> instance.
+        /// </summary>
+        public NPCCustomer Customer => _customer ?? (_customer = new NPCCustomer(this));
+
+        /// <summary>
         /// Sends a text message from this NPC to the players.
         /// Supports responses with callbacks for additional logic.
         /// </summary>
@@ -738,7 +751,7 @@ namespace S1API.Entities
             if (S1NPC.Health.onKnockedOut == null)
                 S1NPC.Health.onKnockedOut = new UnityEvent();
 
-            S1NPC.Health.Invincible = true;
+            // S1NPC.Health.Invincible = true;
             S1NPC.Health.MaxHealth = 100f;
         }
 
@@ -964,6 +977,10 @@ namespace S1API.Entities
         private readonly MethodInfo _unsettleMethod = AccessTools.Method(typeof(S1NPCs.NPC), "SetUnsettled");
         private readonly MethodInfo _removePanicMethod = AccessTools.Method(typeof(S1NPCs.NPC), "RemovePanicked");
 
+        private NPCDialogue _dialogue;
+        private NPCSchedule _schedule;
+        private NPCCustomer _customer;
+
 
         /// <summary>
         /// Spawns this NPC's instance on the server using FishNet so it is networked.
@@ -978,8 +995,6 @@ namespace S1API.Entities
                     return;
 
                 NetworkObject no = gameObject.GetComponent<NetworkObject>() ?? gameObject.AddComponent<NetworkObject>();
-
-                // Mirror MainMod: activate after a short delay, then spawn after another delay, using a global runner.
                 S1ApiCoroutineRunner.Run(ActivationAndSpawnCoroutine(nm, no, this, 0.3f, 0.6f));
             }
             catch (Exception ex)
@@ -990,7 +1005,7 @@ namespace S1API.Entities
 
 
         /// <summary>
-        /// Global coroutine runner to mirror MainMod's activation/spawn timing without relying on the NPC being enabled.
+        /// Global coroutine runner activate/spawn without relying on the NPC being enabled.
         /// </summary>
         private sealed class S1ApiCoroutineRunner : MonoBehaviour
         {
