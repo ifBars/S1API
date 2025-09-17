@@ -12,6 +12,7 @@ using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
 #endif
 
 using System;
+using System.Reflection;
 using UnityEngine;
 using FishNet.Object;
 #if (IL2CPPMELON)
@@ -79,7 +80,7 @@ namespace S1API.Entities
             var data = UnityEngine.Resources.Load<S1Economy.CustomerData>(resourcePath);
             if (data == null)
                 return false;
-            typeof(S1Economy.Customer).GetField("customerData", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(Component, data);
+            customerDataField?.SetValue(Component, data);
             return true;
         }
 
@@ -96,7 +97,7 @@ namespace S1API.Entities
             var builder = new CustomerDataBuilder();
             configure(builder);
             var data = builder.BuildInternal();
-            typeof(S1Economy.Customer).GetField("customerData", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(Component, data);
+            customerDataField?.SetValue(Component, data);
         }
 
         /// <summary>
@@ -233,6 +234,9 @@ namespace S1API.Entities
                 // no-op; safe fallback if schedule system is not present
             }
         }
+
+        private FieldInfo customerDataField = typeof(S1Economy.Customer).GetField("customerData",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
     }
 }
 
