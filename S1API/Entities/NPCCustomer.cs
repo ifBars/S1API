@@ -32,6 +32,7 @@ using Il2CppFishNet.Managing.Object;
 using FishNet;
 using FishNet.Managing;
 using FishNet.Managing.Object;
+using ScheduleOne.Economy;
 #endif
 
 namespace S1API.Entities
@@ -152,9 +153,16 @@ namespace S1API.Entities
         }
 
         /// <summary>
+        /// Sets up customer dialogue
+        /// </summary>
+        public void SetupDialog() => setupDialogueMethod?.Invoke(Component, null);
+
+        /// <summary>
         /// INTERNAL: Direct access to underlying customer component.
         /// </summary>
         internal S1Economy.Customer Component => NPC.gameObject.GetComponent<S1Economy.Customer>();
+        
+        
 
         /// <summary>
         /// INTERNAL: Ensures the newly added Customer component is initialized with FishNet.
@@ -170,7 +178,7 @@ namespace S1API.Entities
                 var nm = InstanceFinder.NetworkManager;
                 if (nm.IsClient && !nm.IsServer) return;
                 customer.NetworkInitializeIfDisabled();
-                setupDialogueMethod?.Invoke(customer, null);
+                
 
                 // If the NPC is already spawned, make sure late-added behaviours are ready on server/clients.
                 var no = NPC.gameObject.GetComponent<NetworkObject>();
