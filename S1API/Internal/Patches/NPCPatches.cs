@@ -42,6 +42,7 @@ using HarmonyLib;
 using MelonLoader;
 using S1API.Entities;
 using S1API.Internal.Utils;
+using UnityEngine.SceneManagement;
 
 namespace S1API.Internal.Patches
 {
@@ -62,6 +63,12 @@ namespace S1API.Internal.Patches
         [HarmonyPrefix]
         private static void NPCsLoadersLoad(S1Loaders.NPCsLoader __instance, string mainPath)
         {
+            // Only allow custom NPC instantiation in the "Main" scene to avoid prologue issues
+            if (!IsInMainScene())
+            {
+                MelonLogger.Msg("[S1API] Skipping custom NPC instantiation because active scene is not 'Main'.");
+                return;
+            }
             foreach (Type type in ReflectionUtils.GetDerivedClasses<NPC>())
             {
                 NPC? customNPC = (NPC)Activator.CreateInstance(type, true)!;
@@ -182,6 +189,9 @@ namespace S1API.Internal.Patches
         [HarmonyPriority(Priority.First)]
         private static bool NPCLoader_Load_Prefix(S1Datas.DynamicSaveData saveData)
         {
+            // Do not intercept on non-Main scenes; let base loader run unmodified
+            if (!IsInMainScene())
+                return true;
             if (saveData == null)
                 return true;
 
@@ -277,6 +287,8 @@ namespace S1API.Internal.Patches
         [HarmonyPrefix]
         private static bool NPCInventory_OnSleepStart_Prefix(S1NPCs.NPCInventory __instance)
         {
+            if (!IsInMainScene())
+                return true; // run original outside of Main
             var baseNpc = __instance.GetComponent<S1NPCs.NPC>();
             var apiNpc = baseNpc != null ? FindWrapperForS1Npc(baseNpc) : null;
             if (apiNpc == null || !apiNpc.IsCustomNPC)
@@ -343,6 +355,8 @@ namespace S1API.Internal.Patches
         [HarmonyPrefix]
         private static bool NPCHealth_Revive_Prefix(S1NPCs.NPCHealth __instance)
         {
+            if (!IsInMainScene())
+                return true; // allow original behaviour outside of Main
             var baseNpc = __instance.GetComponent<S1NPCs.NPC>();
             var apiNpc = baseNpc != null ? FindWrapperForS1Npc(baseNpc) : null;
             if (apiNpc == null || !apiNpc.IsCustomNPC)
@@ -361,6 +375,8 @@ namespace S1API.Internal.Patches
         [HarmonyPostfix]
         private static void NPCLoader_Load_Postfix(S1Datas.DynamicSaveData saveData)
         {
+            if (!IsInMainScene())
+                return;
             if (saveData == null)
                 return;
 
@@ -406,6 +422,16 @@ namespace S1API.Internal.Patches
                     return n;
             }
             return null;
+        }
+
+        /// <summary>
+        /// Returns true only when the active scene is exactly "Main" (case-insensitive).
+        /// Custom NPC flow is restricted to this scene to avoid prologue issues.
+        /// </summary>
+        private static bool IsInMainScene()
+        {
+            string sceneName = SceneManager.GetActiveScene().name;
+            return string.Equals(sceneName, "Main", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

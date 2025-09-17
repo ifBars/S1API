@@ -37,6 +37,10 @@ namespace S1API.Internal.Patches
             if (__instance == null)
                 return;
 
+            // Only register custom apps in the Main scene to avoid prologue issues
+            if (!string.Equals(SceneManager.GetActiveScene().name, "Main", StringComparison.OrdinalIgnoreCase))
+                return;
+
             // Re-register all PhoneApps
             var phoneApps = ReflectionUtils.GetDerivedClasses<PhoneApp.PhoneApp>();
             foreach (var type in phoneApps)
