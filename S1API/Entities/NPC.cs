@@ -14,6 +14,8 @@ using S1Behaviour = Il2CppScheduleOne.NPCs.Behaviour;
 using S1Vehicles = Il2CppScheduleOne.Vehicles;
 using S1Vision = Il2CppScheduleOne.Vision;
 using S1NPCs = Il2CppScheduleOne.NPCs;
+using S1Combat = Il2CppScheduleOne.Combat;
+using S1Items = Il2CppScheduleOne.ItemFramework;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1DevUtilities = ScheduleOne.DevUtilities;
 using S1Interaction = ScheduleOne.Interaction;
@@ -30,6 +32,8 @@ using S1Behaviour = ScheduleOne.NPCs.Behaviour;
 using S1Vehicles = ScheduleOne.Vehicles;
 using S1Vision = ScheduleOne.Vision;
 using S1NPCs = ScheduleOne.NPCs;
+using S1Combat = ScheduleOne.Combat;
+using S1Items = ScheduleOne.ItemFramework;
 #endif
 
 #if (IL2CPPBEPINEX || IL2CPPMELON)
@@ -642,6 +646,11 @@ namespace S1API.Entities
         public NPCSchedule Schedule => _schedule ?? (_schedule = new NPCSchedule(this));
 
         /// <summary>
+        /// The current <see cref="NPCInventory"/> instance.
+        /// </summary>
+        public NPCInventory Inventory => _inventory ?? (_inventory = new NPCInventory(this));
+
+        /// <summary>
         /// The current <see cref="NPCCustomer"/> instance.
         /// </summary>
         public NPCCustomer Customer => _customer ?? (_customer = new NPCCustomer(this));
@@ -844,6 +853,91 @@ namespace S1API.Entities
 
                 S1NPC.Behaviour.FleeBehaviour = existing;
             }
+
+            // Ensure other behaviours used by Customer flows exist
+            if (S1NPC.Behaviour.GenericDialogueBehaviour == null)
+            {
+                var existing = S1NPC.Behaviour.GetComponentInChildren<S1Behaviour.GenericDialogueBehaviour>(true);
+                if (existing == null)
+                {
+                    GameObject go = new GameObject("GenericDialogueBehaviour");
+                    go.transform.SetParent(S1NPC.Behaviour.transform, false);
+                    existing = go.AddComponent<S1Behaviour.GenericDialogueBehaviour>();
+                }
+                S1NPC.Behaviour.GenericDialogueBehaviour = existing;
+            }
+
+            if (S1NPC.Behaviour.RequestProductBehaviour == null)
+            {
+                var existing = S1NPC.Behaviour.GetComponentInChildren<S1Behaviour.RequestProductBehaviour>(true);
+                if (existing == null)
+                {
+                    GameObject go = new GameObject("RequestProductBehaviour");
+                    go.transform.SetParent(S1NPC.Behaviour.transform, false);
+                    existing = go.AddComponent<S1Behaviour.RequestProductBehaviour>();
+                }
+                S1NPC.Behaviour.RequestProductBehaviour = existing;
+            }
+
+            if (S1NPC.Behaviour.CallPoliceBehaviour == null)
+            {
+                var existing = S1NPC.Behaviour.GetComponentInChildren<S1Behaviour.CallPoliceBehaviour>(true);
+                if (existing == null)
+                {
+                    GameObject go = new GameObject("CallPoliceBehaviour");
+                    go.transform.SetParent(S1NPC.Behaviour.transform, false);
+                    existing = go.AddComponent<S1Behaviour.CallPoliceBehaviour>();
+                }
+                S1NPC.Behaviour.CallPoliceBehaviour = existing;
+            }
+
+            if (S1NPC.Behaviour.CombatBehaviour == null)
+            {
+                var existing = S1NPC.Behaviour.GetComponentInChildren<S1Combat.CombatBehaviour>(true);
+                if (existing == null)
+                {
+                    GameObject go = new GameObject("CombatBehaviour");
+                    go.transform.SetParent(S1NPC.Behaviour.transform, false);
+                    existing = go.AddComponent<S1Combat.CombatBehaviour>();
+                }
+                S1NPC.Behaviour.CombatBehaviour = existing;
+            }
+
+            if (S1NPC.Behaviour.StationaryBehaviour == null)
+            {
+                var existing = S1NPC.Behaviour.GetComponentInChildren<S1Behaviour.StationaryBehaviour>(true);
+                if (existing == null)
+                {
+                    GameObject go = new GameObject("StationaryBehaviour");
+                    go.transform.SetParent(S1NPC.Behaviour.transform, false);
+                    existing = go.AddComponent<S1Behaviour.StationaryBehaviour>();
+                }
+                S1NPC.Behaviour.StationaryBehaviour = existing;
+            }
+
+            if (S1NPC.Behaviour.FaceTargetBehaviour == null)
+            {
+                var existing = S1NPC.Behaviour.GetComponentInChildren<S1Behaviour.FaceTargetBehaviour>(true);
+                if (existing == null)
+                {
+                    GameObject go = new GameObject("FaceTargetBehaviour");
+                    go.transform.SetParent(S1NPC.Behaviour.transform, false);
+                    existing = go.AddComponent<S1Behaviour.FaceTargetBehaviour>();
+                }
+                S1NPC.Behaviour.FaceTargetBehaviour = existing;
+            }
+
+            if (S1NPC.Behaviour.ConsumeProductBehaviour == null)
+            {
+                var existing = S1NPC.Behaviour.GetComponentInChildren<S1Behaviour.ConsumeProductBehaviour>(true);
+                if (existing == null)
+                {
+                    GameObject go = new GameObject("ConsumeProductBehaviour");
+                    go.transform.SetParent(S1NPC.Behaviour.transform, false);
+                    existing = go.AddComponent<S1Behaviour.ConsumeProductBehaviour>();
+                }
+                S1NPC.Behaviour.ConsumeProductBehaviour = existing;
+            }
         }
 
         private void InitializeVisionComponents()
@@ -906,6 +1000,26 @@ namespace S1API.Entities
         {
             if (S1NPC.Inventory == null)
                 S1NPC.Inventory = gameObject.GetComponentInChildren<S1NPCs.NPCInventory>(true) ?? gameObject.AddComponent<S1NPCs.NPCInventory>();
+
+            // Guarantee slots exist to support capacity checks and insertions
+            try
+            {
+                if (S1NPC.Inventory.ItemSlots == null || S1NPC.Inventory.ItemSlots.Count == 0)
+                {
+                    for (int i = 0; i < S1NPC.Inventory.SlotCount; i++)
+                    {
+                        var slot = new S1Items.ItemSlot();
+                        slot.SetSlotOwner(S1NPC.Inventory);
+                        slot.onItemDataChanged = (Action)Delegate.Combine(slot.onItemDataChanged, new Action(() =>
+                        {
+                            var mi = typeof(S1NPCs.NPCInventory).GetMethod("InventoryContentsChanged", BindingFlags.NonPublic | BindingFlags.Instance);
+                            mi?.Invoke(S1NPC.Inventory, null);
+                        }));
+                        S1NPC.Inventory.ItemSlots.Add(slot);
+                    }
+                }
+            }
+            catch { /* ignore */ }
 
             if (S1NPC.Inventory.PickpocketIntObj == null)
             {
@@ -986,6 +1100,7 @@ namespace S1API.Entities
 
         private NPCDialogue _dialogue;
         private NPCSchedule _schedule;
+        private NPCInventory _inventory;
         private NPCCustomer _customer;
 
 

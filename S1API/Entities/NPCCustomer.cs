@@ -7,6 +7,7 @@ using S1Product = Il2CppScheduleOne.Product;
 using S1Messaging = Il2CppScheduleOne.Messaging;
 using S1Map = Il2CppScheduleOne.Map;
 using S1DevUtilities = Il2CppScheduleOne.DevUtilities;
+using S1Schedules = Il2CppScheduleOne.NPCs.Schedules;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1NPCs = ScheduleOne.NPCs;
 using S1Economy = ScheduleOne.Economy;
@@ -17,6 +18,7 @@ using S1Product = ScheduleOne.Product;
 using S1Messaging = ScheduleOne.Messaging;
 using S1Map = ScheduleOne.Map;
 using S1DevUtilities = ScheduleOne.DevUtilities;
+using S1Schedules = ScheduleOne.NPCs.Schedules;
 #endif
 
 using System;
@@ -295,6 +297,34 @@ namespace S1API.Entities
                                 customer.DefaultDeliveryLocation = loc;
                             }
                         }
+                    }
+                }
+                catch { /* ignore */ }
+
+                // Ensure DealSignal exists and is wired to the customer's schedule manager
+                try
+                {
+                    var dealSignalField = typeof(S1Economy.Customer).GetField("DealSignal", BindingFlags.Public | BindingFlags.Instance);
+                    var existingSignal = dealSignalField?.GetValue(customer) as S1Schedules.NPCSignal_WaitForDelivery;
+                    if (existingSignal == null)
+                    {
+                        var sched = NPC.gameObject.GetComponentInChildren<S1NPCs.NPCScheduleManager>(true);
+                        if (sched == null)
+                        {
+                            var schedGo = new GameObject("NPCScheduleManager");
+                            schedGo.transform.SetParent(NPC.gameObject.transform, false);
+                            sched = schedGo.AddComponent<S1NPCs.NPCScheduleManager>();
+                        }
+
+                        var signal = NPC.gameObject.GetComponentInChildren<S1Schedules.NPCSignal_WaitForDelivery>(true);
+                        if (signal == null)
+                        {
+                            var go = new GameObject("DealSignal");
+                            go.transform.SetParent(sched.transform, false);
+                            signal = go.AddComponent<S1Schedules.NPCSignal_WaitForDelivery>();
+                            go.SetActive(false);
+                        }
+                        dealSignalField?.SetValue(customer, signal);
                     }
                 }
                 catch { /* ignore */ }
