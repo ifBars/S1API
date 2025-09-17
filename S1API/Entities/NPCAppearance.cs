@@ -39,19 +39,19 @@ namespace S1API.Entities
         /// INTERNAL: Constructor used for assigning the NPC instance.
         /// </summary>
         /// <param name="npc"></param>
-        internal NPCAppearance(NPC npc)
+        internal NPCAppearance(NPC npc, S1AvatarFramework.Avatar runtimeAvatar)
         {
             NPC = npc;
+            _runtimeAvatar = runtimeAvatar;
 
-            S1AvatarFramework.Avatar runtimeAvatar = NPC.S1NPC.Avatar;
             S1AvatarFramework.AvatarSettings sourceSettings = null;
 
-            if (runtimeAvatar != null)
+            if (_runtimeAvatar != null)
             {
-                if (runtimeAvatar.CurrentSettings != null)
-                    sourceSettings = runtimeAvatar.CurrentSettings;
-                else if (runtimeAvatar.InitialAvatarSettings != null)
-                    sourceSettings = runtimeAvatar.InitialAvatarSettings;
+                if (_runtimeAvatar.CurrentSettings != null)
+                    sourceSettings = _runtimeAvatar.CurrentSettings;
+                else if (_runtimeAvatar.InitialAvatarSettings != null)
+                    sourceSettings = _runtimeAvatar.InitialAvatarSettings;
             }
 
             if (sourceSettings != null)
@@ -62,15 +62,11 @@ namespace S1API.Entities
                 ApplyDefaultSettings(_customAvatarSettings);
             }
 
-            // Swap to the mugshot rig for portrait generation.
-            NPC.S1NPC.Avatar = S1AvatarFramework.MugshotGenerator.Instance.MugshotRig;
-
-            // For baked NPCs, apply their existing settings if available.
             S1AvatarFramework.AvatarSettings avatarSettings = Resources.Load<S1AvatarFramework.AvatarSettings>($"charactersettings/{NPC.S1NPC.FirstName}");
             if (avatarSettings != null)
-                NPC.S1NPC.Avatar.LoadAvatarSettings(avatarSettings);
-            else
-                NPC.S1NPC.Avatar.LoadAvatarSettings(_customAvatarSettings);
+                _customAvatarSettings = ScriptableObject.Instantiate(avatarSettings);
+
+            ApplyToAvatar(_runtimeAvatar);
         }
 
         /// <summary>
@@ -78,24 +74,36 @@ namespace S1API.Entities
         /// </summary>
         internal void GenerateMugshot()
         {
-            // Enable the MugshotRig GameObject, if we do not do this the Mugshots are blank.
-            S1AvatarFramework.MugshotGenerator.Instance.MugshotRig.transform.parent.gameObject.SetActive(true);
+            var generator = S1AvatarFramework.MugshotGenerator.Instance;
+            if (generator == null)
+                return;
 
-            // Grab the right AvatarSettings instance to use
-            if (!NPC.S1NPC.Avatar.InitialAvatarSettings)
+            var mugshotRig = generator.MugshotRig;
+            if (mugshotRig == null)
+                return;
+
+            S1AvatarFramework.Avatar previousAvatar = NPC.S1NPC.Avatar;
+            try
+            {
+                NPC.S1NPC.Avatar = mugshotRig;
+                Transform mugshotParent = mugshotRig.transform.parent;
+                if (mugshotParent != null)
+                    mugshotParent.gameObject.SetActive(true);
+
                 NPC.S1NPC.Avatar.LoadAvatarSettings(_customAvatarSettings);
 
-            // Generate the Mugshot for the NPC
-            NPC.S1NPC.Avatar.GetMugshot((Action<Texture2D>)(generatedMugshot =>
+                NPC.S1NPC.Avatar.GetMugshot((Action<Texture2D>)(generatedMugshot =>
+                {
+                    generatedMugshot.Apply();
+                    Sprite iconSprite = Sprite.Create(generatedMugshot, new Rect(0, 0, generatedMugshot.width, generatedMugshot.height), Vector2.zero);
+                    NPC.Icon = iconSprite;
+                }));
+            }
+            finally
             {
-                // Apply the generated Texture2D instance to the GPU
-                // Otherwise it'll be blank in Messages App (for example).
-                generatedMugshot.Apply();
-
-                // Create the sprite and assign it to the NPC Icon.
-                Sprite iconSprite = Sprite.Create(generatedMugshot, new Rect(0, 0, generatedMugshot.width, generatedMugshot.height), Vector2.zero);
-                NPC.Icon = iconSprite;
-            }));
+                NPC.S1NPC.Avatar = previousAvatar ?? _runtimeAvatar;
+                ApplyToAvatar(_runtimeAvatar);
+            }
         }
 
         /// <summary>
@@ -375,6 +383,8 @@ namespace S1API.Entities
             avatarSettings.HairPath = string.Empty;
             avatarSettings.HairColor = Color.black;
         }
+
+        private S1AvatarFramework.Avatar _runtimeAvatar;
 
         /// <summary>
         /// INTERNAL: The custom <see cref="S1AvatarFramework.AvatarSettings"/> instance used for modders

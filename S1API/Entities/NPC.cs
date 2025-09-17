@@ -37,10 +37,20 @@ using System.Collections.Generic;
 #endif
 
 using System;
+using System.Collections;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
+#if (IL2CPPMELON)
+using Il2CppFishNet;
+using Il2CppFishNet.Managing;
+using Il2CppFishNet.Managing.Object;
+#elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
+using FishNet;
+using FishNet.Managing;
+using FishNet.Managing.Object;
+#endif
 using FishNet.Object;
 using S1API.AssetBundles;
 using S1API.Entities.Interfaces;
@@ -50,6 +60,7 @@ using S1API.Messaging;
 using S1API.Vehicles;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.SceneManagement;
 
 namespace S1API.Entities
 {
@@ -72,10 +83,40 @@ namespace S1API.Entities
         private static GameObject InstantiateTemplateInstance()
         {
             GameObject prefab = GetTemplatePrefab();
-            GameObject instance = UnityEngine.Object.Instantiate(prefab);
+            NetworkObject netPrefab = prefab.GetComponent<NetworkObject>() ?? prefab.AddComponent<NetworkObject>();
+
+            // Prefer instantiating from SpawnablePrefabs, mirroring MainMod behaviour.
+            NetworkObject spawnableNetPrefab = null;
+            try
+            {
+                var nm = InstanceFinder.NetworkManager;
+                if (nm != null)
+                {
+                    PrefabObjects spawnablePrefabs = nm.SpawnablePrefabs;
+                    if (spawnablePrefabs != null)
+                    {
+                        int count = spawnablePrefabs.GetObjectCount();
+                        for (int i = 0; i < count; i++)
+                        {
+                            NetworkObject obj = spawnablePrefabs.GetObject(true, i);
+                            if (obj != null && obj.gameObject != null && obj.gameObject.name == prefab.name)
+                            {
+                                spawnableNetPrefab = obj;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            catch { /* no-op: fallback to local prefab */ }
+
+            NetworkObject instanceNo = UnityEngine.Object.Instantiate<NetworkObject>(spawnableNetPrefab ?? netPrefab);
+            GameObject instance = instanceNo.gameObject;
             if (S1NPCs.NPCManager.InstanceExists && S1NPCs.NPCManager.Instance.NPCContainer != null)
             {
-                instance.transform.SetParent(S1NPCs.NPCManager.Instance.NPCContainer, false);
+                Transform parent = S1NPCs.NPCManager.Instance.NPCContainer;
+                if (parent != null && parent.gameObject != null && parent.gameObject.activeInHierarchy)
+                    instance.transform.SetParent(parent, false);
             }
             instance.name = prefab.name;
             return instance;
@@ -91,6 +132,55 @@ namespace S1API.Entities
                 if (TemplatePrefab != null)
                     return TemplatePrefab;
 
+                // Prefer a spawnable prefab provided by the base game (e.g., "BaseNPC").
+                try
+                {
+                    var nm = InstanceFinder.NetworkManager;
+                    if (nm != null)
+                    {
+                        PrefabObjects spawnablePrefabs = nm.SpawnablePrefabs;
+                        if (spawnablePrefabs != null)
+                        {
+                            NetworkObject chosen = null;
+                            int count = spawnablePrefabs.GetObjectCount();
+                            for (int i = 0; i < count; i++)
+                            {
+                                NetworkObject obj = spawnablePrefabs.GetObject(true, i);
+                                if (obj != null && obj.gameObject != null && obj.gameObject.name == "BaseNPC")
+                                {
+                                    chosen = obj;
+                                    break;
+                                }
+                            }
+
+                            // If "BaseNPC" was not found, look for any spawnable containing the base NPC component.
+                            if (chosen == null)
+                            {
+                                for (int i = 0; i < count; i++)
+                                {
+                                    NetworkObject obj = spawnablePrefabs.GetObject(true, i);
+                                    if (obj != null && obj.gameObject != null && obj.gameObject.GetComponent<S1NPCs.NPC>() != null)
+                                    {
+                                        chosen = obj;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (chosen != null)
+                            {
+                                GameObject prefabGo = chosen.gameObject;
+                                // Ensure NetworkObject exists (should already for spawnables)
+                                // prefabGo.GetComponent<NetworkObject>() ?? prefabGo.AddComponent<NetworkObject>();
+                                TemplatePrefab = prefabGo;
+                                return TemplatePrefab;
+                            }
+                        }
+                    }
+                }
+                catch { /* fall back to asset bundle */ }
+
+                // Fallback: load from our embedded asset bundle template.
                 Assembly assembly = typeof(NPC).Assembly;
                 string resourceName = $"{assembly.GetName().Name}.{TemplateBundleResourcePath}";
                 TemplateBundle = AssetLoader.GetAssetBundleFromStream(resourceName, assembly);
@@ -98,6 +188,21 @@ namespace S1API.Entities
                 GameObject prefab = TemplateBundle.LoadAsset<GameObject>(assetName);
                 if (prefab == null)
                     throw new Exception($"Failed to load NPC template prefab '{assetName}' from bundle '{TemplateBundleResourcePath}'.");
+
+                // Ensure a NetworkObject exists on the template prefab so FishNet can network-spawn it on clients.
+                try
+                {
+                    // Force prefab default active state so instances are active on clients.
+                    if (!prefab.activeSelf)
+                        prefab.SetActive(true);
+
+                    NetworkObject netPrefab = prefab.GetComponent<NetworkObject>() ?? prefab.AddComponent<NetworkObject>();
+                    TryRegisterPrefabWithFishNet(netPrefab);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[S1API] Failed to prepare/register NPC template prefab for networking: {ex.Message}");
+                }
 
                 TemplatePrefab = prefab;
                 return TemplatePrefab;
@@ -206,10 +311,14 @@ namespace S1API.Entities
             InitializeRelationshipData();
             InitializeNetworkBehaviours();
 
-            Appearance = new NPCAppearance(this);
+            Appearance = new NPCAppearance(this, _runtimeAvatar);
+            RestoreRuntimeAvatarAppearance();
 
             gameObject.name = S1NPC.FirstName ?? "UnknownNPC";
             gameObject.SetActive(true);
+
+            // Server-side: schedule activation and spawn through FishNet to mirror MainMod timing.
+            TrySpawnNetworkInstance();
 
             All.Add(this);
         }
@@ -922,6 +1031,195 @@ namespace S1API.Entities
 
         private readonly MethodInfo _unsettleMethod = AccessTools.Method(typeof(S1NPCs.NPC), "SetUnsettled");
         private readonly MethodInfo _removePanicMethod = AccessTools.Method(typeof(S1NPCs.NPC), "RemovePanicked");
+
+        /// <summary>
+        /// Attempts to register the template prefab with FishNet spawnables so clients can spawn it.
+        /// </summary>
+        private static void TryRegisterPrefabWithFishNet(NetworkObject prefabNetObject)
+        {
+            try
+            {
+                var nm = InstanceFinder.NetworkManager;
+                if (nm == null || prefabNetObject == null)
+                    return;
+
+                // Prefer property access if available.
+                object target = null;
+                var prefProps = new[] { "PrefabObjects", "SpawnablePrefabs", "DefaultPrefabObjects" };
+                for (int i = 0; i < prefProps.Length && target == null; i++)
+                {
+                    var p = nm.GetType().GetProperty(prefProps[i], BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    if (p != null)
+                        target = p.GetValue(nm);
+                }
+
+                // Try via ObjectManager if direct property wasn't found.
+                if (target == null)
+                {
+                    var omProp = nm.GetType().GetProperty("ObjectManager", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    var om = omProp?.GetValue(nm);
+                    if (om != null)
+                    {
+                        var poProp = om.GetType().GetProperty("PrefabObjects", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                        target = poProp?.GetValue(om);
+                    }
+                }
+
+                if (target == null)
+                    return; // Could not resolve spawnable prefabs container; skip silently.
+
+                // Try typical add/register method names.
+                var methods = new[] { "AddObject", "Add", "RegisterPrefab", "RegisterObject" };
+                for (int i = 0; i < methods.Length; i++)
+                {
+                    var mi = target.GetType().GetMethod(methods[i], BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    if (mi == null)
+                        continue;
+
+                    var parms = mi.GetParameters();
+                    if (parms.Length == 1 && parms[0].ParameterType.IsAssignableFrom(typeof(NetworkObject)))
+                    {
+                        mi.Invoke(target, new object[] { prefabNetObject });
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[S1API] Failed to register NPC prefab with FishNet: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Spawns this NPC's instance on the server using FishNet so it is networked.
+        /// No-ops on clients.
+        /// </summary>
+        private void TrySpawnNetworkInstance()
+        {
+            try
+            {
+                var nm = InstanceFinder.NetworkManager;
+                if (nm == null)
+                    return;
+
+                NetworkObject no = gameObject.GetComponent<NetworkObject>() ?? gameObject.AddComponent<NetworkObject>();
+
+                // Mirror MainMod: activate after a short delay, then spawn after another delay.
+                NetworkSpawnSequencer sequencer = gameObject.GetComponent<NetworkSpawnSequencer>();
+                if (sequencer == null)
+                    sequencer = gameObject.AddComponent<NetworkSpawnSequencer>();
+                sequencer.NetManager = nm;
+                sequencer.NetObject = no;
+                sequencer.Owner = this;
+                sequencer.ActivateDelay = 0.3f;
+                sequencer.SpawnDelay = 0.6f;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[S1API] Failed to schedule NPC network spawn: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Pre-registers the template prefab with FishNet on both server and clients at load time.
+        /// Ensures clients have an active prefab to instantiate when the server spawns NPCs.
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void BootstrapTemplatePrefabRegistration()
+        {
+            try
+            {
+                GameObject go = new GameObject("S1API_NPC_TemplatePrefabRegistrar");
+                UnityEngine.Object.DontDestroyOnLoad(go);
+                go.AddComponent<TemplatePrefabRegistrar>();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[S1API] Failed to bootstrap template prefab registration: {ex.Message}");
+            }
+        }
+
+        private sealed class TemplatePrefabRegistrar : MonoBehaviour
+        {
+            private IEnumerator Start()
+            {
+                // Wait until NetworkManager is available
+                int frames = 0;
+                while (InstanceFinder.NetworkManager == null && frames < 600)
+                {
+                    frames++;
+                    yield return null;
+                }
+
+                try
+                {
+                    // Loading the template prefab will force registration via GetTemplatePrefab.
+                    GetTemplatePrefab();
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[S1API] Template prefab registration failed: {ex.Message}");
+                }
+
+                // Self-cleanup
+                Destroy(gameObject);
+            }
+        }
+
+        /// <summary>
+        /// Helper MonoBehaviour to mirror MainMod's activation/spawn timing sequence.
+        /// </summary>
+        private sealed class NetworkSpawnSequencer : MonoBehaviour
+        {
+            public NetworkManager NetManager;
+            public NetworkObject NetObject;
+            public NPC Owner;
+            public float ActivateDelay = 0.3f;
+            public float SpawnDelay = 0.6f;
+
+            private IEnumerator Start()
+            {
+                if (NetObject == null)
+                    yield break;
+
+                if (ActivateDelay > 0f)
+                    yield return new WaitForSeconds(ActivateDelay);
+
+                if (NetObject != null && NetObject.gameObject != null)
+                    NetObject.gameObject.SetActive(true);
+
+                float remaining = SpawnDelay - ActivateDelay;
+                if (remaining > 0f)
+                    yield return new WaitForSeconds(remaining);
+
+                try
+                {
+                    if (NetManager != null && NetManager.IsServer && NetObject != null && !NetObject.IsSpawned)
+                    {
+                        NetManager.ServerManager.Spawn(NetObject, null, default(UnityEngine.SceneManagement.Scene));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[S1API] Failed to spawn NPC over network (sequencer): {ex.Message}");
+                }
+
+                try
+                {
+                    if (Owner != null)
+                    {
+                        bool broadcastVisibility = InstanceFinder.IsServer;
+                        Owner.S1NPC.SetVisible(true, networked: broadcastVisibility);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[S1API] Failed to set NPC visibility after spawn: {ex.Message}");
+                }
+
+                Destroy(this);
+            }
+        }
 
         #endregion
     }
