@@ -8,7 +8,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace S1API.Entities
+namespace S1API.Entities.Dialogue
 {
     /// <summary>
     /// Builder for composing an NPC-specific dialogue database without requiring asset bundles.

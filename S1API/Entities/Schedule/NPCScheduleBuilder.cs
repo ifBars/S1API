@@ -7,7 +7,7 @@ using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
 using System;
 using UnityEngine;
 
-namespace S1API.Entities
+namespace S1API.Entities.Schedule
 {
     /// <summary>
     /// Fluent builder for composing an NPC's schedule programmatically.
@@ -40,7 +40,18 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Adds a custom action type with a configured initializer.
+        /// Adds a custom schedule action using an S1API spec, without exposing game types.
+        /// </summary>
+        public NPCScheduleBuilder Add(IScheduleActionSpec spec)
+        {
+            if (spec == null)
+                return this;
+            spec.ApplyTo(_schedule);
+            return this;
+        }
+
+        /// <summary>
+        /// INTERNAL: Adds a custom action type with an optional configuration callback.
         /// </summary>
         internal NPCScheduleBuilder Add<T>(int startTime, Action<T> configure = null, string name = null) where T : S1NPCsSchedules.NPCAction
         {

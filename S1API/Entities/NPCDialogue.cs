@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Object = UnityEngine.Object;
+using S1API.Entities.Dialogue;
 
 namespace S1API.Entities
 {

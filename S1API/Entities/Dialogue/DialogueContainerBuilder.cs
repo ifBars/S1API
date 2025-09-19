@@ -8,7 +8,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace S1API.Entities
+namespace S1API.Entities.Dialogue
 {
     /// <summary>
     /// Builder to compose a choice-based DialogueContainer entirely from code.
@@ -40,7 +40,7 @@ namespace S1API.Entities
             if (choices != null)
             {
                 var list = (ChoiceList)typeof(ChoiceList)
-                    .GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, null, new System.Type[]{ typeof(NodeSpec) }, null)
+                    .GetConstructor(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, null, new Type[]{ typeof(NodeSpec) }, null)
                     .Invoke(new object[]{ node });
                 choices(list);
             }

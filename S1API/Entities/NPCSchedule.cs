@@ -11,6 +11,7 @@ using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using S1API.Entities.Schedule;
 
 namespace S1API.Entities
 {
@@ -125,6 +126,8 @@ namespace S1API.Entities
             if (existing != null)
             {
                 existing.NetworkInitializeIfDisabled();
+                // Also reflect into Customer so base game logic can reference it consistently
+                TryWireCustomerDealSignal(existing);
                 return;
             }
 
@@ -134,7 +137,22 @@ namespace S1API.Entities
             signal.NetworkInitializeIfDisabled();
             dealGo.SetActive(false);
 
+            // Wire to Customer component if present
+            TryWireCustomerDealSignal(signal);
+
             Manager.InitializeActions();
+        }
+
+        private void TryWireCustomerDealSignal(S1NPCsSchedules.NPCSignal_WaitForDelivery signal)
+        {
+            try
+            {
+                var customer = NPC.gameObject.GetComponent<S1NPCs.Customer>();
+                if (customer == null) return;
+                var field = typeof(S1NPCs.Customer).GetField("DealSignal", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                field?.SetValue(customer, signal);
+            }
+            catch { /* ignore */ }
         }
 
         /// <summary>

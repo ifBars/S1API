@@ -15,7 +15,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-namespace S1API.Entities
+namespace S1API.Entities.Customer
 {
     /// <summary>
     /// Builder for composing CustomerData at runtime without asset bundles.

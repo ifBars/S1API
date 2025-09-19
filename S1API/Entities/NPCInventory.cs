@@ -1,14 +1,19 @@
 #if (IL2CPPMELON)
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1Items = Il2CppScheduleOne.ItemFramework;
+using S1Interaction = Il2CppScheduleOne.Interaction;
 using S1Registry = Il2CppScheduleOne.Registry;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1NPCs = ScheduleOne.NPCs;
 using S1Items = ScheduleOne.ItemFramework;
+using S1Interaction = ScheduleOne.Interaction;
 using S1Registry = ScheduleOne.Registry;
 #endif
 
 using System;
+using System.Reflection;
+using UnityEngine;
+using UnityEngine.Events;
 namespace S1API.Entities
 {
     /// <summary>
@@ -89,9 +94,82 @@ namespace S1API.Entities
                 {
                     var slot = new S1Items.ItemSlot();
                     slot.SetSlotOwner(inv);
+                    // Wire to InventoryContentsChanged like base Awake does
+                    try
+                    {
+                        MethodInfo invChanged = typeof(S1NPCs.NPCInventory).GetMethod("InventoryContentsChanged", BindingFlags.NonPublic | BindingFlags.Instance);
+                        if (invChanged != null)
+                        {
+                            slot.onItemDataChanged = (Action)Delegate.Combine(slot.onItemDataChanged, new Action(() =>
+                            {
+                                invChanged.Invoke(inv, null);
+                            }));
+                        }
+                    }
+                    catch { }
                     inv.ItemSlots.Add(slot);
                 }
             }
+
+            // Ensure Pickpocket interactable exists to avoid UI NREs when opening the pickpocket screen
+            if (inv.PickpocketIntObj == null)
+            {
+                var talk = NPC.GetType().GetMethod("GetPrimaryInteractable", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                var primary = talk?.Invoke(NPC, null) as S1Interaction.InteractableObject; // safe no-op if null under symbols
+                var interactables = NPC.gameObject.GetComponentsInChildren<S1Interaction.InteractableObject>(true);
+                S1Interaction.InteractableObject pick = null;
+                for (int i = 0; i < interactables.Length; i++)
+                {
+                    if (interactables[i] != null && interactables[i] != primary)
+                    {
+                        pick = interactables[i];
+                        break;
+                    }
+                }
+                if (pick == null)
+                {
+                    pick = NPC.gameObject.AddComponent< S1Interaction.InteractableObject >();
+                }
+                inv.PickpocketIntObj = pick;
+            }
+
+            // Base Awake sets private 'npc' and wires Pickpocket listeners; simulate that here
+            try
+            {
+                FieldInfo npcField = typeof(S1NPCs.NPCInventory).GetField("npc", BindingFlags.NonPublic | BindingFlags.Instance);
+                npcField?.SetValue(inv, NPC.S1NPC);
+
+                if (inv.PickpocketIntObj != null)
+                {
+                    MethodInfo hoveredMi = typeof(S1NPCs.NPCInventory).GetMethod("Hovered", BindingFlags.Public | BindingFlags.Instance);
+                    MethodInfo interactedMi = typeof(S1NPCs.NPCInventory).GetMethod("Interacted", BindingFlags.Public | BindingFlags.Instance);
+                    if (hoveredMi != null)
+                    {
+                        UnityAction hovered = (UnityAction)Delegate.CreateDelegate(typeof(UnityAction), inv, hoveredMi);
+                        inv.PickpocketIntObj.onHovered?.AddListener(hovered);
+                    }
+                    if (interactedMi != null)
+                    {
+                        UnityAction interacted = (UnityAction)Delegate.CreateDelegate(typeof(UnityAction), inv, interactedMi);
+                        inv.PickpocketIntObj.onInteractStart?.AddListener(interacted);
+                    }
+                }
+            }
+            catch { }
+
+            // Ensure UnityEvent exists
+            try
+            {
+                FieldInfo onChangedField = typeof(S1NPCs.NPCInventory).GetField("onContentsChanged", BindingFlags.Public | BindingFlags.Instance);
+                if (onChangedField != null && onChangedField.GetValue(inv) == null)
+                {
+                    onChangedField.SetValue(inv, new UnityEvent());
+                }
+            }
+            catch { }
+
+            // Make sure FishNet is initialized for the component
+            try { inv.NetworkInitializeIfDisabled(); } catch { }
         }
 
         internal S1NPCs.NPCInventory Component => NPC.gameObject.GetComponent<S1NPCs.NPCInventory>();

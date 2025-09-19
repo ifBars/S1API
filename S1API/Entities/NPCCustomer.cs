@@ -8,6 +8,7 @@ using S1Messaging = Il2CppScheduleOne.Messaging;
 using S1Map = Il2CppScheduleOne.Map;
 using S1DevUtilities = Il2CppScheduleOne.DevUtilities;
 using S1Schedules = Il2CppScheduleOne.NPCs.Schedules;
+using S1Quests = Il2CppScheduleOne.Quests;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1NPCs = ScheduleOne.NPCs;
 using S1Economy = ScheduleOne.Economy;
@@ -19,11 +20,13 @@ using S1Messaging = ScheduleOne.Messaging;
 using S1Map = ScheduleOne.Map;
 using S1DevUtilities = ScheduleOne.DevUtilities;
 using S1Schedules = ScheduleOne.NPCs.Schedules;
+using S1Quests = ScheduleOne.Quests;
 #endif
 
 using System;
 using System.Reflection;
 using UnityEngine;
+using UnityEngine.Events;
 using FishNet.Object;
 using MelonLoader;
 #if (IL2CPPMELON)
@@ -35,6 +38,7 @@ using FishNet;
 using FishNet.Managing;
 using FishNet.Managing.Object;
 using ScheduleOne.Economy;
+using S1API.Entities.Customer;
 #endif
 
 namespace S1API.Entities
@@ -65,11 +69,10 @@ namespace S1API.Entities
             if (Component == null)
             {
                 var c = NPC.gameObject.GetComponentInChildren<S1Economy.Customer>() ?? NPC.gameObject.AddComponent<S1Economy.Customer>();
-                // Ensure minimal data exists prior to any runtime use
                 EnsureCustomerData(c);
-                // Wire critical references and runtime state
                 WireCoreReferences(c);
                 InitializeRuntimeState(c);
+                EnsureUnityEvents(c);
                 c.enabled = true;
                 c.InitializeSaveable();
                 TryNetworkInitialize(c);
@@ -79,6 +82,7 @@ namespace S1API.Entities
                 EnsureCustomerData(Component);
                 WireCoreReferences(Component);
                 InitializeRuntimeState(Component);
+                EnsureUnityEvents(Component);
                 TryNetworkInitialize(Component);
             }
         }
@@ -176,19 +180,14 @@ namespace S1API.Entities
                 return;
             try
             {
-                // Initialize the NetworkBehaviour lifecycle if it hasn't been already.
-                var nm = InstanceFinder.NetworkManager;
-                if (nm.IsClient && !nm.IsServer) return;
-                customer.NetworkInitializeIfDisabled();
-                
+                // Directly set FishNet caches instead of calling NetworkInitializeIfDisabled.
+                var transportManager = InstanceFinder.TransportManager;
+                var networkObject = NPC.gameObject.GetComponent<NetworkObject>();
+                if (transportManager == null || networkObject == null)
+                    return;
 
-                // If the NPC is already spawned, make sure late-added behaviours are ready on server/clients.
-                var no = NPC.gameObject.GetComponent<NetworkObject>();
-                if (no != null && no.IsSpawned)
-                {
-                    // Nothing extra is required for late-added NetworkBehaviours in FishNet
-                    // beyond NetworkInitializeIfDisabled. Keep here for future compatibility.
-                }
+                SetNonPublicInstanceField(customer, "_transportManagerCache", transportManager);
+                SetNonPublicInstanceField(customer, "_networkObjectCache", networkObject);
             }
             catch (Exception)
             {
@@ -335,10 +334,182 @@ namespace S1API.Entities
             }
         }
 
+        /// <summary>
+        /// INTERNAL: Ensure UnityEvents are allocated so runtime wiring does not NRE.
+        /// </summary>
+        private void EnsureUnityEvents(S1Economy.Customer customer)
+        {
+            try
+            {
+                // onUnlocked
+                var onUnlockedField = typeof(S1Economy.Customer).GetField("onUnlocked", BindingFlags.Public | BindingFlags.Instance);
+                if (onUnlockedField != null && onUnlockedField.GetValue(customer) == null)
+                {
+                    onUnlockedField.SetValue(customer, new UnityEvent());
+                }
+
+                // onDealCompleted
+                var onDealCompletedField = typeof(S1Economy.Customer).GetField("onDealCompleted", BindingFlags.Public | BindingFlags.Instance);
+                if (onDealCompletedField != null && onDealCompletedField.GetValue(customer) == null)
+                {
+                    onDealCompletedField.SetValue(customer, new UnityEvent());
+                }
+
+                // onContractAssigned (UnityEvent<Contract>)
+                var onContractAssignedField = typeof(S1Economy.Customer).GetField("onContractAssigned", BindingFlags.Public | BindingFlags.Instance);
+                if (onContractAssignedField != null && onContractAssignedField.GetValue(customer) == null)
+                {
+                    // Create a UnityEvent dynamically for generic arg if missing
+                    var genericEventType = typeof(UnityEvent<>).MakeGenericType(typeof(S1Quests.Contract));
+                    var evt = Activator.CreateInstance(genericEventType);
+                    onContractAssignedField.SetValue(customer, evt);
+                }
+            }
+            catch (Exception)
+            {
+                // ignore: best-effort to prevent null UnityEvents
+            }
+        }
+
+        /// <summary>
+        /// Subscribe to customer unlocked event.
+        /// </summary>
+        public void OnUnlocked(Action callback)
+        {
+            EnsureCustomer();
+            if (Component == null || callback == null) return;
+            try
+            {
+                var onUnlockedField = typeof(S1Economy.Customer).GetField("onUnlocked", BindingFlags.Public | BindingFlags.Instance);
+                if (onUnlockedField?.GetValue(Component) is UnityEvent evt)
+                {
+                    UnityAction action = new UnityAction(callback);
+                    evt.AddListener(action);
+                }
+            }
+            catch (Exception) { }
+        }
+
+        /// <summary>
+        /// Subscribe to deal completed event.
+        /// </summary>
+        public void OnDealCompleted(Action callback)
+        {
+            EnsureCustomer();
+            if (Component == null || callback == null) return;
+            try
+            {
+                var onDealCompletedField = typeof(S1Economy.Customer).GetField("onDealCompleted", BindingFlags.Public | BindingFlags.Instance);
+                if (onDealCompletedField?.GetValue(Component) is UnityEvent evt)
+                {
+                    UnityAction action = new UnityAction(callback);
+                    evt.AddListener(action);
+                }
+            }
+            catch (Exception) { }
+        }
+
+        /// <summary>
+        /// Subscribe to contract assigned event. Provides payment, product count, and delivery window via callback.
+        /// </summary>
+        public void OnContractAssigned(Action<float, int, int, int> callback)
+        {
+            EnsureCustomer();
+            if (Component == null || callback == null) return;
+            try
+            {
+                var onContractAssignedField = typeof(S1Economy.Customer).GetField("onContractAssigned", BindingFlags.Public | BindingFlags.Instance);
+                var val = onContractAssignedField?.GetValue(Component);
+                if (val == null) return;
+
+                // Build a UnityAction<Contract> that maps to a safe callback signature
+                var contractType = typeof(S1Quests.Contract);
+                var unityActionType = typeof(UnityAction<>).MakeGenericType(contractType);
+                var method = GetType().GetMethod(nameof(HandleContractAssigned), BindingFlags.NonPublic | BindingFlags.Instance);
+                var del = Delegate.CreateDelegate(unityActionType, this, method);
+
+                // Store user callback for use in handler
+                _onContractAssigned = callback;
+
+                // AddListener via reflection: ((UnityEvent<Contract>)val).AddListener(del)
+                var addListener = val.GetType().GetMethod("AddListener", new[] { unityActionType });
+                addListener?.Invoke(val, new object[] { del });
+            }
+            catch (Exception) { }
+        }
+
+        private Action<float, int, int, int> _onContractAssigned;
+
+        // Maps Contract to safe primitives for modders
+        private void HandleContractAssigned(object contract)
+        {
+            try
+            {
+                if (_onContractAssigned == null || contract == null) return;
+                // Read minimal bits via reflection: payment, total qty, window start/end
+                float payment = 0f;
+                int totalQty = 0;
+                int winStart = 0;
+                int winEnd = 0;
+
+                var contractType = contract.GetType();
+                var paymentProp = contractType.GetProperty("Payment", BindingFlags.Public | BindingFlags.Instance);
+                if (paymentProp != null)
+                    payment = Convert.ToSingle(paymentProp.GetValue(contract));
+
+                var productListProp = contractType.GetProperty("ProductList", BindingFlags.Public | BindingFlags.Instance);
+                var productList = productListProp?.GetValue(contract);
+                if (productList != null)
+                {
+                    var entriesField = productList.GetType().GetField("entries", BindingFlags.Public | BindingFlags.Instance);
+                    var entries = entriesField?.GetValue(productList) as System.Collections.IEnumerable;
+                    if (entries != null)
+                    {
+                        foreach (var e in entries)
+                        {
+                            var qtyField = e.GetType().GetField("Quantity", BindingFlags.Public | BindingFlags.Instance);
+                            if (qtyField != null)
+                                totalQty += Convert.ToInt32(qtyField.GetValue(e));
+                        }
+                    }
+                }
+
+                var windowProp = contractType.GetProperty("DeliveryWindow", BindingFlags.Public | BindingFlags.Instance);
+                var window = windowProp?.GetValue(contract);
+                if (window != null)
+                {
+                    var startField = window.GetType().GetField("WindowStartTime", BindingFlags.Public | BindingFlags.Instance);
+                    var endField = window.GetType().GetField("WindowEndTime", BindingFlags.Public | BindingFlags.Instance);
+                    if (startField != null) winStart = Convert.ToInt32(startField.GetValue(window));
+                    if (endField != null) winEnd = Convert.ToInt32(endField.GetValue(window));
+                }
+
+                _onContractAssigned?.Invoke(payment, totalQty, winStart, winEnd);
+            }
+            catch (Exception) { }
+        }
+
         private FieldInfo customerDataField = typeof(S1Economy.Customer).GetField("customerData",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         private MethodInfo setupDialogueMethod = typeof(S1Economy.Customer).GetMethod("SetUpDialogue",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        private static void SetNonPublicInstanceField(object target, string fieldName, object value)
+        {
+            try
+            {
+                if (target == null || string.IsNullOrEmpty(fieldName)) return;
+                var type = target.GetType();
+                FieldInfo field = null;
+                while (type != null && field == null)
+                {
+                    field = type.GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+                    type = type.BaseType;
+                }
+                field?.SetValue(target, value);
+            }
+            catch (Exception) { }
+        }
     }
 }
 
