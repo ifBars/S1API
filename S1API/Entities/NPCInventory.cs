@@ -86,14 +86,24 @@ namespace S1API.Entities
                 inv = comp;
             }
 
-            // Create slots if none exist
-            if (inv.ItemSlots == null || inv.ItemSlots.Count == 0)
+            // Create slots if none exist, or top-up to SlotCount
+            if (inv.ItemSlots == null)
             {
-                int slotCount = inv.SlotCount;
-                for (int i = 0; i < slotCount; i++)
+                // Ensure list instance exists
+                var listProp = typeof(S1NPCs.NPCInventory).GetProperty("ItemSlots", BindingFlags.Public | BindingFlags.Instance);
+                listProp?.SetValue(inv, new System.Collections.Generic.List<S1Items.ItemSlot>());
+            }
+            if (inv.ItemSlots == null || inv.ItemSlots.Count < inv.SlotCount)
+            {
+                int existing = inv.ItemSlots?.Count ?? 0;
+                int toCreate = Mathf.Max(0, inv.SlotCount - existing);
+                for (int i = 0; i < toCreate; i++)
                 {
                     var slot = new S1Items.ItemSlot();
                     slot.SetSlotOwner(inv);
+                    // Explicitly unlock the slot for additions
+                    try { slot.IsLocked = false; } catch { }
+                    try { slot.IsAddLocked = false; } catch { }
                     // Wire to InventoryContentsChanged like base Awake does
                     try
                     {
@@ -110,6 +120,21 @@ namespace S1API.Entities
                     inv.ItemSlots.Add(slot);
                 }
             }
+
+            // Ensure all slots are unlocked and owned properly
+            try
+            {
+                for (int i = 0; i < inv.ItemSlots.Count; i++)
+                {
+                    var s = inv.ItemSlots[i];
+                    if (s == null)
+                        continue;
+                    s.SetSlotOwner(inv);
+                    try { s.IsLocked = false; } catch { }
+                    try { s.IsAddLocked = false; } catch { }
+                }
+            }
+            catch { }
 
             // Ensure Pickpocket interactable exists to avoid UI NREs when opening the pickpocket screen
             if (inv.PickpocketIntObj == null)
@@ -168,8 +193,19 @@ namespace S1API.Entities
             }
             catch { }
 
-            // Make sure FishNet is initialized for the component
-            try { inv.NetworkInitializeIfDisabled(); } catch { }
+            // Make sure FishNet is initialized for the component (warm caches)
+            try
+            {
+                var no = NPC.gameObject.GetComponent<FishNet.Object.NetworkObject>();
+                var tm = FishNet.InstanceFinder.TransportManager;
+                if (no != null && tm != null)
+                {
+                    SetNonPublicInstanceField(inv, "_networkObjectCache", no);
+                    SetNonPublicInstanceField(inv, "_transportManagerCache", tm);
+                }
+                inv.NetworkInitializeIfDisabled();
+            }
+            catch { }
         }
 
         internal S1NPCs.NPCInventory Component => NPC.gameObject.GetComponent<S1NPCs.NPCInventory>();
@@ -213,6 +249,23 @@ namespace S1API.Entities
             if (item == null) return;
             EnsureInitialized();
             Component?.InsertItem(item, network);
+        }
+
+        private static void SetNonPublicInstanceField(object target, string fieldName, object value)
+        {
+            try
+            {
+                if (target == null || string.IsNullOrEmpty(fieldName)) return;
+                var type = target.GetType();
+                FieldInfo field = null;
+                while (type != null && field == null)
+                {
+                    field = type.GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+                    type = type.BaseType;
+                }
+                field?.SetValue(target, value);
+            }
+            catch { }
         }
     }
 }

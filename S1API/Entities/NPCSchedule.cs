@@ -2,10 +2,12 @@
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1GameTime = Il2CppScheduleOne.GameTime;
 using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
+using S1Economy = Il2CppScheduleOne.Economy;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1NPCs = ScheduleOne.NPCs;
 using S1GameTime = ScheduleOne.GameTime;
 using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
+using S1Economy = ScheduleOne.Economy;
 #endif
 
 using System;
@@ -105,12 +107,22 @@ namespace S1API.Entities
 
             var action = go.AddComponent<T>();
             action.SetStartTime(startTime);
-            action.NetworkInitializeIfDisabled();
+            TryNetworkInitialize(action);
 
             // Let the manager pick up and sort the new action immediately
             Manager.InitializeActions();
             Manager.EnforceState();
             return action;
+        }
+
+        /// <summary>
+        /// INTERNAL: Adds an action via an S1API spec. Use from builder.Add(spec).
+        /// </summary>
+        internal void AddActionFromSpec(IScheduleActionSpec spec)
+        {
+            if (spec == null)
+                return;
+            spec.ApplyTo(this);
         }
 
         /// <summary>
@@ -125,7 +137,7 @@ namespace S1API.Entities
             var existing = Manager.GetComponentInChildren<S1NPCsSchedules.NPCSignal_WaitForDelivery>(true);
             if (existing != null)
             {
-                existing.NetworkInitializeIfDisabled();
+                TryNetworkInitialize(existing);
                 // Also reflect into Customer so base game logic can reference it consistently
                 TryWireCustomerDealSignal(existing);
                 return;
@@ -134,7 +146,7 @@ namespace S1API.Entities
             var dealGo = new GameObject("DealSignal");
             dealGo.transform.SetParent(Manager.transform, false);
             var signal = dealGo.AddComponent<S1NPCsSchedules.NPCSignal_WaitForDelivery>();
-            signal.NetworkInitializeIfDisabled();
+            TryNetworkInitialize(signal);
             dealGo.SetActive(false);
 
             // Wire to Customer component if present
@@ -147,9 +159,9 @@ namespace S1API.Entities
         {
             try
             {
-                var customer = NPC.gameObject.GetComponent<S1NPCs.Customer>();
+                var customer = NPC.gameObject.GetComponent<S1Economy.Customer>();
                 if (customer == null) return;
-                var field = typeof(S1NPCs.Customer).GetField("DealSignal", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                var field = typeof(S1Economy.Customer).GetField("DealSignal", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
                 field?.SetValue(customer, signal);
             }
             catch { /* ignore */ }
@@ -166,7 +178,6 @@ namespace S1API.Entities
                 return;
 
             var destGo = new GameObject("Destination");
-            destGo.transform.SetParent(action.transform, false);
             destGo.transform.position = destination;
 
             // Orient destination forward towards current NPC position so facing makes sense if requested
@@ -252,6 +263,48 @@ namespace S1API.Entities
         /// INTERNAL: Direct access to the underlying manager.
         /// </summary>
         internal S1NPCs.NPCScheduleManager Manager => NPC.gameObject.GetComponentInChildren<S1NPCs.NPCScheduleManager>(true);
+
+        /// <summary>
+        /// INTERNAL: The owning NPC instance.
+        /// </summary>
+        internal NPC Owner => NPC;
+
+        /// <summary>
+        /// INTERNAL: Warm FishNet caches on a dynamically added NetworkBehaviour.
+        /// </summary>
+        private void TryNetworkInitialize(object behaviour)
+        {
+            if (behaviour == null)
+                return;
+            try
+            {
+                var networkObject = NPC.gameObject.GetComponent<FishNet.Object.NetworkObject>();
+                var transportManager = FishNet.InstanceFinder.TransportManager;
+                if (networkObject == null || transportManager == null)
+                    return;
+
+                SetNonPublicInstanceField(behaviour, "_networkObjectCache", networkObject);
+                SetNonPublicInstanceField(behaviour, "_transportManagerCache", transportManager);
+            }
+            catch { }
+        }
+
+        private static void SetNonPublicInstanceField(object target, string fieldName, object value)
+        {
+            try
+            {
+                if (target == null || string.IsNullOrEmpty(fieldName)) return;
+                var type = target.GetType();
+                System.Reflection.FieldInfo field = null;
+                while (type != null && field == null)
+                {
+                    field = type.GetField(fieldName, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                    type = type.BaseType;
+                }
+                field?.SetValue(target, value);
+            }
+            catch { }
+        }
     }
 }
 

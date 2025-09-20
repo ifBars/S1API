@@ -8,6 +8,7 @@ using S1Loaders = ScheduleOne.Persistence.Loaders;
 using S1NPCs = ScheduleOne.NPCs;
 using FishNet;
 using ScheduleOne.DevUtilities;
+using S1Map = ScheduleOne.Map;
 #endif
 
 #if (IL2CPPMELON)
@@ -42,6 +43,7 @@ using HarmonyLib;
 using MelonLoader;
 using S1API.Entities;
 using S1API.Internal.Utils;
+using S1API.Map;
 using UnityEngine.SceneManagement;
 
 namespace S1API.Internal.Patches
@@ -69,6 +71,19 @@ namespace S1API.Internal.Patches
                 MelonLogger.Msg("[S1API] Skipping custom NPC instantiation because active scene is not 'Main'.");
                 return;
             }
+
+            // Pre-scan active enterable buildings and register them for API lookup
+            try
+            {
+                var buildings = UnityEngine.Object.FindObjectsOfType<S1Map.NPCEnterableBuilding>(includeInactive: true);
+                for (int i = 0; i < buildings.Length; i++)
+                {
+                    var b = buildings[i];
+                    if (b != null)
+                        Buildings.Register(b);
+                }
+            }
+            catch { }
             foreach (Type type in ReflectionUtils.GetDerivedClasses<NPC>())
             {
                 NPC? customNPC = (NPC)Activator.CreateInstance(type, true)!;
@@ -134,6 +149,17 @@ namespace S1API.Internal.Patches
                     break;
                 }
             }
+
+            // Register building if this NPC is inside an enterable building component hierarchy
+            try
+            {
+                var building = __instance.GetComponentInParent<S1Map.NPCEnterableBuilding>(true);
+                if (building != null)
+                {
+                    Buildings.Register(building);
+                }
+            }
+            catch { }
         }
 
 
@@ -248,6 +274,17 @@ namespace S1API.Internal.Patches
         [HarmonyPostfix]
         private static void NPCOnDestroy(S1NPCs.NPC __instance)
         {
+            // Unregister any building tied to this NPC's parent chain if applicable
+            try
+            {
+                var building = __instance.GetComponentInParent<S1Map.NPCEnterableBuilding>(true);
+                if (building != null)
+                {
+                    Buildings.Unregister(building);
+                }
+            }
+            catch { }
+
             for (int i = 0; i < NPC.All.Count; i++)
             {
                 var npc = NPC.All[i];

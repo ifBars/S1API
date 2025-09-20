@@ -67,7 +67,7 @@ public void DestroyGameWorld() { ... }
 
 
 ## What **NOT** to Do
-* Do not leak Il2Cpp types across the API. 
+* Do not leak Il2Cpp (game) types across the API. 
   The API is intended to leave the modder in the native C# `System` environment.
 * Utilize the tools present in our `Internal` namespace.
   They are there because we've collectively agreed on a better solution to a common problem.

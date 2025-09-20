@@ -40,7 +40,7 @@ namespace S1API.Entities.Schedule
         }
 
         /// <summary>
-        /// Adds a custom schedule action using an S1API spec, without exposing game types.
+        /// Adds a custom schedule action using an S1API spec.
         /// </summary>
         public NPCScheduleBuilder Add(IScheduleActionSpec spec)
         {
@@ -57,6 +57,25 @@ namespace S1API.Entities.Schedule
         {
             var action = _schedule.AddActionInternal<T>(startTime, name);
             configure?.Invoke(action);
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a "Stay in Building" event using S1API.Map.Building wrapper.
+        /// </summary>
+        public NPCScheduleBuilder StayInBuilding(Map.Building building, int startTime, int durationMinutes = 60, int? doorIndex = null, string name = null)
+        {
+            if (building == null)
+                return this;
+            var spec = new StayInBuildingSpec
+            {
+                BuildingGUID = building.GUID,
+                StartTime = startTime,
+                DurationMinutes = durationMinutes,
+                DoorIndex = doorIndex,
+                Name = name
+            };
+            spec.ApplyTo(_schedule);
             return this;
         }
 
