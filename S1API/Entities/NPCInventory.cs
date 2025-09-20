@@ -101,9 +101,21 @@ namespace S1API.Entities
                 {
                     var slot = new S1Items.ItemSlot();
                     slot.SetSlotOwner(inv);
-                    // Explicitly unlock the slot for additions
-                    try { slot.IsLocked = false; } catch { }
-                    try { slot.IsAddLocked = false; } catch { }
+                    // Explicitly unlock the slot for additions via reflection
+                    try
+                    {
+                        var activeLockProp = typeof(S1Items.ItemSlot).GetProperty("ActiveLock", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                        var setActiveLock = activeLockProp?.GetSetMethod(true);
+                        setActiveLock?.Invoke(slot, new object[] { null });
+                    }
+                    catch { }
+                    try
+                    {
+                        var isAddLockedProp = typeof(S1Items.ItemSlot).GetProperty("IsAddLocked", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                        var setIsAddLocked = isAddLockedProp?.GetSetMethod(true);
+                        setIsAddLocked?.Invoke(slot, new object[] { false });
+                    }
+                    catch { }
                     // Wire to InventoryContentsChanged like base Awake does
                     try
                     {
@@ -130,8 +142,20 @@ namespace S1API.Entities
                     if (s == null)
                         continue;
                     s.SetSlotOwner(inv);
-                    try { s.IsLocked = false; } catch { }
-                    try { s.IsAddLocked = false; } catch { }
+                    try
+                    {
+                        var activeLockProp = typeof(S1Items.ItemSlot).GetProperty("ActiveLock", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                        var setActiveLock = activeLockProp?.GetSetMethod(true);
+                        setActiveLock?.Invoke(s, new object[] { null });
+                    }
+                    catch { }
+                    try
+                    {
+                        var isAddLockedProp = typeof(S1Items.ItemSlot).GetProperty("IsAddLocked", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                        var setIsAddLocked = isAddLockedProp?.GetSetMethod(true);
+                        setIsAddLocked?.Invoke(s, new object[] { false });
+                    }
+                    catch { }
                 }
             }
             catch { }
@@ -193,19 +217,8 @@ namespace S1API.Entities
             }
             catch { }
 
-            // Make sure FishNet is initialized for the component (warm caches)
-            try
-            {
-                var no = NPC.gameObject.GetComponent<FishNet.Object.NetworkObject>();
-                var tm = FishNet.InstanceFinder.TransportManager;
-                if (no != null && tm != null)
-                {
-                    SetNonPublicInstanceField(inv, "_networkObjectCache", no);
-                    SetNonPublicInstanceField(inv, "_transportManagerCache", tm);
-                }
-                inv.NetworkInitializeIfDisabled();
-            }
-            catch { }
+            // Make sure FishNet is initialized for the component
+            try { inv.NetworkInitializeIfDisabled(); } catch { }
         }
 
         internal S1NPCs.NPCInventory Component => NPC.gameObject.GetComponent<S1NPCs.NPCInventory>();
