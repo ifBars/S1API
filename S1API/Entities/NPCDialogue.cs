@@ -140,6 +140,7 @@ namespace S1API.Entities
         public void StopOverride()
         {
             Handler?.StopOverride();
+            Handler?.GetComponent<S1Dialogue.DialogueController>().ClearOverrideContainer();
         }
 
         /// <summary>
