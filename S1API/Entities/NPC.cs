@@ -111,6 +111,14 @@ namespace S1API.Entities
             }
             catch { /* no-op: fallback to local prefab */ }
 
+            // Ensure Customer component exists on the prefab before instantiation
+            // This ensures both server and client have identical NetworkBehaviour lists
+            GameObject prefabToUse = spawnableNetPrefab?.gameObject ?? prefab;
+            if (prefabToUse.GetComponent<S1Economy.Customer>() == null)
+            {
+                prefabToUse.AddComponent<S1Economy.Customer>();
+            }
+
             NetworkObject instanceNo = UnityEngine.Object.Instantiate<NetworkObject>(spawnableNetPrefab ?? netPrefab);
             GameObject instance = instanceNo.gameObject;
             if (S1NPCs.NPCManager.InstanceExists && S1NPCs.NPCManager.Instance.NPCContainer != null)
@@ -171,8 +179,35 @@ namespace S1API.Entities
                 if (chosen == null)
                     throw new Exception("Failed to locate a suitable NPC spawnable prefab (BaseNPC or any with S1NPCs.NPC).");
 
-                GameObject prefabGo = chosen.gameObject;
-                TemplatePrefab = prefabGo;
+                // If a Customer-ready prefab is already registered, use it
+                for (int i = 0; i < count; i++)
+                {
+                    NetworkObject obj = spawnablePrefabs.GetObject(true, i);
+                    if (obj != null && obj.gameObject != null && obj.gameObject.name == "CustomerNPC")
+                    {
+                        TemplatePrefab = obj.gameObject;
+                        return TemplatePrefab;
+                    }
+                }
+
+                // Otherwise, clone BaseNPC → add Customer → rename → register as spawnable → use it
+                NetworkObject customerPrefabNO = UnityEngine.Object.Instantiate<NetworkObject>(chosen);
+                customerPrefabNO.gameObject.name = "CustomerNPC";
+                if (customerPrefabNO.gameObject.GetComponent<S1Economy.Customer>() == null)
+                    customerPrefabNO.gameObject.AddComponent<S1Economy.Customer>();
+
+                try
+                {
+                    var po = spawnablePrefabs;
+
+                    spawnablePrefabs.AddObject(customerPrefabNO);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[S1API] Failed to register CustomerNPC in SpawnablePrefabs: {ex.Message}");
+                }
+
+                TemplatePrefab = customerPrefabNO.gameObject;
                 return TemplatePrefab;
             }
         }
@@ -1152,6 +1187,9 @@ namespace S1API.Entities
             }
         }
 
+        // Removed: component index hack. FishNet assigns NetworkBehaviour indices at spawn based on
+        // the behaviours present on the NetworkObject. Forcing ComponentIndex causes mismatches.
+
         private static IEnumerator ActivationAndSpawnCoroutine(NetworkManager nm, NetworkObject no, NPC owner, float activateDelay, float spawnDelay)
         {
             if (activateDelay > 0f)
@@ -1187,9 +1225,7 @@ namespace S1API.Entities
                     try
                     {
                         if (owner.IsCustomNPC)
-                        {
                             owner.Customer.EnsureCustomer();
-                        }
                     }
                     catch (Exception ex)
                     {

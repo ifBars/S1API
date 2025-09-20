@@ -229,6 +229,18 @@ namespace S1API.Internal.Patches
             if (s1BaseNpc == null)
                 return true;
 
+            // Skip loader entirely for the CustomerNPC template prefab
+            try
+            {
+                var go = s1BaseNpc.gameObject;
+                if (go != null && go.name == "CustomerNPC")
+                {
+                    // Ignore creation/processing for the template clone we registered as spawnable
+                    return false; // skip original
+                }
+            }
+            catch { }
+
             var apiNpc = FindWrapperForS1Npc(s1BaseNpc);
             if (apiNpc == null || !apiNpc.IsCustomNPC)
                 return true; // run original for base NPCs
