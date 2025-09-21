@@ -21,8 +21,7 @@ namespace S1API.PhoneCalls
     /// </summary>
     public static class CallManager
     {
-        private static readonly Queue<S1ScriptableObjects.PhoneCallData> PendingCalls = new Queue<S1ScriptableObjects.PhoneCallData>();
-        private static bool subscribedToCallCompleted;
+        private static readonly Queue<S1ScriptableObjects.PhoneCallData> PendingCalls = new();
         internal static bool IsDispatchingToGameQueue;
 
         /// <summary>
@@ -42,7 +41,6 @@ namespace S1API.PhoneCalls
             }
 
             PendingCalls.Enqueue(phoneCallDefinition.S1PhoneCallData);
-            EnsureSubscribed();
             TryProcessQueue();
         }
 
@@ -57,7 +55,6 @@ namespace S1API.PhoneCalls
             }
 
             PendingCalls.Enqueue(phoneCallData);
-            EnsureSubscribed();
             TryProcessQueue();
         }
 
@@ -69,71 +66,7 @@ namespace S1API.PhoneCalls
             PendingCalls.Clear();
         }
 
-        private static void EnsureSubscribed()
-        {
-            if (subscribedToCallCompleted)
-            {
-                return;
-            }
-
-            var callInterface = S1UIPhone.CallInterface.Instance;
-            if (callInterface == null)
-            {
-                // Instance not available yet; we'll attempt subscription again on the next call.
-                return;
-            }
-
-#if (IL2CPPMELON || IL2CPPBEPINEX)
-            // For IL2CPP, create System.Action first and let implicit cast handle conversion
-            var systemAction = new Action<S1ScriptableObjects.PhoneCallData>(OnCallCompleted);
-            
-            try
-            {
-                // Try using add_CallCompleted method first (preferred for events)
-                var addMethod = typeof(S1UIPhone.CallInterface).GetMethod("add_CallCompleted");
-                if (addMethod != null)
-                {
-                    addMethod.Invoke(callInterface, new object[] { systemAction });
-                }
-                else
-                {
-                    // Fallback to CombineImpl with proper casting
-                    ActionPhoneCall il2cppAction = systemAction; // Implicit cast
-                    var combined = callInterface.CallCompleted?.CombineImpl(il2cppAction) ?? il2cppAction;
-                    callInterface.CallCompleted = combined.Cast<ActionPhoneCall>();
-                }
-            }
-            catch
-            {
-                // Final fallback - try direct assignment
-                ActionPhoneCall il2cppAction = systemAction; // Implicit cast
-                if (callInterface.CallCompleted == null)
-                {
-                    callInterface.CallCompleted = il2cppAction;
-                }
-                else
-                {
-                    var combined = callInterface.CallCompleted.CombineImpl(il2cppAction);
-                    callInterface.CallCompleted = combined.Cast<ActionPhoneCall>();
-                }
-            }
-#else
-            callInterface.CallCompleted = (ActionPhoneCall)Delegate.Combine(
-                callInterface.CallCompleted,
-                new ActionPhoneCall(OnCallCompleted)
-            );
-#endif
-
-            subscribedToCallCompleted = true;
-        }
-
-        private static void OnCallCompleted(S1ScriptableObjects.PhoneCallData _)
-        {
-            // When any call completes, attempt to push the next pending call into the game's queue.
-            TryProcessQueue();
-        }
-
-        private static void TryProcessQueue()
+        internal static void TryProcessQueue()
         {
             var gameCallManager = S1Calling.CallManager.Instance;
             if (gameCallManager == null)
