@@ -4,9 +4,11 @@ using S1API.PhoneCalls;
 #if (IL2CPPMELON)
 using S1Calling = Il2CppScheduleOne.Calling;
 using S1ScriptableObjects = Il2CppScheduleOne.ScriptableObjects;
+using S1UIPhone = Il2CppScheduleOne.UI.Phone;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Calling = ScheduleOne.Calling;
 using S1ScriptableObjects = ScheduleOne.ScriptableObjects;
+using S1UIPhone = ScheduleOne.UI.Phone;
 #endif
 
 namespace S1API.Internal.Patches
@@ -34,6 +36,13 @@ namespace S1API.Internal.Patches
             // Always route through S1API queue so ordering is preserved
             CallManager.QueueCall(data);
             return false; // skip original
+        }
+
+        [HarmonyPatch(typeof(S1Calling.CallManager), "CallCompleted")]
+        [HarmonyPostfix]
+        private static void CallCompleted_Postfix()
+        {
+            CallManager.TryProcessQueue();
         }
     }
 }
