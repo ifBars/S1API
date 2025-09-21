@@ -13,7 +13,11 @@ using S1Product = ScheduleOne.Product;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using S1API.GameTime;
 using UnityEngine;
+using S1API.Properties;
+using S1API.Economy;
+using S1API.Products;
 
 namespace S1API.Entities.Customer
 {
@@ -56,6 +60,15 @@ namespace S1API.Entities.Customer
         }
 
         /// <summary>
+        /// Sets the preferred order day using the API Day enum.
+        /// </summary>
+        public CustomerDataBuilder WithPreferredOrderDay(Day day)
+        {
+            _data.PreferredOrderDay = (S1GameTime.EDay)(int)day;
+            return this;
+        }
+
+        /// <summary>
         /// Sets the order time in 24h integer format (e.g., 930 for 9:30AM, 1745 for 5:45PM).
         /// </summary>
         public CustomerDataBuilder WithOrderTime(int hhmm)
@@ -71,6 +84,15 @@ namespace S1API.Entities.Customer
         {
             if (!string.IsNullOrEmpty(standards) && Enum.TryParse(typeof(S1Economy.ECustomerStandard), standards, true, out var parsed))
                 _data.Standards = (S1Economy.ECustomerStandard)parsed;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets standards using the strongly-typed enum.
+        /// </summary>
+        public CustomerDataBuilder WithStandards(CustomerStandard standards)
+        {
+            _data.Standards = (S1Economy.ECustomerStandard)(int)standards;
             return this;
         }
 
@@ -131,6 +153,49 @@ namespace S1API.Entities.Customer
         }
 
         /// <summary>
+        /// Sets product type affinities using the enum.
+        /// Replaces any existing default affinity data.
+        /// </summary>
+        public CustomerDataBuilder WithAffinities(IEnumerable<(DrugType drugType, float affinity)> entries)
+        {
+            if (entries == null)
+                return this;
+            _data.DefaultAffinityData = new S1Economy.CustomerAffinityData();
+            foreach (var (type, aff) in entries)
+            {
+                _data.DefaultAffinityData.ProductAffinities.Add(new S1Economy.ProductTypeAffinity
+                {
+                    DrugType = (S1Product.EDrugType)(int)type,
+                    Affinity = Mathf.Clamp(aff, -1f, 1f)
+                });
+            }
+            return this;
+        }
+
+        /// <summary>
+        /// Adds or overrides a single product type affinity entry.
+        /// </summary>
+        public CustomerDataBuilder WithAffinity(DrugType drugType, float affinity)
+        {
+            if (_data.DefaultAffinityData == null)
+                _data.DefaultAffinityData = new S1Economy.CustomerAffinityData();
+            var existing = _data.DefaultAffinityData.ProductAffinities.FirstOrDefault(a => a != null && (int)a.DrugType == (int)drugType);
+            if (existing == null)
+            {
+                _data.DefaultAffinityData.ProductAffinities.Add(new S1Economy.ProductTypeAffinity
+                {
+                    DrugType = (S1Product.EDrugType)(int)drugType,
+                    Affinity = Mathf.Clamp(affinity, -1f, 1f)
+                });
+            }
+            else
+            {
+                existing.Affinity = Mathf.Clamp(affinity, -1f, 1f);
+            }
+            return this;
+        }
+
+        /// <summary>
         /// Tries to assign preferred properties by asset name using in-game Resources.
         /// Names must match existing property assets.
         /// </summary>
@@ -154,6 +219,56 @@ namespace S1API.Entities.Customer
                     if (found != null && !results.Contains(found))
                         results.Add(found);
                 }
+            }
+            _data.PreferredProperties = ToIl2CppList(results);
+            return this;
+        }
+
+        /// <summary>
+        /// Tries to assign preferred properties by ID using in-game Resources.
+        /// IDs must match existing property assets.
+        /// </summary>
+        public CustomerDataBuilder WithPreferredPropertiesById(params string[] propertyIds)
+        {
+            if (propertyIds == null || propertyIds.Length == 0)
+                return this;
+
+            var results = new List<S1Props.Property>();
+            string[] searchPaths = { "Properties/Tier1", "Properties/Tier2", "Properties/Tier3", "Properties/Tier4", "Properties/Tier5" };
+            foreach (var path in searchPaths)
+            {
+                var props = Resources.LoadAll<S1Props.Property>(path);
+                if (props == null || props.Length == 0)
+                    continue;
+                foreach (var id in propertyIds)
+                {
+                    if (string.IsNullOrEmpty(id))
+                        continue;
+                    var found = props.FirstOrDefault(p => p != null && string.Equals(p.ID, id, StringComparison.OrdinalIgnoreCase));
+                    if (found != null && !results.Contains(found))
+                        results.Add(found);
+                }
+            }
+            _data.PreferredProperties = ToIl2CppList(results);
+            return this;
+        }
+
+        /// <summary>
+        /// Assigns preferred properties from wrappers.
+        /// </summary>
+        public CustomerDataBuilder WithPreferredProperties(params ProductPropertyWrapper[] wrappers)
+        {
+            if (wrappers == null || wrappers.Length == 0)
+                return this;
+            var results = new List<S1Props.Property>();
+            for (int i = 0; i < wrappers.Length; i++)
+            {
+                var w = wrappers[i];
+                if (w == null)
+                    continue;
+                var inner = w.InnerProperty;
+                if (inner != null && !results.Contains(inner))
+                    results.Add(inner);
             }
             _data.PreferredProperties = ToIl2CppList(results);
             return this;

@@ -57,6 +57,7 @@ namespace S1API.Entities
         internal NPCCustomer(NPC npc)
         {
             NPC = npc;
+            NPC.S1NPC.gameObject.GetComponent<S1Economy.Customer>().enabled = true;
         }
 
         /// <summary>

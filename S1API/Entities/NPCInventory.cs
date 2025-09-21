@@ -182,11 +182,10 @@ namespace S1API.Entities
             }
             catch { }
 
-            // Ensure Pickpocket interactable exists to avoid UI NREs when opening the pickpocket screen
             if (inv.PickpocketIntObj == null)
             {
                 var talk = NPC.GetType().GetMethod("GetPrimaryInteractable", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                var primary = talk?.Invoke(NPC, null) as S1Interaction.InteractableObject; // safe no-op if null under symbols
+                var primary = talk?.Invoke(NPC, null) as S1Interaction.InteractableObject;
                 var interactables = NPC.gameObject.GetComponentsInChildren<S1Interaction.InteractableObject>(true);
                 S1Interaction.InteractableObject pick = null;
                 for (int i = 0; i < interactables.Length; i++)
@@ -204,7 +203,6 @@ namespace S1API.Entities
                 inv.PickpocketIntObj = pick;
             }
 
-            // Base Awake sets private 'npc' and wires Pickpocket listeners; simulate that here
             try
             {
                 FieldInfo npcField = typeof(S1NPCs.NPCInventory).GetField("npc", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -228,7 +226,6 @@ namespace S1API.Entities
             }
             catch { }
 
-            // Ensure UnityEvent exists
             try
             {
                 FieldInfo onChangedField = typeof(S1NPCs.NPCInventory).GetField("onContentsChanged", BindingFlags.Public | BindingFlags.Instance);
@@ -239,7 +236,6 @@ namespace S1API.Entities
             }
             catch { }
 
-            // Make sure FishNet is initialized for the component
             try { inv.NetworkInitializeIfDisabled(); } catch { }
         }
 
@@ -253,7 +249,6 @@ namespace S1API.Entities
                 if (def == null)
                     return null;
                 var inst = def.GetDefaultInstance();
-                // Prefer GetCopy to set quantity if available
                 var copy = inst.GetCopy(quantity);
                 return copy ?? inst;
             }

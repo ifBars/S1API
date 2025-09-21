@@ -234,7 +234,7 @@ namespace S1API.Internal.Patches
             try
             {
                 var go = s1BaseNpc.gameObject;
-                if (go != null && go.name == "CustomerNPC")
+                if (go != null && go.name == "CustomerNPC" || go.name == "CivilianNPC" || go.name == "BaseNPC")
                 {
                     // Ignore creation/processing for the template clone we registered as spawnable
                     return false; // skip original

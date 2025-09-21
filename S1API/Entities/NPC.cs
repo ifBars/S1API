@@ -16,6 +16,7 @@ using S1Vision = Il2CppScheduleOne.Vision;
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1Combat = Il2CppScheduleOne.Combat;
 using S1Items = Il2CppScheduleOne.ItemFramework;
+using S1MapBase = Il2CppScheduleOne.Map;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1DevUtilities = ScheduleOne.DevUtilities;
 using S1Interaction = ScheduleOne.Interaction;
@@ -34,6 +35,7 @@ using S1Vision = ScheduleOne.Vision;
 using S1NPCs = ScheduleOne.NPCs;
 using S1Combat = ScheduleOne.Combat;
 using S1Items = ScheduleOne.ItemFramework;
+using S1MapBase = ScheduleOne.Map;
 #endif
 
 #if (IL2CPPBEPINEX || IL2CPPMELON)
@@ -194,9 +196,9 @@ namespace S1API.Entities
 
                 // Otherwise, clone BaseNPC → add Customer → rename → register as spawnable → use it
                 NetworkObject customerPrefabNO = UnityEngine.Object.Instantiate<NetworkObject>(chosen);
+                S1Economy.Customer customer = customerPrefabNO.gameObject.GetComponent<S1Economy.Customer>() ?? customerPrefabNO.gameObject.AddComponent<S1Economy.Customer>();
                 customerPrefabNO.gameObject.name = "CustomerNPC";
-                if (customerPrefabNO.gameObject.GetComponent<S1Economy.Customer>() == null)
-                    customerPrefabNO.gameObject.AddComponent<S1Economy.Customer>();
+                customer.enabled = true;
 
                 try
                 {
@@ -252,6 +254,8 @@ namespace S1API.Entities
 
             if (S1NPC.Movement == null)
                 S1NPC.Movement = gameObject.GetComponent<S1NPCs.NPCMovement>();
+
+            S1NPC.Movement.enabled = true;
 
             S1AvatarFramework.Avatar? runtimeAvatar = S1NPC.Avatar ?? gameObject.GetComponentInChildren<S1AvatarFramework.Avatar>(true);
             _runtimeAvatar = runtimeAvatar;
@@ -444,8 +448,22 @@ namespace S1API.Entities
         /// The region the NPC is associated with.
         /// Note: Not the region they're in currently. Just the region they're designated to.
         /// </summary>
-        public Region Region =>
-            (Region)S1NPC.Region;
+        public Region Region
+        {
+            get => (Region)S1NPC.Region;
+            set
+            {
+                // Map S1API.Map.Region to base game's EMapRegion safely
+                try
+                {
+                    S1NPC.Region = (S1MapBase.EMapRegion)(int)value;
+                }
+                catch
+                {
+                    // ignore
+                }
+            }
+        }
 
         /// <summary>
         /// UNCONFIRMED: How long the NPC will panic for.
@@ -691,6 +709,11 @@ namespace S1API.Entities
         /// The current <see cref="NPCCustomer"/> instance.
         /// </summary>
         public NPCCustomer Customer => _customer ?? (_customer = new NPCCustomer(this));
+
+        /// <summary>
+        /// The current <see cref="NPCRelationship"/> instance.
+        /// </summary>
+        public NPCRelationship Relationship => _relationship ?? (_relationship = new NPCRelationship(this));
 
         /// <summary>
         /// Sends a text message from this NPC to the players.
@@ -1093,6 +1116,16 @@ namespace S1API.Entities
         {
             if (S1NPC.RelationData == null)
                 S1NPC.RelationData = new S1Relation.NPCRelationData();
+
+            // Ensure the relation data is bound to this NPC and initialized
+            try
+            {
+                if (S1NPC.RelationData != null)
+                {
+                    S1NPC.RelationData.Init(S1NPC);
+                }
+            }
+            catch { /* ignore: base game will handle in its own lifecycle if not ready */ }
         }
 
         private S1Interaction.InteractableObject? GetPrimaryInteractable()
@@ -1158,6 +1191,7 @@ namespace S1API.Entities
         private NPCSchedule _schedule;
         private NPCInventory _inventory;
         private NPCCustomer _customer;
+        private NPCRelationship _relationship;
 
 
         /// <summary>

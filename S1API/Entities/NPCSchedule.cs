@@ -63,7 +63,8 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Initializes and re-reads actions from the scene for this NPC.
+        /// Initializes the order/names of the schedules on this NPC.
+        /// This method is responsible for adding times to the schedule names.
         /// </summary>
         public void InitializeActions()
         {
