@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using Object = UnityEngine.Object;
 using S1API.Entities.Dialogue;
+using S1API.Internal.Abstraction;
 
 namespace S1API.Entities
 {
@@ -163,8 +164,8 @@ namespace S1API.Entities
                 return;
             _eventsHooked = true;
             // Handler events are invoked from DialogueHandler.ChoiceCallback and DialogueCallback
-            Handler.onDialogueChoiceChosen?.AddListener(Internal_OnChoice);
-            Handler.onDialogueNodeDisplayed?.AddListener(Internal_OnNode);
+            EventHelper.AddListener(Internal_OnChoice, Handler.onDialogueChoiceChosen);
+            EventHelper.AddListener(Internal_OnNode, Handler.onDialogueNodeDisplayed);
         }
 
         /// <summary>
@@ -192,7 +193,11 @@ namespace S1API.Entities
 
             // Append database-provided modules (scene/prefab modules)
             if (db.Modules != null)
-                Handler.runtimeModules.AddRange(db.Modules);
+            {
+                // Avoid IEnumerable mismatch between Il2Cpp List and IEnumerable
+                for (int i = 0; i < db.Modules.Count; i++)
+                    Handler.runtimeModules.Add(db.Modules[i]);
+            }
 
             // Bind database to this handler for lookups
             db.Initialize(Handler);
@@ -229,7 +234,7 @@ namespace S1API.Entities
                     // Try to map a known enum name; fallback keeps as custom
                     if (System.Enum.TryParse(typeof(S1Dialogue.EDialogueModule), spec.ModuleName, true, out var enumVal))
                         mod.ModuleType = (S1Dialogue.EDialogueModule)enumVal;
-                    mod.Entries = spec.Entries;
+                    mod.Entries = ToIl2CppEntryList(spec.Entries);
                     Handler.runtimeModules.Add(mod);
                 }
             }
@@ -343,6 +348,23 @@ namespace S1API.Entities
         private readonly Dictionary<string, List<Action>> _choiceCallbacks = new Dictionary<string, List<Action>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<Action>> _nodeCallbacks = new Dictionary<string, List<Action>>(StringComparer.OrdinalIgnoreCase);
         private bool _eventsHooked;
+
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+        private static Il2CppSystem.Collections.Generic.List<S1Dialogue.Entry> ToIl2CppEntryList(System.Collections.Generic.List<S1Dialogue.Entry> source)
+        {
+            var list = new Il2CppSystem.Collections.Generic.List<S1Dialogue.Entry>();
+            if (source == null)
+                return list;
+            for (int i = 0; i < source.Count; i++)
+                list.Add(source[i]);
+            return list;
+        }
+#else
+        private static System.Collections.Generic.List<S1Dialogue.Entry> ToIl2CppEntryList(System.Collections.Generic.List<S1Dialogue.Entry> source)
+        {
+            return source;
+        }
+#endif
     }
 }
 

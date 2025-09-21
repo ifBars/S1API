@@ -60,7 +60,7 @@ namespace S1API.Entities.Dialogue
                 generic.Add(new S1Dialogue.Entry { Key = key, Chains = new[] { chain } });
             }
             // Assign generic entries list
-            db.GenericEntries = generic;
+            db.GenericEntries = ToIl2CppList(generic);
 
             // Modules will be added as runtime components; hand back specs
             var moduleSpecs = new List<ModuleSpec>();
@@ -107,6 +107,23 @@ namespace S1API.Entities.Dialogue
                 Entries = entries;
             }
         }
+
+#if (IL2CPPMELON)
+        private static Il2CppSystem.Collections.Generic.List<T> ToIl2CppList<T>(System.Collections.Generic.List<T> source)
+        {
+            var list = new Il2CppSystem.Collections.Generic.List<T>();
+            if (source == null)
+                return list;
+            for (int i = 0; i < source.Count; i++)
+                list.Add(source[i]);
+            return list;
+        }
+#else
+        private static System.Collections.Generic.List<T> ToIl2CppList<T>(System.Collections.Generic.List<T> source)
+        {
+            return source;
+        }
+#endif
     }
 }
 

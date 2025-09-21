@@ -52,12 +52,14 @@ using HarmonyLib;
 using Il2CppFishNet;
 using Il2CppFishNet.Managing;
 using Il2CppFishNet.Managing.Object;
+using Il2CppFishNet.Object;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using FishNet;
 using FishNet.Managing;
 using FishNet.Managing.Object;
-#endif
 using FishNet.Object;
+#endif
+using MelonLoader;
 using S1API.Entities.Interfaces;
 using S1API.Internal.Abstraction;
 using S1API.Map;
@@ -1044,12 +1046,27 @@ namespace S1API.Entities
                     for (int i = 0; i < S1NPC.Inventory.SlotCount; i++)
                     {
                         var slot = new S1Items.ItemSlot();
+#if MONOMELON
                         slot.SetSlotOwner(S1NPC.Inventory);
-                        slot.onItemDataChanged = (Action)Delegate.Combine(slot.onItemDataChanged, new Action(() =>
+#else
+                        slot.SetSlotOwner(S1NPC.Inventory.Cast<S1Items.IItemSlotOwner>());
+#endif
+                        // Ensure inventory change propagates when the slot updates
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                        System.Action handler = new System.Action(() =>
                         {
-                            var mi = typeof(S1NPCs.NPCInventory).GetMethod("InventoryContentsChanged", BindingFlags.NonPublic | BindingFlags.Instance);
-                            mi?.Invoke(S1NPC.Inventory, null);
-                        }));
+                            S1NPC.Inventory.InventoryContentsChanged();
+                        });
+                        slot.onItemDataChanged = (Il2CppSystem.Action)Il2CppSystem.Delegate.Combine(
+                            slot.onItemDataChanged,
+                            (Il2CppSystem.Action)handler
+                        );
+#else
+                        slot.onItemDataChanged = (Action)Delegate.Combine(
+                            slot.onItemDataChanged,
+                            new Action(() => { S1NPC.Inventory.InventoryContentsChanged(); })
+                        );
+#endif
                         S1NPC.Inventory.ItemSlots.Add(slot);
                     }
                 }
@@ -1114,7 +1131,7 @@ namespace S1API.Entities
             Appearance.ApplyToAvatar(_runtimeAvatar);
         }
 
-        #endregion
+#endregion
 
         #region Private Members
 
@@ -1152,38 +1169,11 @@ namespace S1API.Entities
                     return;
 
                 NetworkObject no = gameObject.GetComponent<NetworkObject>() ?? gameObject.AddComponent<NetworkObject>();
-                S1ApiCoroutineRunner.Run(ActivationAndSpawnCoroutine(nm, no, this, 0.3f, 0.6f));
+                MelonCoroutines.Start(ActivationAndSpawnCoroutine(nm, no, this, 0.3f, 0.6f));
             }
             catch (Exception ex)
             {
                 Debug.LogWarning($"[S1API] Failed to schedule NPC network spawn: {ex.Message}");
-            }
-        }
-
-
-        /// <summary>
-        /// Global coroutine runner activate/spawn without relying on the NPC being enabled.
-        /// </summary>
-        private sealed class S1ApiCoroutineRunner : MonoBehaviour
-        {
-            private static S1ApiCoroutineRunner _instance;
-
-            [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-            private static void Ensure()
-            {
-                if (_instance != null)
-                    return;
-                GameObject go = new GameObject("S1API_CoroutineRunner");
-                DontDestroyOnLoad(go);
-                _instance = go.AddComponent<S1ApiCoroutineRunner>();
-            }
-
-            public static void Run(IEnumerator routine)
-            {
-                if (_instance == null)
-                    Ensure();
-                if (_instance != null)
-                    _instance.StartCoroutine(routine);
             }
         }
 

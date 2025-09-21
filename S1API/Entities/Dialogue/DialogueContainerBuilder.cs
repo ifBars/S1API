@@ -79,7 +79,7 @@ namespace S1API.Entities.Dialogue
                 };
                 nodeData.Add(node);
             }
-            container.DialogueNodeData = nodeData;
+            container.DialogueNodeData = ToIl2CppList(nodeData);
 
             // Build links
             var links = new List<S1Dialogue.NodeLinkData>();
@@ -100,7 +100,7 @@ namespace S1API.Entities.Dialogue
                     TargetNodeGuid = toNode.Guid
                 });
             }
-            container.NodeLinks = links;
+            container.NodeLinks = ToIl2CppList(links);
 
             // AllowExit flag
             container.SetAllowExit(_allowExit);
@@ -197,6 +197,23 @@ namespace S1API.Entities.Dialogue
                 ToNodeLabel = to;
             }
         }
+
+#if (IL2CPPMELON)
+        private static Il2CppSystem.Collections.Generic.List<T> ToIl2CppList<T>(System.Collections.Generic.List<T> source)
+        {
+            var list = new Il2CppSystem.Collections.Generic.List<T>();
+            if (source == null)
+                return list;
+            for (int i = 0; i < source.Count; i++)
+                list.Add(source[i]);
+            return list;
+        }
+#else
+        private static System.Collections.Generic.List<T> ToIl2CppList<T>(System.Collections.Generic.List<T> source)
+        {
+            return source;
+        }
+#endif
     }
 }
 

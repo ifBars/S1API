@@ -3,11 +3,15 @@ using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1GameTime = Il2CppScheduleOne.GameTime;
 using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
 using S1Economy = Il2CppScheduleOne.Economy;
+using Il2CppFishNet;
+using Il2CppFishNet.Object;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1NPCs = ScheduleOne.NPCs;
 using S1GameTime = ScheduleOne.GameTime;
 using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
 using S1Economy = ScheduleOne.Economy;
+using FishNet;
+using FishNet.Object;
 #endif
 
 using System;
@@ -278,8 +282,8 @@ namespace S1API.Entities
                 return;
             try
             {
-                var networkObject = NPC.gameObject.GetComponent<FishNet.Object.NetworkObject>();
-                var transportManager = FishNet.InstanceFinder.TransportManager;
+                var networkObject = NPC.gameObject.GetComponent<NetworkObject>();
+                var transportManager = InstanceFinder.TransportManager;
                 if (networkObject == null || transportManager == null)
                     return;
 

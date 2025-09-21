@@ -27,16 +27,19 @@ using System;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.Events;
-using FishNet.Object;
 using MelonLoader;
+using S1API.Entities.Customer;
+using S1API.Internal.Abstraction;
 #if (IL2CPPMELON)
 using Il2CppFishNet;
 using Il2CppFishNet.Managing;
 using Il2CppFishNet.Managing.Object;
+using Il2CppFishNet.Object;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using FishNet;
 using FishNet.Managing;
 using FishNet.Managing.Object;
+using FishNet.Object;
 using ScheduleOne.Economy;
 using S1API.Entities.Customer;
 #endif
@@ -383,8 +386,7 @@ namespace S1API.Entities
                 var onUnlockedField = typeof(S1Economy.Customer).GetField("onUnlocked", BindingFlags.Public | BindingFlags.Instance);
                 if (onUnlockedField?.GetValue(Component) is UnityEvent evt)
                 {
-                    UnityAction action = new UnityAction(callback);
-                    evt.AddListener(action);
+                    EventHelper.AddListener(callback, evt);
                 }
             }
             catch (Exception) { }
@@ -402,8 +404,7 @@ namespace S1API.Entities
                 var onDealCompletedField = typeof(S1Economy.Customer).GetField("onDealCompleted", BindingFlags.Public | BindingFlags.Instance);
                 if (onDealCompletedField?.GetValue(Component) is UnityEvent evt)
                 {
-                    UnityAction action = new UnityAction(callback);
-                    evt.AddListener(action);
+                    EventHelper.AddListener(callback, evt);
                 }
             }
             catch (Exception) { }

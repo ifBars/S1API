@@ -2,8 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Il2Cpp;
+#if MONOMELON
 using ScheduleOne.Map;
-using UnityEngine;
+#else
+using Il2CppScheduleOne.Map;
+#endif
 
 namespace S1API.Map
 {
@@ -51,7 +55,11 @@ namespace S1API.Map
                 return _gameBuilding;
             try
             {
+#if MONOMELON
                 var guid = new Guid(_guid);
+#else
+                var guid = new Il2CppSystem.Guid(_guid);
+#endif
                 GUIDManager.GetObject<NPCEnterableBuilding>(guid);
             }
             catch { /* ignore */ }

@@ -14,6 +14,7 @@ using S1VehiclesAI = ScheduleOne.Vehicles.AI;
 using S1ObjectScripts = ScheduleOne.ObjectScripts;
 #endif
 
+using Il2Cpp;
 using UnityEngine;
 
 namespace S1API.Entities.Schedule
@@ -174,7 +175,11 @@ namespace S1API.Entities.Schedule
             {
                 try
                 {
+#if MONOMELON
                     var guid = new System.Guid(MachineGUID);
+#else
+                    var guid = new Il2CppSystem.Guid(MachineGUID);
+#endif
                     var machine = GUIDManager.GetObject<S1ObjectScripts.VendingMachine>(guid);
                     action.MachineOverride = machine;
                 }
@@ -206,13 +211,21 @@ namespace S1API.Entities.Schedule
             {
                 if (!string.IsNullOrEmpty(ParkingLotGUID))
                 {
+#if MONOMELON
                     var lot = GUIDManager.GetObject<S1Map.ParkingLot>(new System.Guid(ParkingLotGUID));
+#else
+                    var lot = GUIDManager.GetObject<S1Map.ParkingLot>(new Il2CppSystem.Guid(ParkingLotGUID));
+#endif
                     action.GetType().GetField("ParkingLot")?.SetValue(action, lot);
                 }
 
                 if (!string.IsNullOrEmpty(VehicleGUID))
                 {
+#if MONOMELON
                     var veh = GUIDManager.GetObject<S1Vehicles.LandVehicle>(new System.Guid(VehicleGUID));
+#else
+                    var veh = GUIDManager.GetObject<S1Vehicles.LandVehicle>(new Il2CppSystem.Guid(VehicleGUID));
+#endif
                     action.GetType().GetField("Vehicle")?.SetValue(action, veh);
                 }
 

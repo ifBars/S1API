@@ -100,7 +100,11 @@ namespace S1API.Entities
                 for (int i = 0; i < toCreate; i++)
                 {
                     var slot = new S1Items.ItemSlot();
+#if MONOMELON
                     slot.SetSlotOwner(inv);
+#else
+                    slot.SetSlotOwner(inv.Cast<S1Items.IItemSlotOwner>());
+#endif
                     // Explicitly unlock the slot for additions via reflection
                     try
                     {
@@ -116,19 +120,22 @@ namespace S1API.Entities
                         setIsAddLocked?.Invoke(slot, new object[] { false });
                     }
                     catch { }
-                    // Wire to InventoryContentsChanged like base Awake does
-                    try
+                    // Wire to InventoryContentsChanged like base Awake does (no reflection)
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                    System.Action handler = new System.Action(() =>
                     {
-                        MethodInfo invChanged = typeof(S1NPCs.NPCInventory).GetMethod("InventoryContentsChanged", BindingFlags.NonPublic | BindingFlags.Instance);
-                        if (invChanged != null)
-                        {
-                            slot.onItemDataChanged = (Action)Delegate.Combine(slot.onItemDataChanged, new Action(() =>
-                            {
-                                invChanged.Invoke(inv, null);
-                            }));
-                        }
-                    }
-                    catch { }
+                        inv.InventoryContentsChanged();
+                    });
+                    slot.onItemDataChanged = (Il2CppSystem.Action)Il2CppSystem.Delegate.Combine(
+                        slot.onItemDataChanged,
+                        (Il2CppSystem.Action)handler
+                    );
+#else
+                    slot.onItemDataChanged = (Action)Delegate.Combine(
+                        slot.onItemDataChanged,
+                        new Action(() => { inv.InventoryContentsChanged(); })
+                    );
+#endif
                     inv.ItemSlots.Add(slot);
                 }
             }
@@ -141,7 +148,11 @@ namespace S1API.Entities
                     var s = inv.ItemSlots[i];
                     if (s == null)
                         continue;
+#if MONOMELON
                     s.SetSlotOwner(inv);
+#else
+                    s.SetSlotOwner(inv.Cast<S1Items.IItemSlotOwner>());
+#endif
                     try
                     {
                         var activeLockProp = typeof(S1Items.ItemSlot).GetProperty("ActiveLock", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);

@@ -1,6 +1,7 @@
 ﻿#if (IL2CPPMELON)
 using S1Loaders = Il2CppScheduleOne.Persistence.Loaders;
 using S1NPCs = Il2CppScheduleOne.NPCs;
+using S1Map = Il2CppScheduleOne.Map;
 using Il2CppFishNet;
 using Il2CppScheduleOne.DevUtilities;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
