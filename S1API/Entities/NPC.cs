@@ -17,6 +17,7 @@ using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1Combat = Il2CppScheduleOne.Combat;
 using S1Items = Il2CppScheduleOne.ItemFramework;
 using S1MapBase = Il2CppScheduleOne.Map;
+using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1DevUtilities = ScheduleOne.DevUtilities;
 using S1Interaction = ScheduleOne.Interaction;
@@ -36,6 +37,7 @@ using S1NPCs = ScheduleOne.NPCs;
 using S1Combat = ScheduleOne.Combat;
 using S1Items = ScheduleOne.ItemFramework;
 using S1MapBase = ScheduleOne.Map;
+using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
 #endif
 
 #if (IL2CPPBEPINEX || IL2CPPMELON)
@@ -194,11 +196,21 @@ namespace S1API.Entities
                     }
                 }
 
-                // Otherwise, clone BaseNPC → add Customer → rename → register as spawnable → use it
+                // Otherwise, clone BaseNPC → add Customer and schedule actions → rename → register as spawnable → use it
                 NetworkObject customerPrefabNO = UnityEngine.Object.Instantiate<NetworkObject>(chosen);
                 S1Economy.Customer customer = customerPrefabNO.gameObject.GetComponent<S1Economy.Customer>() ?? customerPrefabNO.gameObject.AddComponent<S1Economy.Customer>();
                 customerPrefabNO.gameObject.name = "CustomerNPC";
                 customer.enabled = true;
+
+                // Pre-create schedule manager and all schedule actions so FishNet component indices are stable
+                try
+                {
+                    EnsureScheduleActionsOnPrefab(customerPrefabNO.gameObject);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[S1API] Failed to pre-create schedule actions on prefab: {ex.Message}");
+                }
 
                 try
                 {
@@ -1268,6 +1280,103 @@ namespace S1API.Entities
         }
 
         #endregion
+
+        /// <summary>
+        /// Pre-creates an <see cref="S1NPCs.NPCScheduleManager"/> and all non-abstract <see cref="S1NPCsSchedules.NPCAction"/>s
+        /// under the provided prefab root so FishNet assigns stable NetworkBehaviour indices at spawn.
+        /// All created action GameObjects are inactive by default; mods can enable/configure them later.
+        /// </summary>
+        private static void EnsureScheduleActionsOnPrefab(GameObject prefabRoot)
+        {
+            if (prefabRoot == null)
+                return;
+
+            // Ensure manager container
+            S1NPCs.NPCScheduleManager existingMgr = prefabRoot.GetComponentInChildren<S1NPCs.NPCScheduleManager>(true);
+            if (existingMgr == null)
+            {
+                GameObject mgrGo = new GameObject("NPCSchedule");
+                mgrGo.transform.SetParent(prefabRoot.transform, false);
+                existingMgr = mgrGo.AddComponent<S1NPCs.NPCScheduleManager>();
+            }
+
+            // Collect action types via reflection when possible
+            System.Collections.Generic.List<System.Type> actionTypes = new System.Collections.Generic.List<System.Type>();
+            System.Type baseType = typeof(S1NPCsSchedules.NPCAction);
+            try
+            {
+                var asm = baseType.Assembly;
+                if (asm != null)
+                {
+                    var types = asm.GetTypes();
+                    for (int i = 0; i < types.Length; i++)
+                    {
+                        System.Type t = types[i];
+                        if (t == null)
+                            continue;
+                        if (t.IsAbstract)
+                            continue;
+                        if (baseType.IsAssignableFrom(t))
+                            actionTypes.Add(t);
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback: known concrete action types by simple names in the schedules namespace
+                string ns = baseType.Namespace;
+                string[] known = new string[]
+                {
+                    "NPCSignal_WalkToLocation",
+                    "NPCSignal_WaitForDelivery",
+                    "NPCSignal_UseVendingMachine",
+                    "NPCSignal_UseATM",
+                    "NPCSignal_HandleDeal",
+                    "NPCSignal_DriveToCarPark",
+                    "NPCEvent_StayInBuilding",
+                    "NPCEvent_Sit",
+                    "NPCEvent_LocationDialogue",
+                    "NPCEvent_LocationBasedAction",
+                    "NPCEvent_Conversate"
+                };
+                for (int i = 0; i < known.Length; i++)
+                {
+                    string full = string.IsNullOrEmpty(ns) ? known[i] : (ns + "." + known[i]);
+                    System.Type t = System.Type.GetType(full);
+                    if (t != null && !t.IsAbstract && baseType.IsAssignableFrom(t))
+                        actionTypes.Add(t);
+                }
+            }
+
+            // Add one inactive instance of each action type if not already present
+            for (int i = 0; i < actionTypes.Count; i++)
+            {
+                System.Type t = actionTypes[i];
+                if (t == null)
+                    continue;
+
+                var existing = existingMgr.GetComponentInChildren(t, true);
+                if (existing != null)
+                    continue;
+
+                GameObject go = new GameObject(t.Name);
+                go.transform.SetParent(existingMgr.transform, false);
+                var comp = go.AddComponent(t);
+
+                // Best-effort wire internal references so actions have context even while inactive
+                try
+                {
+                    var baseNpc = prefabRoot.GetComponent<S1NPCs.NPC>();
+                    var npcField = t.GetField("npc", BindingFlags.NonPublic | BindingFlags.Instance);
+                    npcField?.SetValue(comp, baseNpc);
+
+                    var schedField = t.GetField("schedule", BindingFlags.NonPublic | BindingFlags.Instance);
+                    schedField?.SetValue(comp, existingMgr);
+                }
+                catch { }
+                go.SetActive(false);
+            }
+        }
     }
 }
 

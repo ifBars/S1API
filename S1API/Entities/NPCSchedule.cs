@@ -107,17 +107,40 @@ namespace S1API.Entities
             if (Manager == null)
                 return null;
 
-            var go = new GameObject(string.IsNullOrEmpty(name) ? typeof(T).Name : name);
-            go.transform.SetParent(Manager.transform, false);
+            // Prefer a pre-created, inactive action instance of this type to avoid changing component indices
+            var pool = Manager.GetComponentsInChildren<T>(true);
+            T chosen = null;
+            for (int i = 0; i < pool.Length; i++)
+            {
+                var candidate = pool[i];
+                if (candidate == null)
+                    continue;
+                if (!candidate.gameObject.activeSelf)
+                {
+                    chosen = candidate;
+                    break;
+                }
+            }
 
-            var action = go.AddComponent<T>();
-            action.SetStartTime(startTime);
-            TryNetworkInitialize(action);
+            // Fallback to any instance if all are active (do NOT create new components at runtime)
+            if (chosen == null && pool.Length > 0)
+                chosen = pool[0];
 
-            // Let the manager pick up and sort the new action immediately
+            if (chosen == null)
+                return null;
+
+            if (!string.IsNullOrEmpty(name))
+                chosen.gameObject.name = name;
+
+            chosen.SetStartTime(startTime);
+            if (!chosen.gameObject.activeSelf)
+                chosen.gameObject.SetActive(true);
+                chosen.enabled = true;
+
+            // Let the manager pick up and sort the action immediately
             Manager.InitializeActions();
             Manager.EnforceState();
-            return action;
+            return chosen;
         }
 
         /// <summary>
@@ -214,7 +237,13 @@ namespace S1API.Entities
                 bool isEvent = a is S1NPCsSchedules.NPCEvent;
                 if ((isSignal && includeSignals) || (isEvent && includeEvents))
                 {
-                    UnityEngine.Object.Destroy(a.gameObject);
+                    if (a != null && a.gameObject != null)
+                    {
+                        // Disable and reset timing instead of destroying to keep FishNet indices stable
+                        a.gameObject.SetActive(false);
+                        a.enabled = false;
+                        try { a.SetStartTime(0); } catch { }
+                    }
                 }
             }
             Manager.InitializeActions();
