@@ -161,6 +161,24 @@ namespace S1API.Internal.Patches
                 }
             }
             catch { }
+
+            // Ensure the CustomerNPC template prefab is not kept in the NPCRegistry
+            try
+            {
+                if (__instance != null && __instance.gameObject != null && __instance.gameObject.name == "CustomerNPC")
+                {
+                    var reg = S1NPCs.NPCManager.NPCRegistry;
+                    for (int i = reg.Count - 1; i >= 0; i--)
+                    {
+                        if (reg[i] == __instance)
+                        {
+                            reg.RemoveAt(i);
+                            break;
+                        }
+                    }
+                }
+            }
+            catch { }
         }
 
 
