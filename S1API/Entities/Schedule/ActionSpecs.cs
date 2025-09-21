@@ -1,4 +1,5 @@
 #if (IL2CPPMELON)
+using Il2Cpp;
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
 using S1Map = Il2CppScheduleOne.Map;
@@ -13,8 +14,6 @@ using S1Vehicles = ScheduleOne.Vehicles;
 using S1VehiclesAI = ScheduleOne.Vehicles.AI;
 using S1ObjectScripts = ScheduleOne.ObjectScripts;
 #endif
-
-using Il2Cpp;
 using UnityEngine;
 
 namespace S1API.Entities.Schedule

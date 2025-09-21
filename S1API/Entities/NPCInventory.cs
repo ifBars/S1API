@@ -105,7 +105,6 @@ namespace S1API.Entities
 #else
                     slot.SetSlotOwner(inv.Cast<S1Items.IItemSlotOwner>());
 #endif
-                    // Explicitly unlock the slot for additions via reflection
                     try
                     {
                         var activeLockProp = typeof(S1Items.ItemSlot).GetProperty("ActiveLock", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
@@ -120,11 +119,10 @@ namespace S1API.Entities
                         setIsAddLocked?.Invoke(slot, new object[] { false });
                     }
                     catch { }
-                    // Wire to InventoryContentsChanged like base Awake does (no reflection)
 #if (IL2CPPMELON || IL2CPPBEPINEX)
                     System.Action handler = new System.Action(() =>
                     {
-                        inv.InventoryContentsChanged();
+                        try { inv.onContentsChanged?.Invoke(); } catch { }
                     });
                     slot.onItemDataChanged = (Il2CppSystem.Action)Il2CppSystem.Delegate.Combine(
                         slot.onItemDataChanged,
@@ -133,7 +131,20 @@ namespace S1API.Entities
 #else
                     slot.onItemDataChanged = (Action)Delegate.Combine(
                         slot.onItemDataChanged,
-                        new Action(() => { inv.InventoryContentsChanged(); })
+                        new Action(() =>
+                        {
+                            try { inv.onContentsChanged?.Invoke(); }
+                            catch
+                            {
+                                try
+                                {
+                                    var evtField = typeof(S1NPCs.NPCInventory).GetField("onContentsChanged", BindingFlags.Public | BindingFlags.Instance);
+                                    var evt = evtField?.GetValue(inv) as UnityEvent;
+                                    evt?.Invoke();
+                                }
+                                catch { }
+                            }
+                        })
                     );
 #endif
                     inv.ItemSlots.Add(slot);

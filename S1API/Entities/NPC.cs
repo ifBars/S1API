@@ -1051,11 +1051,11 @@ namespace S1API.Entities
 #else
                         slot.SetSlotOwner(S1NPC.Inventory.Cast<S1Items.IItemSlotOwner>());
 #endif
-                        // Ensure inventory change propagates when the slot updates
 #if (IL2CPPMELON || IL2CPPBEPINEX)
                         System.Action handler = new System.Action(() =>
                         {
-                            S1NPC.Inventory.InventoryContentsChanged();
+                    if (S1NPC.Inventory != null && S1NPC.Inventory.onContentsChanged != null)
+                        S1NPC.Inventory.onContentsChanged.Invoke();
                         });
                         slot.onItemDataChanged = (Il2CppSystem.Action)Il2CppSystem.Delegate.Combine(
                             slot.onItemDataChanged,
@@ -1064,7 +1064,11 @@ namespace S1API.Entities
 #else
                         slot.onItemDataChanged = (Action)Delegate.Combine(
                             slot.onItemDataChanged,
-                            new Action(() => { S1NPC.Inventory.InventoryContentsChanged(); })
+                    new Action(() =>
+                    {
+                        if (S1NPC.Inventory != null && S1NPC.Inventory.onContentsChanged != null)
+                            S1NPC.Inventory.onContentsChanged.Invoke();
+                    })
                         );
 #endif
                         S1NPC.Inventory.ItemSlots.Add(slot);

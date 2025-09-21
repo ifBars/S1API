@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Il2Cpp;
 #if MONOMELON
 using ScheduleOne.Map;
 #else
+using Il2Cpp;
 using Il2CppScheduleOne.Map;
 #endif
 
