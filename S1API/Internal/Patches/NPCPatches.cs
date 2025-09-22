@@ -26,8 +26,10 @@ using S1Economy = ScheduleOne.Economy;
 
 #if (IL2CPPMELON)
 using S1Datas = Il2CppScheduleOne.Persistence.Datas;
+using S1Items = Il2CppScheduleOne.ItemFramework;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Datas = ScheduleOne.Persistence.Datas;
+using S1Items = ScheduleOne.ItemFramework;
 #endif
 
 #if (IL2CPPMELON || IL2CPPBEPINEX)
@@ -68,10 +70,7 @@ namespace S1API.Internal.Patches
         {
             // Only allow custom NPC instantiation in the "Main" scene to avoid prologue issues
             if (!IsInMainScene())
-            {
-                MelonLogger.Msg("[S1API] Skipping custom NPC instantiation because active scene is not 'Main'.");
                 return;
-            }
 
             // Pre-scan active enterable buildings and register them for API lookup
             try
@@ -328,13 +327,49 @@ namespace S1API.Internal.Patches
                     }
                 }
 
-                // TODO: Inventory hydration for custom NPCs
+                // Load inventory data for custom NPCs
+                if (saveData.TryGetData("Inventory", out var inventoryData))
+                {
+                    try
+                    {
+                        // Use ItemSet deserialization like the base game does
+                        if (S1Datas.ItemSet.TryDeserialize(inventoryData, out var itemSet))
+                        {
+                            // Ensure the NPC inventory is properly initialized before loading
+                            apiNpc.Inventory.EnsureInitialized();
+                            
+                            // Load the ItemSet into the NPC's inventory slots
+                            itemSet.LoadTo(s1BaseNpc.Inventory.ItemSlots);
+                            
+                            Logger.Msg($"Successfully loaded inventory data for custom NPC '{baseData.ID}' with {itemSet.Items.Length} items");
+                        }
+                        else
+                        {
+                            Logger.Warning($"Failed to deserialize inventory data for custom NPC '{baseData.ID}'");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warning($"NPCLoader_Load_Prefix: Exception loading Inventory data for '{baseData.ID}': {ex.Message}");
+                    }
+                }
             }
             catch (Exception ex)
             {
                 Logger.Warning($"[S1API] NPCLoader.Load guard failed for custom NPC '{baseData.ID}': {ex.Message}");
                 Logger.Warning($"Stack trace: {ex.StackTrace}");
             }
+
+            try
+            {
+                var wrap = FindWrapperForS1Npc(s1BaseNpc);
+                if (wrap != null)
+                {
+                    // Mark that this instance was hydrated from save data to prevent defaults overwrite
+                    typeof(NPC).GetMethod("MarkLoadedFromSave", BindingFlags.NonPublic | BindingFlags.Instance)?.Invoke(wrap, null);
+                }
+            }
+            catch { }
 
             return false; // skip original
         }
@@ -503,6 +538,13 @@ namespace S1API.Internal.Patches
                 return;
 
             apiNpc.LoadFromDynamic(saveData);
+
+            // Mark as loaded from save so prefab defaults won't overwrite
+            try
+            {
+                typeof(NPC).GetMethod("MarkLoadedFromSave", BindingFlags.NonPublic | BindingFlags.Instance)?.Invoke(apiNpc, null);
+            }
+            catch { }
         }
 
         /// <summary>
@@ -514,30 +556,19 @@ namespace S1API.Internal.Patches
             {
                 var reg = S1NPCs.NPCManager.NPCRegistry;
                 if (reg == null)
-                {
-                    Logger.Warning($"FindBaseNpcById: NPCRegistry is null for ID '{id}'");
                     return null;
-                }
                 
-                Logger.Msg($"FindBaseNpcById: Searching for ID '{id}' in registry with {reg.Count} entries");
                 for (int i = 0; i < reg.Count; i++)
                 {
                     var n = reg[i];
                     if (n != null)
                     {
-                        Logger.Msg($"FindBaseNpcById: Checking NPC at index {i} with ID '{n.ID}'");
                         if (n.ID == id)
                         {
-                            Logger.Msg($"FindBaseNpcById: Found matching NPC for ID '{id}'");
                             return n;
                         }
                     }
-                    else
-                    {
-                        Logger.Msg($"FindBaseNpcById: NPC at index {i} is null");
-                    }
                 }
-                Logger.Msg($"FindBaseNpcById: No NPC found for ID '{id}'");
                 return null;
             }
             catch (Exception ex)
@@ -555,28 +586,17 @@ namespace S1API.Internal.Patches
             try
             {
                 if (baseNpc == null)
-                {
-                    Logger.Warning("FindWrapperForS1Npc: baseNpc is null");
                     return null;
-                }
                 
-                Logger.Msg($"FindWrapperForS1Npc: Searching for wrapper for base NPC with ID '{baseNpc.ID}' in {NPC.All.Count} API NPCs");
                 for (int i = 0; i < NPC.All.Count; i++)
                 {
                     var n = NPC.All[i];
                     if (n == null)
-                    {
-                        Logger.Msg($"FindWrapperForS1Npc: API NPC at index {i} is null");
                         continue;
-                    }
                     
                     if (n.S1NPC == baseNpc)
-                    {
-                        Logger.Msg($"FindWrapperForS1Npc: Found wrapper for base NPC '{baseNpc.ID}' (IsCustomNPC: {n.IsCustomNPC})");
                         return n;
-                    }
                 }
-                Logger.Msg($"FindWrapperForS1Npc: No wrapper found for base NPC '{baseNpc.ID}'");
                 return null;
             }
             catch (Exception ex)

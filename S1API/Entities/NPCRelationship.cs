@@ -220,23 +220,13 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Builds and applies relationship configuration using a builder.
-        /// Mirrors the customer data builder pattern.
+        /// Deprecated: Declare defaults in NPC.ConfigurePrefab via NPCPrefabBuilder.WithRelationshipDefaults.
+        /// Runtime mutation is no longer supported to preserve save/load consistency.
         /// </summary>
+        [Obsolete("Declare defaults in NPC.ConfigurePrefab via NPCPrefabBuilder.WithRelationshipDefaults. Runtime mutation is disabled.")]
         public void BuildAndSetRelationshipData(Action<NPCRelationshipDataBuilder> configure)
         {
-            if (configure == null)
-                return;
-            var comp = Component;
-            if (comp == null)
-                return;
-            var builder = new NPCRelationshipDataBuilder();
-            configure(builder);
-            try
-            {
-                builder.ApplyTo(comp, NPC.S1NPC);
-            }
-            catch { }
+            // Keep a no-op to avoid breaking mods at runtime but guide them to the new API
         }
 
         #endregion

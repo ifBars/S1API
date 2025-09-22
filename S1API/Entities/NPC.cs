@@ -66,6 +66,8 @@ using FishNet.Object;
 using MelonLoader;
 using S1API.Entities.Interfaces;
 using S1API.Entities.Schedule;
+using S1API.Entities.Customer;
+using S1API.Entities.Relation;
 using S1API.Internal.Abstraction;
 using S1API.Map;
 using S1API.Messaging;
@@ -86,6 +88,9 @@ namespace S1API.Entities
         private static readonly System.Collections.Generic.Dictionary<System.Type, GameObject> TypeToPrefab = new System.Collections.Generic.Dictionary<System.Type, GameObject>();
         private static readonly object TemplateLoadLock = new object();
         private static readonly System.Collections.Generic.Dictionary<System.Type, System.Collections.Generic.List<IScheduleActionSpec>> TypeToSchedulePlan = new System.Collections.Generic.Dictionary<System.Type, System.Collections.Generic.List<IScheduleActionSpec>>();
+        private static readonly System.Collections.Generic.Dictionary<System.Type, System.Action<CustomerDataBuilder>> TypeToCustomerDefaults = new System.Collections.Generic.Dictionary<System.Type, System.Action<CustomerDataBuilder>>();
+        private static readonly System.Collections.Generic.Dictionary<System.Type, System.Action<NPCRelationshipDataBuilder>> TypeToRelationshipDefaults = new System.Collections.Generic.Dictionary<System.Type, System.Action<NPCRelationshipDataBuilder>>();
+        private static readonly System.Collections.Generic.Dictionary<System.Type, (Vector3 position, Quaternion rotation)> TypeToSpawnPosition = new System.Collections.Generic.Dictionary<System.Type, (Vector3, Quaternion)>();
         private S1AvatarFramework.Avatar? _runtimeAvatar;
         
         #region Template Prefab Helpers
@@ -230,6 +235,27 @@ namespace S1API.Entities
             if (npcType == null || specs == null)
                 return;
             TypeToSchedulePlan[npcType] = specs;
+        }
+
+        internal static void RegisterCustomerDefaultsForType(System.Type npcType, System.Action<CustomerDataBuilder> configure)
+        {
+            if (npcType == null || configure == null)
+                return;
+            TypeToCustomerDefaults[npcType] = configure;
+        }
+
+        internal static void RegisterRelationshipDefaultsForType(System.Type npcType, System.Action<NPCRelationshipDataBuilder> configure)
+        {
+            if (npcType == null || configure == null)
+                return;
+            TypeToRelationshipDefaults[npcType] = configure;
+        }
+
+        internal static void RegisterSpawnPositionForType(System.Type npcType, Vector3 position, Quaternion rotation)
+        {
+            if (npcType == null)
+                return;
+            TypeToSpawnPosition[npcType] = (position, rotation);
         }
 
         #endregion
@@ -1216,6 +1242,12 @@ namespace S1API.Entities
         private NPCInventory _inventory;
         private NPCCustomer _customer;
         private NPCRelationship _relationship;
+        private bool _wasLoadedFromSave;
+
+        private void MarkLoadedFromSave()
+        {
+            _wasLoadedFromSave = true;
+        }
 
 
         /// <summary>
@@ -1280,7 +1312,27 @@ namespace S1API.Entities
                         {
                             var hasCustomer = owner.gameObject.GetComponent<S1Economy.Customer>() != null;
                             if (hasCustomer)
+                            {
+                                // Apply per-type prefab customer defaults, if any, unless this NPC is being loaded from save
+                                if (!owner._wasLoadedFromSave)
+                                {
+                                    try
+                                    {
+                                        if (TypeToCustomerDefaults.TryGetValue(owner.GetType(), out var custCfg) && custCfg != null)
+                                        {
+                                            var builder = new CustomerDataBuilder();
+                                            custCfg(builder);
+                                            var data = builder.BuildInternal();
+                                            var customer = owner.gameObject.GetComponent<S1Economy.Customer>();
+                                            var field = typeof(S1Economy.Customer).GetField("customerData", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                                            field?.SetValue(customer, data);
+                                        }
+                                    }
+                                    catch { }
+                                }
+
                                 owner.Customer.EnsureCustomer();
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -1307,6 +1359,42 @@ namespace S1API.Entities
                     catch (Exception ex)
                     {
                         Debug.LogWarning($"[S1API] Failed to apply planned schedule: {ex.Message}");
+                    }
+
+                    // Apply per-type relationship defaults after base fields are present, unless loaded from save
+                    if (!owner._wasLoadedFromSave)
+                    {
+                        try
+                        {
+                            var t = owner.GetType();
+                            if (TypeToRelationshipDefaults.TryGetValue(t, out var relCfg) && relCfg != null)
+                            {
+                                var builder = new NPCRelationshipDataBuilder();
+                                relCfg(builder);
+                                var rel = owner.S1NPC.RelationData;
+                                if (rel != null)
+                                    builder.ApplyTo(rel, owner.S1NPC);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogWarning($"[S1API] Failed to apply relationship defaults: {ex.Message}");
+                        }
+                    }
+
+                    // Apply spawn position for this NPC type (always applied, regardless of save state)
+                    try
+                    {
+                        var t = owner.GetType();
+                        if (TypeToSpawnPosition.TryGetValue(t, out var spawnData))
+                        {
+                            owner.Position = spawnData.position;
+                            owner.Transform.rotation = spawnData.rotation;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"[S1API] Failed to apply spawn position: {ex.Message}");
                     }
                 }
             }

@@ -12,6 +12,8 @@ using System;
 using System.Reflection;
 using UnityEngine;
 using S1API.Entities.Schedule;
+using S1API.Entities.Customer;
+using S1API.Entities.Relation;
 
 namespace S1API.Entities
 {
@@ -78,6 +80,65 @@ namespace S1API.Entities
             // Pre-create actions based on the plan to keep FishNet indices stable
             PrecreateActionsForSpecs(specs);
             return this;
+        }
+
+        /// <summary>
+        /// Declares default CustomerData for this NPC type. Ensures a Customer component exists
+        /// on the prefab and assigns the composed data as its starting configuration.
+        /// Save/load will override these values when present.
+        /// </summary>
+        public NPCPrefabBuilder WithCustomerDefaults(Action<CustomerDataBuilder> configure)
+        {
+            if (configure == null)
+                return this;
+
+            EnsureCustomer();
+            var customer = prefabRoot.GetComponent<S1Economy.Customer>();
+            if (customer != null)
+            {
+                try
+                {
+                    var builder = new CustomerDataBuilder();
+                    configure(builder);
+                    var data = builder.BuildInternal();
+                    var field = typeof(S1Economy.Customer).GetField("customerData", BindingFlags.NonPublic | BindingFlags.Instance);
+                    field?.SetValue(customer, data);
+                }
+                catch { }
+            }
+
+            NPC.RegisterCustomerDefaultsForType(ownerType, configure);
+            return this;
+        }
+
+        /// <summary>
+        /// Declares default relationship settings (delta, unlock type, connections) for this NPC type.
+        /// Applied to the instance after spawn and before save-data hydration.
+        /// </summary>
+        public NPCPrefabBuilder WithRelationshipDefaults(Action<NPCRelationshipDataBuilder> configure)
+        {
+            if (configure != null)
+                NPC.RegisterRelationshipDefaultsForType(ownerType, configure);
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the spawn position and rotation for this NPC type.
+        /// Applied every time the NPC is spawned (both new games and loaded games).
+        /// </summary>
+        public NPCPrefabBuilder WithSpawnPosition(Vector3 position, Quaternion rotation)
+        {
+            NPC.RegisterSpawnPositionForType(ownerType, position, rotation);
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the spawn position for this NPC type with default rotation.
+        /// Applied every time the NPC is spawned (both new games and loaded games).
+        /// </summary>
+        public NPCPrefabBuilder WithSpawnPosition(Vector3 position)
+        {
+            return WithSpawnPosition(position, Quaternion.identity);
         }
 
         private void PrecreateActionsForSpecs(System.Collections.Generic.List<IScheduleActionSpec> specs)

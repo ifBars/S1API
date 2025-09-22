@@ -85,21 +85,13 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Builds a CustomerData object from code and applies it to this NPC's customer component.
+        /// Deprecated: Declare defaults in NPC.ConfigurePrefab via NPCPrefabBuilder.WithCustomerDefaults.
+        /// Runtime mutation is no longer supported to preserve save/load consistency.
         /// </summary>
+        [Obsolete("Declare defaults in NPC.ConfigurePrefab via NPCPrefabBuilder.WithCustomerDefaults. Runtime mutation is disabled.")]
         public void BuildAndSetCustomerData(Action<CustomerDataBuilder> configure)
         {
-            if (configure == null)
-                return;
-            EnsureCustomer();
-            if (Component == null)
-                return;
-            var builder = new CustomerDataBuilder();
-            configure(builder);
-            var data = builder.BuildInternal();
-            customerDataField?.SetValue(Component, data);
-            // Refresh runtime caches and defaults now that data is present
-            InitializeRuntimeState(Component);
+            MelonLogger.Warning("[S1API] BuildAndSetCustomerData is deprecated. Use NPCPrefabBuilder.WithCustomerDefaults in ConfigurePrefab.");
         }
 
         /// <summary>
