@@ -57,7 +57,7 @@ namespace S1API.Entities
         internal NPCCustomer(NPC npc)
         {
             NPC = npc;
-            NPC.S1NPC.gameObject.GetComponent<S1Economy.Customer>().enabled = true;
+            // Do not assume Customer exists; prefab may omit it by design
         }
 
         /// <summary>
@@ -72,23 +72,16 @@ namespace S1API.Entities
         {
             if (Component == null)
             {
-                var c = NPC.gameObject.GetComponentInChildren<S1Economy.Customer>() ?? NPC.gameObject.AddComponent<S1Economy.Customer>();
-                EnsureCustomerData(c);
-                WireCoreReferences(c);
-                InitializeRuntimeState(c);
-                EnsureUnityEvents(c);
-                c.enabled = true;
-                c.InitializeSaveable();
-                TryNetworkInitialize(c);
+                // Do not add network behaviours at runtime; require Customer on prefab
+                MelonLoader.MelonLogger.Warning("[S1API] Customer component not present on NPC prefab. Add it via NPC.ConfigurePrefab(builder.EnsureCustomer()).");
+                return;
             }
-            else
-            {
-                EnsureCustomerData(Component);
-                WireCoreReferences(Component);
-                InitializeRuntimeState(Component);
-                EnsureUnityEvents(Component);
-                TryNetworkInitialize(Component);
-            }
+
+            EnsureCustomerData(Component);
+            WireCoreReferences(Component);
+            InitializeRuntimeState(Component);
+            EnsureUnityEvents(Component);
+            TryNetworkInitialize(Component);
         }
 
         /// <summary>

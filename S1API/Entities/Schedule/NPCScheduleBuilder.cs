@@ -88,6 +88,64 @@ namespace S1API.Entities.Schedule
             return this;
         }
     }
+
+    /// <summary>
+    /// Plan-time schedule builder used during prefab composition.
+    /// Collects <see cref="IScheduleActionSpec"/> entries without requiring a live NPC instance.
+    /// </summary>
+    public sealed class PrefabScheduleBuilder
+    {
+        private readonly System.Collections.Generic.List<IScheduleActionSpec> _specs = new System.Collections.Generic.List<IScheduleActionSpec>();
+
+        internal System.Collections.Generic.List<IScheduleActionSpec> Build() => _specs;
+
+        /// <summary>
+        /// Adds a walk-to action at the given start time.
+        /// </summary>
+        public PrefabScheduleBuilder WalkTo(UnityEngine.Vector3 destination, int startTime, bool faceDestinationDir = true, float within = 1f, bool warpIfSkipped = false, string name = null)
+        {
+            _specs.Add(new WalkToSpec { Destination = destination, StartTime = startTime, FaceDestinationDirection = faceDestinationDir, Within = within, WarpIfSkipped = warpIfSkipped, Name = name });
+            return this;
+        }
+
+        /// <summary>
+        /// Ensures the customer deal signal exists under the schedule.
+        /// </summary>
+        public PrefabScheduleBuilder EnsureDealSignal()
+        {
+            _specs.Add(new EnsureDealSignalSpec());
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a custom schedule action using an S1API spec.
+        /// </summary>
+        public PrefabScheduleBuilder Add(IScheduleActionSpec spec)
+        {
+            if (spec != null)
+                _specs.Add(spec);
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a "Stay in Building" event using S1API.Map.Building wrapper.
+        /// </summary>
+        public PrefabScheduleBuilder StayInBuilding(Map.Building building, int startTime, int durationMinutes = 60, int? doorIndex = null, string name = null)
+        {
+            if (building != null)
+            {
+                _specs.Add(new StayInBuildingSpec
+                {
+                    BuildingGUID = building.GUID,
+                    StartTime = startTime,
+                    DurationMinutes = durationMinutes,
+                    DoorIndex = doorIndex,
+                    Name = name
+                });
+            }
+            return this;
+        }
+    }
 }
 
 

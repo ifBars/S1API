@@ -162,18 +162,22 @@ namespace S1API.Internal.Patches
             }
             catch { }
 
-            // Ensure the CustomerNPC template prefab is not kept in the NPCRegistry
+            // Ensure S1API per-type template prefabs are not kept in the NPCRegistry
             try
             {
-                if (__instance != null && __instance.gameObject != null && __instance.gameObject.name == "CustomerNPC")
+                if (__instance != null && __instance.gameObject != null && __instance.gameObject.name != null)
                 {
-                    var reg = S1NPCs.NPCManager.NPCRegistry;
-                    for (int i = reg.Count - 1; i >= 0; i--)
+                    string n = __instance.gameObject.name;
+                    if (n.StartsWith("S1API_", System.StringComparison.Ordinal))
                     {
-                        if (reg[i] == __instance)
+                        var reg = S1NPCs.NPCManager.NPCRegistry;
+                        for (int i = reg.Count - 1; i >= 0; i--)
                         {
-                            reg.RemoveAt(i);
-                            break;
+                            if (reg[i] == __instance)
+                            {
+                                reg.RemoveAt(i);
+                                break;
+                            }
                         }
                     }
                 }
@@ -237,6 +241,7 @@ namespace S1API.Internal.Patches
             // Do not intercept on non-Main scenes; let base loader run unmodified
             if (!IsInMainScene())
                 return true;
+            
             if (saveData == null)
                 return true;
 
@@ -248,17 +253,21 @@ namespace S1API.Internal.Patches
             if (s1BaseNpc == null)
                 return true;
 
-            // Skip loader entirely for the CustomerNPC template prefab
+            // Skip loader entirely for S1API per-type template prefabs
             try
             {
+                if (s1BaseNpc.gameObject == null)
+                    return false;
+                
                 var go = s1BaseNpc.gameObject;
-                if (go != null && go.name == "CustomerNPC" || go.name == "CivilianNPC" || go.name == "BaseNPC")
-                {
-                    // Ignore creation/processing for the template clone we registered as spawnable
+                if (go != null && (go.name == "CivilianNPC" || go.name == "BaseNPC" || go.name.StartsWith("S1API_")))
                     return false; // skip original
-                }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.Warning($"NPCLoader_Load_Prefix: Exception in template check for ID '{baseData.ID}': {ex.Message}");
+                return false;
+            }
 
             var apiNpc = FindWrapperForS1Npc(s1BaseNpc);
             if (apiNpc == null || !apiNpc.IsCustomNPC)
@@ -271,27 +280,60 @@ namespace S1API.Internal.Patches
 
                 if (saveData.TryGetData("Relationship", out S1Datas.RelationshipData rel))
                 {
-                    if (!float.IsNaN(rel.RelationDelta) && !float.IsInfinity(rel.RelationDelta))
-                        s1BaseNpc.RelationData.SetRelationship(rel.RelationDelta);
-                    if (rel.Unlocked)
-                        s1BaseNpc.RelationData.Unlock(rel.UnlockType, notify: false);
+                    if (s1BaseNpc.RelationData == null)
+                    {
+                        Logger.Warning($"NPCLoader_Load_Prefix: RelationData is null for '{baseData.ID}'");
+                    }
+                    else
+                    {
+                        if (!float.IsNaN(rel.RelationDelta) && !float.IsInfinity(rel.RelationDelta))
+                            s1BaseNpc.RelationData.SetRelationship(rel.RelationDelta);
+                        if (rel.Unlocked)
+                            s1BaseNpc.RelationData.Unlock(rel.UnlockType, notify: false);
+                    }
                 }
 
                 if (saveData.TryGetData("MessageConversation", out S1Datas.MSGConversationData convo))
                 {
-                    s1BaseNpc.MSGConversation.Load(convo);
+                    if (s1BaseNpc.MSGConversation == null)
+                    {
+                        Logger.Warning($"NPCLoader_Load_Prefix: MSGConversation is null for '{baseData.ID}'");
+                    }
+                    else
+                    {
+                        s1BaseNpc.MSGConversation.Load(convo);
+                    }
                 }
 
-                if (saveData.TryGetData("CustomerData", out S1Datas.CustomerData cust) && s1BaseNpc.GetComponent<S1Economy.Customer>() != null)
+                if (saveData.TryGetData("CustomerData", out S1Datas.CustomerData cust))
                 {
-                    s1BaseNpc.GetComponent<S1Economy.Customer>().Load(cust);
+                    var customerComponent = s1BaseNpc.GetComponent<S1Economy.Customer>();
+
+                    if (customerComponent == null)
+                    {
+                        Logger.Warning($"NPCLoader_Load_Prefix: Customer component is null for '{baseData.ID}'");
+                    }
+                    else
+                    {
+                        try
+                        {
+                            apiNpc.Customer.EnsureCustomer();
+                            customerComponent.enabled = true;
+                            customerComponent.Load(cust);
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Warning($"NPCLoader_Load_Prefix: Exception loading Customer data for '{baseData.ID}': {ex.Message}");
+                        }
+                    }
                 }
 
-                // Intentionally skip Inventory hydration for custom NPCs
+                // TODO: Inventory hydration for custom NPCs
             }
             catch (Exception ex)
             {
-                MelonLogger.Warning($"[S1API] NPCLoader.Load guard failed for custom NPC: {ex.Message}");
+                Logger.Warning($"[S1API] NPCLoader.Load guard failed for custom NPC '{baseData.ID}': {ex.Message}");
+                Logger.Warning($"Stack trace: {ex.StackTrace}");
             }
 
             return false; // skip original
@@ -468,14 +510,41 @@ namespace S1API.Internal.Patches
         /// </summary>
         private static S1NPCs.NPC FindBaseNpcById(string id)
         {
-            var reg = S1NPCs.NPCManager.NPCRegistry;
-            for (int i = 0; i < reg.Count; i++)
+            try
             {
-                var n = reg[i];
-                if (n != null && n.ID == id)
-                    return n;
+                var reg = S1NPCs.NPCManager.NPCRegistry;
+                if (reg == null)
+                {
+                    Logger.Warning($"FindBaseNpcById: NPCRegistry is null for ID '{id}'");
+                    return null;
+                }
+                
+                Logger.Msg($"FindBaseNpcById: Searching for ID '{id}' in registry with {reg.Count} entries");
+                for (int i = 0; i < reg.Count; i++)
+                {
+                    var n = reg[i];
+                    if (n != null)
+                    {
+                        Logger.Msg($"FindBaseNpcById: Checking NPC at index {i} with ID '{n.ID}'");
+                        if (n.ID == id)
+                        {
+                            Logger.Msg($"FindBaseNpcById: Found matching NPC for ID '{id}'");
+                            return n;
+                        }
+                    }
+                    else
+                    {
+                        Logger.Msg($"FindBaseNpcById: NPC at index {i} is null");
+                    }
+                }
+                Logger.Msg($"FindBaseNpcById: No NPC found for ID '{id}'");
+                return null;
             }
-            return null;
+            catch (Exception ex)
+            {
+                Logger.Warning($"FindBaseNpcById: Exception searching for ID '{id}': {ex.Message}");
+                return null;
+            }
         }
 
         /// <summary>
@@ -483,13 +552,38 @@ namespace S1API.Internal.Patches
         /// </summary>
         private static NPC FindWrapperForS1Npc(S1NPCs.NPC baseNpc)
         {
-            for (int i = 0; i < NPC.All.Count; i++)
+            try
             {
-                var n = NPC.All[i];
-                if (n.S1NPC == baseNpc)
-                    return n;
+                if (baseNpc == null)
+                {
+                    Logger.Warning("FindWrapperForS1Npc: baseNpc is null");
+                    return null;
+                }
+                
+                Logger.Msg($"FindWrapperForS1Npc: Searching for wrapper for base NPC with ID '{baseNpc.ID}' in {NPC.All.Count} API NPCs");
+                for (int i = 0; i < NPC.All.Count; i++)
+                {
+                    var n = NPC.All[i];
+                    if (n == null)
+                    {
+                        Logger.Msg($"FindWrapperForS1Npc: API NPC at index {i} is null");
+                        continue;
+                    }
+                    
+                    if (n.S1NPC == baseNpc)
+                    {
+                        Logger.Msg($"FindWrapperForS1Npc: Found wrapper for base NPC '{baseNpc.ID}' (IsCustomNPC: {n.IsCustomNPC})");
+                        return n;
+                    }
+                }
+                Logger.Msg($"FindWrapperForS1Npc: No wrapper found for base NPC '{baseNpc.ID}'");
+                return null;
             }
-            return null;
+            catch (Exception ex)
+            {
+                Logger.Warning($"FindWrapperForS1Npc: Exception searching for base NPC '{baseNpc?.ID}': {ex.Message}");
+                return null;
+            }
         }
 
         /// <summary>

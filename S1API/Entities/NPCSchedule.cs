@@ -123,8 +123,18 @@ namespace S1API.Entities
             }
 
             // Fallback to any instance if all are active (do NOT create new components at runtime)
-            if (chosen == null && pool.Length > 0)
-                chosen = pool[0];
+            if (chosen == null)
+            {
+                if (pool.Length > 0)
+                {
+                    chosen = pool[0];
+                }
+                else
+                {
+                    UnityEngine.Debug.LogWarning($"[S1API] No available pre-created actions of type {typeof(T).Name}. Add more via NPC.ConfigurePrefab.");
+                    return null;
+                }
+            }
 
             if (chosen == null)
                 return null;
@@ -135,7 +145,7 @@ namespace S1API.Entities
             chosen.SetStartTime(startTime);
             if (!chosen.gameObject.activeSelf)
                 chosen.gameObject.SetActive(true);
-                chosen.enabled = true;
+            chosen.enabled = true;
 
             // Let the manager pick up and sort the action immediately
             Manager.InitializeActions();
@@ -158,7 +168,6 @@ namespace S1API.Entities
         /// </summary>
         public void EnsureDealSignal()
         {
-            EnsureManager();
             if (Manager == null)
                 return;
 
@@ -170,17 +179,8 @@ namespace S1API.Entities
                 TryWireCustomerDealSignal(existing);
                 return;
             }
-
-            var dealGo = new GameObject("DealSignal");
-            dealGo.transform.SetParent(Manager.transform, false);
-            var signal = dealGo.AddComponent<S1NPCsSchedules.NPCSignal_WaitForDelivery>();
-            TryNetworkInitialize(signal);
-            dealGo.SetActive(false);
-
-            // Wire to Customer component if present
-            TryWireCustomerDealSignal(signal);
-
-            Manager.InitializeActions();
+            // Do not create new network behaviours at runtime; require prefab declaration
+            UnityEngine.Debug.LogWarning("[S1API] DealSignal missing on prefab. Please add via NPC.ConfigurePrefab(builder.EnsureDealSignal()).");
         }
 
         private void TryWireCustomerDealSignal(S1NPCsSchedules.NPCSignal_WaitForDelivery signal)
@@ -286,11 +286,7 @@ namespace S1API.Entities
         {
             var mgr = NPC.gameObject.GetComponentInChildren<S1NPCs.NPCScheduleManager>(true);
             if (mgr == null)
-            {
-                var go = new GameObject("NPCSchedule");
-                go.transform.SetParent(NPC.gameObject.transform, false);
-                mgr = go.AddComponent<S1NPCs.NPCScheduleManager>();
-            }
+                UnityEngine.Debug.LogWarning("[S1API] NPCScheduleManager is missing. Ensure it is added in NPC.ConfigurePrefab.");
         }
 
         /// <summary>

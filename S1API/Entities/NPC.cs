@@ -65,6 +65,7 @@ using FishNet.Object;
 #endif
 using MelonLoader;
 using S1API.Entities.Interfaces;
+using S1API.Entities.Schedule;
 using S1API.Internal.Abstraction;
 using S1API.Map;
 using S1API.Messaging;
@@ -82,15 +83,16 @@ namespace S1API.Entities
     {
         // Protected members intended to be used by modders.
         // Intended to be used from within the class / derived classes ONLY.
-        private static GameObject? TemplatePrefab;
+        private static readonly System.Collections.Generic.Dictionary<System.Type, GameObject> TypeToPrefab = new System.Collections.Generic.Dictionary<System.Type, GameObject>();
         private static readonly object TemplateLoadLock = new object();
+        private static readonly System.Collections.Generic.Dictionary<System.Type, System.Collections.Generic.List<IScheduleActionSpec>> TypeToSchedulePlan = new System.Collections.Generic.Dictionary<System.Type, System.Collections.Generic.List<IScheduleActionSpec>>();
         private S1AvatarFramework.Avatar? _runtimeAvatar;
         
         #region Template Prefab Helpers
 
-        private static GameObject InstantiateTemplateInstance()
+        private static GameObject InstantiateTemplateInstance(System.Type npcType, NPC owner)
         {
-            GameObject prefab = GetTemplatePrefab();
+            GameObject prefab = GetOrCreatePerNpcPrefab(npcType, owner);
             NetworkObject netPrefab = prefab.GetComponent<NetworkObject>() ?? prefab.AddComponent<NetworkObject>();
 
             NetworkObject spawnableNetPrefab = null;
@@ -120,10 +122,7 @@ namespace S1API.Entities
             // Ensure Customer component exists on the prefab before instantiation
             // This ensures both server and client have identical NetworkBehaviour lists
             GameObject prefabToUse = spawnableNetPrefab?.gameObject ?? prefab;
-            if (prefabToUse.GetComponent<S1Economy.Customer>() == null)
-            {
-                prefabToUse.AddComponent<S1Economy.Customer>();
-            }
+            // Do not auto-add Customer; per-NPC prefabs may or may not include it
 
             NetworkObject instanceNo = UnityEngine.Object.Instantiate<NetworkObject>(spawnableNetPrefab ?? netPrefab);
             GameObject instance = instanceNo.gameObject;
@@ -137,15 +136,18 @@ namespace S1API.Entities
             return instance;
         }
 
-        private static GameObject GetTemplatePrefab()
+        private static GameObject GetOrCreatePerNpcPrefab(System.Type npcType, NPC owner)
         {
-            if (TemplatePrefab != null)
-                return TemplatePrefab;
+            if (npcType == null)
+                throw new Exception("NPC type is null for prefab resolution.");
+
+            if (TypeToPrefab.TryGetValue(npcType, out var cached) && cached != null)
+                return cached;
 
             lock (TemplateLoadLock)
             {
-                if (TemplatePrefab != null)
-                    return TemplatePrefab;
+                if (TypeToPrefab.TryGetValue(npcType, out cached) && cached != null)
+                    return cached;
 
                 // Prefer a spawnable prefab provided by the base game (e.g., "BaseNPC").
                 var nm = InstanceFinder.NetworkManager;
@@ -185,47 +187,49 @@ namespace S1API.Entities
                 if (chosen == null)
                     throw new Exception("Failed to locate a suitable NPC spawnable prefab (BaseNPC or any with S1NPCs.NPC).");
 
-                // If a Customer-ready prefab is already registered, use it
-                for (int i = 0; i < count; i++)
-                {
-                    NetworkObject obj = spawnablePrefabs.GetObject(true, i);
-                    if (obj != null && obj.gameObject != null && obj.gameObject.name == "CustomerNPC")
-                    {
-                        TemplatePrefab = obj.gameObject;
-                        return TemplatePrefab;
-                    }
-                }
+                // Build a unique per-NPC prefab based on type
+                NetworkObject prefabNO = UnityEngine.Object.Instantiate<NetworkObject>(chosen);
+                string prefabName = GetPrefabNameForType(npcType);
+                prefabNO.gameObject.name = prefabName;
 
-                // Otherwise, clone BaseNPC → add Customer and schedule actions → rename → register as spawnable → use it
-                NetworkObject customerPrefabNO = UnityEngine.Object.Instantiate<NetworkObject>(chosen);
-                S1Economy.Customer customer = customerPrefabNO.gameObject.GetComponent<S1Economy.Customer>() ?? customerPrefabNO.gameObject.AddComponent<S1Economy.Customer>();
-                customerPrefabNO.gameObject.name = "CustomerNPC";
-                customer.enabled = true;
-
-                // Pre-create schedule manager and all schedule actions so FishNet component indices are stable
+                // Let the NPC subclass declare required components on the prefab (Customer, actions, etc.)
                 try
                 {
-                    EnsureScheduleActionsOnPrefab(customerPrefabNO.gameObject);
+                    var builder = new NPCPrefabBuilder(prefabNO.gameObject, npcType);
+                    owner?.ConfigurePrefab(builder);
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"[S1API] Failed to pre-create schedule actions on prefab: {ex.Message}");
+                    Debug.LogWarning($"[S1API] {npcType.Name}.ConfigurePrefab failed: {ex.Message}");
                 }
 
+                // Register as spawnable so FishNet assigns stable behaviour indices and can network-spawn
                 try
                 {
-                    var po = spawnablePrefabs;
-
-                    spawnablePrefabs.AddObject(customerPrefabNO);
+                    spawnablePrefabs.AddObject(prefabNO);
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"[S1API] Failed to register CustomerNPC in SpawnablePrefabs: {ex.Message}");
+                    Debug.LogWarning($"[S1API] Failed to register {prefabName} in SpawnablePrefabs: {ex.Message}");
                 }
 
-                TemplatePrefab = customerPrefabNO.gameObject;
-                return TemplatePrefab;
+                TypeToPrefab[npcType] = prefabNO.gameObject;
+                return prefabNO.gameObject;
             }
+        }
+
+        private static string GetPrefabNameForType(System.Type npcType)
+        {
+            // Avoid path separators, keep name concise, deterministic per type
+            string typeName = npcType != null ? npcType.Name : "UnknownNPC";
+            return $"S1API_{typeName}";
+        }
+
+        internal static void RegisterSchedulePlanForType(System.Type npcType, System.Collections.Generic.List<IScheduleActionSpec> specs)
+        {
+            if (npcType == null || specs == null)
+                return;
+            TypeToSchedulePlan[npcType] = specs;
         }
 
         #endregion
@@ -255,7 +259,7 @@ namespace S1API.Entities
         {
             IsCustomNPC = true;
 
-            gameObject = InstantiateTemplateInstance();
+            gameObject = InstantiateTemplateInstance(this.GetType(), this);
             gameObject.SetActive(false);
 
             S1NPCs.NPC? prefabNpc = gameObject.GetComponent<S1NPCs.NPC>();
@@ -311,6 +315,14 @@ namespace S1API.Entities
 
             All.Add(this);
         }
+
+        /// <summary>
+        /// Override to declare components your NPC prefab must contain before network spawn.
+        /// Use <see cref="NPCPrefabBuilder"/> to add Customer, ScheduleManager and pre-create actions.
+        /// Default does nothing.
+        /// </summary>
+        /// <param name="builder">Prefab builder for this NPC type.</param>
+        protected virtual void ConfigurePrefab(NPCPrefabBuilder builder) { }
 
         /// <summary>
         /// Called when a response is loaded from the save file.
@@ -1261,15 +1273,40 @@ namespace S1API.Entities
                     bool broadcastVisibility = InstanceFinder.IsServer;
                     owner.S1NPC.SetVisible(owner.IsPhysical, networked: broadcastVisibility);
 
-                    // Ensure Customer component for custom NPCs is present and initialized early
+                    // If this prefab included a Customer, ensure it's initialized; otherwise, respect non-customer NPCs
                     try
                     {
                         if (owner.IsCustomNPC)
-                            owner.Customer.EnsureCustomer();
+                        {
+                            var hasCustomer = owner.gameObject.GetComponent<S1Economy.Customer>() != null;
+                            if (hasCustomer)
+                                owner.Customer.EnsureCustomer();
+                        }
                     }
                     catch (Exception ex)
                     {
                         Debug.LogWarning($"[S1API] Failed to ensure Customer on NPC: {ex.Message}");
+                    }
+
+                    // Apply any planned schedule specs for this NPC type now that the instance exists
+                    try
+                    {
+                        var t = owner.GetType();
+                        if (TypeToSchedulePlan.TryGetValue(t, out var planned) && planned != null && planned.Count > 0)
+                        {
+                            for (int i = 0; i < planned.Count; i++)
+                            {
+                                var spec = planned[i];
+                                if (spec != null)
+                                    spec.ApplyTo(owner.Schedule);
+                            }
+                            owner.Schedule.InitializeActions();
+                            owner.Schedule.EnforceState();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"[S1API] Failed to apply planned schedule: {ex.Message}");
                     }
                 }
             }
