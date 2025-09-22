@@ -1,4 +1,5 @@
 #if (IL2CPPMELON)
+using Il2Cpp;
 using S1Vehicles = Il2CppScheduleOne.Vehicles;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Vehicles = ScheduleOne.Vehicles;
@@ -26,10 +27,18 @@ namespace S1API.Vehicles
                 var list = S1Vehicles.VehicleManager.Instance.AllVehicles;
                 if (list == null)
                     return Array.Empty<LandVehicle>();
-                return list
-                    .Where(v => v != null)
-                    .Select(Wrap)
-                    .ToArray();
+                
+                var results = new List<LandVehicle>();
+                foreach (var vehicle in list)
+                {
+                    if (vehicle != null)
+                    {
+                        var wrapped = Wrap(vehicle);
+                        if (wrapped != null)
+                            results.Add(wrapped);
+                    }
+                }
+                return results.ToArray();
             }
             catch
             {

@@ -41,6 +41,13 @@ using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
 #endif
 
 #if (IL2CPPBEPINEX || IL2CPPMELON)
+using S1Type = Il2CppSystem.Type;
+using Il2CppInterop.Runtime;
+#else
+using S1Type = System.Type;
+#endif
+
+#if (IL2CPPBEPINEX || IL2CPPMELON)
 using Il2CppSystem.Collections.Generic;
 #else
 using System.Collections.Generic;
@@ -1426,8 +1433,12 @@ namespace S1API.Entities
             }
 
             // Collect action types via reflection when possible
-            System.Collections.Generic.List<System.Type> actionTypes = new System.Collections.Generic.List<System.Type>();
-            System.Type baseType = typeof(S1NPCsSchedules.NPCAction);
+            System.Collections.Generic.List<S1Type> actionTypes = new System.Collections.Generic.List<S1Type>();
+#if (IL2CPPBEPINEX || IL2CPPMELON)
+            S1Type baseType = Il2CppType.Of<S1NPCsSchedules.NPCAction>();
+#else
+            S1Type baseType = typeof(S1NPCsSchedules.NPCAction);
+#endif
             try
             {
                 var asm = baseType.Assembly;
@@ -1436,7 +1447,7 @@ namespace S1API.Entities
                     var types = asm.GetTypes();
                     for (int i = 0; i < types.Length; i++)
                     {
-                        System.Type t = types[i];
+                        S1Type t = types[i];
                         if (t == null)
                             continue;
                         if (t.IsAbstract)
@@ -1467,7 +1478,11 @@ namespace S1API.Entities
                 for (int i = 0; i < known.Length; i++)
                 {
                     string full = string.IsNullOrEmpty(ns) ? known[i] : (ns + "." + known[i]);
-                    System.Type t = System.Type.GetType(full);
+#if (IL2CPPBEPINEX || IL2CPPMELON)
+                    S1Type t = Il2CppSystem.Type.GetType(full);
+#else
+                    S1Type t = System.Type.GetType(full);
+#endif
                     if (t != null && !t.IsAbstract && baseType.IsAssignableFrom(t))
                         actionTypes.Add(t);
                 }
@@ -1476,7 +1491,7 @@ namespace S1API.Entities
             // Add one inactive instance of each action type if not already present
             for (int i = 0; i < actionTypes.Count; i++)
             {
-                System.Type t = actionTypes[i];
+                S1Type t = actionTypes[i];
                 if (t == null)
                     continue;
 
@@ -1491,11 +1506,16 @@ namespace S1API.Entities
                 // Best-effort wire internal references so actions have context even while inactive
                 try
                 {
-                    var baseNpc = prefabRoot.GetComponent<S1NPCs.NPC>();
+#if MONOMELON
                     var npcField = t.GetField("npc", BindingFlags.NonPublic | BindingFlags.Instance);
-                    npcField?.SetValue(comp, baseNpc);
-
                     var schedField = t.GetField("schedule", BindingFlags.NonPublic | BindingFlags.Instance);
+#else
+                    var npcField = t.GetField("npc", Il2CppSystem.Reflection.BindingFlags.NonPublic | Il2CppSystem.Reflection.BindingFlags.Instance);
+                    var schedField = t.GetField("schedule", Il2CppSystem.Reflection.BindingFlags.NonPublic | Il2CppSystem.Reflection.BindingFlags.Instance);
+#endif
+                    var baseNpc = prefabRoot.GetComponent<S1NPCs.NPC>();
+                    
+                    npcField?.SetValue(comp, baseNpc);
                     schedField?.SetValue(comp, existingMgr);
                 }
                 catch { }

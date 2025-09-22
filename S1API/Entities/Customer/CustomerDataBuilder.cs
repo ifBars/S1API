@@ -182,7 +182,15 @@ namespace S1API.Entities.Customer
         {
             if (_data.DefaultAffinityData == null)
                 _data.DefaultAffinityData = new S1Economy.CustomerAffinityData();
-            var existing = _data.DefaultAffinityData.ProductAffinities.FirstOrDefault(a => a != null && (int)a.DrugType == (int)drugType);
+            S1Economy.ProductTypeAffinity existing = null;
+            foreach (var a in _data.DefaultAffinityData.ProductAffinities)
+            {
+                if (a != null && (int)a.DrugType == (int)drugType)
+                {
+                    existing = a;
+                    break;
+                }
+            }
             if (existing == null)
             {
                 _data.DefaultAffinityData.ProductAffinities.Add(new S1Economy.ProductTypeAffinity
@@ -218,7 +226,15 @@ namespace S1API.Entities.Customer
                 {
                     if (string.IsNullOrEmpty(name))
                         continue;
-                    var found = props.FirstOrDefault(p => p != null && string.Equals(p.name, name, StringComparison.OrdinalIgnoreCase));
+                    S1Props.Property found = null;
+                    foreach (var p in props)
+                    {
+                        if (p != null && string.Equals(p.name, name, StringComparison.OrdinalIgnoreCase))
+                        {
+                            found = p;
+                            break;
+                        }
+                    }
                     if (found != null && !results.Contains(found))
                         results.Add(found);
                 }
@@ -247,7 +263,15 @@ namespace S1API.Entities.Customer
                 {
                     if (string.IsNullOrEmpty(id))
                         continue;
-                    var found = props.FirstOrDefault(p => p != null && string.Equals(p.ID, id, StringComparison.OrdinalIgnoreCase));
+                    S1Props.Property found = null;
+                    foreach (var p in props)
+                    {
+                        if (p != null && string.Equals(p.ID, id, StringComparison.OrdinalIgnoreCase))
+                        {
+                            found = p;
+                            break;
+                        }
+                    }
                     if (found != null && !results.Contains(found))
                         results.Add(found);
                 }

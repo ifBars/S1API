@@ -148,7 +148,18 @@ namespace S1API.Entities.Relation
                         for (int i = 0; i < _connectionIDs.Count; i++)
                         {
                             var id = _connectionIDs[i];
-                            var other = registry.FirstOrDefault(n => n != null && !ReferenceEquals(n, owner) && string.Equals(n.ID, id, StringComparison.OrdinalIgnoreCase));
+                            S1NPCs.NPC other = null;
+                            
+                            // Manual search instead of FirstOrDefault
+                            foreach (var n in registry)
+                            {
+                                if (n != null && !ReferenceEquals(n, owner) && string.Equals(n.ID, id, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    other = n;
+                                    break;
+                                }
+                            }
+                            
                             if (other != null && !targetList.Contains(other))
                                 targetList.Add(other);
                         }

@@ -75,7 +75,14 @@ namespace S1API.Map
                 var all = UnityEngine.Object.FindObjectsOfType<ParkingLot>();
                 if (all == null || all.Length == 0)
                     return Array.Empty<ParkingLotWrapper>();
-                return all.Select(l => new ParkingLotWrapper(l)).ToArray();
+                
+                var results = new List<ParkingLotWrapper>();
+                foreach (var lot in all)
+                {
+                    if (lot != null)
+                        results.Add(new ParkingLotWrapper(lot));
+                }
+                return results.ToArray();
             }
             catch
             {
@@ -119,7 +126,12 @@ namespace S1API.Map
             try
             {
                 var spots = lot.ResolveGameLot().GetFreeParkingSpots();
-                return spots.Select(s => new ParkingSpotWrapper(s)).ToArray();
+                var results = new List<ParkingSpotWrapper>();
+                foreach (var spot in spots)
+                {
+                    results.Add(new ParkingSpotWrapper(spot));
+                }
+                return results.ToArray();
             }
             catch
             {
