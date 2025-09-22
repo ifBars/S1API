@@ -327,21 +327,13 @@ namespace S1API.Internal.Patches
                     }
                 }
 
-                // Load inventory data for custom NPCs
                 if (saveData.TryGetData("Inventory", out var inventoryData))
                 {
                     try
                     {
-                        // Use ItemSet deserialization like the base game does
                         if (S1Datas.ItemSet.TryDeserialize(inventoryData, out var itemSet))
                         {
-                            // Ensure the NPC inventory is properly initialized before loading
-                            apiNpc.Inventory.EnsureInitialized();
-                            
-                            // Load the ItemSet into the NPC's inventory slots
                             itemSet.LoadTo(s1BaseNpc.Inventory.ItemSlots);
-                            
-                            Logger.Msg($"Successfully loaded inventory data for custom NPC '{baseData.ID}' with {itemSet.Items.Length} items");
                         }
                         else
                         {
