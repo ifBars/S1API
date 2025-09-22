@@ -15,6 +15,8 @@ using S1VehiclesAI = ScheduleOne.Vehicles.AI;
 using S1ObjectScripts = ScheduleOne.ObjectScripts;
 #endif
 using UnityEngine;
+using S1API.Map;
+using S1API.Vehicles;
 
 namespace S1API.Entities.Schedule
 {
@@ -197,7 +199,18 @@ namespace S1API.Entities.Schedule
         public string VehicleGUID { get; set; }
         public bool? OverrideParkingType { get; set; }
         public int? ParkingType { get; set; }
+        
+        /// <summary>
+        /// Optional S1API-facing parking alignment. If set, overrides ParkingType.
+        /// </summary>
+        public ParkingAlignment? Alignment { get; set; }
         public string Name { get; set; }
+        
+        /// <summary>
+        /// Optional: pass resolved wrappers directly to avoid GUID lookups.
+        /// </summary>
+        public ParkingLotWrapper ParkingLot { get; set; }
+        public LandVehicle Vehicle { get; set; }
 
         void IScheduleActionSpec.ApplyTo(NPCSchedule schedule)
         {
@@ -208,40 +221,51 @@ namespace S1API.Entities.Schedule
 
             try
             {
-                if (!string.IsNullOrEmpty(ParkingLotGUID))
+                // Resolve lot
+                object lotObj = null;
+                if (ParkingLot != null)
                 {
-#if MONOMELON
-                    var lot = GUIDManager.GetObject<S1Map.ParkingLot>(new System.Guid(ParkingLotGUID));
-#else
-                    var lot = GUIDManager.GetObject<S1Map.ParkingLot>(new Il2CppSystem.Guid(ParkingLotGUID));
-#endif
-                    action.GetType().GetField("ParkingLot")?.SetValue(action, lot);
+                    lotObj = ParkingLot.ResolveGameLot();
                 }
-
-                if (!string.IsNullOrEmpty(VehicleGUID))
+                else if (!string.IsNullOrEmpty(ParkingLotGUID))
                 {
-#if MONOMELON
-                    var veh = GUIDManager.GetObject<S1Vehicles.LandVehicle>(new System.Guid(VehicleGUID));
-#else
-                    var veh = GUIDManager.GetObject<S1Vehicles.LandVehicle>(new Il2CppSystem.Guid(VehicleGUID));
-#endif
-                    action.GetType().GetField("Vehicle")?.SetValue(action, veh);
+                    var lotWrap = ParkingLots.GetByGUID(ParkingLotGUID);
+                    lotObj = lotWrap?.ResolveGameLot();
                 }
+                if (lotObj != null)
+                    action.GetType().GetField("ParkingLot")?.SetValue(action, lotObj);
 
+                // Resolve vehicle
+                object vehObj = null;
+                if (Vehicle != null && Vehicle.S1LandVehicle != null)
+                {
+                    vehObj = Vehicle.S1LandVehicle;
+                }
+                else if (!string.IsNullOrEmpty(VehicleGUID))
+                {
+                    var v = VehicleRegistry.GetByGUID(VehicleGUID);
+                    vehObj = v?.S1LandVehicle;
+                }
+                if (vehObj != null)
+                    action.GetType().GetField("Vehicle")?.SetValue(action, vehObj);
+
+                // Flags
                 if (OverrideParkingType.HasValue)
-                {
                     action.GetType().GetField("OverrideParkingType")?.SetValue(action, OverrideParkingType.Value);
-                }
 
-                if (ParkingType.HasValue)
+                var parkingField = action.GetType().GetField("ParkingType");
+                if (Alignment.HasValue)
+                {
+                    var boxed = (S1Vehicles.EParkingAlignment)(int)Alignment.Value;
+                    parkingField?.SetValue(action, boxed);
+                }
+                else if (ParkingType.HasValue)
                 {
                     var boxed = (S1Vehicles.EParkingAlignment)ParkingType.Value;
-                    action.GetType().GetField("ParkingType")?.SetValue(action, boxed);
+                    parkingField?.SetValue(action, boxed);
                 }
             }
-            catch
-            {
-            }
+            catch { }
         }
     }
 }

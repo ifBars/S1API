@@ -265,19 +265,7 @@ namespace S1API.Entities
             return names;
         }
 
-        /// <summary>
-        /// Starts a builder session to configure actions fluently.
-        /// </summary>
-        public void Build(System.Action<NPCScheduleBuilder> configure)
-        {
-            if (configure == null)
-                return;
-            var builder = new NPCScheduleBuilder(this);
-            configure(builder);
-            // Ensure manager reflects any changes
-            InitializeActions();
-            EnforceState();
-        }
+        // Runtime schedule building is disabled. Declare schedules in NPC.ConfigurePrefab via NPCPrefabBuilder.WithSchedule.
 
         /// <summary>
         /// INTERNAL: Ensures a schedule manager exists on the NPC root.

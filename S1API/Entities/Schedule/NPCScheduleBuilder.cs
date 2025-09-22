@@ -6,6 +6,8 @@ using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
 
 using System;
 using UnityEngine;
+using S1API.Map;
+using S1API.Vehicles;
 
 namespace S1API.Entities.Schedule
 {
@@ -80,6 +82,42 @@ namespace S1API.Entities.Schedule
         }
 
         /// <summary>
+        /// Adds a "Drive to Car Park" action using wrappers.
+        /// </summary>
+        public NPCScheduleBuilder DriveToCarPark(ParkingLotWrapper lot, LandVehicle vehicle, int startTime, ParkingAlignment? alignment = null, bool? overrideParkingType = null, string name = null)
+        {
+            var spec = new DriveToCarParkSpec
+            {
+                StartTime = startTime,
+                ParkingLot = lot,
+                Vehicle = vehicle,
+                Alignment = alignment,
+                OverrideParkingType = overrideParkingType,
+                Name = name
+            };
+            ((IScheduleActionSpec)spec).ApplyTo(_schedule);
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a "Drive to Car Park" action using GUIDs.
+        /// </summary>
+        public NPCScheduleBuilder DriveToCarPark(string parkingLotGUID, string vehicleGUID, int startTime, ParkingAlignment? alignment = null, bool? overrideParkingType = null, string name = null)
+        {
+            var spec = new DriveToCarParkSpec
+            {
+                StartTime = startTime,
+                ParkingLotGUID = parkingLotGUID,
+                VehicleGUID = vehicleGUID,
+                Alignment = alignment,
+                OverrideParkingType = overrideParkingType,
+                Name = name
+            };
+            ((IScheduleActionSpec)spec).ApplyTo(_schedule);
+            return this;
+        }
+
+        /// <summary>
         /// Clears all configured actions. Use carefully on NPCs with authored schedules.
         /// </summary>
         public NPCScheduleBuilder ClearAll()
@@ -143,6 +181,40 @@ namespace S1API.Entities.Schedule
                     Name = name
                 });
             }
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a "Drive to Car Park" action using wrappers.
+        /// </summary>
+        public PrefabScheduleBuilder DriveToCarPark(ParkingLotWrapper lot, LandVehicle vehicle, int startTime, ParkingAlignment? alignment = null, bool? overrideParkingType = null, string name = null)
+        {
+            _specs.Add(new DriveToCarParkSpec
+            {
+                StartTime = startTime,
+                ParkingLot = lot,
+                Vehicle = vehicle,
+                Alignment = alignment,
+                OverrideParkingType = overrideParkingType,
+                Name = name
+            });
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a "Drive to Car Park" action using GUIDs.
+        /// </summary>
+        public PrefabScheduleBuilder DriveToCarPark(string parkingLotGUID, string vehicleGUID, int startTime, ParkingAlignment? alignment = null, bool? overrideParkingType = null, string name = null)
+        {
+            _specs.Add(new DriveToCarParkSpec
+            {
+                StartTime = startTime,
+                ParkingLotGUID = parkingLotGUID,
+                VehicleGUID = vehicleGUID,
+                Alignment = alignment,
+                OverrideParkingType = overrideParkingType,
+                Name = name
+            });
             return this;
         }
     }

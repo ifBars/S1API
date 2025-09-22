@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using S1API.Entities;
 
 namespace S1API.Entities.Relation
 {
@@ -96,16 +97,16 @@ namespace S1API.Entities.Relation
             WithConnectionsById((IEnumerable<string>)ids);
 
         /// <summary>
-        /// Replaces the connections list with the given NPC wrappers.
+        /// Replaces the connections list using API NPC wrappers. Nulls are ignored.
         /// </summary>
-        public NPCRelationshipDataBuilder WithConnections(params NPC[] npcs)
+        public NPCRelationshipDataBuilder WithConnections(IEnumerable<NPC> npcs)
         {
             _connectionIDs.Clear();
             if (npcs == null)
                 return this;
             foreach (var npc in npcs)
             {
-                var id = npc?.S1NPC?.ID;
+                var id = npc?.ID;
                 if (string.IsNullOrEmpty(id))
                     continue;
                 if (!_connectionIDs.Contains(id, StringComparer.OrdinalIgnoreCase))
@@ -115,9 +116,15 @@ namespace S1API.Entities.Relation
         }
 
         /// <summary>
+        /// Replaces the connections list using API NPC wrappers. Nulls are ignored.
+        /// </summary>
+        public NPCRelationshipDataBuilder WithConnections(params NPC[] npcs) =>
+            WithConnections((IEnumerable<NPC>)npcs);
+
+        /// <summary>
         /// INTERNAL: Applies the configured values to a relation data instance.
         /// </summary>
-        internal void ApplyTo(S1Relation.NPCRelationData relationData, S1NPCs.NPC owner)
+        public void ApplyTo(S1Relation.NPCRelationData relationData, S1NPCs.NPC owner)
         {
             if (relationData == null)
                 return;

@@ -18,6 +18,8 @@ using UnityEngine;
 using S1API.Properties;
 using S1API.Economy;
 using S1API.Products;
+using S1API.Properties.Interfaces;
+using S1API.Properties.Internal;
 
 namespace S1API.Entities.Customer
 {
@@ -29,7 +31,8 @@ namespace S1API.Entities.Customer
     {
         private readonly S1Economy.CustomerData _data;
 
-        public CustomerDataBuilder()
+        // Runtime instantiation is disabled; only NPCPrefabBuilder can create this
+        internal CustomerDataBuilder()
         {
             _data = ScriptableObject.CreateInstance<S1Economy.CustomerData>();
             _data.DefaultAffinityData = new S1Economy.CustomerAffinityData();
@@ -274,6 +277,20 @@ namespace S1API.Entities.Customer
             return this;
         }
 
+        /// <summary>
+        /// Assigns preferred properties from API property abstractions (tokens or wrappers).
+        /// Does not expose game types to mod developers.
+        /// </summary>
+        public CustomerDataBuilder WithPreferredProperties(params PropertyBase[] properties)
+        {
+            if (properties == null || properties.Length == 0)
+                return this;
+
+            var resolved = PropertyResolver.ResolveToGameProperties(properties);
+            _data.PreferredProperties = ToIl2CppList(resolved);
+            return this;
+        }
+
         internal S1Economy.CustomerData BuildInternal() => _data;
 
 #if (IL2CPPMELON)
@@ -294,5 +311,3 @@ namespace S1API.Entities.Customer
 #endif
     }
 }
-
-
