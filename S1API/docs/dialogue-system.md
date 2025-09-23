@@ -419,4 +419,3 @@ Now that you understand the dialogue system, explore:
 - **[Customer Behavior](customer-behavior.md)** - Customer system details
 - **[Relationship Management](relationship-management.md)** - Relationship system
 - **[Runtime Management](runtime-management.md)** - NPC lifecycle and properties
-- **[Examples](examples.md)** - Complete working examples

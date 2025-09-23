@@ -413,4 +413,3 @@ Now that you understand appearance customization, explore:
 - **[Scheduling System](scheduling-system.md)** - NPC movement and activities
 - **[Dialogue System](dialogue-system.md)** - Interactive conversations
 - **[Runtime Management](runtime-management.md)** - NPC lifecycle and properties
-- **[Examples](examples.md)** - Complete working examples

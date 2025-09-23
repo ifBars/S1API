@@ -424,4 +424,3 @@ Now that you understand the scheduling system, explore:
 - **[Dialogue System](dialogue-system.md)** - Interactive conversations
 - **[Customer Behavior](customer-behavior.md)** - Customer system details
 - **[Runtime Management](runtime-management.md)** - NPC lifecycle and properties
-- **[Examples](examples.md)** - Complete working examples

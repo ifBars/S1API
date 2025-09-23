@@ -386,4 +386,3 @@ Now that you understand relationship management, explore:
 - **[Customer Behavior](customer-behavior.md)** - Customer system details
 - **[Scheduling System](scheduling-system.md)** - NPC schedules and activities
 - **[Runtime Management](runtime-management.md)** - NPC lifecycle and properties
-- **[Examples](examples.md)** - Complete working examples

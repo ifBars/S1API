@@ -29,8 +29,7 @@ The Custom NPC system is documented across multiple focused pages:
 - **[Customer Behavior](customer-behavior.md)** - NPCs as business customers
 - **[Relationship Management](relationship-management.md)** - NPC relationships and connections
 
-### Examples & Reference
-- **[Examples](examples.md)** - Complete working examples and best practices
+### API Reference
 - **[API Reference](api-reference.md)** - Detailed API documentation
 
 ## Quick Start
@@ -136,7 +135,6 @@ Each NPC has access to several component systems:
 
 ## Getting Help
 
-- Check the [Examples](examples.md) page for complete working examples
 - Review the [API Reference](api-reference.md) for detailed method documentation
 - Look at the example projects in the repository for real-world usage patterns
 
@@ -144,5 +142,4 @@ Each NPC has access to several component systems:
 
 1. Read [Basic NPC Creation](basic-npc-creation.md) to understand the fundamentals
 2. Explore [Prefab Configuration](prefab-configuration.md) to learn about component setup
-3. Check out [Examples](examples.md) for complete working implementations
-4. Refer to individual system pages for detailed feature documentation
+3. Refer to individual system pages for detailed feature documentation

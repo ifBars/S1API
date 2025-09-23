@@ -461,4 +461,3 @@ Now that you understand prefab configuration, explore:
 - **[Scheduling System](scheduling-system.md)** - Detailed schedule management
 - **[Customer Behavior](customer-behavior.md)** - Customer system details
 - **[Relationship Management](relationship-management.md)** - Relationship system
-- **[Examples](examples.md)** - Complete working examples

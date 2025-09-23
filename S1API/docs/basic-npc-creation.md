@@ -390,4 +390,3 @@ Now that you understand the basics of NPC creation, you can explore:
 - **[Appearance Customization](appearance-customization.md)** - Visual customization
 - **[Scheduling System](scheduling-system.md)** - Movement and activities
 - **[Dialogue System](dialogue-system.md)** - Interactive conversations
-- **[Examples](examples.md)** - Complete working examples

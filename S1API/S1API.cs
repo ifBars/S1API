@@ -1,7 +1,7 @@
 ﻿using MelonLoader;
 using S1API.Internal.Lifecycle;
 
-[assembly: MelonInfo(typeof(S1API.S1API), "S1API (Forked by Bars)", "1.8.7", "KaBooMa")]
+[assembly: MelonInfo(typeof(S1API.S1API), "S1API (Forked by Bars)", "2.0.0", "KaBooMa")]
 
 namespace S1API
 {

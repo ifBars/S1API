@@ -469,6 +469,5 @@ protected override void OnCreated()
 
 Now that you understand runtime management, explore:
 
-- **[Examples](examples.md)** - Complete working examples
 - **[API Reference](api-reference.md)** - Detailed API documentation
 - **[Troubleshooting](troubleshooting.md)** - Common issues and solutions
