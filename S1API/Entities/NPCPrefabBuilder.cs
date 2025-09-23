@@ -101,8 +101,12 @@ namespace S1API.Entities
                     var builder = new CustomerDataBuilder();
                     configure(builder);
                     var data = builder.BuildInternal();
-                    var field = typeof(S1Economy.Customer).GetField("customerData", BindingFlags.NonPublic | BindingFlags.Instance);
+#if MONOMELON
+                    var field = typeof(S1Economy.Customer).GetField("customerData", System.Reflection.BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
                     field?.SetValue(customer, data);
+#else
+                    customer.customerData = data;
+#endif
                 }
                 catch { }
             }

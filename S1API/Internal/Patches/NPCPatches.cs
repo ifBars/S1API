@@ -317,12 +317,34 @@ namespace S1API.Internal.Patches
                         try
                         {
                             apiNpc.Customer.EnsureCustomer();
+                            var npcType = apiNpc.GetType();
+                            bool hasDefaults = NPC.HasCustomerDefaultsForType(npcType);
+                            if (hasDefaults)
+                            {
+                                var defaultData = NPC.BuildCustomerDefaultsForType(npcType);
+                                if (defaultData != null)
+                                {
+                                    bool setOk = NPC.TrySetCustomerDataOnComponent(customerComponent, defaultData);
+                                    if (!setOk)
+                                    {
+                                        try
+                                        {
+#if IL2CPPMELON
+                                            customerComponent.customerData = defaultData;
+                                            customerComponent.currentAffinityData = defaultData.DefaultAffinityData;
+#endif
+                                        }
+                                        catch { }
+                                    }
+                                }
+                            }
                             customerComponent.enabled = true;
                             customerComponent.Load(cust);
                         }
                         catch (Exception ex)
                         {
                             Logger.Warning($"NPCLoader_Load_Prefix: Exception loading Customer data for '{baseData.ID}': {ex.Message}");
+                            Logger.Warning($"NPCLoader_Load_Prefix: Stack trace: {ex.StackTrace}");
                         }
                     }
                 }

@@ -291,6 +291,28 @@ protected override void OnCreated()
 }
 ```
 
+### Important: Avoid StopOverride inside node/choice callbacks
+
+Calling `NPCDialogue.StopOverride()` from within dialogue event callbacks such as `OnNodeDisplayed` or a choice-selected callback can cause a stack overflow. This happens because `StopOverride()` calls into the underlying `DialogueHandler.StopOverride()`, which immediately re-displays the current node. Re-displaying the node re-fires `onDialogueNodeDisplayed`, which calls your callback again, creating an infinite recursion loop.
+
+Recommended approaches:
+
+- Defer the stop: Schedule the call to `StopOverride()` after the current frame or a small delay instead of invoking it synchronously inside the callback. For example, use a coroutine or a delayed action to call it on the next update tick.
+- Avoid re-entrant changes: If you must modify overrides in response to node display, set a flag and perform `StopOverride()` from a safe context outside the callback.
+
+Symptoms of doing this incorrectly include a stack trace similar to:
+
+```
+Stack overflow.
+   at UnityEngine.GameObject.GetComponentInChildren(...)
+   at S1API.Entities.NPCDialogue.get_Handler()
+   at S1API.Entities.NPCDialogue.StopOverride()
+   at S1API.Entities.NPCDialogue.<callback>()
+   at S1API.Entities.NPCDialogue.Internal_OnNode(System.String)
+```
+
+If you encounter this, remove the direct `StopOverride()` call from inside the node/choice callback and defer it.
+
 ### Dialogue Features
 
 - **Modular Design**: Separate dialogue modules for different contexts
@@ -299,6 +321,72 @@ protected override void OnCreated()
 - **Dynamic Navigation**: Jump between dialogue nodes programmatically
 - **Worldspace Text**: Show dialogue text above NPC
 - **Reactions**: Trigger NPC reactions and animations
+
+### Example: Pay-for-Info container (mirrors ExamplePhysicalNPC)
+
+This pattern demonstrates building a small reactions database, registering a container, wiring a payment choice, and ensuring the container is used on interact. It mirrors the approach used in the example NPC shipped with the repo.
+
+```csharp
+protected override void OnCreated()
+{
+    base.OnCreated();
+
+    // Optional: world text or intro message
+    SendTextMessage("Hello from a physical NPC!", responseDelay: 0.5f);
+
+    // 1) Build reactions module at runtime (appends if DB already exists)
+    Dialogue.BuildAndSetDatabase(db => {
+        db.WithModuleEntry("Reactions", "GREETING", "Welcome.");
+    });
+
+    // 2) Register container with branching based on player's cash
+    Dialogue.BuildAndRegisterContainer("AlexShop", c => {
+        c.AddNode("ENTRY", "Want some info for $100?", ch => {
+            ch.Add("PAY_FOR_INFO", "Pay $100", "INFO_NODE")
+              .Add("NO_THANKS", "No thanks", "EXIT");
+        });
+
+        c.AddNode("INFO_NODE", "Get scammed nerd.", ch => {
+            ch.Add("BYE", "Thanks", "EXIT");
+        });
+
+        c.AddNode("NOT_ENOUGH", "You don't have enough cash.", ch => {
+            ch.Add("BACK", "I'll come back.", "ENTRY");
+        });
+
+        c.AddNode("EXIT", "See you.");
+    });
+
+    // 3) Handle payment; route to NOT_ENOUGH if short on cash
+    Dialogue.OnChoiceSelected("PAY_FOR_INFO", () => {
+        const float price = 100f;
+        var balance = Money.GetCashBalance();
+        if (balance >= price)
+        {
+            Money.ChangeCashBalance(-price, visualizeChange: true, playCashSound: true);
+            Dialogue.JumpTo("AlexShop", "INFO_NODE");
+        }
+        else
+        {
+            Dialogue.JumpTo("AlexShop", "NOT_ENOUGH");
+        }
+    });
+
+    // 4) Use this container when the player interacts with the NPC
+    Dialogue.UseContainerOnInteract("AlexShop");
+
+    // 5) Enable schedule and set basic properties
+    Schedule.Enable();
+    Schedule.InitializeActions();
+    Region = Region.Northtown;
+    Aggressiveness = 5f;
+}
+```
+
+Notes:
+- `Dialogue.BuildAndSetDatabase` appends to an existing DB if one is already present on the handler; otherwise it assigns and initializes a new DB.
+- `Dialogue.BuildAndRegisterContainer` replaces a container with the same name if it already exists.
+- Use `Dialogue.JumpTo(containerName, nodeLabel)` to navigate programmatically without closing the current dialogue.
 
 ## Customer Behavior
 

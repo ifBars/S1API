@@ -131,11 +131,7 @@ namespace S1API.Entities
             }
             catch { /* no-op: fallback to local prefab */ }
 
-            // Ensure Customer component exists on the prefab before instantiation
-            // This ensures both server and client have identical NetworkBehaviour lists
             GameObject prefabToUse = spawnableNetPrefab?.gameObject ?? prefab;
-            // Do not auto-add Customer; per-NPC prefabs may or may not include it
-
             NetworkObject instanceNo = UnityEngine.Object.Instantiate<NetworkObject>(spawnableNetPrefab ?? netPrefab);
             GameObject instance = instanceNo.gameObject;
             if (S1NPCs.NPCManager.InstanceExists && S1NPCs.NPCManager.Instance.NPCContainer != null)
@@ -215,66 +211,6 @@ namespace S1API.Entities
                     Debug.LogWarning($"[S1API] {npcType.Name}.ConfigurePrefab failed: {ex.Message}");
                 }
 
-#if (IL2CPPBEPINEX || IL2CPPMELON)
-                // If Customer still isn't present under IL2CPP, clone-and-replace the prefab and wire fields.
-                try
-                {
-                    GameObject currentGo = prefabNO.gameObject;
-                    var baseNpcOnPrefab = currentGo.GetComponent<S1NPCs.NPC>();
-                    var existingCustomer = currentGo.GetComponent<S1Economy.Customer>();
-                    if (existingCustomer == null && baseNpcOnPrefab != null)
-                    {
-                        NetworkObject clonedNo = UnityEngine.Object.Instantiate<NetworkObject>(prefabNO);
-                        GameObject clonedGo = clonedNo.gameObject;
-
-                        // Ensure Customer exists on the clone and is initially disabled; it will be enabled post-spawn.
-                        var cust = clonedGo.GetComponent<S1Economy.Customer>() ?? clonedGo.AddComponent<S1Economy.Customer>();
-                        if (cust != null)
-                        {
-                            try
-                            {
-#if (IL2CPPBEPINEX || IL2CPPMELON)
-                                var bf = BindingFlags.NonPublic | BindingFlags.Instance;
-#else
-                                var bf = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
-#endif
-                                // Wire Customer.npc
-                                var npcField = typeof(S1Economy.Customer).GetField("npc", bf);
-                                npcField?.SetValue(cust, clonedGo.GetComponent<S1NPCs.NPC>());
-
-                                // Wire NetworkBehaviour._networkObjectCache if available
-                                var nbType = typeof(NetworkBehaviour);
-#if (IL2CPPBEPINEX || IL2CPPMELON)
-                                var cacheField = nbType.GetField("_networkObjectCache", BindingFlags.NonPublic | BindingFlags.Instance);
-#else
-                                var cacheField = nbType.GetField("_networkObjectCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-#endif
-                                if (cacheField != null)
-                                    cacheField.SetValue(cust, clonedNo);
-                            }
-                            catch { /* best-effort wiring; continue */ }
-
-                            try { cust.enabled = false; } catch { }
-                        }
-
-                        // Destroy the original prefab GameObject so SpawnablePrefabs entry becomes null at that slot
-                        try { UnityEngine.Object.Destroy(currentGo); } catch { }
-
-                        // Best-effort: remove nulls from SpawnablePrefabs via reflection if API exists
-                        try
-                        {
-                            var removeNull = spawnablePrefabs.GetType().GetMethod("RemoveNull");
-                            removeNull?.Invoke(spawnablePrefabs, null);
-                        }
-                        catch { }
-
-                        // Continue with the cloned prefab
-                        prefabNO = clonedNo;
-                    }
-                }
-                catch { /* continue with original prefab if anything fails */ }
-#endif
-
                 // Register as spawnable so FishNet assigns stable behaviour indices and can network-spawn
                 try
                 {
@@ -311,6 +247,55 @@ namespace S1API.Entities
             TypeToCustomerDefaults[npcType] = configure;
         }
 
+        // Helper accessors for loader-time default application
+        internal static bool HasCustomerDefaultsForType(System.Type npcType)
+        {
+            if (npcType == null)
+                return false;
+            return TypeToCustomerDefaults.TryGetValue(npcType, out var cfg) && cfg != null;
+        }
+
+        internal static System.Action<CustomerDataBuilder> GetCustomerDefaultsForType(System.Type npcType)
+        {
+            if (npcType == null)
+                return null;
+            TypeToCustomerDefaults.TryGetValue(npcType, out var cfg);
+            return cfg;
+        }
+
+        internal static S1Economy.CustomerData BuildCustomerDefaultsForType(System.Type npcType)
+        {
+            var cfg = GetCustomerDefaultsForType(npcType);
+            if (cfg == null)
+                return null;
+            var builder = new CustomerDataBuilder();
+            cfg(builder);
+            return builder.BuildInternal();
+        }
+
+        internal static bool TrySetCustomerDataOnComponent(S1Economy.Customer customerComponent, S1Economy.CustomerData data)
+        {
+            if (customerComponent == null || data == null)
+                return false;
+            try
+            {
+#if MONOMELON
+                var field = typeof(S1Economy.Customer).GetField("customerData", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                field?.SetValue(customerComponent, data);
+                var field2 = typeof(S1Economy.Customer).GetField("currentAffinityData", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                field2?.SetValue(customerComponent, data.DefaultAffinityData);
+#else
+                customerComponent.customerData = data;
+                customerComponent.currentAffinityData = data.DefaultAffinityData;
+#endif
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         internal static void RegisterRelationshipDefaultsForType(System.Type npcType, System.Action<NPCRelationshipDataBuilder> configure)
         {
             if (npcType == null || configure == null)
@@ -325,7 +310,7 @@ namespace S1API.Entities
             TypeToSpawnPosition[npcType] = (position, rotation);
         }
 
-        #endregion
+#endregion
         
         #region Protected Members
 
@@ -1380,36 +1365,7 @@ namespace S1API.Entities
                             var hasCustomer = owner.gameObject.GetComponent<S1Economy.Customer>() != null;
                             if (hasCustomer)
                             {
-                                // Apply per-type prefab customer defaults, if any, unless this NPC is being loaded from save
-                                if (!owner._wasLoadedFromSave)
-                                {
-                                    try
-                                    {
-                                        if (TypeToCustomerDefaults.TryGetValue(owner.GetType(), out var custCfg) && custCfg != null)
-                                        {
-                                            var builder = new CustomerDataBuilder();
-                                            custCfg(builder);
-                                            var data = builder.BuildInternal();
-                                            var customer = owner.gameObject.GetComponent<S1Economy.Customer>();
-                                            var field = typeof(S1Economy.Customer).GetField("customerData", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                                            field?.SetValue(customer, data);
-                                        }
-                                    }
-                                    catch { }
-                                }
-
-                                owner.Customer.EnsureCustomer();
-
-                                // Under IL2CPP the component may start disabled; ensure required behaviours are enabled
-#if (IL2CPPBEPINEX || IL2CPPMELON)
-                                try
-                                {
-                                    var customerComp = owner.gameObject.GetComponent<S1Economy.Customer>();
-                                    if (customerComp != null && customerComp.enabled == false)
-                                        customerComp.enabled = true;
-                                }
-                                catch { }
-#endif
+                                // owner.Customer.EnsureCustomer();
                             }
                         }
                     }
@@ -1482,7 +1438,7 @@ namespace S1API.Entities
             }
         }
 
-        #endregion
+#endregion
 
         /// <summary>
         /// Pre-creates an <see cref="S1NPCs.NPCScheduleManager"/> and all non-abstract <see cref="S1NPCsSchedules.NPCAction"/>s

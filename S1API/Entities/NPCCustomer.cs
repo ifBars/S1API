@@ -53,6 +53,7 @@ namespace S1API.Entities
     public sealed class NPCCustomer
     {
         internal readonly NPC NPC;
+        private static readonly Logging.Log Logger = new Logging.Log("NPCCustomer");
 
         internal NPCCustomer(NPC npc)
         {
@@ -72,26 +73,30 @@ namespace S1API.Entities
         {
             if (Component == null)
             {
-                // Do not add network behaviours at runtime; require Customer on prefab
-                MelonLoader.MelonLogger.Warning("[S1API] Customer component not present on NPC prefab. Add it via NPC.ConfigurePrefab(builder.EnsureCustomer()).");
+                Logger.Warning($"Customer component not present on NPC prefab for {NPC.ID}. Add it via NPC.ConfigurePrefab(builder.EnsureCustomer()).");
                 return;
             }
-
-            EnsureCustomerData(Component);
-            WireCoreReferences(Component);
-            InitializeRuntimeState(Component);
-            EnsureUnityEvents(Component);
-            TryNetworkInitialize(Component);
-        }
-
-        /// <summary>
-        /// Deprecated: Declare defaults in NPC.ConfigurePrefab via NPCPrefabBuilder.WithCustomerDefaults.
-        /// Runtime mutation is no longer supported to preserve save/load consistency.
-        /// </summary>
-        [Obsolete("Declare defaults in NPC.ConfigurePrefab via NPCPrefabBuilder.WithCustomerDefaults. Runtime mutation is disabled.")]
-        public void BuildAndSetCustomerData(Action<CustomerDataBuilder> configure)
-        {
-            MelonLogger.Warning("[S1API] BuildAndSetCustomerData is deprecated. Use NPCPrefabBuilder.WithCustomerDefaults in ConfigurePrefab.");
+            
+            try
+            {
+                EnsureCustomerData(Component);
+                
+                S1Economy.CustomerData verifyData = null;
+#if MONOMELON
+                verifyData = (S1Economy.CustomerData)customerDataField?.GetValue(Component);
+#else
+                verifyData = Component.CustomerData;
+#endif
+                WireCoreReferences(Component);
+                InitializeRuntimeState(Component);
+                EnsureUnityEvents(Component);
+                TryNetworkInitialize(Component);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Exception in EnsureCustomer for {NPC.ID}: {ex.Message}");
+                Logger.Warning($"Stack trace: {ex.StackTrace}");
+            }
         }
 
         /// <summary>
@@ -191,14 +196,17 @@ namespace S1API.Entities
         {
             try
             {
-                // Set protected NPC property via reflection so Customer has a back-reference immediately
                 var npcProp = typeof(S1Economy.Customer).GetProperty("NPC", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                 var setMethod = npcProp?.GetSetMethod(true);
-                setMethod?.Invoke(customer, new object[] { NPC.S1NPC });
+                if (setMethod != null)
+                {
+                    setMethod.Invoke(customer, new object[] { NPC.S1NPC });
+                }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // ignore
+                Logger.Warning($"Exception in WireCoreReferences for {NPC.ID}: {ex.Message}");
+                Logger.Warning($"Stack trace: {ex.StackTrace}");
             }
         }
 
@@ -206,7 +214,29 @@ namespace S1API.Entities
         {
             try
             {
-                var data = (S1Economy.CustomerData)customerDataField?.GetValue(customer);
+                var dataViaProperty = customer.CustomerData;
+                
+                S1Economy.CustomerData data = null;
+#if MONOMELON
+                
+                if (customerDataField == null)
+                {
+                    Logger.Warning($"customerDataField is null, attempting to find field again for {NPC.ID}");
+                    customerDataField = typeof(S1Economy.Customer).GetField("customerData",
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                }
+                
+                data = (S1Economy.CustomerData)customerDataField?.GetValue(customer);
+#else
+                data = customer.CustomerData;
+#endif
+                
+                // Use property result if reflection failed
+                if (data == null && dataViaProperty != null)
+                {
+                    data = dataViaProperty;
+                }
+                
                 if (data == null)
                 {
                     // Create a minimal, safe CustomerData so base game logic has sane defaults
@@ -232,12 +262,31 @@ namespace S1API.Entities
                     data.DependenceMultiplier = 1f;
                     data.BaseAddiction = 0f;
 
-                    customerDataField?.SetValue(customer, data);
+                    
+#if MONOMELON
+                    // Try reflection first
+                    if (customerDataField != null)
+                    {
+                        customerDataField.SetValue(customer, data);
+                    }
+                    else
+                    {
+                        Logger.Warning($"Attempting manual field setting");
+                        customerDataField.SetValue(customer, data);
+                        if (currentAffinityDataField != null)
+                            currentAffinityDataField.SetValue(customer, data.DefaultAffinityData);
+                    }
+#else
+                    // Use property assignment for IL2CPP
+                    customer.customerData = data;
+                    customer.currentAffinityData = data.DefaultAffinityData;
+#endif
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // ignore; best-effort defaults
+                Logger.Warning($"Exception in EnsureCustomerData for {NPC.ID}: {ex.Message}");
+                Logger.Warning($"Stack trace: {ex.StackTrace}");
             }
         }
 
@@ -245,14 +294,24 @@ namespace S1API.Entities
         {
             try
             {
-                var data = (S1Economy.CustomerData)customerDataField?.GetValue(customer);
+                S1Economy.CustomerData data;
+#if MONOMELON
+                data = (S1Economy.CustomerData)customerDataField?.GetValue(customer);
+#else
+                data = customer.CustomerData;
+#endif
                 if (data == null)
                 {
                     EnsureCustomerData(customer);
+#if MONOMELON
                     data = (S1Economy.CustomerData)customerDataField?.GetValue(customer);
+#else
+                    data = customer.CustomerData;
+#endif
                 }
 
                 // currentAffinityData = new CustomerAffinityData(); data.DefaultAffinityData.CopyTo(currentAffinityData)
+#if MONOMELON
                 var currentAffinityField = typeof(S1Economy.Customer).GetField("currentAffinityData", BindingFlags.NonPublic | BindingFlags.Instance);
                 var currentAffinity = currentAffinityField?.GetValue(customer) as S1Economy.CustomerAffinityData;
                 if (currentAffinity == null)
@@ -265,10 +324,27 @@ namespace S1API.Entities
                     }
                     currentAffinityField?.SetValue(customer, currentAffinity);
                 }
+#else
+                var currentAffinity = customer.currentAffinityData;
+                if (currentAffinity == null)
+                {
+                    currentAffinity = new S1Economy.CustomerAffinityData();
+                    // Copy default affinities if present
+                    if (data != null && data.DefaultAffinityData != null)
+                    {
+                        data.DefaultAffinityData.CopyTo(currentAffinity);
+                    }
+                    customer.currentAffinityData = currentAffinity;
+                }
+#endif
 
                 // Set starting addiction from data.BaseAddiction
-                var currentAddictionProp = typeof(S1Economy.Customer).GetProperty("CurrentAddiction", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-                currentAddictionProp?.SetValue(customer, (float)(data?.BaseAddiction ?? 0f));
+#if MONOMELON
+                var currentAddictionField = typeof(S1Economy.Customer).GetField("CurrentAddiction", BindingFlags.Public | BindingFlags.Instance);
+                currentAddictionField?.SetValue(customer, (float)(data?.BaseAddiction ?? 0f));
+#else
+                customer.CurrentAddiction = (float)(data?.BaseAddiction ?? 0f);
+#endif
 
                 // Ensure a valid default delivery location to avoid nulls during contract creation
                 try
@@ -292,7 +368,11 @@ namespace S1API.Entities
                 // Ensure DealSignal exists and is wired to the customer's schedule manager
                 try
                 {
+#if MONOMELON
                     var dealSignalField = typeof(S1Economy.Customer).GetField("DealSignal", BindingFlags.Public | BindingFlags.Instance);
+#else
+                    var dealSignalField = typeof(S1Economy.Customer).GetProperty("DealSignal", BindingFlags.Public | BindingFlags.Instance);
+#endif
                     var existingSignal = dealSignalField?.GetValue(customer) as S1Schedules.NPCSignal_WaitForDelivery;
                     if (existingSignal == null)
                     {
@@ -331,21 +411,27 @@ namespace S1API.Entities
             try
             {
                 // onUnlocked
+#if MONOMELON
+                var onDealCompletedField = typeof(S1Economy.Customer).GetField("onDealCompleted", BindingFlags.Public | BindingFlags.Instance);
                 var onUnlockedField = typeof(S1Economy.Customer).GetField("onUnlocked", BindingFlags.Public | BindingFlags.Instance);
+                var onContractAssignedField = typeof(S1Economy.Customer).GetField("onContractAssigned", BindingFlags.Public | BindingFlags.Instance);
+#else
+                var onDealCompletedField = typeof(S1Economy.Customer).GetProperty("onDealCompleted", BindingFlags.Public | BindingFlags.Instance);
+                var onUnlockedField = typeof(S1Economy.Customer).GetProperty("onUnlocked", BindingFlags.Public | BindingFlags.Instance);
+                var onContractAssignedField = typeof(S1Economy.Customer).GetProperty("onContractAssigned", BindingFlags.Public | BindingFlags.Instance);
+#endif
                 if (onUnlockedField != null && onUnlockedField.GetValue(customer) == null)
                 {
                     onUnlockedField.SetValue(customer, new UnityEvent());
                 }
 
                 // onDealCompleted
-                var onDealCompletedField = typeof(S1Economy.Customer).GetField("onDealCompleted", BindingFlags.Public | BindingFlags.Instance);
                 if (onDealCompletedField != null && onDealCompletedField.GetValue(customer) == null)
                 {
                     onDealCompletedField.SetValue(customer, new UnityEvent());
                 }
 
                 // onContractAssigned (UnityEvent<Contract>)
-                var onContractAssignedField = typeof(S1Economy.Customer).GetField("onContractAssigned", BindingFlags.Public | BindingFlags.Instance);
                 if (onContractAssignedField != null && onContractAssignedField.GetValue(customer) == null)
                 {
                     // Create a UnityEvent dynamically for generic arg if missing
@@ -476,10 +562,20 @@ namespace S1API.Entities
             catch (Exception) { }
         }
 
+#if MONOMELON
         private FieldInfo customerDataField = typeof(S1Economy.Customer).GetField("customerData",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+#else
+        // In IL2CPP, customerData is a property, not a field
+#endif
+#if MONOMELON
+        private FieldInfo currentAffinityDataField = typeof(S1Economy.Customer).GetField("currentAffinityData",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+#else
+        // In IL2CPP, currentAffinityData is a property, not a field
+#endif
         private MethodInfo setupDialogueMethod = typeof(S1Economy.Customer).GetMethod("SetUpDialogue",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
 
         private static void SetNonPublicInstanceField(object target, string fieldName, object value)
         {
@@ -490,7 +586,7 @@ namespace S1API.Entities
                 FieldInfo field = null;
                 while (type != null && field == null)
                 {
-                    field = type.GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+                    field = type.GetField(fieldName, BindingFlags.Instance | System.Reflection.BindingFlags.Public | BindingFlags.NonPublic);
                     type = type.BaseType;
                 }
                 field?.SetValue(target, value);
