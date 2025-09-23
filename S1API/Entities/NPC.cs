@@ -1120,12 +1120,12 @@ namespace S1API.Entities
                 S1NPC.Awareness.VisionCone = existing;
             }
 
-            if (S1NPC.Awareness.VisionCone.StatesOfInterest == null || S1NPC.Awareness.VisionCone.StatesOfInterest.Count == 0)
+            if (S1NPC.Awareness.VisionCone.DefaultStatesOfInterest == null || S1NPC.Awareness.VisionCone.DefaultStatesOfInterest.Count == 0)
             {
-                S1NPC.Awareness.VisionCone.StatesOfInterest.Add(new S1Vision.VisionCone.StateContainer
+                S1NPC.Awareness.VisionCone.DefaultStatesOfInterest.Add(new S1Vision.VisionCone.StateContainer
                 {
-                    state = S1Vision.EVisualState.PettyCrime,
-                    RequiredNoticeTime = 0.1f
+                    state = S1Vision.EVisualState.PettyCrime
+                    // RequiredNoticeTime = 0.1f
                 });
             }
 
