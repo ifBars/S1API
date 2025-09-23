@@ -45,6 +45,7 @@ using HarmonyLib;
 
 using MelonLoader;
 using S1API.Entities;
+using S1API.Entities.Relation;
 using S1API.Internal.Utils;
 using S1API.Map;
 using UnityEngine.SceneManagement;
@@ -379,6 +380,23 @@ namespace S1API.Internal.Patches
                 var wrap = FindWrapperForS1Npc(s1BaseNpc);
                 if (wrap != null)
                 {
+                    // Apply relationship defaults for connections even after load (connections aren't saved by base game)
+                    var npcType = wrap.GetType();
+                    if (NPC.TypeToRelationshipDefaults.TryGetValue(npcType, out var relCfg) && relCfg != null)
+                    {
+                        var builder = new NPCRelationshipDataBuilder();
+                        relCfg(builder);
+                        var rel = s1BaseNpc.RelationData;
+                        if (rel != null)
+                        {
+                            // Only apply connections if the list is empty (connections aren't persisted)
+                            if (rel.Connections == null || rel.Connections.Count == 0)
+                            {
+                                builder.ApplyTo(rel, s1BaseNpc);
+                            }
+                        }
+                    }
+                    
                     // Mark that this instance was hydrated from save data to prevent defaults overwrite
                     typeof(NPC).GetMethod("MarkLoadedFromSave", BindingFlags.NonPublic | BindingFlags.Instance)?.Invoke(wrap, null);
                 }
