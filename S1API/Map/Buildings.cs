@@ -8,6 +8,7 @@ using ScheduleOne.Map;
 using Il2Cpp;
 using Il2CppScheduleOne.Map;
 #endif
+using UnityEngine;
 
 namespace S1API.Map
 {
@@ -60,7 +61,8 @@ namespace S1API.Map
 #else
                 var guid = new Il2CppSystem.Guid(_guid);
 #endif
-                GUIDManager.GetObject<NPCEnterableBuilding>(guid);
+                // Assign the resolved object so subsequent calls are fast
+                _gameBuilding = GUIDManager.GetObject<NPCEnterableBuilding>(guid);
             }
             catch { /* ignore */ }
             return _gameBuilding;
@@ -77,6 +79,35 @@ namespace S1API.Map
         /// </summary>
         public static readonly List<Building> All = new List<Building>();
 
+        private static bool _attemptedDiscovery = false;
+
+        /// <summary>
+        /// Attempts a lazy scene discovery of all NPCEnterableBuilding instances
+        /// when the registry is still empty (e.g. early lifecycle like ConfigurePrefab).
+        /// Safe to call multiple times; will only execute once.
+        /// </summary>
+        private static void TryLazyDiscover()
+        {
+            if (_attemptedDiscovery)
+                return;
+            _attemptedDiscovery = true;
+            try
+            {
+                // Includes inactive objects as well
+                var found = Resources.FindObjectsOfTypeAll<NPCEnterableBuilding>();
+                if (found == null || found.Length == 0)
+                    return;
+                foreach (var b in found)
+                {
+                    Register(b);
+                }
+            }
+            catch
+            {
+                // Best-effort only
+            }
+        }
+
         internal static void Register(object gameBuilding)
         {
             if (gameBuilding == null)
@@ -85,8 +116,9 @@ namespace S1API.Map
             {
                 var type = gameBuilding.GetType();
                 var guidProp = type.GetProperty("GUID", BindingFlags.Public | BindingFlags.Instance);
-                var guidVal = (Guid)(guidProp?.GetValue(gameBuilding) ?? Guid.Empty);
-                string guid = guidVal.ToString();
+                var rawGuid = guidProp?.GetValue(gameBuilding);
+                // Support both System.Guid and Il2CppSystem.Guid by using ToString()
+                string guid = rawGuid?.ToString() ?? string.Empty;
                 if (string.IsNullOrEmpty(guid)) return;
                 if (All.Any(b => string.Equals(b.GUID, guid, StringComparison.OrdinalIgnoreCase)))
                     return;
@@ -116,7 +148,11 @@ namespace S1API.Map
         public static Building[] GetAll()
         {
             if (All.Count == 0)
-                return Array.Empty<Building>();
+            {
+                TryLazyDiscover();
+                if (All.Count == 0)
+                    return Array.Empty<Building>();
+            }
             return All.OrderBy(b => b.Name).ToArray();
         }
 

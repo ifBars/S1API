@@ -263,7 +263,7 @@ namespace S1API.Entities
 #if (IL2CPPMELON || IL2CPPBEPINEX)
                     Handler.runtimeModules = new Il2CppSystem.Collections.Generic.List<S1Dialogue.DialogueModule>();
 #else
-                    Handler.runtimeModules = new System.Collections.Generic.List<S1Dialogue.DialogueModule>();
+                    runtimeModulesProperty?.SetValue(Handler, new System.Collections.Generic.List<S1Dialogue.DialogueModule>());
 #endif
                 }
             }
@@ -417,6 +417,56 @@ namespace S1API.Entities
         }
 
         /// <summary>
+        /// When the player interacts with this NPC, force using the named container once for the next dialogue.
+        /// After the conversation begins, the override is automatically cleared so subsequent interactions use normal flow.
+        /// Returns true if the container was found and applied.
+        /// </summary>
+        public bool UseContainerOnInteractOnce(string containerName)
+        {
+            if (string.IsNullOrEmpty(containerName))
+                return false;
+            EnsureHandler();
+            if (Handler == null)
+                return false;
+
+#if MONOMELON
+            var list = dialogueContainersField?.GetValue(Handler) as List<S1Dialogue.DialogueContainer>;
+#else
+            var list = Handler.dialogueContainers;
+#endif
+            if (list == null)
+                return false;
+            S1Dialogue.DialogueContainer container = null;
+            for (int i = 0; i < list.Count; i++)
+            {
+                var item = list[i];
+                if (item != null && item.name == containerName)
+                {
+                    container = item;
+                    break;
+                }
+            }
+            if (container == null)
+                return false;
+
+            var controller = Handler.GetComponent<S1Dialogue.DialogueController>();
+            if (controller == null)
+                return false;
+
+            controller.SetOverrideContainer(container);
+
+            // Clear the override as soon as the conversation actually starts
+            void ClearOnce()
+            {
+                try { controller.ClearOverrideContainer(); } catch { }
+                try { EventHelper.RemoveListener((System.Action)ClearOnce, Handler.onConversationStart); } catch { }
+            }
+            try { EventHelper.AddListener((System.Action)ClearOnce, Handler.onConversationStart); } catch { }
+
+            return true;
+        }
+
+        /// <summary>
         /// Immediately navigates this NPC's dialogue to a specific container and entry node.
         /// Returns true on success.
         /// </summary>
@@ -478,6 +528,7 @@ namespace S1API.Entities
 
 #if MONOMELON
         private FieldInfo dialogueContainersField = typeof(S1Dialogue.DialogueHandler).GetField("dialogueContainers", BindingFlags.NonPublic | BindingFlags.Instance);
+        private PropertyInfo runtimeModulesProperty = typeof(S1Dialogue.DialogueHandler).GetProperty("runtimeModules", BindingFlags.NonPublic | BindingFlags.Instance);
 #else
         // In IL2CPP, dialogueContainers is a property, not a field
 #endif

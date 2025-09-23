@@ -74,6 +74,8 @@ namespace S1API.PhoneCalls
                 return;
             }
 
+            if (S1UIPhone.CallInterface.Instance == null) return;
+
             // If the game already has a queued call, wait until it is consumed/completed.
             if (gameCallManager.QueuedCallData != null)
             {
@@ -85,7 +87,43 @@ namespace S1API.PhoneCalls
                 return;
             }
 
-            var next = PendingCalls.Dequeue();
+            S1ScriptableObjects.PhoneCallData next = null;
+            // Pull until we find a valid call or run out
+            while (PendingCalls.Count > 0)
+            {
+                var candidate = PendingCalls.Dequeue();
+                if (candidate == null)
+                    continue;
+                try
+                {
+                    if (candidate.CallerID == null)
+                    {
+                        var caller = UnityEngine.ScriptableObject.CreateInstance<S1ScriptableObjects.CallerID>();
+                        caller.Name = "Unknown Caller";
+                        caller.ProfilePicture = null;
+                        candidate.CallerID = caller;
+                    }
+                    if (candidate.Stages == null)
+                    {
+                        candidate.Stages = System.Array.Empty<S1ScriptableObjects.PhoneCallData.Stage>();
+                    }
+                }
+                catch { }
+
+                // Skip calls with no stages; they will crash UI (ShowStage(0))
+                if (candidate.Stages == null || candidate.Stages.Length == 0)
+                {
+                    continue;
+                }
+
+                next = candidate;
+                break;
+            }
+
+            if (next == null)
+            {
+                return;
+            }
             IsDispatchingToGameQueue = true;
             try
             {

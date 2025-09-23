@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Collections;
 using UnityEngine;
 
 using S1API.Entities.Appearances.AccessoryFields;
@@ -18,6 +19,7 @@ using S1API.Entities.Appearances.CustomizationFields;
 using S1API.Entities.Appearances.FaceLayerFields;
 using S1API.Internal.Utils;
 using S1API.Logging;
+using MelonLoader;
 
 namespace S1API.Entities
 {
@@ -74,35 +76,95 @@ namespace S1API.Entities
         /// </summary>
         internal void GenerateMugshot()
         {
+            // Enqueue serialized mugshot generation to avoid shared rig race conditions
             var generator = S1AvatarFramework.MugshotGenerator.Instance;
-            if (generator == null)
+            if (generator == null || generator.MugshotRig == null)
                 return;
 
-            var mugshotRig = generator.MugshotRig;
-            if (mugshotRig == null)
-                return;
-
-            S1AvatarFramework.Avatar previousAvatar = NPC.S1NPC.Avatar;
-            try
+            lock (_mugshotQueueLock)
             {
-                NPC.S1NPC.Avatar = mugshotRig;
+                _mugshotQueue.Enqueue(this);
+                if (!_isProcessingMugshots)
+                {
+                    _isProcessingMugshots = true;
+                    MelonCoroutines.Start(ProcessMugshotQueue());
+                }
+            }
+        }
+
+        private static IEnumerator ProcessMugshotQueue()
+        {
+            while (true)
+            {
+                NPCAppearance next = null;
+                lock (_mugshotQueueLock)
+                {
+                    if (_mugshotQueue.Count > 0)
+                        next = _mugshotQueue.Dequeue();
+                    else
+                    {
+                        _isProcessingMugshots = false;
+                        yield break;
+                    }
+                }
+
+                if (next == null)
+                {
+                    yield return null;
+                    continue;
+                }
+
+                var generator = S1AvatarFramework.MugshotGenerator.Instance;
+                var mugshotRig = generator != null ? generator.MugshotRig : null;
+                if (mugshotRig == null)
+                {
+                    // Nothing we can do this frame; try again next frame
+                    // Re-enqueue to avoid dropping the request if generator is momentarily unavailable
+                    lock (_mugshotQueueLock)
+                        _mugshotQueue.Enqueue(next);
+                    yield return null;
+                    continue;
+                }
+
+                // Phase 1: setup without yielding
+                S1AvatarFramework.Avatar previousAvatar = next.NPC.S1NPC.Avatar;
+                next.NPC.S1NPC.Avatar = mugshotRig;
                 Transform mugshotParent = mugshotRig.transform.parent;
                 if (mugshotParent != null)
                     mugshotParent.gameObject.SetActive(true);
 
-                NPC.S1NPC.Avatar.LoadAvatarSettings(_customAvatarSettings);
+                next.NPC.S1NPC.Avatar.LoadAvatarSettings(next._customAvatarSettings);
 
-                NPC.S1NPC.Avatar.GetMugshot((Action<Texture2D>)(generatedMugshot =>
+                bool completed = false;
+                // Trigger capture (callback will flip flag)
+                next.NPC.S1NPC.Avatar.GetMugshot((Action<Texture2D>)(generatedMugshot =>
                 {
-                    generatedMugshot.Apply();
-                    Sprite iconSprite = Sprite.Create(generatedMugshot, new Rect(0, 0, generatedMugshot.width, generatedMugshot.height), Vector2.zero);
-                    NPC.Icon = iconSprite;
+                    try
+                    {
+                        generatedMugshot.Apply();
+                        Sprite iconSprite = Sprite.Create(generatedMugshot, new Rect(0, 0, generatedMugshot.width, generatedMugshot.height), Vector2.zero);
+                        next.NPC.Icon = iconSprite;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"Failed to finalize mugshot: {ex.Message}");
+                    }
+                    finally
+                    {
+                        completed = true;
+                    }
                 }));
-            }
-            finally
-            {
-                NPC.S1NPC.Avatar = previousAvatar ?? _runtimeAvatar;
-                ApplyToAvatar(_runtimeAvatar);
+
+                // Phase 2: wait for completion
+                while (!completed)
+                    yield return null;
+
+                // Phase 3: restore without yielding
+                next.NPC.S1NPC.Avatar = previousAvatar ?? next._runtimeAvatar;
+                next.ApplyToAvatar(next._runtimeAvatar);
+
+                // Small yield between jobs to keep frame time healthy
+                yield return null;
             }
         }
 
@@ -466,6 +528,14 @@ namespace S1API.Entities
         /// INTERNAL: The max amount of layers for Accessories
         /// </summary>
         private const int MaxAccessoryLayers = 9;
+
+        #endregion
+
+        #region Static Mugshot Queue
+
+        private static readonly object _mugshotQueueLock = new object();
+        private static readonly Queue<NPCAppearance> _mugshotQueue = new Queue<NPCAppearance>();
+        private static bool _isProcessingMugshots = false;
 
         #endregion
 

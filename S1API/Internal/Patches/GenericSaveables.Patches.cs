@@ -58,7 +58,10 @@ namespace S1API.Internal.Patches
 					saveable.SaveInternal(path, ref extra);
 				}
 			}
-			catch { }
+			catch (Exception e)
+			{
+				try { MelonLoader.MelonLogger.Warning($"[Saveables] SaveManager_Save_Postfix failed: {e.Message}\n{e.StackTrace}"); } catch { }
+			}
 		}
 
 		[HarmonyPatch(typeof(S1Loaders.NPCsLoader), "Load")]
@@ -86,18 +89,24 @@ namespace S1API.Internal.Patches
 						var lm = S1Persistence.LoadManager.Instance;
 						void InitializeOnLoadComplete()
 						{
-							try
-							{
-								EventHelper.RemoveListener(InitializeOnLoadComplete, lm.onLoadComplete);
-								((IRegisterable)saveable).CreateInternal();
-							}
-							catch { }
+						    try
+						    {
+							    EventHelper.RemoveListener(InitializeOnLoadComplete, lm.onLoadComplete);
+							    ((IRegisterable)saveable).CreateInternal();
+						    }
+						    catch (Exception e)
+						    {
+							    try { MelonLoader.MelonLogger.Warning($"[Saveables] InitializeOnLoadComplete failed: {e.Message}\n{e.StackTrace}"); } catch { }
+						    }
 						}
 						EventHelper.AddListener(InitializeOnLoadComplete, lm.onLoadComplete);
 					}
 				}
 			}
-			catch { }
+			catch (Exception e)
+			{
+				try { MelonLoader.MelonLogger.Warning($"[Saveables] AfterBaseLoaders failed: {e.Message}\n{e.StackTrace}"); } catch { }
+			}
 		}
 	}
 }
