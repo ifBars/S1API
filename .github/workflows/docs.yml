@@ -2,9 +2,9 @@ name: Build and Deploy Documentation
 
 on:
   push:
-    branches: [ master, main, stable ]
+    branches: [ master, main, stable, npc-prefabs ]
   pull_request:
-    branches: [ master, main, stable ]
+    branches: [ master, main, stable, npc-prefabs ]
   workflow_dispatch:
 
 permissions:
@@ -171,7 +171,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable'
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable' || github.ref == 'refs/heads/npc-prefabs'
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
