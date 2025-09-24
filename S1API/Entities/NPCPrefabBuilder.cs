@@ -14,6 +14,7 @@ using UnityEngine;
 using S1API.Entities.Schedule;
 using S1API.Entities.Customer;
 using S1API.Entities.Relation;
+using System.Collections.Generic;
 
 namespace S1API.Entities
 {
@@ -65,21 +66,59 @@ namespace S1API.Entities
         /// <summary>
         /// Plan and predeclare schedule actions on the prefab using the API schedule builder.
         /// The plan is applied at runtime to activate and configure precreated actions.
+        /// Mirrors the clean style of other builder APIs and guards against exceptions.
         /// </summary>
         public NPCPrefabBuilder WithSchedule(Action<PrefabScheduleBuilder> configure)
         {
             if (configure == null)
                 return this;
 
-            var planner = new PrefabScheduleBuilder();
-            configure(planner);
+            try
+            {
+                var planner = new PrefabScheduleBuilder();
+                configure(planner);
+                var specs = planner.Build();
+                return WithSchedule(specs);
+            }
+            catch
+            {
+                return this;
+            }
+        }
 
-            var specs = planner.Build();
-            NPC.RegisterSchedulePlanForType(ownerType, specs);
+        /// <summary>
+        /// Declares a schedule using a prebuilt set of specs.
+        /// Use this when composing plans externally or sharing between NPC types.
+        /// </summary>
+        public NPCPrefabBuilder WithSchedule(IEnumerable<IScheduleActionSpec> specs)
+        {
+            if (specs == null)
+                return this;
 
-            // Pre-create actions based on the plan to keep FishNet indices stable
-            PrecreateActionsForSpecs(specs);
+            try
+            {
+                // Materialize once to avoid multiple enumeration and allow counting for precreation
+                var list = specs as List<IScheduleActionSpec> ?? new List<IScheduleActionSpec>(specs);
+                if (list.Count == 0)
+                    return this;
+
+                NPC.RegisterSchedulePlanForType(ownerType, list);
+                // Pre-create actions based on the plan to keep FishNet indices stable
+                PrecreateActionsForSpecs(list);
+            }
+            catch { }
+
             return this;
+        }
+
+        /// <summary>
+        /// Declares a schedule using a params array of specs for convenience.
+        /// </summary>
+        public NPCPrefabBuilder WithSchedule(params IScheduleActionSpec[] specs)
+        {
+            if (specs == null || specs.Length == 0)
+                return this;
+            return WithSchedule((IEnumerable<IScheduleActionSpec>)specs);
         }
 
         /// <summary>

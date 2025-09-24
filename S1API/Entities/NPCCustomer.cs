@@ -29,6 +29,7 @@ using UnityEngine;
 using UnityEngine.Events;
 using MelonLoader;
 using S1API.Entities.Customer;
+using S1API.Economy;
 using S1API.Internal.Abstraction;
 #if (IL2CPPMELON)
 using Il2CppFishNet;
@@ -123,6 +124,28 @@ namespace S1API.Entities
             if (Component == null)
                 return;
             Component.ForceDealOffer();
+        }
+
+        /// <summary>
+        /// Offers a contract to this customer using an API-friendly <see cref="S1API.Economy.ContractInfo"/>.
+        /// Mirrors the base game's Customer.OfferContract flow and UI.
+        /// </summary>
+        /// <param name="info">The contract info to offer.</param>
+        public void OfferContract(ContractInfo info)
+        {
+            if (Component == null || info == null)
+                return;
+
+            // Convert API model to game model and invoke game logic
+            var internalInfo = info.ToInternal();
+            try
+            {
+                Component.OfferContract(internalInfo);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"OfferContract failed for {NPC.ID}: {ex.Message}");
+            }
         }
 
         /// <summary>

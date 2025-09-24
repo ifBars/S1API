@@ -17,6 +17,8 @@ using S1ObjectScripts = ScheduleOne.ObjectScripts;
 using UnityEngine;
 using S1API.Map;
 using S1API.Vehicles;
+using System.Reflection;
+using System.Collections;
 
 namespace S1API.Entities.Schedule
 {
@@ -25,6 +27,7 @@ namespace S1API.Entities.Schedule
     /// </summary>
     public sealed class StayInBuildingSpec : IScheduleActionSpec
     {
+        public string BuildingGUID { get; set; }
         public string BuildingName { get; set; }
         public int StartTime { get; set; }
         public int DurationMinutes { get; set; } = 60;
@@ -41,29 +44,67 @@ namespace S1API.Entities.Schedule
 
             // Resolve building using S1API.Map registry first
             object gameBuilding = null;
-            if (!string.IsNullOrEmpty(BuildingName))
+            if (!string.IsNullOrEmpty(BuildingGUID))
+            {
+                var wrapper = Map.Buildings.GetByGUID(BuildingGUID);
+                gameBuilding = wrapper?.ResolveGameBuilding();
+            }
+            else if (!string.IsNullOrEmpty(BuildingName))
             {
                 var wrapper = Map.Buildings.GetByName(BuildingName);
                 gameBuilding = wrapper?.ResolveGameBuilding();
             }
 
-            if (gameBuilding != null)
-            {
-                var prop = action.GetType().GetField("Building");
-                prop?.SetValue(action, gameBuilding);
+			if (gameBuilding != null)
+			{
+				TrySetFieldOrProperty(action, "Building", gameBuilding);
 
-                if (DoorIndex.HasValue)
-                {
-                    var doorField = action.GetType().GetField("Door");
-                    var buildingType = gameBuilding.GetType();
-                    var doorsProp = buildingType.GetProperty("Doors");
-                    var list = doorsProp?.GetValue(gameBuilding) as System.Collections.IList;
-                    if (list != null && DoorIndex.Value >= 0 && DoorIndex.Value < list.Count)
-                    {
-                        doorField?.SetValue(action, list[DoorIndex.Value]);
-                    }
-                }
-            }
+				if (DoorIndex.HasValue)
+				{
+					var buildingType = gameBuilding.GetType();
+					const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+					IList doorsList = null;
+					var doorsField = buildingType.GetField("Doors", flags);
+					if (doorsField != null)
+						doorsList = doorsField.GetValue(gameBuilding) as IList;
+					if (doorsList == null)
+					{
+						var doorsProp = buildingType.GetProperty("Doors", flags);
+						if (doorsProp != null)
+							doorsList = doorsProp.GetValue(gameBuilding) as IList;
+					}
+					if (doorsList != null && DoorIndex.Value >= 0 && DoorIndex.Value < doorsList.Count)
+					{
+						TrySetFieldOrProperty(action, "Door", doorsList[DoorIndex.Value]);
+					}
+				}
+			}
         }
+
+		private static bool TrySetFieldOrProperty(object target, string memberName, object value)
+		{
+			if (target == null) return false;
+			var type = target.GetType();
+			const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+			var fi = type.GetField(memberName, flags);
+			if (fi != null)
+			{
+				if (value == null || fi.FieldType.IsInstanceOfType(value))
+				{
+					fi.SetValue(target, value);
+					return true;
+				}
+			}
+			var pi = type.GetProperty(memberName, flags);
+			if (pi != null && pi.CanWrite)
+			{
+				if (value == null || pi.PropertyType.IsInstanceOfType(value))
+				{
+					pi.SetValue(target, value);
+					return true;
+				}
+			}
+			return false;
+		}
     }
 }

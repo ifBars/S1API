@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using MelonLoader;
 #if MONOMELON
 using ScheduleOne.Map;
 #else
@@ -13,63 +14,6 @@ using UnityEngine;
 namespace S1API.Map
 {
     /// <summary>
-    /// Modder-facing wrapper for an enterable building in the world.
-    /// Provides stable GUID and basic metadata without exposing game types.
-    /// </summary>
-    public sealed class Building
-    {
-        internal readonly string _guid;
-        internal object _gameBuilding;
-
-        internal Building(string guid, object gameBuilding)
-        {
-            _guid = guid;
-            _gameBuilding = gameBuilding;
-        }
-
-        /// <summary>
-        /// Unique GUID string identifier for this building.
-        /// </summary>
-        public string GUID => _guid;
-
-        /// <summary>
-        /// Display name of the building, if available.
-        /// </summary>
-        public string Name
-        {
-            get
-            {
-                try
-                {
-                    var go = ResolveGameBuilding();
-                    if (go == null) return string.Empty;
-                    var nameField = go.GetType().GetField("BuildingName", BindingFlags.Public | BindingFlags.Instance);
-                    return nameField?.GetValue(go) as string ?? string.Empty;
-                }
-                catch { return string.Empty; }
-            }
-        }
-
-        internal object ResolveGameBuilding()
-        {
-            if (_gameBuilding != null)
-                return _gameBuilding;
-            try
-            {
-#if MONOMELON
-                var guid = new Guid(_guid);
-#else
-                var guid = new Il2CppSystem.Guid(_guid);
-#endif
-                // Assign the resolved object so subsequent calls are fast
-                _gameBuilding = GUIDManager.GetObject<NPCEnterableBuilding>(guid);
-            }
-            catch { /* ignore */ }
-            return _gameBuilding;
-        }
-    }
-
-    /// <summary>
     /// Registry utilities for finding enterable buildings.
     /// </summary>
     public static class Buildings
@@ -79,35 +23,12 @@ namespace S1API.Map
         /// </summary>
         public static readonly List<Building> All = new List<Building>();
 
-        private static bool _attemptedDiscovery = false;
 
         /// <summary>
-        /// Attempts a lazy scene discovery of all NPCEnterableBuilding instances
-        /// when the registry is still empty (e.g. early lifecycle like ConfigurePrefab).
-        /// Safe to call multiple times; will only execute once.
+        /// INTERNAL: Registers a building with the S1API system.
+        /// Called automatically by Harmony patches when buildings are created.
         /// </summary>
-        private static void TryLazyDiscover()
-        {
-            if (_attemptedDiscovery)
-                return;
-            _attemptedDiscovery = true;
-            try
-            {
-                // Includes inactive objects as well
-                var found = Resources.FindObjectsOfTypeAll<NPCEnterableBuilding>();
-                if (found == null || found.Length == 0)
-                    return;
-                foreach (var b in found)
-                {
-                    Register(b);
-                }
-            }
-            catch
-            {
-                // Best-effort only
-            }
-        }
-
+        /// <param name="gameBuilding">The game's NPCEnterableBuilding instance.</param>
         internal static void Register(object gameBuilding)
         {
             if (gameBuilding == null)
@@ -118,8 +39,13 @@ namespace S1API.Map
                 var guidProp = type.GetProperty("GUID", BindingFlags.Public | BindingFlags.Instance);
                 var rawGuid = guidProp?.GetValue(gameBuilding);
                 // Support both System.Guid and Il2CppSystem.Guid by using ToString()
-                string guid = rawGuid?.ToString() ?? string.Empty;
-                if (string.IsNullOrEmpty(guid)) return;
+				string guid = rawGuid?.ToString() ?? string.Empty;
+				if (string.IsNullOrEmpty(guid)) return;
+				// Skip Guid.Empty or obviously invalid values
+				if (System.Guid.TryParse(guid, out var parsed) && parsed == System.Guid.Empty)
+					return;
+				if (string.Equals(guid, "00000000-0000-0000-0000-000000000000", StringComparison.OrdinalIgnoreCase))
+					return;
                 if (All.Any(b => string.Equals(b.GUID, guid, StringComparison.OrdinalIgnoreCase)))
                     return;
                 All.Add(new Building(guid, gameBuilding));
@@ -127,6 +53,11 @@ namespace S1API.Map
             catch { }
         }
 
+        /// <summary>
+        /// INTERNAL: Unregisters a building from the S1API system.
+        /// Called automatically by Harmony patches when buildings are destroyed.
+        /// </summary>
+        /// <param name="gameBuilding">The game's NPCEnterableBuilding instance.</param>
         internal static void Unregister(object gameBuilding)
         {
             if (gameBuilding == null)
@@ -143,16 +74,10 @@ namespace S1API.Map
         }
 
         /// <summary>
-        /// Returns all enterable buildings currently available in the project (includes inactive).
+        /// Returns all enterable buildings currently available in the project.
         /// </summary>
         public static Building[] GetAll()
         {
-            if (All.Count == 0)
-            {
-                TryLazyDiscover();
-                if (All.Count == 0)
-                    return Array.Empty<Building>();
-            }
             return All.OrderBy(b => b.Name).ToArray();
         }
 
@@ -173,7 +98,13 @@ namespace S1API.Map
             if (string.IsNullOrEmpty(name)) return null;
             return GetAll().FirstOrDefault(b => string.Equals(b.Name, name, StringComparison.OrdinalIgnoreCase));
         }
+
+        /// <summary>
+        /// INTERNAL: Clears all registered buildings. Used during scene cleanup.
+        /// </summary>
+        internal static void Clear()
+        {
+            All.Clear();
+        }
     }
 }
-
-

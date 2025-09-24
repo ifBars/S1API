@@ -166,10 +166,10 @@ namespace S1API.Entities.Schedule
             return this;
         }
 
-        // Adds a "Stay in Building" event using S1API.Map.Building wrapper.
-        // Commented out as Building instances might be null during ConfigurePrefab
-        /*
-        public PrefabScheduleBuilder StayInBuilding(Map.Building building, int startTime, int durationMinutes = 60, int? doorIndex = null, string name = null)
+        /// <summary>
+        /// Adds a "Stay in Building" event using S1API.Map.Building wrapper.
+        /// </summary>
+        public PrefabScheduleBuilder StayInBuilding(Building building, int startTime, int durationMinutes = 60, int? doorIndex = null, string name = null)
         {
             if (building != null)
             {
@@ -184,7 +184,7 @@ namespace S1API.Entities.Schedule
             }
             return this;
         }
-        */
+        
 
         /// <summary>
         /// Adds a "Drive to Car Park" action using wrappers.
