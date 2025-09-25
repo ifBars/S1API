@@ -117,34 +117,88 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Forces a deal offer attempt (based on the base game's heuristics).
+        /// Forces the NPC to generate and offer a random contract based on their Customer data and relationship with the player.
+        /// 
+        /// The generated contract is based on:
+        /// - Available products listed for sale in ProductManagerApp
+        /// - NPC's drug type affinities and preferences
+        /// - NPC's spending budget (adjusted by relationship level)
+        /// - NPC's quality standards
+        /// - Current addiction level
+        /// 
+        /// For custom contracts with specific products/prices, use <see cref="OfferContract(ContractInfo)"/> instead.
         /// </summary>
-        public void ForceDealOffer()
+        /// <returns>True if a contract was generated and offered, false if generation failed.</returns>
+        public bool ForceDealOffer()
         {
             if (Component == null)
-                return;
-            Component.ForceDealOffer();
+            {
+                Logger.Warning($"Cannot force deal offer for {NPC.ID}: Customer component is null");
+                return false;
+            }
+            
+            try
+            {
+                // Store the original state to check if a contract was actually generated
+                var originalOfferedContract = Component.OfferedContractInfo;
+                
+                Component.ForceDealOffer();
+                
+                // Check if a new contract was generated
+                var newOfferedContract = Component.OfferedContractInfo;
+                bool contractGenerated = newOfferedContract != null && newOfferedContract != originalOfferedContract;
+                
+                if (contractGenerated)
+                {
+                    Logger.Msg($"Successfully generated contract for {NPC.ID}");
+                }
+                else
+                {
+                    Logger.Warning($"Failed to generate contract for {NPC.ID}. Check if products are listed for sale and NPC meets order conditions.");
+                }
+                
+                return contractGenerated;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Exception in ForceDealOffer for {NPC.ID}: {ex.Message}");
+                return false;
+            }
         }
 
         /// <summary>
-        /// Offers a contract to this customer using an API-friendly <see cref="S1API.Economy.ContractInfo"/>.
-        /// Mirrors the base game's Customer.OfferContract flow and UI.
+        /// Offers a custom contract to this customer using an API-friendly <see cref="S1API.Economy.ContractInfo"/>.
+        /// This method allows you to specify exactly what products, quantities, prices, and delivery details the contract should have.
+        /// For automatic contract generation based on NPC preferences, use <see cref="ForceDealOffer()"/> instead.
         /// </summary>
-        /// <param name="info">The contract info to offer.</param>
-        public void OfferContract(ContractInfo info)
+        /// <param name="info">The contract info containing the specific products, quantities, prices, and delivery details.</param>
+        /// <returns>True if the contract was successfully offered, false otherwise.</returns>
+        public bool OfferContract(ContractInfo info)
         {
-            if (Component == null || info == null)
-                return;
+            if (Component == null)
+            {
+                Logger.Warning($"Cannot offer contract to {NPC.ID}: Customer component is null");
+                return false;
+            }
+            
+            if (info == null)
+            {
+                Logger.Warning($"Cannot offer contract to {NPC.ID}: ContractInfo is null");
+                return false;
+            }
 
             // Convert API model to game model and invoke game logic
             var internalInfo = info.ToInternal();
             try
             {
                 Component.OfferContract(internalInfo);
+                Logger.Msg($"Successfully offered custom contract to {NPC.ID}");
+                return true;
             }
             catch (Exception ex)
             {
                 Logger.Warning($"OfferContract failed for {NPC.ID}: {ex.Message}");
+                return false;
             }
         }
 
@@ -206,9 +260,10 @@ namespace S1API.Entities
                 SetNonPublicInstanceField(customer, "_transportManagerCache", transportManager);
                 SetNonPublicInstanceField(customer, "_networkObjectCache", networkObject);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // no-op: avoid crashing mods if FishNet state isn't ready yet
+                Logger.Warning($"Exception in TryNetworkInitialize for {NPC.ID}: {ex.Message}");
+                Logger.Warning($"Stack trace: {ex.StackTrace}");
             }
         }
 
