@@ -62,8 +62,8 @@ namespace S1API.Internal.Lifecycle
                     QuestManager.Quests.Clear();
 
                     // Buildings: clear S1API building registry. Objects are destroyed by scene unload.
-                    int buildingCount = Buildings.All.Count;
-                    Buildings.Clear();
+                    int buildingCount = Building.All.Count;
+                    Building.All.Clear();
 
                     // Delivery Locations: clear S1API delivery location registry. Objects are destroyed by scene unload.
                     int deliveryLocationCount = DeliveryLocations.All.Count;

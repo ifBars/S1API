@@ -42,16 +42,11 @@ namespace S1API.Entities.Schedule
 
             action.Duration = Mathf.Max(1, DurationMinutes);
 
-            // Resolve building using S1API.Map registry first
+            // Resolve building using S1API.Map name-based registry
             object gameBuilding = null;
-            if (!string.IsNullOrEmpty(BuildingGUID))
+            if (!string.IsNullOrEmpty(BuildingName))
             {
-                var wrapper = Map.Buildings.GetByGUID(BuildingGUID);
-                gameBuilding = wrapper?.ResolveGameBuilding();
-            }
-            else if (!string.IsNullOrEmpty(BuildingName))
-            {
-                var wrapper = Map.Buildings.GetByName(BuildingName);
+                var wrapper = Building.GetByName(BuildingName);
                 gameBuilding = wrapper?.ResolveGameBuilding();
             }
 

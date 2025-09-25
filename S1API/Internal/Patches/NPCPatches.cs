@@ -81,7 +81,7 @@ namespace S1API.Internal.Patches
                 {
                     var b = buildings[i];
                     if (b != null)
-                        Buildings.Register(b);
+                        Building.Register(b);
                 }
             }
             catch { }
@@ -157,7 +157,7 @@ namespace S1API.Internal.Patches
                 var building = __instance.GetComponentInParent<S1Map.NPCEnterableBuilding>(true);
                 if (building != null)
                 {
-                    Buildings.Register(building);
+                    Building.Register(building);
                 }
             }
             catch { }
@@ -420,7 +420,7 @@ namespace S1API.Internal.Patches
                 var building = __instance.GetComponentInParent<S1Map.NPCEnterableBuilding>(true);
                 if (building != null)
                 {
-                    Buildings.Unregister(building);
+                    Building.Unregister(building);
                 }
             }
             catch { }
