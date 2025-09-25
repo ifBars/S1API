@@ -140,7 +140,7 @@ namespace S1API.Map
         /// Resolves a building using a typed identifier T.
         /// Declare an identifier class annotated with [Buildings.BuildingName("...")].
         /// </summary>
-        public static Building Get<T>() where T : S1API.Map.Buildings.IBuildingIdentifier
+        public static Building Get<T>() where T : Buildings.IBuildingIdentifier
         {
             var t = typeof(T);
             string name = TryGetNameFromIdentifier(t);
@@ -154,7 +154,7 @@ namespace S1API.Map
         {
             try
             {
-                var attr = t.GetCustomAttributes(false).FirstOrDefault(a => a.GetType().FullName == typeof(S1API.Map.Buildings.BuildingNameAttribute).FullName);
+                var attr = t.GetCustomAttributes(false).FirstOrDefault(a => a.GetType().FullName == typeof(Buildings.BuildingNameAttribute).FullName);
                 if (attr != null)
                 {
                     var prop = attr.GetType().GetProperty("Name", BindingFlags.Public | BindingFlags.Instance);

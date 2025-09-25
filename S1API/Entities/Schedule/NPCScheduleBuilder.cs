@@ -175,7 +175,7 @@ namespace S1API.Entities.Schedule
             {
                 _specs.Add(new StayInBuildingSpec
                 {
-                    BuildingGUID = building.GUID,
+                    BuildingName = building.Name,
                     StartTime = startTime,
                     DurationMinutes = durationMinutes,
                     DoorIndex = doorIndex,
