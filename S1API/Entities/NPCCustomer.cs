@@ -112,7 +112,7 @@ namespace S1API.Entities
             var relation = NPC.S1NPC.RelationData;
             if (relation != null && !relation.Unlocked)
             {
-                relation.Unlock(S1NPCs.Relation.NPCRelationData.EUnlockType.DirectApproach, false);
+                relation.Unlock(S1NPCs.Relation.NPCRelationData.EUnlockType.DirectApproach);
             }
         }
 
@@ -238,8 +238,6 @@ namespace S1API.Entities
         /// INTERNAL: Direct access to underlying customer component.
         /// </summary>
         internal S1Economy.Customer Component => NPC.gameObject.GetComponent<S1Economy.Customer>();
-        
-        
 
         /// <summary>
         /// INTERNAL: Ensures the newly added Customer component is initialized with FishNet.
