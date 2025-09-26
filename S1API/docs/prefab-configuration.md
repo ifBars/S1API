@@ -79,7 +79,7 @@ builder.WithCustomerDefaults(cd => {
       .WithOrderTime(1100); // 11:00 AM
     
     // Customer standards and behavior
-    cd.WithStandards(CustomerStandard.Low)
+    cd.WithStandards(CustomerStandard.VeryLow)
       .AllowDirectApproach(true)
       .GuaranteeFirstSample(true)
       .WithCallPoliceChance(0.15f);
@@ -243,9 +243,11 @@ cd.WithSpending(minWeekly: 100f, maxWeekly: 500f)
 Set quality expectations:
 
 ```csharp
-cd.WithStandards(CustomerStandard.Low)      // Accepts low quality
-  .WithStandards(CustomerStandard.Medium)   // Expects decent quality
-  .WithStandards(CustomerStandard.High);    // Demands high quality
+cd.WithStandards(CustomerStandard.VeryLow)  // Accepts very low quality
+  .WithStandards(CustomerStandard.Low)      // Accepts low quality
+  .WithStandards(CustomerStandard.Moderate) // Expects decent quality
+  .WithStandards(CustomerStandard.High)     // Demands high quality
+  .WithStandards(CustomerStandard.VeryHigh); // Demands very high quality
 ```
 
 ### Product Preferences
@@ -387,7 +389,7 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
                  .WithOrdersPerWeek(2, 5)
                  .WithPreferredOrderDay(Day.Friday)
                  .WithOrderTime(1400)
-                 .WithStandards(CustomerStandard.Medium)
+                 .WithStandards(CustomerStandard.Low)
                  .AllowDirectApproach(true)
                  .WithAffinities(new[] {
                      (DrugType.Marijuana, 0.6f),

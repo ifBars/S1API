@@ -296,7 +296,7 @@ public sealed class BasicShopkeeper : NPC
                      .WithOrdersPerWeek(2, 5)
                      .WithPreferredOrderDay(Day.Friday)
                      .WithOrderTime(1400)
-                     .WithStandards(CustomerStandard.Medium)
+                     .WithStandards(CustomerStandard.Low)
                      .AllowDirectApproach(true)
                      .WithAffinities(new[] {
                          (DrugType.Marijuana, 0.6f),

@@ -81,7 +81,7 @@ namespace S1API.Entities.Customer
         }
 
         /// <summary>
-        /// Sets standards from string (e.g., "Low", "Moderate", "High").
+        /// Sets standards from string (e.g., "VeryLow", "Low", "Moderate", "High", "VeryHigh").
         /// </summary>
         public CustomerDataBuilder WithStandards(string standards)
         {

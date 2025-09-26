@@ -28,7 +28,7 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
                  .WithOrderTime(1100); // 11:00 AM
                
                // Customer standards and behavior
-               cd.WithStandards(CustomerStandard.Low)
+               cd.WithStandards(CustomerStandard.VeryLow)
                  .AllowDirectApproach(true)
                  .GuaranteeFirstSample(true)
                  .WithCallPoliceChance(0.15f);
@@ -101,15 +101,19 @@ cd.WithSpending(minWeekly: 100f, maxWeekly: 500f)
 Set quality expectations:
 
 ```csharp
+cd.WithStandards(CustomerStandard.VeryLow);  // Accepts very low quality
 cd.WithStandards(CustomerStandard.Low);      // Accepts low quality
-cd.WithStandards(CustomerStandard.Medium);   // Expects decent quality
+cd.WithStandards(CustomerStandard.Moderate); // Expects decent quality
 cd.WithStandards(CustomerStandard.High);     // Demands high quality
+cd.WithStandards(CustomerStandard.VeryHigh); // Demands very high quality
 ```
 
 **Standard Levels:**
-- **Low**: Accepts any quality, less picky
-- **Medium**: Expects decent quality, some standards
+- **VeryLow**: Accepts any quality, very lenient
+- **Low**: Accepts low quality, less picky
+- **Moderate**: Expects decent quality, some standards
 - **High**: Demands high quality, very picky
+- **VeryHigh**: Demands very high quality, extremely picky
 
 ### Behavior Settings
 
@@ -270,7 +274,7 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
                  .WithOrdersPerWeek(1, 2)
                  .WithPreferredOrderDay(Day.Friday)
                  .WithOrderTime(1400)
-                 .WithStandards(CustomerStandard.Low)
+                 .WithStandards(CustomerStandard.VeryLow)
                  .AllowDirectApproach(true)
                  .WithCallPoliceChance(0.1f)
                  .WithAffinities(new[] {
@@ -291,7 +295,7 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
                  .WithOrdersPerWeek(3, 5)
                  .WithPreferredOrderDay(Day.Saturday)
                  .WithOrderTime(1100)
-                 .WithStandards(CustomerStandard.High)
+                 .WithStandards(CustomerStandard.Moderate)
                  .AllowDirectApproach(false)
                  .GuaranteeFirstSample(true)
                  .WithCallPoliceChance(0.05f)
@@ -317,7 +321,7 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
                  .WithOrdersPerWeek(2, 4)
                  .WithPreferredOrderDay(Day.Sunday)
                  .WithOrderTime(2000)
-                 .WithStandards(CustomerStandard.Medium)
+                 .WithStandards(CustomerStandard.Low)
                  .AllowDirectApproach(true)
                  .WithCallPoliceChance(0.3f) // High police risk
                  .WithMutualRelationRequirement(1.0f, 2.0f)

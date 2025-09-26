@@ -5,10 +5,11 @@ namespace S1API.Economy
     /// </summary>
     public enum CustomerStandard
     {
-        Low = 0,
-        Moderate = 1,
-        High = 2,
-        Extreme = 3
+        VeryLow = 0,
+        Low = 1,
+        Moderate = 2,
+        High = 3,
+        VeryHigh = 4
     }
 }
 
