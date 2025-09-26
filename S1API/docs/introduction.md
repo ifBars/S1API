@@ -28,4 +28,4 @@ The goals are predictable behavior, safe integration with the base game, and a s
 - Phone Calls: [phone-calls.md](phone-calls.md)
 - Logging: [Logging](../Logging/)
 
-If you're looking for a practical example, see the S1NotesApp mod which implements a full in-game Notes application using S1API's PhoneApp and Saveables systems.
+If you're looking for a practical example, see the [S1NotesApp](https://github.com/ifBars/S1NotesApp) mod which implements a full in-game Notes application using S1API's PhoneApp and Saveables systems.

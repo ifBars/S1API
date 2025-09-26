@@ -25,6 +25,7 @@ private int _myInteger;
 public float AddFloats(float floatOne, float floatTwo) => ...
 ```
 * Enums do not need to be prefixed with `E`. I'd like us to keep this consistent.
+* Utilize Enums over strings where possible. (e.g. "Low" -> `CustomerStandard.Low`)
 * Utilize existing common naming conventions from the codebase. 
   I don't want to see `SomeManager`, `SomeHandler`, `SomeSystem`, etc. throughout this codebase.
   See what is already in use naming-wise, and commit to it like everyone else.
