@@ -26,6 +26,6 @@ The goals are predictable behavior, safe integration with the base game, and a s
 - UI Factory: [ui.md](ui.md)
 - Save System: [save-system.md](save-system.md)
 - Phone Calls: [phone-calls.md](phone-calls.md)
-- Logging: [logging.md](logging.md)
+- Logging: [Logging](../Logging/)
 
 If you're looking for a practical example, see the S1NotesApp mod which implements a full in-game Notes application using S1API's PhoneApp and Saveables systems.

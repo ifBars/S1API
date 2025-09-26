@@ -164,8 +164,19 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Ensures a deal-wait signal exists under the schedule manager so customer handovers can be toggled.
+        /// Ensures that a deal-wait signal exists under the schedule manager for customer handover functionality.
         /// </summary>
+        /// <remarks>
+        /// This method ensures that a <see cref="S1NPCsSchedules.NPCSignal_WaitForDelivery"/> component
+        /// exists on the NPC's schedule manager. This signal is required for customer NPCs to
+        /// properly handle deal interactions and handovers with the player.
+        /// 
+        /// If the signal already exists, it will be properly initialized and wired to the
+        /// customer component. If it doesn't exist, a warning will be logged indicating that
+        /// it should be added via NPC.ConfigurePrefab.
+        /// 
+        /// The deal signal allows the NPC to wait for deliveries and toggle customer handover states.
+        /// </remarks>
         public void EnsureDealSignal()
         {
             if (Manager == null)
@@ -196,9 +207,23 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Adds a timed "walk to location" step.
-        /// A destination transform is created and parented under the step.
+        /// Adds a timed "walk to location" action that moves the NPC to a specific world position.
         /// </summary>
+        /// <param name="destination">The world position where the NPC should walk to.</param>
+        /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>
+        /// <param name="faceDestinationDir">Whether the NPC should face the destination direction when walking. Default is <c>true</c>.</param>
+        /// <param name="threshold">The distance threshold within which the NPC is considered to have arrived. Default is 1.0f.</param>
+        /// <param name="warpIfSkipped">Whether the NPC should be warped to the destination if the action is skipped. Default is <c>false</c>.</param>
+        /// <param name="name">The optional name for this action. If <c>null</c>, uses "WalkTo".</param>
+        /// <remarks>
+        /// This method creates a <see cref="S1NPCsSchedules.NPCSignal_WalkToLocation"/> action that will
+        /// make the NPC walk to the specified destination. A destination transform is created
+        /// and parented under the action step. The NPC will be considered to have arrived
+        /// when they are within the specified threshold distance of the destination.
+        /// 
+        /// The destination transform is oriented to face towards the NPC's current position
+        /// to ensure proper facing behavior if requested.
+        /// </remarks>
         public void AddWalkTo(Vector3 destination, int startTime, bool faceDestinationDir = true, float threshold = 1f, bool warpIfSkipped = false, string name = null)
         {
             var action = AddActionInternal<S1NPCsSchedules.NPCSignal_WalkToLocation>(startTime, string.IsNullOrEmpty(name) ? "WalkTo" : name);
@@ -221,10 +246,20 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Removes all actions under the schedule manager. Signals and/or events can be filtered.
+        /// Removes all actions under the schedule manager with optional filtering by action type.
         /// </summary>
-        /// <param name="includeSignals">Remove signal-type actions.</param>
-        /// <param name="includeEvents">Remove event-type actions.</param>
+        /// <param name="includeSignals">Whether to remove signal-type actions (e.g., WalkTo, DriveToCarPark). Default is <c>true</c>.</param>
+        /// <param name="includeEvents">Whether to remove event-type actions (e.g., StayInBuilding, LocationDialogue). Default is <c>true</c>.</param>
+        /// <remarks>
+        /// This method removes all schedule actions from the NPC's schedule manager. Actions are
+        /// disabled and reset instead of being destroyed to maintain FishNet network component
+        /// indices and avoid network synchronization issues.
+        /// 
+        /// After clearing actions, the schedule manager is re-initialized to update the
+        /// action order and timing.
+        /// 
+        /// Use with caution as this will completely reset the NPC's scheduled behavior.
+        /// </remarks>
         public void ClearActions(bool includeSignals = true, bool includeEvents = true)
         {
             if (Manager == null)
@@ -250,8 +285,16 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Returns the names of currently configured actions (including inactive/disabled).
+        /// Returns the names of all currently configured actions, including inactive and disabled ones.
         /// </summary>
+        /// <returns>A read-only list of action names. Returns an empty list if no schedule manager exists.</returns>
+        /// <remarks>
+        /// This method retrieves the names of all schedule actions currently configured on the NPC,
+        /// regardless of their active state. This can be useful for debugging or monitoring
+        /// the NPC's schedule configuration.
+        /// 
+        /// The returned list includes both signal-type and event-type actions.
+        /// </remarks>
         public IReadOnlyList<string> GetActionNames()
         {
             if (Manager == null)

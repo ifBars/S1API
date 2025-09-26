@@ -28,4 +28,4 @@ S1API provides a unified API for developing mods that work across both Mono and 
 
 ## Contributing
 
-Contributions are welcome! Please see our [Contributing Guidelines](../../CONTRIBUTING.md) for details.
+Contributions are welcome! Please see our [Contributing Guidelines](https://github.com/ifBars/S1API/blob/stable/CONTRIBUTING.md) for details.

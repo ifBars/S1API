@@ -21,10 +21,21 @@ using S1API.Vehicles;
 namespace S1API.Entities.Schedule
 {
     /// <summary>
-    /// Modder-facing, game-type-free schedule action spec.
+    /// Defines a specification for a schedule action that can be applied to an NPC's schedule.
+    /// This interface provides a modder-facing, game-type-free way to define schedule actions
+    /// that can be used during prefab configuration.
     /// </summary>
     public interface IScheduleActionSpec
     {
+        /// <summary>
+        /// Applies this action specification to the given NPC schedule.
+        /// </summary>
+        /// <param name="schedule">The NPC schedule to apply this action to.</param>
+        /// <remarks>
+        /// This method should create and configure the appropriate schedule action
+        /// on the provided schedule instance. The implementation should handle
+        /// any necessary object resolution, validation, and error handling.
+        /// </remarks>
         public void ApplyTo(NPCSchedule schedule);
     }
 }

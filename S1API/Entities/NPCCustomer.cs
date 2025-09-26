@@ -167,7 +167,7 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Offers a custom contract to this customer using an API-friendly <see cref="S1API.Economy.ContractInfo"/>.
+        /// Offers a custom contract to this customer using an API-friendly <see cref="ContractInfo"/>.
         /// This method allows you to specify exactly what products, quantities, prices, and delivery details the contract should have.
         /// For automatic contract generation based on NPC preferences, use <see cref="ForceDealOffer()"/> instead.
         /// </summary>
