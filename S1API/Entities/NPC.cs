@@ -221,6 +221,9 @@ namespace S1API.Entities
                     Debug.LogWarning($"[S1API] Failed to register {prefabName} in SpawnablePrefabs: {ex.Message}");
                 }
 
+                // Organize the prefab in the scene hierarchy to avoid clutter
+                NPCPrefabContainer.OrganizePrefab(prefabNO.gameObject, npcType.Name);
+
                 TypeToPrefab[npcType] = prefabNO.gameObject;
                 return prefabNO.gameObject;
             }

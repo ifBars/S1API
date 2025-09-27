@@ -206,44 +206,6 @@ namespace S1API.Entities
             catch { /* ignore */ }
         }
 
-        /// <summary>
-        /// Adds a timed "walk to location" action that moves the NPC to a specific world position.
-        /// </summary>
-        /// <param name="destination">The world position where the NPC should walk to.</param>
-        /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>
-        /// <param name="faceDestinationDir">Whether the NPC should face the destination direction when walking. Default is <c>true</c>.</param>
-        /// <param name="threshold">The distance threshold within which the NPC is considered to have arrived. Default is 1.0f.</param>
-        /// <param name="warpIfSkipped">Whether the NPC should be warped to the destination if the action is skipped. Default is <c>false</c>.</param>
-        /// <param name="name">The optional name for this action. If <c>null</c>, uses "WalkTo".</param>
-        /// <remarks>
-        /// This method creates a <see cref="S1NPCsSchedules.NPCSignal_WalkToLocation"/> action that will
-        /// make the NPC walk to the specified destination. A destination transform is created
-        /// and parented under the action step. The NPC will be considered to have arrived
-        /// when they are within the specified threshold distance of the destination.
-        /// 
-        /// The destination transform is oriented to face towards the NPC's current position
-        /// to ensure proper facing behavior if requested.
-        /// </remarks>
-        public void AddWalkTo(Vector3 destination, int startTime, bool faceDestinationDir = true, float threshold = 1f, bool warpIfSkipped = false, string name = null)
-        {
-            var action = AddActionInternal<S1NPCsSchedules.NPCSignal_WalkToLocation>(startTime, string.IsNullOrEmpty(name) ? "WalkTo" : name);
-            if (action == null)
-                return;
-
-            var destGo = new GameObject("Destination");
-            destGo.transform.position = destination;
-
-            // Orient destination forward towards current NPC position so facing makes sense if requested
-            var look = NPC.gameObject.transform.position;
-            var forward = (destination - look);
-            if (forward.sqrMagnitude > 0.001f)
-                destGo.transform.forward = forward.normalized;
-
-            action.Destination = destGo.transform;
-            action.FaceDestinationDir = faceDestinationDir;
-            action.DestinationThreshold = Mathf.Max(0.01f, threshold);
-            action.WarpIfSkipped = warpIfSkipped;
-        }
 
         /// <summary>
         /// Removes all actions under the schedule manager with optional filtering by action type.

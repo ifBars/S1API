@@ -77,7 +77,29 @@ namespace S1API.Entities.Schedule
 
         void IScheduleActionSpec.ApplyTo(NPCSchedule schedule)
         {
-            schedule.AddWalkTo(Destination, StartTime, FaceDestinationDirection, Within, WarpIfSkipped, Name);
+            var action = schedule.AddActionInternal<S1NPCsSchedules.NPCSignal_WalkToLocation>(StartTime, string.IsNullOrEmpty(Name) ? "WalkTo" : Name);
+            if (action == null)
+                return;
+
+            // Calculate forward direction towards current NPC position
+            var look = schedule.NPC.gameObject.transform.position;
+            var forward = (Destination - look);
+            Vector3? forwardDirection = forward.sqrMagnitude > 0.001f ? forward.normalized : null;
+
+            // Create destination marker in NPC's dedicated container
+            var destinationTransform = NPCDestinationContainer.CreateDestinationMarker(
+                schedule.NPC.gameObject.name, 
+                "Destination", 
+                Destination, 
+                forwardDirection);
+
+            if (destinationTransform != null)
+            {
+                action.Destination = destinationTransform;
+                action.FaceDestinationDir = FaceDestinationDirection;
+                action.DestinationThreshold = Mathf.Max(0.01f, Within);
+                action.WarpIfSkipped = WarpIfSkipped;
+            }
         }
     }
 }

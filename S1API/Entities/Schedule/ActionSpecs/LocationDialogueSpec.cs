@@ -112,41 +112,23 @@ namespace S1API.Entities.Schedule
             if (action == null)
                 return;
 
-            action.Destination = CreateMarker(schedule, action.transform, Destination, Forward);
-            action.FaceDestinationDir = FaceDestinationDirection;
-            action.DestinationThreshold = Mathf.Max(0.01f, Within);
-            action.WarpIfSkipped = WarpIfSkipped;
-            action.GreetingOverrideToEnable = GreetingOverrideToEnable;
-            action.ChoiceToEnable = ChoiceToEnable;
+            // Create destination marker in NPC's dedicated container
+            var destinationTransform = NPCDestinationContainer.CreateDestinationMarker(
+                schedule.NPC.gameObject.name,
+                "Marker",
+                Destination,
+                Forward);
+
+            if (destinationTransform != null)
+            {
+                action.Destination = destinationTransform;
+                action.FaceDestinationDir = FaceDestinationDirection;
+                action.DestinationThreshold = Mathf.Max(0.01f, Within);
+                action.WarpIfSkipped = WarpIfSkipped;
+                action.GreetingOverrideToEnable = GreetingOverrideToEnable;
+                action.ChoiceToEnable = ChoiceToEnable;
+            }
         }
 
-        /// <summary>
-        /// Creates a destination marker transform for the location dialogue action.
-        /// </summary>
-        /// <param name="schedule">The NPC schedule that owns this action.</param>
-        /// <param name="parent">The parent transform to attach the marker to.</param>
-        /// <param name="position">The world position for the marker.</param>
-        /// <param name="forward">The optional forward direction for the marker.</param>
-        /// <returns>A transform representing the destination marker.</returns>
-        /// <remarks>
-        /// This method creates a GameObject with a Transform that serves as the destination
-        /// marker for the location dialogue action. If no forward direction is specified,
-        /// it will be calculated from the NPC's current position to the destination.
-        /// </remarks>
-        internal static Transform CreateMarker(NPCSchedule schedule, Transform parent, Vector3 position, Vector3? forward)
-        {
-            var go = new GameObject("Marker");
-            go.transform.position = position;
-            if (forward.HasValue && forward.Value.sqrMagnitude > 0.001f)
-                go.transform.forward = forward.Value.normalized;
-            else
-            {
-                var look = schedule.NPC.gameObject.transform.position;
-                var dir = (position - look);
-                if (dir.sqrMagnitude > 0.001f)
-                    go.transform.forward = dir.normalized;
-            }
-            return go.transform;
-        }
     }
 }
