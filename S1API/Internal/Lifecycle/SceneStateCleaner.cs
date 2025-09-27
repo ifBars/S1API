@@ -66,8 +66,8 @@ namespace S1API.Internal.Lifecycle
                     Building.All.Clear();
 
                     // Delivery Locations: clear S1API delivery location registry. Objects are destroyed by scene unload.
-                    int deliveryLocationCount = DeliveryLocations.All.Count;
-                    DeliveryLocations.Clear();
+                    int deliveryLocationCount = DeliveryLocation.All.Count;
+                    DeliveryLocation.Clear();
 
                     Logger.Msg($"[S1API] Cleaned scene state after unload of '{sceneName}' (NPCs: {npcCount} -> 0, Quests: {questCount} -> 0, Buildings: {buildingCount} -> 0, DeliveryLocations: {deliveryLocationCount} -> 0)");
                 }

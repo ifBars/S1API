@@ -105,7 +105,7 @@ namespace S1API.Economy
         /// <returns>This builder instance for method chaining</returns>
         public ContractInfoBuilder WithDeliveryLocationByName(string locationName)
         {
-            _deliveryLocation = DeliveryLocations.GetByName(locationName);
+            _deliveryLocation = DeliveryLocation.GetByName(locationName);
             return this;
         }
 
@@ -116,7 +116,7 @@ namespace S1API.Economy
         /// <returns>This builder instance for method chaining</returns>
         public ContractInfoBuilder WithDeliveryLocationByGuid(string locationGuid)
         {
-            _deliveryLocation = DeliveryLocations.GetByGuid(locationGuid);
+            _deliveryLocation = DeliveryLocation.GetByGuid(locationGuid);
             return this;
         }
 

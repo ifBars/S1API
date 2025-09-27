@@ -34,7 +34,7 @@ namespace S1API.Internal.Patches
         [HarmonyPatch(typeof(S1Economy.DeliveryLocation), "Awake")]
         [HarmonyPostfix]
         private static void DeliveryLocationAwake(S1Economy.DeliveryLocation __instance) =>
-            DeliveryLocations.Register(__instance);
+            DeliveryLocation.Register(__instance);
 
     }
 }
