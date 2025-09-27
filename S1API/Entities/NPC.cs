@@ -977,6 +977,20 @@ namespace S1API.Entities
                 }
             }
 
+            // Ensure civilians get the civilian responses implementation so impacts provoke reactions
+            if (!(S1NPC.Responses is S1Responses.NPCResponses_Civilian))
+            {
+                try
+                {
+                    var respGO = S1NPC.Responses != null ? S1NPC.Responses.gameObject : gameObject;
+                    if (S1NPC.Responses != null)
+                        UnityEngine.Object.Destroy(S1NPC.Responses);
+                    var civilian = respGO.AddComponent<S1Responses.NPCResponses_Civilian>();
+                    S1NPC.Responses = civilian;
+                }
+                catch { }
+            }
+
             if (S1NPC.Awareness.Responses == null && S1NPC.Responses is S1Responses.NPCResponses_Civilian civilianResponses)
                 S1NPC.Awareness.Responses = civilianResponses;
         }
@@ -988,6 +1002,19 @@ namespace S1API.Entities
                 GameObject behaviourObject = new GameObject("NPCBehaviour");
                 behaviourObject.transform.SetParent(gameObject.transform, false);
                 S1NPC.Behaviour = behaviourObject.AddComponent<S1Behaviour.NPCBehaviour>();
+            }
+
+            // Ensure NPCActions exists so Responses can trigger behaviours like CallPolice/Face/Combat
+            if (S1NPC.Actions == null)
+            {
+                var existing = S1NPC.GetComponentInChildren<S1NPCs.Actions.NPCActions>(true);
+                if (existing == null)
+                {
+                    GameObject actionsObject = new GameObject("NPCActions");
+                    actionsObject.transform.SetParent(gameObject.transform, false);
+                    existing = actionsObject.AddComponent<S1NPCs.Actions.NPCActions>();
+                }
+                S1NPC.Actions = existing;
             }
 
             if (S1NPC.Behaviour.CoweringBehaviour == null)
@@ -1100,6 +1127,48 @@ namespace S1API.Entities
                 }
                 S1NPC.Behaviour.ConsumeProductBehaviour = existing;
             }
+
+            TryRegisterBehaviourEventLinks();
+        }
+
+        private void TryRegisterBehaviourEventLinks()
+        {
+            try
+            {
+                var beh = S1NPC.Behaviour;
+                if (beh == null)
+                    return;
+
+                var behaviours = beh.GetComponentsInChildren<S1Behaviour.Behaviour>(true);
+
+                var addMethod = AccessTools.Method(typeof(S1Behaviour.NPCBehaviour), "AddEnabledBehaviour");
+                var removeMethod = AccessTools.Method(typeof(S1Behaviour.NPCBehaviour), "RemoveEnabledBehaviour");
+
+                for (int i = 0; i < behaviours.Length; i++)
+                {
+                    var b = behaviours[i];
+                    if (b == null)
+                        continue;
+
+                    try
+                    {
+                        b.onEnable.AddListener(() =>
+                        {
+                            try { addMethod?.Invoke(beh, new object[] { b }); } catch { }
+                        });
+                    }
+                    catch { }
+                    try
+                    {
+                        b.onDisable.AddListener(() =>
+                        {
+                            try { removeMethod?.Invoke(beh, new object[] { b }); } catch { }
+                        });
+                    }
+                    catch { }
+                }
+            }
+            catch { }
         }
 
         private void InitializeVisionComponents()
@@ -1120,13 +1189,31 @@ namespace S1API.Entities
                 S1NPC.Awareness.VisionCone = existing;
             }
 
-            if (S1NPC.Awareness.VisionCone.DefaultStatesOfInterest == null || S1NPC.Awareness.VisionCone.DefaultStatesOfInterest.Count == 0)
+            // Ensure a broad set of visual states are observed so civilians react like base NPCs
+            var dsoi = S1NPC.Awareness.VisionCone.DefaultStatesOfInterest;
+            if (dsoi == null)
             {
-                S1NPC.Awareness.VisionCone.DefaultStatesOfInterest.Add(new S1Vision.VisionCone.StateContainer
+                dsoi = new System.Collections.Generic.List<S1Vision.VisionCone.StateContainer>();
+                S1NPC.Awareness.VisionCone.DefaultStatesOfInterest = dsoi;
+            }
+            if (dsoi.Count == 0)
+            {
+                S1Vision.EVisualState[] defaults = new S1Vision.EVisualState[]
                 {
-                    state = S1Vision.EVisualState.PettyCrime
-                    // RequiredNoticeTime = 0.1f
-                });
+                    S1Vision.EVisualState.PettyCrime,
+                    S1Vision.EVisualState.DrugDealing,
+                    S1Vision.EVisualState.Vandalizing,
+                    S1Vision.EVisualState.Pickpocketing,
+                    S1Vision.EVisualState.DisobeyingCurfew,
+                    S1Vision.EVisualState.Wanted,
+                    S1Vision.EVisualState.Suspicious,
+                    S1Vision.EVisualState.Brandishing,
+                    S1Vision.EVisualState.DischargingWeapon
+                };
+                for (int i = 0; i < defaults.Length; i++)
+                {
+                    dsoi.Add(new S1Vision.VisionCone.StateContainer { state = defaults[i] });
+                }
             }
 
             if (S1NPC.Awareness.VisionCone.QuestionMarkPopup == null)
@@ -1253,6 +1340,12 @@ namespace S1API.Entities
                 try
                 {
                     behaviour.NetworkInitializeIfDisabled();
+                    // If this is a Behaviour instance, re-run its EnabledOnAwake if set so NPCBehaviour can pick it up now
+                    var asBehaviour = behaviour as S1Behaviour.Behaviour;
+                    if (asBehaviour != null && asBehaviour.EnabledOnAwake && !asBehaviour.Enabled)
+                    {
+                        asBehaviour.Enable();
+                    }
                 }
                 catch (Exception ex)
                 {
