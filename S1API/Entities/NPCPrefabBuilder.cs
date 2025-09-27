@@ -25,9 +25,9 @@ namespace S1API.Entities
     public sealed class NPCPrefabBuilder
     {
         private readonly GameObject prefabRoot;
-        private readonly System.Type ownerType;
+        private readonly Type ownerType;
 
-        internal NPCPrefabBuilder(GameObject prefabRoot, System.Type ownerType)
+        internal NPCPrefabBuilder(GameObject prefabRoot, Type ownerType)
         {
             this.prefabRoot = prefabRoot;
             this.ownerType = ownerType;
@@ -141,7 +141,7 @@ namespace S1API.Entities
                     configure(builder);
                     var data = builder.BuildInternal();
 #if MONOMELON
-                    var field = typeof(S1Economy.Customer).GetField("customerData", System.Reflection.BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    var field = typeof(S1Economy.Customer).GetField("customerData", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
                     field?.SetValue(customer, data);
 #else
                     customer.customerData = data;
@@ -184,7 +184,7 @@ namespace S1API.Entities
             return WithSpawnPosition(position, Quaternion.identity);
         }
 
-        private void PrecreateActionsForSpecs(System.Collections.Generic.List<IScheduleActionSpec> specs)
+        private void PrecreateActionsForSpecs(List<IScheduleActionSpec> specs)
         {
             if (specs == null || specs.Count == 0)
                 return;
@@ -241,5 +241,3 @@ namespace S1API.Entities
         }
     }
 }
-
-
