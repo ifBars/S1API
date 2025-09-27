@@ -1155,18 +1155,20 @@ namespace S1API.Entities
 
                     try
                     {
-                        b.onEnable.AddListener(() =>
+                        Action enableAction = () =>
                         {
                             try { addMethod?.Invoke(beh, new object[] { b }); } catch { }
-                        });
+                        };
+                        EventHelper.AddListener(enableAction, b.onEnable);
                     }
                     catch { }
                     try
                     {
-                        b.onDisable.AddListener(() =>
+                        Action disableAction = () =>
                         {
                             try { removeMethod?.Invoke(beh, new object[] { b }); } catch { }
-                        });
+                        };
+                        EventHelper.AddListener(disableAction, b.onDisable);
                     }
                     catch { }
                 }
@@ -1196,7 +1198,7 @@ namespace S1API.Entities
             var dsoi = S1NPC.Awareness.VisionCone.DefaultStatesOfInterest;
             if (dsoi == null)
             {
-                dsoi = new System.Collections.Generic.List<S1Vision.VisionCone.StateContainer>();
+                dsoi = new List<S1Vision.VisionCone.StateContainer>();
                 S1NPC.Awareness.VisionCone.DefaultStatesOfInterest = dsoi;
             }
             if (dsoi.Count == 0)
