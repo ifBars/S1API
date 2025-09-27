@@ -11,163 +11,7 @@ using S1API.Vehicles;
 
 namespace S1API.Entities.Schedule
 {
-    /// <summary>
-    /// Fluent builder for composing an NPC's schedule programmatically.
-    /// </summary>
-    public sealed class NPCScheduleBuilder
-    {
-        private readonly NPCSchedule _schedule;
-
-        internal NPCScheduleBuilder(NPCSchedule schedule)
-        {
-            _schedule = schedule;
-        }
-
-        /// <summary>
-        /// Adds a walk-to action that moves the NPC to a specific world position at the given start time.
-        /// </summary>
-        /// <param name="destination">The world position where the NPC should walk to.</param>
-        /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>
-        /// <param name="faceDestinationDir">Whether the NPC should face the destination direction when walking. Default is <c>true</c>.</param>
-        /// <param name="within">The distance threshold within which the NPC is considered to have arrived. Default is 1.0f.</param>
-        /// <param name="warpIfSkipped">Whether the NPC should be warped to the destination if the action is skipped. Default is <c>false</c>.</param>
-        /// <param name="name">The optional name for this action. If <c>null</c>, uses "WalkTo".</param>
-        /// <returns>This builder instance for method chaining.</returns>
-        /// <remarks>
-        /// This method creates a <see cref="S1NPCsSchedules.NPCSignal_WalkToLocation"/> action that will
-        /// make the NPC walk to the specified destination. The NPC will be considered to have arrived
-        /// when they are within the specified threshold distance of the destination.
-        /// </remarks>
-        public NPCScheduleBuilder WalkTo(Vector3 destination, int startTime, bool faceDestinationDir = true, float within = 1f, bool warpIfSkipped = false, string name = null)
-        {
-            _schedule.AddWalkTo(destination, startTime, faceDestinationDir, within, warpIfSkipped, name);
-            return this;
-        }
-
-        /// <summary>
-        /// Ensures that a customer deal signal exists under this schedule for handling deal interactions.
-        /// </summary>
-        /// <returns>This builder instance for method chaining.</returns>
-        /// <remarks>
-        /// This method ensures that a <see cref="S1NPCsSchedules.NPCSignal_WaitForDelivery"/> component
-        /// exists on the NPC's schedule manager. This signal is required for customer NPCs to
-        /// properly handle deal interactions and handovers with the player.
-        /// 
-        /// The deal signal allows the NPC to wait for deliveries and toggle customer handover states.
-        /// If the signal doesn't exist, it will be created and properly initialized.
-        /// </remarks>
-        public NPCScheduleBuilder EnsureDealSignal()
-        {
-            _schedule.EnsureDealSignal();
-            return this;
-        }
-
-        /// <summary>
-        /// Adds a custom schedule action using an S1API action specification.
-        /// </summary>
-        /// <param name="spec">The action specification to apply to the schedule.</param>
-        /// <returns>This builder instance for method chaining.</returns>
-        /// <remarks>
-        /// This method allows adding custom schedule actions using the <see cref="IScheduleActionSpec"/>
-        /// interface. The specification will be applied to the underlying schedule, creating
-        /// the appropriate action components.
-        /// 
-        /// If the specification is <c>null</c>, this method does nothing and returns the builder unchanged.
-        /// </remarks>
-        public NPCScheduleBuilder Add(IScheduleActionSpec spec)
-        {
-            if (spec == null)
-                return this;
-            spec.ApplyTo(_schedule);
-            return this;
-        }
-
-        /// <summary>
-        /// INTERNAL: Adds a custom action type with an optional configuration callback.
-        /// </summary>
-        internal NPCScheduleBuilder Add<T>(int startTime, Action<T> configure = null, string name = null) where T : S1NPCsSchedules.NPCAction
-        {
-            var action = _schedule.AddActionInternal<T>(startTime, name);
-            configure?.Invoke(action);
-            return this;
-        }
-
-        /// <summary>
-        /// Adds a "Drive to Car Park" action that makes the NPC drive a vehicle to a parking lot using wrapper objects.
-        /// </summary>
-        /// <param name="lot">The parking lot wrapper where the vehicle should be parked.</param>
-        /// <param name="vehicle">The vehicle wrapper that should be driven to the parking lot.</param>
-        /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>
-        /// <param name="alignment">The optional parking alignment to use when parking the vehicle.</param>
-        /// <param name="overrideParkingType">Whether to override the default parking type behavior.</param>
-        /// <param name="name">The optional name for this action. If <c>null</c>, uses "DriveToCarPark".</param>
-        /// <returns>This builder instance for method chaining.</returns>
-        /// <remarks>
-        /// This method creates a <see cref="S1NPCsSchedules.NPCSignal_DriveToCarPark"/> action that will
-        /// make the NPC drive the specified vehicle to the designated parking lot and park it.
-        /// </remarks>
-        public NPCScheduleBuilder DriveToCarPark(ParkingLotWrapper lot, LandVehicle vehicle, int startTime, ParkingAlignment? alignment = null, bool? overrideParkingType = null, string name = null)
-        {
-            var spec = new DriveToCarParkSpec
-            {
-                StartTime = startTime,
-                ParkingLot = lot,
-                Vehicle = vehicle,
-                Alignment = alignment,
-                OverrideParkingType = overrideParkingType,
-                Name = name
-            };
-            ((IScheduleActionSpec)spec).ApplyTo(_schedule);
-            return this;
-        }
-
-        /// <summary>
-        /// Adds a "Drive to Car Park" action that makes the NPC drive a vehicle to a parking lot using GUIDs.
-        /// </summary>
-        /// <param name="parkingLotGUID">The GUID of the parking lot where the vehicle should be parked.</param>
-        /// <param name="vehicleGUID">The GUID of the vehicle that should be driven to the parking lot.</param>
-        /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>
-        /// <param name="alignment">The optional parking alignment to use when parking the vehicle.</param>
-        /// <param name="overrideParkingType">Whether to override the default parking type behavior.</param>
-        /// <param name="name">The optional name for this action. If <c>null</c>, uses "DriveToCarPark".</param>
-        /// <returns>This builder instance for method chaining.</returns>
-        /// <remarks>
-        /// This method creates a <see cref="S1NPCsSchedules.NPCSignal_DriveToCarPark"/> action that will
-        /// make the NPC drive the specified vehicle to the designated parking lot and park it.
-        /// The GUIDs will be resolved to their corresponding objects at runtime.
-        /// </remarks>
-        public NPCScheduleBuilder DriveToCarPark(string parkingLotGUID, string vehicleGUID, int startTime, ParkingAlignment? alignment = null, bool? overrideParkingType = null, string name = null)
-        {
-            var spec = new DriveToCarParkSpec
-            {
-                StartTime = startTime,
-                ParkingLotGUID = parkingLotGUID,
-                VehicleGUID = vehicleGUID,
-                Alignment = alignment,
-                OverrideParkingType = overrideParkingType,
-                Name = name
-            };
-            ((IScheduleActionSpec)spec).ApplyTo(_schedule);
-            return this;
-        }
-
-        /// <summary>
-        /// Clears all configured actions from the schedule. Use carefully on NPCs with authored schedules.
-        /// </summary>
-        /// <returns>This builder instance for method chaining.</returns>
-        /// <remarks>
-        /// This method removes all schedule actions (both signals and events) from the NPC's schedule.
-        /// It should be used with caution, especially on NPCs that have pre-authored schedules,
-        /// as it will completely reset their behavior.
-        /// 
-        /// After clearing, you can rebuild the schedule using the builder methods.
-        /// </remarks>
-        public NPCScheduleBuilder ClearAll()
-        {
-            _schedule.ClearActions();
-            return this;
-        }
-    }
+    // Runtime NPCScheduleBuilder removed. Schedules must be declared in ConfigurePrefab via PrefabScheduleBuilder.
 
     /// <summary>
     /// Plan-time schedule builder used during prefab composition.
@@ -230,6 +74,91 @@ namespace S1API.Entities.Schedule
         {
             if (spec != null)
                 _specs.Add(spec);
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a vending machine usage action at the specified time.
+        /// </summary>
+        /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>
+        /// <param name="machineGUID">Optional GUID of a specific vending machine to use; if null, the nearest reachable machine will be used.</param>
+        /// <param name="name">Optional custom name for this action; defaults to "UseVending".</param>
+        /// <returns>This builder instance for method chaining.</returns>
+        /// <remarks>
+        /// Creates a <see cref="UseVendingMachineSpec"/> that, when applied, configures a
+        /// <see cref="S1NPCsSchedules.NPCSignal_UseVendingMachine"/> under the NPC's schedule manager.
+        /// </remarks>
+        public PrefabScheduleBuilder UseVendingMachine(int startTime, string machineGUID = null, string name = null)
+        {
+            _specs.Add(new UseVendingMachineSpec { StartTime = startTime, MachineGUID = machineGUID, Name = name });
+            return this;
+        }
+
+        /// <summary>
+        /// Adds an ATM usage action at the specified time.
+        /// </summary>
+        /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>
+        /// <param name="atmGUID">Optional GUID of a specific ATM to use; if null, the ATM should be resolved by gameplay systems.</param>
+        /// <param name="name">Optional custom name for this action; defaults to "UseATM".</param>
+        /// <returns>This builder instance for method chaining.</returns>
+        /// <remarks>
+        /// Creates a <see cref="UseATMSpec"/> that, when applied, configures a
+        /// <see cref="S1NPCsSchedules.NPCSignal_UseATM"/> under the NPC's schedule manager.
+        /// </remarks>
+        public PrefabScheduleBuilder UseATM(int startTime, string atmGUID = null, string name = null)
+        {
+            _specs.Add(new UseATMSpec { StartTime = startTime, ATMGUID = atmGUID, Name = name });
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a location-dialogue action that moves to a destination and enables dialogue.
+        /// </summary>
+        /// <param name="destination">The world position where the NPC should walk to.</param>
+        /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>
+        /// <param name="faceDestinationDir">Whether the NPC should face the destination direction when walking. Default is <c>true</c>.</param>
+        /// <param name="within">The distance threshold (in world units) within which the NPC is considered to have arrived. Default is 1.0f.</param>
+        /// <param name="warpIfSkipped">Whether to warp the NPC to the destination if the action is skipped. Default is <c>false</c>.</param>
+        /// <param name="greetingOverrideToEnable">Greeting override index to enable upon arrival; use -1 to disable. Default is -1.</param>
+        /// <param name="choiceToEnable">Choice index to enable upon arrival; use -1 to disable. Default is -1.</param>
+        /// <param name="name">Optional custom name for this action; defaults to "LocationDialogue".</param>
+        /// <returns>This builder instance for method chaining.</returns>
+        /// <remarks>
+        /// Creates a <see cref="LocationDialogueSpec"/> that, when applied, configures a
+        /// <see cref="S1NPCsSchedules.NPCEvent_LocationDialogue"/>. The NPC walks to the destination and
+        /// then sets dialogue-related overrides for player interaction.
+        /// </remarks>
+        public PrefabScheduleBuilder LocationDialogue(Vector3 destination, int startTime, bool faceDestinationDir = true, float within = 1f, bool warpIfSkipped = false, int greetingOverrideToEnable = -1, int choiceToEnable = -1, string name = null)
+        {
+            _specs.Add(new LocationDialogueSpec
+            {
+                Destination = destination,
+                Forward = null,
+                StartTime = startTime,
+                FaceDestinationDirection = faceDestinationDir,
+                Within = within,
+                WarpIfSkipped = warpIfSkipped,
+                GreetingOverrideToEnable = greetingOverrideToEnable,
+                ChoiceToEnable = choiceToEnable,
+                Name = name
+            });
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a handle-deal action for dealer-type NPCs.
+        /// </summary>
+        /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>
+        /// <param name="name">Optional custom name for this action; defaults to "HandleDeal".</param>
+        /// <returns>This builder instance for method chaining.</returns>
+        /// <remarks>
+        /// Creates a <see cref="HandleDealSpec"/> that, when applied, configures a
+        /// <see cref="S1NPCsSchedules.NPCSignal_HandleDeal"/>. The owning NPC is expected to be a dealer
+        /// with contract assignment handled by gameplay systems.
+        /// </remarks>
+        public PrefabScheduleBuilder HandleDeal(int startTime, string name = null)
+        {
+            _specs.Add(new HandleDealSpec { StartTime = startTime, Name = name });
             return this;
         }
 
