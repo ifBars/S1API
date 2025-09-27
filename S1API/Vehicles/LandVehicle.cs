@@ -42,6 +42,7 @@ namespace S1API.Vehicles
 
             S1LandVehicle = component;
             SetConnection();
+            UpdateGuidFromGame();
         }
 
         /// <summary>
@@ -79,6 +80,11 @@ namespace S1API.Vehicles
             get => (VehicleColor)S1LandVehicle.OwnedColor;
             set => SetColor(value);
         }
+
+        /// <summary>
+        /// Unique GUID string for this vehicle.
+        /// </summary>
+        public string GUID => _guid;
 
         /// <summary>
         /// Spawns the vehicle in the game world.
@@ -119,6 +125,7 @@ namespace S1API.Vehicles
         {
             S1LandVehicle = landVehicle;
             SetConnection();
+            UpdateGuidFromGame();
         }
         
         #endregion
@@ -141,6 +148,11 @@ namespace S1API.Vehicles
         /// Connection to the player that owns the vehicle.
         /// </summary>
         private NetworkConnection? _conn;
+
+        /// <summary>
+        /// Cached GUID string for this vehicle.
+        /// </summary>
+        private string _guid = string.Empty;
 
         /// <summary>
         /// Sets the connection to the player that owns the vehicle.
@@ -192,6 +204,30 @@ namespace S1API.Vehicles
             }
 
             setOwnedColorMethod.Invoke(S1LandVehicle, [_conn, (S1Vehicles.Modification.EVehicleColor)color]);
+        }
+
+        /// <summary>
+        /// Refreshes the cached GUID from the underlying game object.
+        /// </summary>
+        private void UpdateGuidFromGame()
+        {
+            try
+            {
+                var guidProp = typeof(S1Vehicles.LandVehicle).GetProperty("GUID", BindingFlags.Public | BindingFlags.Instance);
+                if (guidProp == null)
+                    return;
+#if (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
+                var g = (System.Guid)(guidProp.GetValue(S1LandVehicle) ?? System.Guid.Empty);
+                _guid = g.ToString();
+#else
+                var g = (Il2CppSystem.Guid)(guidProp.GetValue(S1LandVehicle) ?? new Il2CppSystem.Guid());
+                _guid = g.ToString();
+#endif
+            }
+            catch
+            {
+                // ignore
+            }
         }
         #endregion
     }

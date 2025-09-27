@@ -21,7 +21,7 @@
         <RootNamespace>S1API</RootNamespace>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <LangVersion>latest</LangVersion>
-		<Version>1.8.7</Version>
+		<Version>2.1.0</Version>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)' == 'MonoMelon' or '$(Configuration)' == 'MonoBepInEx'">
@@ -134,12 +134,15 @@
     <ItemGroup>
       <Compile Remove="api\**" />
       <Compile Remove="docs\**" />
+      <Compile Remove="templates\**" />
       <Compile Remove="_site\**" />
       <EmbeddedResource Remove="api\**" />
       <EmbeddedResource Remove="docs\**" />
+      <EmbeddedResource Remove="templates\**" />
       <EmbeddedResource Remove="_site\**" />
       <None Remove="api\**" />
       <None Remove="docs\**" />
+      <None Remove="templates\**" />
       <None Remove="_site\**" />
     </ItemGroup>
     <ItemGroup>

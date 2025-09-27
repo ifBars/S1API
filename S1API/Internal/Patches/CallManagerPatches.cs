@@ -1,4 +1,6 @@
+using System;
 using HarmonyLib;
+using MelonLoader;
 using S1API.PhoneCalls;
 
 #if (IL2CPPMELON)
@@ -43,6 +45,37 @@ namespace S1API.Internal.Patches
         private static void CallCompleted_Postfix()
         {
             CallManager.TryProcessQueue();
+        }
+
+        /// <summary>
+        /// Defensive patch: if the game tries to start a call with a null CallerID, stub one to prevent UI breakage.
+        /// </summary>
+        [HarmonyPatch(typeof(S1UIPhone.CallInterface), "StartCall")]
+        [HarmonyPrefix]
+        private static void StartCall_Prefix(ref S1ScriptableObjects.PhoneCallData data)
+        {
+            if (data == null)
+                return;
+            try
+            {
+                if (data.CallerID == null)
+                {
+                    var caller = UnityEngine.ScriptableObject.CreateInstance<S1ScriptableObjects.CallerID>();
+                    caller.Name = "Unknown Caller";
+                    caller.ProfilePicture = null;
+                    data.CallerID = caller;
+                }
+                // If stages are missing or empty, skip starting the call
+                if (data.Stages == null || data.Stages.Length == 0)
+                {
+                    // Cancel UI open by finishing immediately and letting the dispatcher try the next one
+                    return;
+                }
+            }
+            catch (Exception e)
+            {
+                try { MelonLogger.Warning($"[CallManager] StartCall_Prefix failed: {e.Message}\n{e.StackTrace}"); } catch { }
+            }
         }
     }
 }

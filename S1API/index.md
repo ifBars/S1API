@@ -12,7 +12,7 @@ S1API provides a unified API for developing mods that work across both Mono and 
 
 - **[Getting Started](docs/getting-started.md)** - Learn how to set up and use S1API
 - **[Introduction](docs/introduction.md)** - Overview of S1API features and architecture
-- **[API Reference](api/)** - Complete API documentation
+- **[API Reference](api/S1API.html)** - Complete API documentation
 
 ## Key Features
 
@@ -22,10 +22,10 @@ S1API provides a unified API for developing mods that work across both Mono and 
 
 ## Getting Help
 
-- Check the [documentation](docs/) for detailed guides
-- Review the [API reference](api/) for specific method documentation
+- Check the [documentation](docs/introduction.html) for detailed guides
+- Review the [API reference](api/S1API.html) for specific method documentation
 - Look at example implementations in the codebase
 
 ## Contributing
 
-Contributions are welcome! Please see our [Contributing Guidelines](../../CONTRIBUTING.md) for details.
+Contributions are welcome! Please see our [Contributing Guidelines](https://github.com/ifBars/S1API/blob/stable/CONTRIBUTING.md) for details.

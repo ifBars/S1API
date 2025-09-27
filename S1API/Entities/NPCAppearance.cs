@@ -1,4 +1,4 @@
-﻿#if (IL2CPPMELON)
+#if (IL2CPPMELON)
 using S1AvatarFramework = Il2CppScheduleOne.AvatarFramework;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1AvatarFramework = ScheduleOne.AvatarFramework;
@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Collections;
 using UnityEngine;
 
 using S1API.Entities.Appearances.AccessoryFields;
@@ -18,6 +19,7 @@ using S1API.Entities.Appearances.CustomizationFields;
 using S1API.Entities.Appearances.FaceLayerFields;
 using S1API.Internal.Utils;
 using S1API.Logging;
+using MelonLoader;
 
 namespace S1API.Entities
 {
@@ -39,20 +41,34 @@ namespace S1API.Entities
         /// INTERNAL: Constructor used for assigning the NPC instance.
         /// </summary>
         /// <param name="npc"></param>
-        internal NPCAppearance(NPC npc)
+        internal NPCAppearance(NPC npc, S1AvatarFramework.Avatar runtimeAvatar)
         {
             NPC = npc;
+            _runtimeAvatar = runtimeAvatar;
 
-            // Defaulting to the local player for Avatar
-            NPC.S1NPC.Avatar = S1AvatarFramework.MugshotGenerator.Instance.MugshotRig;
+            S1AvatarFramework.AvatarSettings sourceSettings = null;
 
-            // Create the new AvatarSettings by default
-            _customAvatarSettings = ScriptableObject.CreateInstance<S1AvatarFramework.AvatarSettings>();
-            ApplyDefaultSettings(_customAvatarSettings);
+            if (_runtimeAvatar != null)
+            {
+                if (_runtimeAvatar.CurrentSettings != null)
+                    sourceSettings = _runtimeAvatar.CurrentSettings;
+                else if (_runtimeAvatar.InitialAvatarSettings != null)
+                    sourceSettings = _runtimeAvatar.InitialAvatarSettings;
+            }
 
-            // Assign the appearance for already existing NPCs with existing AvatarSettings
+            if (sourceSettings != null)
+                _customAvatarSettings = ScriptableObject.Instantiate(sourceSettings);
+            else
+            {
+                _customAvatarSettings = ScriptableObject.CreateInstance<S1AvatarFramework.AvatarSettings>();
+                ApplyDefaultSettings(_customAvatarSettings);
+            }
+
             S1AvatarFramework.AvatarSettings avatarSettings = Resources.Load<S1AvatarFramework.AvatarSettings>($"charactersettings/{NPC.S1NPC.FirstName}");
-            NPC.S1NPC.Avatar.LoadAvatarSettings(avatarSettings);
+            if (avatarSettings != null)
+                _customAvatarSettings = ScriptableObject.Instantiate(avatarSettings);
+
+            ApplyToAvatar(_runtimeAvatar);
         }
 
         /// <summary>
@@ -60,24 +76,108 @@ namespace S1API.Entities
         /// </summary>
         internal void GenerateMugshot()
         {
-            // Enable the MugshotRig GameObject, if we do not do this the Mugshots are blank.
-            S1AvatarFramework.MugshotGenerator.Instance.MugshotRig.transform.parent.gameObject.SetActive(true);
+            // Enqueue serialized mugshot generation to avoid shared rig race conditions
+            var generator = S1AvatarFramework.MugshotGenerator.Instance;
+            if (generator == null || generator.MugshotRig == null)
+                return;
 
-            // Grab the right AvatarSettings instance to use
-            if (!NPC.S1NPC.Avatar.InitialAvatarSettings)
-                NPC.S1NPC.Avatar.LoadAvatarSettings(_customAvatarSettings);
-
-            // Generate the Mugshot for the NPC
-            NPC.S1NPC.Avatar.GetMugshot((Action<Texture2D>)(generatedMugshot =>
+            lock (_mugshotQueueLock)
             {
-                // Apply the generated Texture2D instance to the GPU
-                // Otherwise it'll be blank in Messages App (for example).
-                generatedMugshot.Apply();
+                _mugshotQueue.Enqueue(this);
+                if (!_isProcessingMugshots)
+                {
+                    _isProcessingMugshots = true;
+                    MelonCoroutines.Start(ProcessMugshotQueue());
+                }
+            }
+        }
 
-                // Create the sprite and assign it to the NPC Icon.
-                Sprite iconSprite = Sprite.Create(generatedMugshot, new Rect(0, 0, generatedMugshot.width, generatedMugshot.height), Vector2.zero);
-                NPC.Icon = iconSprite;
-            }));
+        private static IEnumerator ProcessMugshotQueue()
+        {
+            while (true)
+            {
+                NPCAppearance next = null;
+                lock (_mugshotQueueLock)
+                {
+                    if (_mugshotQueue.Count > 0)
+                        next = _mugshotQueue.Dequeue();
+                    else
+                    {
+                        _isProcessingMugshots = false;
+                        yield break;
+                    }
+                }
+
+                if (next == null)
+                {
+                    yield return null;
+                    continue;
+                }
+
+                var generator = S1AvatarFramework.MugshotGenerator.Instance;
+                var mugshotRig = generator != null ? generator.MugshotRig : null;
+                if (mugshotRig == null)
+                {
+                    // Nothing we can do this frame; try again next frame
+                    // Re-enqueue to avoid dropping the request if generator is momentarily unavailable
+                    lock (_mugshotQueueLock)
+                        _mugshotQueue.Enqueue(next);
+                    yield return null;
+                    continue;
+                }
+
+                // Phase 1: setup without yielding
+                S1AvatarFramework.Avatar previousAvatar = next.NPC.S1NPC.Avatar;
+                next.NPC.S1NPC.Avatar = mugshotRig;
+                Transform mugshotParent = mugshotRig.transform.parent;
+                if (mugshotParent != null)
+                    mugshotParent.gameObject.SetActive(true);
+
+                next.NPC.S1NPC.Avatar.LoadAvatarSettings(next._customAvatarSettings);
+
+                bool completed = false;
+                // Trigger capture (callback will flip flag)
+                next.NPC.S1NPC.Avatar.GetMugshot((Action<Texture2D>)(generatedMugshot =>
+                {
+                    try
+                    {
+                        generatedMugshot.Apply();
+                        Sprite iconSprite = Sprite.Create(generatedMugshot, new Rect(0, 0, generatedMugshot.width, generatedMugshot.height), Vector2.zero);
+                        next.NPC.Icon = iconSprite;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"Failed to finalize mugshot: {ex.Message}");
+                    }
+                    finally
+                    {
+                        completed = true;
+                    }
+                }));
+
+                // Phase 2: wait for completion
+                while (!completed)
+                    yield return null;
+
+                // Phase 3: restore without yielding
+                next.NPC.S1NPC.Avatar = previousAvatar ?? next._runtimeAvatar;
+                next.ApplyToAvatar(next._runtimeAvatar);
+
+                // Small yield between jobs to keep frame time healthy
+                yield return null;
+            }
+        }
+
+        /// <summary>
+        /// INTERNAL: Applies the currently configured avatar settings to a runtime avatar instance.
+        /// </summary>
+        /// <param name="avatar">The avatar to apply settings to.</param>
+        internal void ApplyToAvatar(S1AvatarFramework.Avatar avatar)
+        {
+            if (avatar == null)
+                return;
+
+            avatar.LoadAvatarSettings(_customAvatarSettings);
         }
 
         #endregion
@@ -346,6 +446,8 @@ namespace S1API.Entities
             avatarSettings.HairColor = Color.black;
         }
 
+        private S1AvatarFramework.Avatar _runtimeAvatar;
+
         /// <summary>
         /// INTERNAL: The custom <see cref="S1AvatarFramework.AvatarSettings"/> instance used for modders
         /// </summary>
@@ -429,5 +531,16 @@ namespace S1API.Entities
 
         #endregion
 
+        #region Static Mugshot Queue
+
+        private static readonly object _mugshotQueueLock = new object();
+        private static readonly Queue<NPCAppearance> _mugshotQueue = new Queue<NPCAppearance>();
+        private static bool _isProcessingMugshots = false;
+
+        #endregion
+
     }
 }
+
+
+

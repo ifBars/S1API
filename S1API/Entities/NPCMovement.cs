@@ -29,6 +29,7 @@ namespace S1API.Entities
         internal NPCMovement(NPC npc)
         {
             NPC = npc;
+            NPC.S1NPC.Movement.enabled = true;
         }
 
         #endregion

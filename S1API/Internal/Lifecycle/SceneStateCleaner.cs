@@ -1,6 +1,7 @@
 using System;
 using S1API.Entities;
 using S1API.Logging;
+using S1API.Map;
 using S1API.Quests;
 using UnityEngine;
 
@@ -39,25 +40,42 @@ namespace S1API.Internal.Lifecycle
 
             try
             {
-                // NPCs: try to destroy custom NPC game objects to ensure full cleanup,
-                // then clear the wrapper registry.
-                int npcCount = NPC.All.Count;
-                for (int i = 0; i < NPC.All.Count; i++)
+                if (afterUnload)
                 {
-                    var npc = NPC.All[i];
-                    if (npc != null && npc.gameObject != null)
+                    // Only clear registries when actually unloading a scene
+                    // NPCs: try to destroy custom NPC game objects to ensure full cleanup,
+                    // then clear the wrapper registry.
+                    int npcCount = NPC.All.Count;
+                    for (int i = 0; i < NPC.All.Count; i++)
                     {
-                        // Best-effort cleanup for custom NPCs; base NPCs are destroyed by scene unload.
-                        try { UnityEngine.Object.Destroy(npc.gameObject); } catch { /* ignore */ }
+                        var npc = NPC.All[i];
+                        if (npc != null && npc.gameObject != null)
+                        {
+                            // Best-effort cleanup for custom NPCs; base NPCs are destroyed by scene unload.
+                            try { UnityEngine.Object.Destroy(npc.gameObject); } catch { /* ignore */ }
+                        }
                     }
+                    NPC.All.Clear();
+
+                    // Quests: clear S1API quest registry. The base game manages its own instances.
+                    int questCount = QuestManager.Quests.Count;
+                    QuestManager.Quests.Clear();
+
+                    // Buildings: clear S1API building registry. Objects are destroyed by scene unload.
+                    int buildingCount = Building.All.Count;
+                    Building.All.Clear();
+
+                    // Delivery Locations: clear S1API delivery location registry. Objects are destroyed by scene unload.
+                    int deliveryLocationCount = DeliveryLocation.All.Count;
+                    DeliveryLocation.All.Clear();
+
+                    Logger.Msg($"[S1API] Cleaned scene state after unload of '{sceneName}' (NPCs: {npcCount} -> 0, Quests: {questCount} -> 0, Buildings: {buildingCount} -> 0, DeliveryLocations: {deliveryLocationCount} -> 0)");
                 }
-                NPC.All.Clear();
-
-                // Quests: clear S1API quest registry. The base game manages its own instances.
-                int questCount = QuestManager.Quests.Count;
-                QuestManager.Quests.Clear();
-
-                Logger.Msg($"[S1API] Cleaned scene state after {(afterUnload ? "unload" : "initialize")} of '{sceneName}' (NPCs: {npcCount} -> 0, Quests: {questCount} -> 0)");
+                else
+                {
+                    // On scene initialization, only log that we're preparing for the scene
+                    Logger.Msg($"[S1API] Preparing for scene '{sceneName}' initialization");
+                }
             }
             catch (Exception ex)
             {
