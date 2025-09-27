@@ -35,9 +35,22 @@ namespace S1API.Internal.Patches
                 return true; // allow original; this was initiated by S1API dispatcher
             }
 
-            // Always route through S1API queue so ordering is preserved
-            CallManager.QueueCall(data);
-            return false; // skip original
+            var gameCallManager = S1Calling.CallManager.Instance;
+            if (gameCallManager == null)
+            {
+                return true; // no game manager yet; let original handle or no-op safely
+            }
+
+            // If the game already has a call queued, route additional calls through S1API
+            // so ordering is preserved without re-entering the game's QueueCall here.
+            if (gameCallManager.QueuedCallData != null)
+            {
+                CallManager.QueueCall(data);
+                return false; // skip original to avoid clobbering and recursion
+            }
+
+            // No call currently queued by the game; allow the original to proceed.
+            return true;
         }
 
         [HarmonyPatch(typeof(S1Calling.CallManager), "CallCompleted")]
