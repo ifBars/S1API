@@ -60,6 +60,8 @@ namespace S1API.Entities
                 customer = prefabRoot.AddComponent<S1Economy.Customer>();
                 customer.enabled = true;
             }
+            // Mark this NPC type as a Customer-bearing type so pre-registration adds Customer on template
+            NPC.RegisterCustomerType(ownerType);
             return this;
         }
 

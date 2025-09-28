@@ -75,6 +75,7 @@ using S1API.Entities.Interfaces;
 using S1API.Entities.Schedule;
 using S1API.Entities.Customer;
 using S1API.Entities.Relation;
+using S1API.Internal;
 using S1API.Internal.Abstraction;
 using S1API.Map;
 using S1API.Messaging;
@@ -98,6 +99,7 @@ namespace S1API.Entities
         private static readonly System.Collections.Generic.Dictionary<System.Type, System.Action<CustomerDataBuilder>> TypeToCustomerDefaults = new System.Collections.Generic.Dictionary<System.Type, System.Action<CustomerDataBuilder>>();
         internal static readonly System.Collections.Generic.Dictionary<System.Type, System.Action<NPCRelationshipDataBuilder>> TypeToRelationshipDefaults = new System.Collections.Generic.Dictionary<System.Type, System.Action<NPCRelationshipDataBuilder>>();
         private static readonly System.Collections.Generic.Dictionary<System.Type, (Vector3 position, Quaternion rotation)> TypeToSpawnPosition = new System.Collections.Generic.Dictionary<System.Type, (Vector3, Quaternion)>();
+        private static readonly System.Collections.Generic.HashSet<System.Type> CustomerTypes = new System.Collections.Generic.HashSet<System.Type>();
         private S1AvatarFramework.Avatar? _runtimeAvatar;
         
         #region Template Prefab Helpers
@@ -239,6 +241,39 @@ namespace S1API.Entities
                     Debug.LogWarning($"[S1API] {npcType.Name}.ConfigurePrefab failed: {ex.Message}");
                 }
 
+                // Ensure schedule actions exist on the template so NetworkBehaviour indices are stable
+                try
+                {
+                    EnsureScheduleActionsOnPrefab(prefabNO.gameObject);
+                }
+                catch { }
+
+                // If we are pre-registering without an instance owner, ensure baseline Customer exists when applicable
+                if (owner == null)
+                {
+                    try
+                    {
+                        // Only add Customer for types that opted-in via EnsureCustomer
+                        if (IsCustomerType(npcType))
+                        {
+                            var existingCustomer = prefabNO.gameObject.GetComponent<S1Economy.Customer>();
+                            if (existingCustomer == null)
+                            {
+                                existingCustomer = prefabNO.gameObject.AddComponent<S1Economy.Customer>();
+                            }
+
+                            // Apply defaults if the mod registered them
+                            var defaults = GetCustomerDefaultsForType(npcType);
+                            if (defaults != null && existingCustomer != null)
+                            {
+                                var data = BuildCustomerDefaultsForType(npcType);
+                                TrySetCustomerDataOnComponent(existingCustomer, data);
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
                 // Register as spawnable so FishNet assigns stable behaviour indices and can network-spawn
                 try
                 {
@@ -271,11 +306,73 @@ namespace S1API.Entities
             TypeToSchedulePlan[npcType] = specs;
         }
 
+        /// <summary>
+        /// Pre-registers a per-type NPC prefab into FishNet spawnables without creating a live instance.
+        /// Should be called on both server and client before any NPC instances are spawned.
+        /// </summary>
+        public static void PreRegisterPrefabForType(System.Type npcType)
+        {
+            try
+            {
+                GetOrCreatePerNpcPrefab(npcType, null);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[S1API] Failed to pre-register NPC prefab for {npcType?.Name}: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Scans loaded assemblies for subclasses of S1API.Entities.NPC and pre-registers their prefabs.
+        /// </summary>
+        public static void PreRegisterAllNpcPrefabs()
+        {
+            try
+            {
+                var baseType = typeof(NPC);
+                var asms = AppDomain.CurrentDomain.GetAssemblies();
+                for (int ai = 0; ai < asms.Length; ai++)
+                {
+                    var asm = asms[ai];
+                    Type[] types;
+                    try { types = asm.GetTypes(); } catch { continue; }
+                    for (int ti = 0; ti < types.Length; ti++)
+                    {
+                        var t = types[ti];
+                        if (t == null || t.IsAbstract)
+                            continue;
+                        if (baseType.IsAssignableFrom(t))
+                        {
+                            PreRegisterPrefabForType(t);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[S1API] PreRegisterAllNpcPrefabs failed: {ex.Message}");
+            }
+        }
+
         internal static void RegisterCustomerDefaultsForType(System.Type npcType, System.Action<CustomerDataBuilder> configure)
         {
             if (npcType == null || configure == null)
                 return;
             TypeToCustomerDefaults[npcType] = configure;
+        }
+
+        internal static void RegisterCustomerType(System.Type npcType)
+        {
+            if (npcType == null)
+                return;
+            CustomerTypes.Add(npcType);
+        }
+
+        internal static bool IsCustomerType(System.Type npcType)
+        {
+            if (npcType == null)
+                return false;
+            return CustomerTypes.Contains(npcType);
         }
 
         // Helper accessors for loader-time default application
@@ -1464,10 +1561,45 @@ namespace S1API.Entities
             if (remaining > 0f)
                 yield return new WaitForSeconds(remaining);
 
+            // Gate spawning until online scene is ready across clients to avoid MovedObjectsHolder stalls
+            float waitStart = Time.realtimeSinceStartup;
+            float maxWait = 60f;
+            while (true)
+            {
+                bool mainSceneActive = false;
+                try { mainSceneActive = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "Main"; } catch { }
+
+                bool serverReady = nm != null && nm.IsServer;
+                bool clientsReady = true;
+                try { clientsReady = NPCNetworkBootstrap.ClientsReadyToSpawnNpcs; } catch { }
+
+                if (serverReady && mainSceneActive && clientsReady)
+                    break;
+
+                if (Time.realtimeSinceStartup - waitStart > maxWait)
+                    break;
+
+                yield return new WaitForSeconds(0.1f);
+            }
+
             try
             {
                 if (nm != null && nm.IsServer && no != null && !no.IsSpawned)
                 {
+                    // If this NPC has a Customer component, ensure its data and references are initialized before spawning
+                    try
+                    {
+                        if (owner != null)
+                        {
+                            var customer = owner.gameObject.GetComponent<S1Economy.Customer>();
+                            if (customer != null)
+                            {
+                                owner.Customer.EnsureCustomer();
+                            }
+                        }
+                    }
+                    catch { }
+
                     nm.ServerManager.Spawn(no, null, default(UnityEngine.SceneManagement.Scene));
                 }
             }

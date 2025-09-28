@@ -80,6 +80,16 @@ namespace S1API.Internal.Lifecycle
                 {
                     // On scene initialization, only log that we're preparing for the scene
                     Logger.Msg($"[S1API] Preparing for scene '{sceneName}' initialization");
+
+                    // Notify NPC bootstrap for readiness and prefab pre-registration
+                    try
+                    {
+                        if (string.Equals(sceneName, "Main", StringComparison.OrdinalIgnoreCase))
+                            NPCNetworkBootstrap.OnMainSceneInitialized();
+                        else
+                            NPCNetworkBootstrap.ResetFlags();
+                    }
+                    catch { }
                 }
             }
             catch (Exception ex)
