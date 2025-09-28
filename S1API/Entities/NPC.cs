@@ -200,6 +200,34 @@ namespace S1API.Entities
                 string prefabName = GetPrefabNameForType(npcType);
                 prefabNO.gameObject.name = prefabName;
 
+                // Ensure template prefab does not execute runtime logic or remain in NPC registry
+                try
+                {
+                    // Deactivate template instance to prevent Awake/Start side effects
+                    if (prefabNO != null && prefabNO.gameObject != null)
+                    {
+                        prefabNO.gameObject.SetActive(false);
+                        // If an NPC component exists and was registered, remove it from the registry immediately
+                        var npcComp = prefabNO.gameObject.GetComponent<S1NPCs.NPC>();
+                        if (npcComp != null)
+                        {
+                            var reg = S1NPCs.NPCManager.NPCRegistry;
+                            if (reg != null && reg.Count > 0)
+                            {
+                                for (int i = reg.Count - 1; i >= 0; i--)
+                                {
+                                    if (reg[i] == npcComp)
+                                    {
+                                        reg.RemoveAt(i);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { }
+
                 // Let the NPC subclass declare required components on the prefab (Customer, actions, etc.)
                 try
                 {

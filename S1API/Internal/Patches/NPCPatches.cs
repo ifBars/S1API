@@ -151,17 +151,6 @@ namespace S1API.Internal.Patches
                 }
             }
 
-            // Register building if this NPC is inside an enterable building component hierarchy
-            try
-            {
-                var building = __instance.GetComponentInParent<S1Map.NPCEnterableBuilding>(true);
-                if (building != null)
-                {
-                    Building.Register(building);
-                }
-            }
-            catch { }
-
             // Ensure S1API per-type template prefabs are not kept in the NPCRegistry
             try
             {
@@ -433,6 +422,84 @@ namespace S1API.Internal.Patches
                     NPC.All.Remove(npc);
                     break;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Guard: Template prefabs created by S1API should never be saved.
+        /// If the object name starts with "S1API_" treat it as a non-saveable template.
+        /// </summary>
+        [HarmonyPatch(typeof(S1NPCs.NPC), nameof(S1NPCs.NPC.ShouldSave))]
+        [HarmonyPrefix]
+        private static bool NPC_ShouldSave_Prefix(S1NPCs.NPC __instance, ref bool __result)
+        {
+            try
+            {
+                if (__instance != null && __instance.gameObject != null)
+                {
+                    string n = __instance.gameObject.name;
+                    if (!string.IsNullOrEmpty(n) && n.StartsWith("S1API_", StringComparison.Ordinal))
+                    {
+                        __result = false;
+                        return false; // skip original
+                    }
+                }
+            }
+            catch { }
+            return true;
+        }
+
+        /// <summary>
+        /// Replace NPCManager.GetSaveString with a sanitized implementation that ignores
+        /// S1API template prefabs (name starts with "S1API_").
+        /// Prevents NullReferenceExceptions when templates exist in NPCRegistry.
+        /// </summary>
+        [HarmonyPatch(typeof(S1NPCs.NPCManager), nameof(S1NPCs.NPCManager.GetSaveString))]
+        [HarmonyPrefix]
+        private static bool NPCManager_GetSaveString_Prefix(ref string __result)
+        {
+            try
+            {
+                var reg = S1NPCs.NPCManager.NPCRegistry;
+                if (reg == null)
+                {
+                    __result = new S1Datas.NPCCollectionData(new S1Datas.DynamicSaveData[0]).GetJson();
+                    return false;
+                }
+
+                var list = new System.Collections.Generic.List<S1Datas.DynamicSaveData>();
+                for (int i = 0; i < reg.Count; i++)
+                {
+                    var npc = reg[i];
+                    if (npc == null)
+                        continue;
+                    try
+                    {
+                        string n = npc.gameObject != null ? npc.gameObject.name : null;
+                        if (!string.IsNullOrEmpty(n) && n.StartsWith("S1API_", StringComparison.Ordinal))
+                            continue; // skip template prefab entries
+
+                        if (npc.ShouldSave())
+                        {
+                            var data = npc.GetSaveData();
+                            if (data != null)
+                                list.Add(data);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warning($"NPCManager_GetSaveString_Prefix: Skipping NPC at index {i} due to exception: {ex.Message}");
+                    }
+                }
+
+                __result = new S1Datas.NPCCollectionData(list.ToArray()).GetJson();
+                return false; // skip original
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"NPCManager_GetSaveString_Prefix: Exception building save JSON: {ex.Message}");
+                __result = new S1Datas.NPCCollectionData(new S1Datas.DynamicSaveData[0]).GetJson();
+                return false;
             }
         }
 
