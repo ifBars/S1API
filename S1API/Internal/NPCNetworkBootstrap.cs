@@ -1,10 +1,17 @@
 using System;
 using System.Collections;
 using MelonLoader;
+#if MONOMELON
 using FishNet;
 using FishNet.Managing;
 using FishNet.Managing.Scened;
 using FishNet.Transporting;
+#else
+using Il2CppFishNet;
+using Il2CppFishNet.Managing;
+using Il2CppFishNet.Managing.Scened;
+using Il2CppFishNet.Transporting;
+#endif
 using S1API.Entities;
 using UnityEngine;
 
