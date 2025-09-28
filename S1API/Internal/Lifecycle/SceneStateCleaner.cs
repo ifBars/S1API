@@ -1,5 +1,6 @@
 using System;
 using S1API.Entities;
+using S1API.Avatar;
 using S1API.Logging;
 using S1API.Map;
 using S1API.Quests;
@@ -69,7 +70,11 @@ namespace S1API.Internal.Lifecycle
                     int deliveryLocationCount = DeliveryLocation.All.Count;
                     DeliveryLocation.All.Clear();
 
-                    Logger.Msg($"[S1API] Cleaned scene state after unload of '{sceneName}' (NPCs: {npcCount} -> 0, Quests: {questCount} -> 0, Buildings: {buildingCount} -> 0, DeliveryLocations: {deliveryLocationCount} -> 0)");
+                    // Seats: clear the avatar seat registry to avoid stale references across loads.
+                    int seatCount = Seat.Count;
+                    Seat.Clear();
+
+                    Logger.Msg($"[S1API] Cleaned scene state after unload of '{sceneName}' (NPCs: {npcCount} -> 0, Quests: {questCount} -> 0, Buildings: {buildingCount} -> 0, DeliveryLocations: {deliveryLocationCount} -> 0, Seats: {seatCount} -> 0)");
                 }
                 else
                 {

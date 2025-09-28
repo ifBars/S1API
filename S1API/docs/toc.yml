@@ -13,6 +13,12 @@
       href: appearance-customization.md
     - name: Scheduling System
       href: scheduling-system.md
+    - name: Seating Registry
+      href: seating-registry.md
+    - name: Building Registry
+      href: building-registry.md
+    - name: Delivery Location Registry
+      href: delivery-location-registry.md
     - name: Dialogue System
       href: dialogue-system.md
     - name: Customer Behavior

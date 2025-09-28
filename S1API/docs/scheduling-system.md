@@ -23,18 +23,11 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
         // Walk to location at 9:00 AM
         plan.WalkTo(new Vector3(10, 0, 10), 900, faceDestinationDir: true);
         
-        // Stay in building from 10:00 AM for 60 minutes
-        plan.Add(new StayInBuildingSpec { 
-            BuildingName = "North apartments", 
-            StartTime = 1000, 
-            DurationMinutes = 60 
-        });
+        // Stay in building from 10:00 AM for 60 minutes (preferred wrapper method)
+        plan.StayInBuilding(Building.Get<Buildings.NorthApartments>(), 1000, 60);
         
         // Use vending machine at 2:00 PM
-        plan.Add(new UseVendingMachineSpec { 
-            StartTime = 1400,
-            MachineGUID = "vending-machine-guid"
-        });
+        plan.UseVendingMachine(1400);
         
         // Ensure deal signal exists
         plan.EnsureDealSignal();
@@ -69,6 +62,8 @@ All schedule times use 24-hour integer format:
 
 ## Available Schedule Actions
 
+The scheduling system provides both convenient wrapper methods and the flexible `.Add()` method for custom specifications. **Prefer the wrapper methods for common actions** as they provide better type safety and cleaner code.
+
 ### WalkTo
 
 Move to a specific location at a given time:
@@ -90,6 +85,114 @@ plan.WalkTo(destination, startTime, faceDestinationDir, within, warpIfSkipped, n
 plan.WalkTo(new Vector3(-28.060f, 1.065f, 62.070f), 900, faceDestinationDir: true);
 ```
 
+### StayInBuilding
+
+Keep the NPC inside a building for a specified duration (preferred wrapper method):
+
+```csharp
+plan.StayInBuilding(building, startTime, durationMinutes, doorIndex, name);
+```
+
+**Parameters:**
+- `building`: Building wrapper object (use `Building.Get<T>()` or `Building.GetByName()`)
+- `startTime`: Time to enter the building (24h format)
+- `durationMinutes`: How long to stay (default: 60)
+- `doorIndex`: Which door to use (optional)
+- `name`: Optional name for the action
+
+**Examples:**
+```csharp
+// Using strongly-typed building identifier (preferred)
+plan.StayInBuilding(Building.Get<Buildings.NorthApartments>(), 900, 480);
+
+// Using name-based lookup
+plan.StayInBuilding(Building.GetByName("North apartments"), 900, 480);
+```
+
+### DriveToCarPark
+
+Drive a vehicle to a parking lot and park it (preferred wrapper method):
+
+```csharp
+plan.DriveToCarPark(parkingLot, vehicle, startTime, alignment, overrideParkingType, name);
+```
+
+**Parameters:**
+- `parkingLot`: ParkingLotWrapper object
+- `vehicle`: LandVehicle wrapper object
+- `startTime`: Time to start driving (24h format)
+- `alignment`: Parking alignment preference (optional)
+- `overrideParkingType`: Whether to override parking type (optional)
+- `name`: Optional name for the action
+
+**Example:**
+```csharp
+var parkingLot = ParkingLots.GetByGUID("parking-lot-guid");
+var vehicle = VehicleRegistry.GetByGUID("vehicle-guid");
+plan.DriveToCarPark(parkingLot, vehicle, 1700, ParkingAlignment.FrontToKerb);
+```
+
+### UseVendingMachine
+
+Use a vending machine:
+
+```csharp
+plan.UseVendingMachine(startTime, machineGUID, name);
+```
+
+**Parameters:**
+- `startTime`: Time to use the machine (24h format)
+- `machineGUID`: GUID of specific machine (optional)
+- `name`: Optional name for the action
+
+**Example:**
+```csharp
+plan.UseVendingMachine(1400, "vending-machine-guid", "BuySnack");
+```
+
+### UseATM
+
+Use an ATM:
+
+```csharp
+plan.UseATM(startTime, atmGUID, name);
+```
+
+**Parameters:**
+- `startTime`: Time to use the ATM (24h format)
+- `atmGUID`: GUID of specific ATM (optional)
+- `name`: Optional name for the action
+
+### LocationDialogue
+
+Move to a location and enable dialogue:
+
+```csharp
+plan.LocationDialogue(destination, startTime, faceDestinationDir, within, warpIfSkipped, greetingOverrideToEnable, choiceToEnable, name);
+```
+
+**Parameters:**
+- `destination`: Vector3 location for dialogue
+- `startTime`: Time to start the dialogue (24h format)
+- `faceDestinationDir`: Whether to face the destination (default: true)
+- `within`: Distance threshold for arrival (default: 1f)
+- `warpIfSkipped`: Whether to warp if time is missed (default: false)
+- `greetingOverrideToEnable`: Greeting override ID to enable (default: -1)
+- `choiceToEnable`: Choice ID to enable (default: -1)
+- `name`: Optional name for the action
+
+### HandleDeal
+
+Handle deals for dealer-type NPCs:
+
+```csharp
+plan.HandleDeal(startTime, name);
+```
+
+**Parameters:**
+- `startTime`: Time to start handling deals (24h format)
+- `name`: Optional name for the action
+
 ### EnsureDealSignal
 
 Enable customer deal waiting behavior:
@@ -103,15 +206,50 @@ plan.EnsureDealSignal();
 - Enables customer behavior
 - Required for customer NPCs
 
+### SitAtSeatSet
+
+Seat the NPC at a configured seating area:
+
+```csharp
+plan.SitAtSeatSet("OutdoorBench", 900, warpIfSkipped: true);
+```
+
+**Parameters:**
+- `seatSetName`: GameObject name of the `AvatarSeatSet`
+- `startTime`: Time to begin the seating action (24h format)
+- `warpIfSkipped`: Whether to warp the NPC to the seat if missed (default: false)
+- `name`: Optional action name; defaults to "Sit"
+
+**Notes:**
+- Seat sets can be located in the Unity hierarchy (inactive objects are supported)
+- For complex lookups (path or direct reference), create a `SitSpec` manually and add it via `plan.Add`
+
 ## Action Specs
 
-Action specs provide more complex behaviors than basic schedule actions.
+Action specs provide more complex behaviors than basic schedule actions. **Use `.Add()` with specs only when you need advanced configuration** that the wrapper methods don't support.
+
+### When to Use `.Add()` vs Wrapper Methods
+
+**Prefer wrapper methods for:**
+- Simple building stays: `plan.StayInBuilding(Building.Get<T>(), 900, 480)`
+- Vehicle parking: `plan.DriveToCarPark(parkingLot, vehicle, 1700)`
+- Basic vending machine usage: `plan.UseVendingMachine(1400)`
+
+**Use `.Add()` with specs for:**
+- Complex seat set lookups with paths or direct references
+- Advanced parking configurations with custom alignment overrides
+- Building stays with specific door index requirements
+- Custom action specifications not covered by wrapper methods
 
 ### StayInBuildingSpec
 
-Remain inside a building for a duration:
+Remain inside a building for a duration (use wrapper method when possible):
 
 ```csharp
+// Preferred: Use wrapper method
+plan.StayInBuilding(Building.Get<Buildings.NorthApartments>(), 1000, 60);
+
+// Advanced: Use spec for complex requirements
 plan.Add(new StayInBuildingSpec { 
     BuildingName = "North apartments", 
     StartTime = 1000, 
@@ -127,12 +265,18 @@ plan.Add(new StayInBuildingSpec {
 - `DurationMinutes`: How long to stay (default: 60)
 - `DoorIndex`: Which door to use (optional)
 - `Name`: Optional name for the action
+- Use the building registry (`docs/building-registry.md`) to discover building names and resolve door indices
+- Prefer strongly-typed identifiers: `plan.StayInBuilding(Building.Get<Buildings.NorthApartments>(), 900);`
 
 ### UseVendingMachineSpec
 
-Use a vending machine:
+Use a vending machine (use wrapper method when possible):
 
 ```csharp
+// Preferred: Use wrapper method
+plan.UseVendingMachine(1400, "vending-machine-guid", "BuySnack");
+
+// Advanced: Use spec for complex requirements
 plan.Add(new UseVendingMachineSpec { 
     StartTime = 1400,
     MachineGUID = "vending-machine-guid",
@@ -151,9 +295,13 @@ plan.Add(new UseVendingMachineSpec {
 
 ### LocationDialogueSpec
 
-Trigger dialogue at a specific location:
+Trigger dialogue at a specific location (use wrapper method when possible):
 
 ```csharp
+// Preferred: Use wrapper method
+plan.LocationDialogue(new Vector3(20, 0, 20), 1900, true, 1f, false, 1, 2, "MeetPlayer");
+
+// Advanced: Use spec for complex requirements
 plan.Add(new LocationDialogueSpec {
     Destination = new Vector3(20, 0, 20),
     StartTime = 1900,
@@ -176,11 +324,40 @@ plan.Add(new LocationDialogueSpec {
 - `ChoiceToEnable`: Choice ID to enable
 - `Name`: Optional name for the action
 
-### DriveToCarParkSpec
+### SitSpec
 
-Drive to a car park and park a vehicle:
+Seat an NPC using an existing `AvatarSeatSet`:
 
 ```csharp
+plan.Add(new SitSpec {
+    StartTime = 900,
+    SeatSetName = "OutdoorBench",
+    WarpIfSkipped = true,
+    Name = "MorningCoffee"
+});
+```
+
+**Properties:**
+- `StartTime`: Time to begin the action
+- `SeatSetName`: GameObject name of the target `AvatarSeatSet`
+- `SeatSetPath`: Optional transform path (supports inactive objects)
+- `SeatSetReference`: Optional direct reference to the seat set or any component within it
+- `WarpIfSkipped`: Whether to warp the NPC directly to the seat when skipped
+- `Name`: Optional custom name for the action
+- `IncludeInactiveSearch`: Include inactive seat sets during lookup (default: true)
+- Use the seating registry (`S1API.Avatar.Seat`) to gather scene-specific seat metadata when authoring schedules
+
+### DriveToCarParkSpec
+
+Drive to a car park and park a vehicle (use wrapper method when possible):
+
+```csharp
+// Preferred: Use wrapper method with wrapper objects
+var parkingLot = ParkingLots.GetByGUID("parking-lot-guid");
+var vehicle = VehicleRegistry.GetByGUID("vehicle-guid");
+plan.DriveToCarPark(parkingLot, vehicle, 1700, ParkingAlignment.FrontToKerb, true, "ParkCar");
+
+// Advanced: Use spec for complex requirements
 plan.Add(new DriveToCarParkSpec {
     StartTime = 1700,
     ParkingLotGUID = "parking-lot-guid",
@@ -270,11 +447,7 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
     builder.WithSchedule(plan => {
         // Morning routine
         plan.WalkTo(workPos, 800); // 8:00 AM - Go to work
-        plan.Add(new StayInBuildingSpec { 
-            BuildingName = "North apartments", 
-            StartTime = 900, 
-            DurationMinutes = 480 // 8 hours
-        });
+        plan.StayInBuilding(Building.Get<Buildings.NorthApartments>(), 900, 480); // 8 hours
         
         // Evening routine
         plan.WalkTo(homePos, 1800); // 6:00 PM - Go home
@@ -291,38 +464,22 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
     Vector3 homePos = new Vector3(-53.5701f, 1.065f, 67.7955f);
     Vector3 workPos = new Vector3(-28.060f, 1.065f, 62.070f);
     Vector3 parkPos = new Vector3(-40.0f, 1.065f, 50.0f);
+    var northApts = Building.Get<Buildings.NorthApartments>();
     
     builder.WithSchedule(plan => {
         // Morning
         plan.WalkTo(workPos, 800);
-        plan.Add(new StayInBuildingSpec { 
-            BuildingName = "North apartments", 
-            StartTime = 900, 
-            DurationMinutes = 240 // 4 hours
-        });
+        plan.StayInBuilding(northApts, 900, 240); // 4 hours
         
         // Lunch break
-        plan.Add(new UseVendingMachineSpec { 
-            StartTime = 1300,
-            Name = "LunchBreak"
-        });
+        plan.UseVendingMachine(1300, null, "LunchBreak");
         
         // Afternoon work
-        plan.Add(new StayInBuildingSpec { 
-            BuildingName = "North apartments", 
-            StartTime = 1400, 
-            DurationMinutes = 240 // 4 hours
-        });
+        plan.StayInBuilding(northApts, 1400, 240); // 4 hours
         
         // Evening activities
         plan.WalkTo(parkPos, 1800);
-        plan.Add(new LocationDialogueSpec {
-            Destination = parkPos,
-            StartTime = 1900,
-            FaceDestinationDirection = true,
-            GreetingOverrideToEnable = 1,
-            Name = "ParkMeeting"
-        });
+        plan.LocationDialogue(parkPos, 1900, true, 1f, false, 1, -1, "ParkMeeting");
         
         // Go home
         plan.WalkTo(homePos, 2100);
@@ -338,6 +495,7 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 {
     Vector3 homePos = new Vector3(-53.5701f, 1.065f, 67.7955f);
     Vector3 shopPos = new Vector3(-28.060f, 1.065f, 62.070f);
+    var northApts = Building.Get<Buildings.NorthApartments>();
     
     builder.WithSchedule(plan => {
         // Enable customer behavior
@@ -345,28 +503,14 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
         
         // Morning shopping
         plan.WalkTo(shopPos, 900);
-        plan.Add(new StayInBuildingSpec { 
-            BuildingName = "North apartments", 
-            StartTime = 1000, 
-            DurationMinutes = 60 // 1 hour shopping
-        });
+        plan.StayInBuilding(northApts, 1000, 60); // 1 hour shopping
         
         // Afternoon activities
         plan.WalkTo(homePos, 1400);
-        plan.Add(new StayInBuildingSpec { 
-            BuildingName = "North apartments", 
-            StartTime = 1500, 
-            DurationMinutes = 180 // 3 hours at home
-        });
+        plan.StayInBuilding(northApts, 1500, 180); // 3 hours at home
         
         // Evening deal opportunity
-        plan.Add(new LocationDialogueSpec {
-            Destination = shopPos,
-            StartTime = 1900,
-            FaceDestinationDirection = true,
-            GreetingOverrideToEnable = 1,
-            Name = "EveningDeal"
-        });
+        plan.LocationDialogue(shopPos, 1900, true, 1f, false, 1, -1, "EveningDeal");
     });
 }
 ```
@@ -376,6 +520,9 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 ### Do's
 
 - **Configure schedules in `ConfigurePrefab`** - required for save/load compatibility
+- **Prefer wrapper methods** over `.Add()` for common actions (better type safety and cleaner code)
+- **Use strongly-typed building identifiers** like `Building.Get<Buildings.NorthApartments>()`
+- **Use wrapper objects** when available (see `docs/building-registry.md`) (see `docs/building-registry.md`)
 - **Use meaningful action names** for debugging and events
 - **Test schedule timing** to ensure actions don't overlap
 - **Use appropriate durations** for building stays
@@ -387,6 +534,7 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 - **Don't use invalid building names** or GUIDs
 - **Don't create overlapping actions** at the same time
 - **Don't forget to call `Schedule.Enable()`** and `Schedule.InitializeActions()`
+- **Don't use `.Add()` with specs when wrapper methods are available** - reserve for complex scenarios
 
 ### Error Handling
 
@@ -398,8 +546,9 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
     try
     {
         builder.WithSchedule(plan => {
-            // Schedule configuration
+            // Schedule configuration using wrapper methods
             plan.WalkTo(new Vector3(0, 0, 0), 900);
+            plan.StayInBuilding(Building.Get<Buildings.NorthApartments>(), 1000, 60);
             plan.EnsureDealSignal();
         });
     }

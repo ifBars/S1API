@@ -45,6 +45,35 @@ namespace S1API.Entities.Schedule
         }
 
         /// <summary>
+        /// Adds a seating action that moves the NPC to an available seat within the specified seat set.
+        /// </summary>
+        /// <param name="seatSetName">The GameObject name of the <c>AvatarSeatSet</c> to use.</param>
+        /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>
+        /// <param name="warpIfSkipped">Whether the NPC should be warped to the seat if the action is skipped. Default is <c>false</c>.</param>
+        /// <param name="name">Optional custom name for this action; defaults to "Sit".</param>
+        /// <returns>This builder instance for method chaining.</returns>
+        /// <remarks>
+        /// This convenience overload creates a <see cref="SitSpec"/> that resolves a seat set by name. For more advanced
+        /// lookup scenarios (GUIDs, transform paths, direct references) instantiate <see cref="SitSpec"/> manually and
+        /// add it via <see cref="Add(IScheduleActionSpec)"/>.
+        /// </remarks>
+        public PrefabScheduleBuilder SitAtSeatSet(string seatSetName, int startTime, bool warpIfSkipped = false, string name = null)
+        {
+            if (!string.IsNullOrEmpty(seatSetName))
+            {
+                _specs.Add(new SitSpec
+                {
+                    SeatSetName = seatSetName,
+                    StartTime = startTime,
+                    WarpIfSkipped = warpIfSkipped,
+                    Name = name
+                });
+            }
+
+            return this;
+        }
+
+        /// <summary>
         /// Ensures that a customer deal signal exists under the schedule for handling deal interactions.
         /// </summary>
         /// <returns>This builder instance for method chaining.</returns>

@@ -1,14 +1,16 @@
 #if (IL2CPPMELON)
 using S1Map = Il2CppScheduleOne.Map;
 using S1Economy = Il2CppScheduleOne.Economy;
+using S1AvatarAnimation = Il2CppScheduleOne.AvatarFramework.Animation;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Map = ScheduleOne.Map;
 using S1Economy = ScheduleOne.Economy;
+using S1AvatarAnimation = ScheduleOne.AvatarFramework.Animation;
 #endif
 
 using HarmonyLib;
 using S1API.Map;
-using UnityEngine;
+using S1API.Avatar;
 
 namespace S1API.Internal.Patches
 {
@@ -36,5 +38,12 @@ namespace S1API.Internal.Patches
         private static void DeliveryLocationAwake(S1Economy.DeliveryLocation __instance) =>
             DeliveryLocation.Register(__instance);
 
+        /// <summary>
+        /// INTERNAL: Registers avatar seats for tooling and schedule lookup.
+        /// </summary>
+        [HarmonyPatch(typeof(S1AvatarAnimation.AvatarSeat), "Awake")]
+        [HarmonyPostfix]
+        private static void AvatarSeatAwake(S1AvatarAnimation.AvatarSeat __instance) =>
+            Seat.Register(__instance);
     }
 }
