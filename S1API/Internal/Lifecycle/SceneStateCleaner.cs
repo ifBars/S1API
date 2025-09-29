@@ -85,7 +85,11 @@ namespace S1API.Internal.Lifecycle
                     try
                     {
                         if (string.Equals(sceneName, "Main", StringComparison.OrdinalIgnoreCase))
+                        {
                             NPCNetworkBootstrap.OnMainSceneInitialized();
+                            // Kick off delayed seating scan once Main initializes to avoid early Awake crashes
+                            try { Internal.SeatBootstrap.OnMainSceneInitialized(); } catch { }
+                        }
                         else
                             NPCNetworkBootstrap.ResetFlags();
                     }

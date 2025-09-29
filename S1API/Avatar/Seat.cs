@@ -8,6 +8,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using MelonLoader.Utils;
+using S1API.Internal.Utils;
 using UnityEngine;
 
 namespace S1API.Avatar
@@ -39,8 +41,10 @@ namespace S1API.Avatar
             // Track hierarchy and naming for mod author reference
             hierarchyPath = BuildTransformPath(seatTransform);
 
-            // Resolve seat set (if any)
-            var parentSet = seat != null ? seat.GetComponentInParent<S1AvatarAnimation.AvatarSeatSet>(includeInactive: true) : null;
+            // Resolve seat set (if any). Avoid generic GetComponentInParent<T> to prevent Il2Cpp casting issues.
+            var parentSet = seat != null
+                ? seat.GetComponentInParent(CrossType.Of<S1AvatarAnimation.AvatarSeatSet>(), true) as S1AvatarAnimation.AvatarSeatSet
+                : null;
             if (parentSet != null)
             {
                 seatSetReference = new WeakReference<S1AvatarAnimation.AvatarSeatSet>(parentSet);

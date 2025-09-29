@@ -37,13 +37,5 @@ namespace S1API.Internal.Patches
         [HarmonyPostfix]
         private static void DeliveryLocationAwake(S1Economy.DeliveryLocation __instance) =>
             DeliveryLocation.Register(__instance);
-
-        /// <summary>
-        /// INTERNAL: Registers avatar seats for tooling and schedule lookup.
-        /// </summary>
-        [HarmonyPatch(typeof(S1AvatarAnimation.AvatarSeat), "Awake")]
-        [HarmonyPostfix]
-        private static void AvatarSeatAwake(S1AvatarAnimation.AvatarSeat __instance) =>
-            Seat.Register(__instance);
     }
 }

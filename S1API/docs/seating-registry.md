@@ -5,7 +5,9 @@ and map them to schedule actions.
 
 ## Seat Model
 
-Each entry is represented by `S1API.Avatar.Seat` and is populated when `AvatarSeat.Awake` runs.
+Each entry is represented by `S1API.Avatar.Seat`. Seats are now discovered via a delayed scan
+shortly after the `Main` scene initializes (not during `AvatarSeat.Awake`). This avoids early-scene
+initialization crashes and ensures all seats are available.
 Key properties:
 
 - `HierarchyPath`: Full transform path (scene root ➝ seat GameObject).
