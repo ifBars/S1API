@@ -1,4 +1,5 @@
 ﻿using MelonLoader;
+using S1API.Internal;
 using S1API.Internal.Lifecycle;
 using S1API.Map;
 
@@ -18,6 +19,7 @@ namespace S1API
 
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
+            NPCNetworkBootstrap.EnsurePrefabsWarmup();
             SceneStateCleaner.ResetForSceneChange(sceneName, afterUnload: false);
         }
     }

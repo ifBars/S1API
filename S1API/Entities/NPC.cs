@@ -58,6 +58,7 @@ using System.Collections;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Serialization;
 using HarmonyLib;
 #if (IL2CPPMELON)
 using Il2CppFishNet;
@@ -100,6 +101,8 @@ namespace S1API.Entities
         internal static readonly System.Collections.Generic.Dictionary<System.Type, System.Action<NPCRelationshipDataBuilder>> TypeToRelationshipDefaults = new System.Collections.Generic.Dictionary<System.Type, System.Action<NPCRelationshipDataBuilder>>();
         private static readonly System.Collections.Generic.Dictionary<System.Type, (Vector3 position, Quaternion rotation)> TypeToSpawnPosition = new System.Collections.Generic.Dictionary<System.Type, (Vector3, Quaternion)>();
         private static readonly System.Collections.Generic.HashSet<System.Type> CustomerTypes = new System.Collections.Generic.HashSet<System.Type>();
+        private static volatile bool _prefabsConfiguredForLocalProcess;
+        internal static bool PrefabsConfiguredForLocalProcess => _prefabsConfiguredForLocalProcess;
         private S1AvatarFramework.Avatar? _runtimeAvatar;
         
         #region Template Prefab Helpers
@@ -134,8 +137,24 @@ namespace S1API.Entities
             catch { /* no-op: fallback to local prefab */ }
 
             GameObject prefabToUse = spawnableNetPrefab?.gameObject ?? prefab;
-            NetworkObject instanceNo = UnityEngine.Object.Instantiate<NetworkObject>(spawnableNetPrefab ?? netPrefab);
-            GameObject instance = instanceNo.gameObject;
+            GameObject instance = UnityEngine.Object.Instantiate<GameObject>(prefabToUse);
+            try
+            {
+                var nm = InstanceFinder.NetworkManager;
+                bool isServer = nm != null && nm.IsServer;
+                var existingNo = instance.GetComponent<NetworkObject>();
+                if (isServer)
+                {
+                    if (existingNo == null)
+                        existingNo = instance.AddComponent<NetworkObject>();
+                }
+                else
+                {
+                    if (existingNo != null)
+                        UnityEngine.Object.Destroy(existingNo);
+                }
+            }
+            catch { }
             if (S1NPCs.NPCManager.InstanceExists && S1NPCs.NPCManager.Instance.NPCContainer != null)
             {
                 Transform parent = S1NPCs.NPCManager.Instance.NPCContainer;
@@ -152,12 +171,18 @@ namespace S1API.Entities
                 throw new Exception("NPC type is null for prefab resolution.");
 
             if (TypeToPrefab.TryGetValue(npcType, out var cached) && cached != null)
+            {
+                MarkPrefabsConfigured();
                 return cached;
+            }
 
             lock (TemplateLoadLock)
             {
                 if (TypeToPrefab.TryGetValue(npcType, out cached) && cached != null)
+                {
+                    MarkPrefabsConfigured();
                     return cached;
+                }
 
                 // Prefer a spawnable prefab provided by the base game (e.g., "BaseNPC").
                 var nm = InstanceFinder.NetworkManager;
@@ -234,7 +259,14 @@ namespace S1API.Entities
                 try
                 {
                     var builder = new NPCPrefabBuilder(prefabNO.gameObject, npcType);
-                    owner?.ConfigurePrefab(builder);
+                    if (owner != null)
+                    {
+                        owner.ConfigurePrefab(builder);
+                    }
+                    else
+                    {
+                        InvokeConfigurePrefabWithoutInstance(npcType, builder);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -277,7 +309,23 @@ namespace S1API.Entities
                 // Register as spawnable so FishNet assigns stable behaviour indices and can network-spawn
                 try
                 {
-                    spawnablePrefabs.AddObject(prefabNO);
+                    if (spawnablePrefabs != null)
+                    {
+                        bool alreadyRegistered = false;
+                        int existingCount = spawnablePrefabs.GetObjectCount();
+                        for (int i = 0; i < existingCount; i++)
+                        {
+                            NetworkObject existing = spawnablePrefabs.GetObject(true, i);
+                            if (existing != null && existing.gameObject != null && existing.gameObject.name == prefabName)
+                            {
+                                alreadyRegistered = true;
+                                break;
+                            }
+                        }
+
+                        if (!alreadyRegistered)
+                            spawnablePrefabs.AddObject(prefabNO);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -288,7 +336,34 @@ namespace S1API.Entities
                 NPCPrefabContainer.OrganizePrefab(prefabNO.gameObject, npcType.Name);
 
                 TypeToPrefab[npcType] = prefabNO.gameObject;
+                MarkPrefabsConfigured();
                 return prefabNO.gameObject;
+            }
+        }
+
+        private static void InvokeConfigurePrefabWithoutInstance(System.Type npcType, NPCPrefabBuilder builder)
+        {
+            if (npcType == null || builder == null)
+                return;
+
+            // Skip if the type did not override ConfigurePrefab
+            MethodInfo configureMethod = npcType.GetMethod("ConfigurePrefab", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            if (configureMethod == null || configureMethod.DeclaringType == typeof(NPC))
+                return;
+
+            NPC tempInstance = null;
+            try
+            {
+                tempInstance = (NPC)FormatterServices.GetUninitializedObject(npcType);
+                configureMethod.Invoke(tempInstance, new object[] { builder });
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[S1API] {npcType.Name}.ConfigurePrefab failed during pre-registration: {ex.Message}");
+            }
+            finally
+            {
+                tempInstance = null;
             }
         }
 
@@ -329,7 +404,14 @@ namespace S1API.Entities
         {
             try
             {
+                // Only pre-register when SpawnablePrefabs is available; otherwise, a warmup will retry shortly
+                var nm = InstanceFinder.NetworkManager;
+                var spawnables = nm?.SpawnablePrefabs;
+                if (spawnables == null)
+                    return;
+
                 var baseType = typeof(NPC);
+                var baseAssembly = baseType.Assembly;
                 var asms = AppDomain.CurrentDomain.GetAssemblies();
                 for (int ai = 0; ai < asms.Length; ai++)
                 {
@@ -343,10 +425,17 @@ namespace S1API.Entities
                             continue;
                         if (baseType.IsAssignableFrom(t))
                         {
+                            // Skip internal S1API NPC wrappers; only pre-register mod-defined types
+                            if (t.Assembly == baseAssembly)
+                                continue;
+
                             PreRegisterPrefabForType(t);
                         }
                     }
                 }
+
+                // Prefabs are configured for this process once registration has been attempted with spawnables present
+                MarkPrefabsConfigured();
             }
             catch (Exception ex)
             {
@@ -438,6 +527,11 @@ namespace S1API.Entities
             TypeToSpawnPosition[npcType] = (position, rotation);
         }
 
+        private static void MarkPrefabsConfigured()
+        {
+            _prefabsConfiguredForLocalProcess = true;
+        }
+
 #endregion
         
         #region Protected Members
@@ -516,8 +610,6 @@ namespace S1API.Entities
             RestoreRuntimeAvatarAppearance();
 
             gameObject.name = S1NPC.FirstName ?? "UnknownNPC";
-
-            TrySpawnNetworkInstance();
 
             All.Add(this);
         }
@@ -1469,13 +1561,7 @@ namespace S1API.Entities
 
                 try
                 {
-                    behaviour.NetworkInitializeIfDisabled();
-                    // If this is a Behaviour instance, re-run its EnabledOnAwake if set so NPCBehaviour can pick it up now
-                    var asBehaviour = behaviour as S1Behaviour.Behaviour;
-                    if (asBehaviour != null && asBehaviour.EnabledOnAwake && !asBehaviour.Enabled)
-                    {
-                        asBehaviour.Enable();
-                    }
+                    // Defer network initialization to FishNet's spawn process. Do not initialize manually.
                 }
                 catch (Exception ex)
                 {
@@ -1534,167 +1620,121 @@ namespace S1API.Entities
             try
             {
                 var nm = InstanceFinder.NetworkManager;
-                if (nm == null)
+                if (nm != null && !nm.IsServer)
                     return;
 
                 NetworkObject no = gameObject.GetComponent<NetworkObject>() ?? gameObject.AddComponent<NetworkObject>();
-                MelonCoroutines.Start(ActivationAndSpawnCoroutine(nm, no, this, 0.3f, 0.6f));
+                NPCNetworkBootstrap.RegisterPendingNetworkSpawn(this, no, 0.3f, 0.6f);
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[S1API] Failed to schedule NPC network spawn: {ex.Message}");
+                Debug.LogWarning($"[S1API] Failed to queue NPC network spawn: {ex.Message}");
+            }
+        }
+
+        internal void PrepareForNetworkSpawn()
+        {
+            try
+            {
+                var customer = gameObject.GetComponent<S1Economy.Customer>();
+                if (customer != null)
+                    Customer.EnsureCustomer();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[S1API] Failed to prepare customer data before spawn: {ex.Message}");
+            }
+        }
+
+        internal void FinalizeNetworkSpawn()
+        {
+            try
+            {
+                bool broadcastVisibility = InstanceFinder.IsServer;
+                S1NPC.SetVisible(IsPhysical, networked: broadcastVisibility);
+
+                // If this prefab included a Customer, ensure it's initialized; otherwise, respect non-customer NPCs
+                try
+                {
+                    if (IsCustomNPC)
+                    {
+                        var hasCustomer = gameObject.GetComponent<S1Economy.Customer>() != null;
+                        if (hasCustomer)
+                        {
+                            // Customer.EnsureCustomer();
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[S1API] Failed to ensure Customer on NPC: {ex.Message}");
+                }
+
+                // Apply any planned schedule specs for this NPC type now that the instance exists
+                try
+                {
+                    var t = GetType();
+                    if (TypeToSchedulePlan.TryGetValue(t, out var planned) && planned != null && planned.Count > 0)
+                    {
+                        for (int i = 0; i < planned.Count; i++)
+                        {
+                            var spec = planned[i];
+                            if (spec != null)
+                                spec.ApplyTo(Schedule);
+                        }
+                        Schedule.InitializeActions();
+                        Schedule.EnforceState();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[S1API] Failed to apply planned schedule: {ex.Message}");
+                }
+
+                // Apply per-type relationship defaults after base fields are present, unless loaded from save
+                if (!_wasLoadedFromSave)
+                {
+                    try
+                    {
+                        var t = GetType();
+                        if (TypeToRelationshipDefaults.TryGetValue(t, out var relCfg) && relCfg != null)
+                        {
+                            var builder = new NPCRelationshipDataBuilder();
+                            relCfg(builder);
+                            var rel = S1NPC.RelationData;
+                            if (rel != null)
+                                builder.ApplyTo(rel, S1NPC);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"[S1API] Failed to apply relationship defaults: {ex.Message}");
+                    }
+                }
+
+                // Apply spawn position for this NPC type (always applied, regardless of save state)
+                try
+                {
+                    var t = GetType();
+                    if (TypeToSpawnPosition.TryGetValue(t, out var spawnData))
+                    {
+                        Position = spawnData.position;
+                        Transform.rotation = spawnData.rotation;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[S1API] Failed to apply spawn position: {ex.Message}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[S1API] Failed to finalize NPC after spawn: {ex.Message}");
             }
         }
 
         // Removed: component index hack. FishNet assigns NetworkBehaviour indices at spawn based on
         // the behaviours present on the NetworkObject. Forcing ComponentIndex causes mismatches.
-
-        private static IEnumerator ActivationAndSpawnCoroutine(NetworkManager nm, NetworkObject no, NPC owner, float activateDelay, float spawnDelay)
-        {
-            if (activateDelay > 0f)
-                yield return new WaitForSeconds(activateDelay);
-
-            if (no != null && no.gameObject != null)
-                no.gameObject.SetActive(true);
-
-            float remaining = spawnDelay - activateDelay;
-            if (remaining > 0f)
-                yield return new WaitForSeconds(remaining);
-
-            // Gate spawning until online scene is ready across clients to avoid MovedObjectsHolder stalls
-            float waitStart = Time.realtimeSinceStartup;
-            float maxWait = 60f;
-            while (true)
-            {
-                bool mainSceneActive = false;
-                try { mainSceneActive = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "Main"; } catch { }
-
-                bool serverReady = nm != null && nm.IsServer;
-                bool clientsReady = true;
-                try { clientsReady = NPCNetworkBootstrap.ClientsReadyToSpawnNpcs; } catch { }
-
-                if (serverReady && mainSceneActive && clientsReady)
-                    break;
-
-                if (Time.realtimeSinceStartup - waitStart > maxWait)
-                    break;
-
-                yield return new WaitForSeconds(0.1f);
-            }
-
-            try
-            {
-                if (nm != null && nm.IsServer && no != null && !no.IsSpawned)
-                {
-                    // If this NPC has a Customer component, ensure its data and references are initialized before spawning
-                    try
-                    {
-                        if (owner != null)
-                        {
-                            var customer = owner.gameObject.GetComponent<S1Economy.Customer>();
-                            if (customer != null)
-                            {
-                                owner.Customer.EnsureCustomer();
-                            }
-                        }
-                    }
-                    catch { }
-
-                    nm.ServerManager.Spawn(no, null, default(UnityEngine.SceneManagement.Scene));
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[S1API] Failed to spawn NPC over network: {ex.Message}");
-            }
-
-            try
-            {
-                if (owner != null)
-                {
-                    bool broadcastVisibility = InstanceFinder.IsServer;
-                    owner.S1NPC.SetVisible(owner.IsPhysical, networked: broadcastVisibility);
-
-                    // If this prefab included a Customer, ensure it's initialized; otherwise, respect non-customer NPCs
-                    try
-                    {
-                        if (owner.IsCustomNPC)
-                        {
-                            var hasCustomer = owner.gameObject.GetComponent<S1Economy.Customer>() != null;
-                            if (hasCustomer)
-                            {
-                                // owner.Customer.EnsureCustomer();
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogWarning($"[S1API] Failed to ensure Customer on NPC: {ex.Message}");
-                    }
-
-                    // Apply any planned schedule specs for this NPC type now that the instance exists
-                    try
-                    {
-                        var t = owner.GetType();
-                        if (TypeToSchedulePlan.TryGetValue(t, out var planned) && planned != null && planned.Count > 0)
-                        {
-                            for (int i = 0; i < planned.Count; i++)
-                            {
-                                var spec = planned[i];
-                                if (spec != null)
-                                    spec.ApplyTo(owner.Schedule);
-                            }
-                            owner.Schedule.InitializeActions();
-                            owner.Schedule.EnforceState();
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogWarning($"[S1API] Failed to apply planned schedule: {ex.Message}");
-                    }
-
-                    // Apply per-type relationship defaults after base fields are present, unless loaded from save
-                    if (!owner._wasLoadedFromSave)
-                    {
-                        try
-                        {
-                            var t = owner.GetType();
-                            if (TypeToRelationshipDefaults.TryGetValue(t, out var relCfg) && relCfg != null)
-                            {
-                                var builder = new NPCRelationshipDataBuilder();
-                                relCfg(builder);
-                                var rel = owner.S1NPC.RelationData;
-                                if (rel != null)
-                                    builder.ApplyTo(rel, owner.S1NPC);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.LogWarning($"[S1API] Failed to apply relationship defaults: {ex.Message}");
-                        }
-                    }
-
-                    // Apply spawn position for this NPC type (always applied, regardless of save state)
-                    try
-                    {
-                        var t = owner.GetType();
-                        if (TypeToSpawnPosition.TryGetValue(t, out var spawnData))
-                        {
-                            owner.Position = spawnData.position;
-                            owner.Transform.rotation = spawnData.rotation;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogWarning($"[S1API] Failed to apply spawn position: {ex.Message}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[S1API] Failed to set NPC visibility after spawn: {ex.Message}");
-            }
-        }
 
 #endregion
 

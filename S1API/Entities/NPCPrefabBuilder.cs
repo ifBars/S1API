@@ -2,10 +2,12 @@
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
 using S1Economy = Il2CppScheduleOne.Economy;
+using S1AvatarFramework = Il2CppScheduleOne.AvatarFramework;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1NPCs = ScheduleOne.NPCs;
 using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
 using S1Economy = ScheduleOne.Economy;
+using S1AvatarFramework = ScheduleOne.AvatarFramework;
 #endif
 
 using System;
@@ -15,6 +17,7 @@ using S1API.Entities.Schedule;
 using S1API.Entities.Customer;
 using S1API.Entities.Relation;
 using System.Collections.Generic;
+using S1API.Entities.Internal;
 
 namespace S1API.Entities
 {
@@ -62,6 +65,108 @@ namespace S1API.Entities
             }
             // Mark this NPC type as a Customer-bearing type so pre-registration adds Customer on template
             NPC.RegisterCustomerType(ownerType);
+            return this;
+        }
+
+        /// <summary>
+        /// Declares identity defaults (ID, first and last name) to be embedded on the prefab.
+        /// These values are applied on spawn on both server and clients.
+        /// </summary>
+        public NPCPrefabBuilder WithIdentity(string id, string firstName, string lastName)
+        {
+            try
+            {
+                var identity = EnsureIdentityComponent();
+                identity.Id = id;
+                identity.FirstName = firstName;
+                identity.LastName = lastName;
+            }
+            catch { }
+            return this;
+        }
+
+        /// <summary>
+        /// Declares appearance defaults via a wrapper builder. Values are embedded as an AvatarSettings
+        /// asset reference on the prefab and applied to the runtime avatar on spawn (server and clients).
+        /// </summary>
+        public NPCPrefabBuilder WithAppearanceDefaults(Action<AvatarDefaultsBuilder> configure)
+        {
+            if (configure == null)
+                return this;
+
+            try
+            {
+                var builder = new AvatarDefaultsBuilder();
+                configure(builder);
+
+                // Create a new AvatarSettings ScriptableObject and populate from wrapper values
+                var settings = ScriptableObject.CreateInstance<S1AvatarFramework.AvatarSettings>();
+
+                settings.Gender = builder.Gender;
+                settings.Height = builder.Height;
+                settings.Weight = builder.Weight;
+                settings.SkinColor = builder.SkinColor;
+                settings.EyeBallTint = builder.EyeBallTint;
+                settings.PupilDilation = builder.PupilDilation;
+                settings.EyebrowScale = builder.EyebrowScale;
+                settings.EyebrowThickness = builder.EyebrowThickness;
+                settings.EyebrowRestingHeight = builder.EyebrowRestingHeight;
+                settings.EyebrowRestingAngle = builder.EyebrowRestingAngle;
+                settings.HairPath = builder.HairPath ?? string.Empty;
+                settings.HairColor = builder.HairColor;
+                settings.LeftEyeRestingState = new S1AvatarFramework.Eye.EyeLidConfiguration
+                {
+                    topLidOpen = builder.LeftEye.topLidOpen,
+                    bottomLidOpen = builder.LeftEye.bottomLidOpen
+                };
+                settings.RightEyeRestingState = new S1AvatarFramework.Eye.EyeLidConfiguration
+                {
+                    topLidOpen = builder.RightEye.topLidOpen,
+                    bottomLidOpen = builder.RightEye.bottomLidOpen
+                };
+
+                // Layers
+                if (settings.FaceLayerSettings == null)
+                    settings.FaceLayerSettings = new List<S1AvatarFramework.AvatarSettings.LayerSetting>();
+                if (settings.BodyLayerSettings == null)
+                    settings.BodyLayerSettings = new List<S1AvatarFramework.AvatarSettings.LayerSetting>();
+                if (settings.AccessorySettings == null)
+                    settings.AccessorySettings = new List<S1AvatarFramework.AvatarSettings.AccessorySetting>();
+
+                for (int i = 0; i < builder.FaceLayers.Count; i++)
+                {
+                    var l = builder.FaceLayers[i];
+                    settings.FaceLayerSettings.Add(new S1AvatarFramework.AvatarSettings.LayerSetting
+                    {
+                        layerPath = l.path,
+                        layerTint = l.color
+                    });
+                }
+                for (int i = 0; i < builder.BodyLayers.Count; i++)
+                {
+                    var l = builder.BodyLayers[i];
+                    settings.BodyLayerSettings.Add(new S1AvatarFramework.AvatarSettings.LayerSetting
+                    {
+                        layerPath = l.path,
+                        layerTint = l.color
+                    });
+                }
+                for (int i = 0; i < builder.AccessoryLayers.Count; i++)
+                {
+                    var l = builder.AccessoryLayers[i];
+                    settings.AccessorySettings.Add(new S1AvatarFramework.AvatarSettings.AccessorySetting
+                    {
+                        path = l.path,
+                        color = l.color
+                    });
+                }
+
+                // Attach to prefab identity so clients can load it on spawn
+                var identity = EnsureIdentityComponent();
+                identity.AppearanceDefaults = settings;
+            }
+            catch { }
+
             return this;
         }
 
@@ -239,6 +344,60 @@ namespace S1API.Entities
                 catch { }
                 go.SetActive(false);
                 comp.enabled = false;
+            }
+        }
+
+        private NPCPrefabIdentity EnsureIdentityComponent()
+        {
+            var identity = prefabRoot.GetComponent<NPCPrefabIdentity>();
+            if (identity == null)
+                identity = prefabRoot.AddComponent<NPCPrefabIdentity>();
+            return identity;
+        }
+
+        /// <summary>
+        /// Wrapper for authoring appearance defaults without exposing game types to modders.
+        /// </summary>
+        public sealed class AvatarDefaultsBuilder
+        {
+            public float Gender { get; set; } = 0.0f;
+            public float Height { get; set; } = 1.0f;
+            public float Weight { get; set; } = 0.5f;
+            public Color32 SkinColor { get; set; } = new Color32(150, 120, 95, 255);
+            public Color EyeBallTint { get; set; } = Color.white;
+            public float PupilDilation { get; set; } = 1.0f;
+            public float EyebrowScale { get; set; } = 1.0f;
+            public float EyebrowThickness { get; set; } = 1.0f;
+            public float EyebrowRestingHeight { get; set; } = 0.0f;
+            public float EyebrowRestingAngle { get; set; } = 0.0f;
+            public (float topLidOpen, float bottomLidOpen) LeftEye { get; set; } = (0.5f, 0.5f);
+            public (float topLidOpen, float bottomLidOpen) RightEye { get; set; } = (0.5f, 0.5f);
+            public string HairPath { get; set; } = string.Empty;
+            public Color HairColor { get; set; } = Color.black;
+
+            internal readonly List<(string path, Color color)> FaceLayers = new List<(string, Color)>();
+            internal readonly List<(string path, Color color)> BodyLayers = new List<(string, Color)>();
+            internal readonly List<(string path, Color color)> AccessoryLayers = new List<(string, Color)>();
+
+            public AvatarDefaultsBuilder WithFaceLayer(string path, Color color)
+            {
+                if (!string.IsNullOrEmpty(path))
+                    FaceLayers.Add((path, color));
+                return this;
+            }
+
+            public AvatarDefaultsBuilder WithBodyLayer(string path, Color color)
+            {
+                if (!string.IsNullOrEmpty(path))
+                    BodyLayers.Add((path, color));
+                return this;
+            }
+
+            public AvatarDefaultsBuilder WithAccessoryLayer(string path, Color color)
+            {
+                if (!string.IsNullOrEmpty(path))
+                    AccessoryLayers.Add((path, color));
+                return this;
             }
         }
     }

@@ -2,39 +2,25 @@
 using S1Loaders = Il2CppScheduleOne.Persistence.Loaders;
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1Map = Il2CppScheduleOne.Map;
+using S1Money = Il2CppScheduleOne.Money;
+using S1Economy = Il2CppScheduleOne.Economy;
+using S1Datas = Il2CppScheduleOne.Persistence.Datas;
+using S1Items = Il2CppScheduleOne.ItemFramework;
 using Il2CppFishNet;
+using Il2CppFishNet.Object;
 using Il2CppScheduleOne.DevUtilities;
+using Il2CppSystem.Collections.Generic;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Loaders = ScheduleOne.Persistence.Loaders;
 using S1NPCs = ScheduleOne.NPCs;
 using FishNet;
+using FishNet.Object;
 using ScheduleOne.DevUtilities;
 using S1Map = ScheduleOne.Map;
-#endif
-
-#if (IL2CPPMELON)
-using S1Money = Il2CppScheduleOne.Money;
-#elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Money = ScheduleOne.Money;
-#endif
-
-#if (IL2CPPMELON)
-using S1Economy = Il2CppScheduleOne.Economy;
-#elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Economy = ScheduleOne.Economy;
-#endif
-
-#if (IL2CPPMELON)
-using S1Datas = Il2CppScheduleOne.Persistence.Datas;
-using S1Items = Il2CppScheduleOne.ItemFramework;
-#elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Datas = ScheduleOne.Persistence.Datas;
 using S1Items = ScheduleOne.ItemFramework;
-#endif
-
-#if (IL2CPPMELON || IL2CPPBEPINEX)
-using Il2CppSystem.Collections.Generic;
-#elif (MONOMELON || MONOBEPINEX)
 using System.Collections.Generic;
 #endif
 
@@ -42,10 +28,10 @@ using System;
 using System.IO;
 using System.Reflection;
 using HarmonyLib;
-
 using MelonLoader;
 using S1API.Entities;
 using S1API.Entities.Relation;
+using S1API.Entities.Internal;
 using S1API.Internal.Utils;
 using S1API.Map;
 using UnityEngine.SceneManagement;
@@ -71,6 +57,10 @@ namespace S1API.Internal.Patches
         {
             // Only allow custom NPC instantiation in the "Main" scene to avoid prologue issues
             if (!IsInMainScene())
+                return;
+
+            // Only the server should instantiate custom NPCs; clients will receive network spawns
+            if (!InstanceFinder.IsServer)
                 return;
 
             // Pre-scan active enterable buildings and register them for API lookup
@@ -103,6 +93,35 @@ namespace S1API.Internal.Patches
                     string npcPath = Path.Combine(mainPath, customNPC.S1NPC.SaveFolderName);
                     customNPC.LoadInternal(npcPath);
                 }
+
+                // Schedule network spawn on server via NPCNetworkBootstrap once clients are ready
+                try
+                {
+                    var no = customNPC.gameObject.GetComponent<NetworkObject>();
+                }
+                catch { }
+                try
+                {
+                    var no = customNPC.gameObject.GetComponent<FishNet.Object.NetworkObject>();
+                }
+                catch { }
+
+                try
+                {
+                    var netObj = customNPC.gameObject.GetComponent<FishNet.Object.NetworkObject>() ??
+                                 customNPC.gameObject.GetComponent<NetworkObject>();
+                    if (netObj == null)
+                    {
+                        // Add a NetworkObject on server only; clients will not instantiate these directly
+                        try { netObj = customNPC.gameObject.AddComponent<FishNet.Object.NetworkObject>(); } catch { }
+                        try { if (netObj == null) netObj = customNPC.gameObject.AddComponent<NetworkObject>(); } catch { }
+                    }
+                    if (netObj != null)
+                    {
+                        NPCNetworkBootstrap.RegisterPendingNetworkSpawn(customNPC, netObj, 3f, 6f);
+                    }
+                }
+                catch { }
             }
         }
 
@@ -141,6 +160,15 @@ namespace S1API.Internal.Patches
         [HarmonyPostfix]
         private static void NPCStart(S1NPCs.NPC __instance)
         {
+            // Apply prefab-stored identity/appearance defaults on both server and clients
+            try
+            {
+                var identity = __instance.GetComponent<NPCPrefabIdentity>();
+                if (identity != null)
+                    identity.ApplyTo(__instance);
+            }
+            catch { }
+
             for (int i = 0; i < NPC.All.Count; i++)
             {
                 var npc = NPC.All[i];

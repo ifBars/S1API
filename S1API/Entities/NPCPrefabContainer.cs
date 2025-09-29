@@ -3,41 +3,41 @@ using UnityEngine;
 namespace S1API.Entities
 {
     /// <summary>
-    /// Manages NPC prefab containers to keep the scene hierarchy organized.
-    /// Creates and maintains a container hierarchy under "@Managers/@Prefabs/" 
-    /// for NPC prefabs to avoid cluttering the main scene.
+    /// Manages NPC prefab containers to keep the scene hierarchy organized and persistent
+    /// across scene loads. Prefabs are parented under a dedicated root that is marked as
+    /// DontDestroyOnLoad so host and clients share the same configured prefabs before the
+    /// gameplay scene initializes.
     /// </summary>
     internal static class NPCPrefabContainer
     {
-        private const string PREFABS_PATH = "@Managers/@Prefabs";
+        private const string RootName = "@S1API_PersistentPrefabs";
+        private static GameObject _persistentRoot;
 
         /// <summary>
-        /// Gets or creates the root prefabs container under @Managers.
+        /// Gets or creates the persistent prefab root that survives scene loads.
         /// </summary>
         /// <returns>The root prefabs container GameObject.</returns>
         /// <remarks>
-        /// This method ensures that the "@Managers/@Prefabs" hierarchy exists
-        /// for organizing NPC prefabs. If the hierarchy doesn't exist, it will be created.
+        /// This method ensures the persistent prefab root exists and is marked as
+        /// DontDestroyOnLoad so configured prefabs remain available across scenes.
         /// </remarks>
         public static GameObject GetOrCreatePrefabsContainer()
         {
-            // Find or create the root prefabs container
-            var prefabsContainer = GameObject.Find(PREFABS_PATH);
-            if (prefabsContainer == null)
-            {
-                // Find or create the @Managers root
-                var managers = GameObject.Find("@Managers");
-                if (managers == null)
-                {
-                    managers = new GameObject("@Managers");
-                }
+            if (_persistentRoot != null)
+                return _persistentRoot;
 
-                // Create the @Prefabs container
-                prefabsContainer = new GameObject("@Prefabs");
-                prefabsContainer.transform.SetParent(managers.transform);
+            var existing = GameObject.Find(RootName);
+            if (existing != null)
+            {
+                _persistentRoot = existing;
+            }
+            else
+            {
+                _persistentRoot = new GameObject(RootName);
             }
 
-            return prefabsContainer;
+            Object.DontDestroyOnLoad(_persistentRoot);
+            return _persistentRoot;
         }
 
         /// <summary>
@@ -58,12 +58,11 @@ namespace S1API.Entities
             if (prefabsRoot == null)
                 return null;
 
-            // Find or create the NPC-specific container
             var npcContainer = prefabsRoot.transform.Find(npcTypeName);
             if (npcContainer == null)
             {
                 var containerGO = new GameObject(npcTypeName);
-                containerGO.transform.SetParent(prefabsRoot.transform);
+                containerGO.transform.SetParent(prefabsRoot.transform, false);
                 return containerGO;
             }
 
@@ -88,7 +87,7 @@ namespace S1API.Entities
             var container = GetOrCreateNPCPrefabContainer(npcTypeName);
             if (container != null)
             {
-                prefab.transform.SetParent(container.transform);
+                prefab.transform.SetParent(container.transform, false);
                 prefab.SetActive(false); // Keep prefabs inactive
             }
 

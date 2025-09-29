@@ -84,6 +84,8 @@ namespace S1API.Internal.Lifecycle
                     // Notify NPC bootstrap for readiness and prefab pre-registration
                     try
                     {
+                        NPCNetworkBootstrap.EnsurePrefabsWarmup();
+
                         if (string.Equals(sceneName, "Main", StringComparison.OrdinalIgnoreCase))
                         {
                             NPCNetworkBootstrap.OnMainSceneInitialized();
