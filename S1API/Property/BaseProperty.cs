@@ -35,7 +35,7 @@ namespace S1API.Property
         /// <value>
         /// A <c>float</c> representing the monetary price of the property.
         /// </value>
-        public abstract float Price { get; }
+        public abstract float Price { get; set; }
 
         /// Indicates whether the property is currently owned or not.
         /// This property is read-only and reflects the ownership status

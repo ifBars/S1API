@@ -64,6 +64,7 @@
         <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.TextRenderingModule.dll" />
         <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.ImageConversionModule.dll" />
         <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.PhysicsModule.dll" />
+        <Reference Include="$(Il2CppAssembliesPath)\Unity.TextMeshPro.dll" />
 
         <Reference Include="$(Il2CppAssembliesPath)\Il2CppFishNet.Runtime.dll" Condition="'$(Configuration)' == 'Il2CppMelon'" />
         <Reference Include="$(Il2CppAssembliesPath)\FishNet.Runtime.dll" Condition="'$(Configuration)' == 'Il2CppBepInEx'" />
@@ -109,6 +110,9 @@
         </Reference>
         <Reference Include="UnityEngine.PhysicsModule">
             <HintPath>$(MonoAssembliesPath)/UnityEngine.PhysicsModule.dll</HintPath>
+        </Reference>
+        <Reference Include="TextMeshPro">
+            <HintPath>$(MonoAssembliesPath)/Unity.TextMeshPro.dll</HintPath>
         </Reference>
     </ItemGroup>
 

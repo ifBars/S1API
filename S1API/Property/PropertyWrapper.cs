@@ -1,4 +1,12 @@
+using System.Collections.Generic;
 using UnityEngine;
+#if IL2CPPMELON
+using Il2CppTMPro;
+using Il2CppScheduleOne.Money;
+#elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
+using TMPro;
+using ScheduleOne.Money;
+#endif
 
 namespace S1API.Property
 {
@@ -53,10 +61,18 @@ namespace S1API.Property
         /// </summary>
         /// <remarks>
         /// The price represents a floating-point value that denotes the monetary
-        /// value or cost associated with the property. This property is read-only
-        /// and retrieves the value from the underlying property implementation.
+        /// value or cost associated with the property. This property is both
+        /// readable and writable, allowing for dynamic adjustments to the property's price.
         /// </remarks>
-        public override float Price => InnerProperty.Price;
+        public override float Price
+        {
+            get => InnerProperty.Price;
+            set
+            {
+                InnerProperty.Price = value;
+                UpdatePriceDisplay(value);
+            }
+        }
 
         /// <summary>
         /// Gets a value indicating whether the property is currently owned.
@@ -98,6 +114,79 @@ namespace S1API.Property
         public override bool IsPointInside(Vector3 point)
         {
             return InnerProperty.DoBoundsContainPoint(point);
+        }
+
+        /// <summary>
+        /// INTERNAL: Prefix used for locating property signs in the scene hierarchy.
+        /// </summary>
+        internal virtual string SignPrefix => "@Properties/";
+
+        /// <summary>
+        /// INTERNAL: Path to the whiteboard text object in the scene hierarchy for updating the property price display.
+        /// </summary>
+        internal virtual string WhiteboardPath =>
+            $"Map/Container/RE Office/Interior/Whiteboard/PropertyListing {PropertyName}/Price";
+
+        /// <summary>
+        /// INTERNAL: Collection of potential paths to the sign text objects in the scene hierarchy for updating the property price display.
+        /// </summary>
+        internal virtual IEnumerable<string> SignPaths
+        {
+            get
+            {
+                var baseName = PropertyName.Replace(" ", "");
+                yield return $"{SignPrefix}{baseName}/ForSaleSign/Price";
+                yield return $"{SignPrefix}{PropertyName}/ForSaleSign/Price";
+                yield return $"{SignPrefix}{baseName}/ForSaleSign (1)/Price";
+                yield return $"{SignPrefix}{PropertyName}/ForSaleSign (1)/Price";
+            }
+        }
+
+        /// <summary>
+        /// INTERNAL: Updates the price display on both the whiteboard and property signs in the game world.
+        /// Will not update property sign for Sweatshop property, as it uses a Texture based sign.
+        /// </summary>
+        /// <param name="price">The new price to display.</param>
+        internal void UpdatePriceDisplay(float price)
+        {
+            var formattedPrice = MoneyManager.FormatAmount(price);
+
+            // Whiteboard update
+            TrySetTMPText(WhiteboardPath, formattedPrice, "whiteboard");
+
+            // Sign updates
+            foreach (var path in SignPaths)
+            {
+                if (TrySetTMPText(path, formattedPrice, "sign"))
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// INTERNAL: Attempts to find a TextMeshPro text component at the specified path and update its text to display the given price.
+        /// </summary>
+        /// <param name="path">The hierarchy path to the GameObject containing the TMP_Text component.</param>
+        /// <param name="priceText">The formatted price text to set.</param>
+        /// <param name="context">A string indicating the context (e.g., "whiteboard" or "sign") for logging purposes.</param>
+        /// <returns>True if the text was successfully updated; otherwise, false.</returns>
+        internal bool TrySetTMPText(string path, string priceText, string context)
+        {
+            var obj = GameObject.Find(path);
+            if (obj != null)
+            {
+                var textComp = obj.GetComponent<TMP_Text>();
+                if (textComp != null)
+                {
+                    textComp.text = priceText;
+                    return true;
+                }
+                Debug.LogWarning($"TMP_Text not found on {context} price object.");
+            }
+            else
+            {
+                Debug.LogWarning($"{context} price object not found at path: {path}");
+            }
+            return false;
         }
     }
 }
