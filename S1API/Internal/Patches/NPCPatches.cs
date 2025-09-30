@@ -63,18 +63,6 @@ namespace S1API.Internal.Patches
             if (!InstanceFinder.IsServer)
                 return;
 
-            // Pre-scan active enterable buildings and register them for API lookup
-            try
-            {
-                var buildings = UnityEngine.Object.FindObjectsOfType<S1Map.NPCEnterableBuilding>(includeInactive: true);
-                for (int i = 0; i < buildings.Length; i++)
-                {
-                    var b = buildings[i];
-                    if (b != null)
-                        Building.Register(b);
-                }
-            }
-            catch { }
             foreach (Type type in ReflectionUtils.GetDerivedClasses<NPC>())
             {
                 NPC? customNPC = (NPC)Activator.CreateInstance(type, true)!;
