@@ -30,7 +30,7 @@ The Custom NPC system is documented across multiple focused pages:
 - **[Relationship Management](relationship-management.md)** - NPC relationships and connections
 
 ### API Reference
-- **[API Reference](../api/)** - Detailed API documentation
+- **[API Reference](../api/S1API.html)** - Detailed API documentation
 
 ## Quick Start
 
@@ -135,7 +135,7 @@ Each NPC has access to several component systems:
 
 ## Getting Help
 
-- Review the [API Reference](../api/) for detailed method documentation
+- Review the [API Reference](../api/S1API.html) for detailed method documentation
 - Look at the example projects in the repository for real-world usage patterns
 
 ## Next Steps

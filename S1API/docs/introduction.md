@@ -21,11 +21,10 @@ The goals are predictable behavior, safe integration with the base game, and a s
 
 ## Quick Links
 
-- Getting started: [getting-started.md](getting-started.md)
-- Phone Apps: [phone-app.md](phone-app.md)
-- UI Factory: [ui.md](ui.md)
-- Save System: [save-system.md](save-system.md)
-- Phone Calls: [phone-calls.md](phone-calls.md)
-- Logging: [Logging](../Logging/)
+- Getting started: [Getting Started](getting-started.md)
+- Phone Apps: [Phone Apps](phone-app.md)
+- UI Factory: [UI](ui.md)
+- Save System: [Save System](save-system.md)
+- Phone Calls: [Phone Calls](phone-calls.md)
 
 If you're looking for a practical example, see the [S1NotesApp](https://github.com/ifBars/S1NotesApp) mod which implements a full in-game Notes application using S1API's PhoneApp and Saveables systems.

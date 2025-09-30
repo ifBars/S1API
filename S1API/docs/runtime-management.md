@@ -457,17 +457,3 @@ protected override void OnCreated()
     }
 }
 ```
-
-### Performance Considerations
-
-- **Keep event handlers efficient** - avoid expensive operations in callbacks
-- **Use appropriate update frequencies** for periodic tasks
-- **Test with multiple NPCs** - ensure runtime behavior scales well
-- **Monitor runtime performance** in multiplayer environments
-
-## Next Steps
-
-Now that you understand runtime management, explore:
-
-- **[API Reference](../api/)** - Detailed API documentation
-- **[Troubleshooting](troubleshooting.md)** - Common issues and solutions
