@@ -111,7 +111,7 @@
         <Reference Include="UnityEngine.PhysicsModule">
             <HintPath>$(MonoAssembliesPath)/UnityEngine.PhysicsModule.dll</HintPath>
         </Reference>
-        <Reference Include="TextMeshPro">
+        <Reference Include="Unity.TextMeshPro">
             <HintPath>$(MonoAssembliesPath)/Unity.TextMeshPro.dll</HintPath>
         </Reference>
     </ItemGroup>
