@@ -68,6 +68,20 @@ jobs:
           else
             echo "No game-assemblies/MelonLoader directory found"
           fi
+          
+          # Ensure Unity.TextMeshPro.dll is available
+          if [ ! -f "S1API/ScheduleOneAssemblies/Managed/Unity.TextMeshPro.dll" ]; then
+            echo "Unity.TextMeshPro.dll not found in Managed folder, searching for it..."
+            TMPRO_PATH=$(find game-assemblies -name "Unity.TextMeshPro.dll" -type f | head -1)
+            if [ -n "$TMPRO_PATH" ]; then
+              echo "Found Unity.TextMeshPro.dll at: $TMPRO_PATH"
+              cp "$TMPRO_PATH" S1API/ScheduleOneAssemblies/Managed/ || echo "Failed to copy Unity.TextMeshPro.dll"
+              echo "Copied Unity.TextMeshPro.dll to Managed folder"
+            else
+              echo "Warning: Unity.TextMeshPro.dll not found in game-assemblies repository"
+              echo "This may cause build failures for files that use TMPro"
+            fi
+          fi
 
       - name: Verify Assembly Copies
         run: |
@@ -88,6 +102,18 @@ jobs:
             echo "✗ Missing Assembly-CSharp.dll"
             echo "Attempting auto-discovery..."
             find game-assemblies -name "Assembly-CSharp.dll" -type f -exec ls -l {} \;
+          fi
+          echo ""
+          echo "=== TextMeshPro Assembly Check ==="
+          if [ -f S1API/ScheduleOneAssemblies/Managed/Unity.TextMeshPro.dll ]; then
+            echo "✓ Found Unity.TextMeshPro.dll"
+            ls -l S1API/ScheduleOneAssemblies/Managed/Unity.TextMeshPro.dll
+          else
+            echo "✗ Missing Unity.TextMeshPro.dll"
+            echo "Attempting auto-discovery..."
+            find game-assemblies -name "Unity.TextMeshPro.dll" -type f -exec ls -l {} \;
+            echo "Searching for TextMeshPro assemblies..."
+            find game-assemblies -name "*TextMeshPro*" -type f -exec ls -l {} \;
           fi
           echo ""
           echo "=== MelonLoader Assembly Check ==="
