@@ -102,19 +102,17 @@ namespace S1API.Internal.Patches
                 catch { }
                 try
                 {
-                    var no = customNPC.gameObject.GetComponent<FishNet.Object.NetworkObject>();
+                    var no = customNPC.gameObject.GetComponent<NetworkObject>();
                 }
                 catch { }
 
                 try
                 {
-                    var netObj = customNPC.gameObject.GetComponent<FishNet.Object.NetworkObject>() ??
-                                 customNPC.gameObject.GetComponent<NetworkObject>();
+                    var netObj = customNPC.gameObject.GetComponent<NetworkObject>();
                     if (netObj == null)
                     {
                         // Add a NetworkObject on server only; clients will not instantiate these directly
-                        try { netObj = customNPC.gameObject.AddComponent<FishNet.Object.NetworkObject>(); } catch { }
-                        try { if (netObj == null) netObj = customNPC.gameObject.AddComponent<NetworkObject>(); } catch { }
+                        try { netObj = customNPC.gameObject.AddComponent<NetworkObject>(); } catch { }
                     }
                     if (netObj != null)
                     {

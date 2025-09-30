@@ -126,12 +126,15 @@ namespace S1API.Entities
                 };
 
                 // Layers
+                var faceList = new List<S1AvatarFramework.AvatarSettings.LayerSetting>();
+                var bodyList = new List<S1AvatarFramework.AvatarSettings.LayerSetting>();
+                var accessoryList = new List<S1AvatarFramework.AvatarSettings.AccessorySetting>();
                 if (settings.FaceLayerSettings == null)
-                    settings.FaceLayerSettings = new List<S1AvatarFramework.AvatarSettings.LayerSetting>();
+                    settings.FaceLayerSettings = ToIl2CppList(faceList);
                 if (settings.BodyLayerSettings == null)
-                    settings.BodyLayerSettings = new List<S1AvatarFramework.AvatarSettings.LayerSetting>();
+                    settings.BodyLayerSettings = ToIl2CppList(bodyList);
                 if (settings.AccessorySettings == null)
-                    settings.AccessorySettings = new List<S1AvatarFramework.AvatarSettings.AccessorySetting>();
+                    settings.AccessorySettings = ToIl2CppList(accessoryList);
 
                 for (int i = 0; i < builder.FaceLayers.Count; i++)
                 {
@@ -354,6 +357,23 @@ namespace S1API.Entities
                 identity = prefabRoot.AddComponent<NPCPrefabIdentity>();
             return identity;
         }
+
+#if (IL2CPPMELON)
+        private static Il2CppSystem.Collections.Generic.List<T> ToIl2CppList<T>(System.Collections.Generic.List<T> source)
+        {
+            var list = new Il2CppSystem.Collections.Generic.List<T>();
+            if (source == null)
+                return list;
+            for (int i = 0; i < source.Count; i++)
+                list.Add(source[i]);
+            return list;
+        }
+#else
+        private static System.Collections.Generic.List<T> ToIl2CppList<T>(System.Collections.Generic.List<T> source)
+        {
+            return source;
+        }
+#endif
 
         /// <summary>
         /// Wrapper for authoring appearance defaults without exposing game types to modders.

@@ -15,18 +15,14 @@ namespace S1API.Entities.Internal
     /// INTERNAL: Stores identity and appearance defaults on the prefab so clients receive
     /// the same configuration on network spawn without relying on RPCs/SyncVars.
     /// </summary>
+#if IL2CPPMELON
+    [RegisterTypeInIl2Cpp]
+#endif
     public sealed class NPCPrefabIdentity : MonoBehaviour
     {
-        [Tooltip("Unique identifier for this NPC type (used for saves/UI). Optional for clients.")]
         public string Id;
-
-        [Tooltip("First name default to apply on spawn (client-visible).")]
         public string FirstName;
-
-        [Tooltip("Last name default to apply on spawn (client-visible).")]
         public string LastName;
-
-        [Tooltip("Avatar settings to apply on spawn (client-visible appearance).")]
         public S1AvatarFramework.AvatarSettings AppearanceDefaults;
 
         private bool _applied;
