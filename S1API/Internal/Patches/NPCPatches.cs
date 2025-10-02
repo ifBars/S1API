@@ -73,6 +73,8 @@ namespace S1API.Internal.Patches
                 if (type.Assembly == Assembly.GetExecutingAssembly())
                     continue;
 
+                Logger.Msg($"Creating S1API NPC '{customNPC.S1NPC.ID}' of type '{type.Name}'");
+
                 // For old saves (NPCs folder present), load SaveableFields from per-NPC folder.
                 // For new saves (NPCs.json present), let NPCLoader patch hydrate via DynamicSaveData.
                 string consolidatedPath = Path.Combine(mainPath, "NPCs.json");
@@ -241,9 +243,12 @@ namespace S1API.Internal.Patches
         [HarmonyPriority(Priority.First)]
         private static bool NPCLoader_Load_Prefix(S1Datas.DynamicSaveData saveData)
         {
-            // Do not intercept on non-Main scenes; let base loader run unmodified
-            if (!IsInMainScene())
+            // Skip prologue/loading scenes that might cause issues, but allow save loading
+            if (!IsInMainScene() && !IsInLoadingScene())
                 return true;
+            
+            // Debug logging to understand when this patch runs
+            Logger.Msg($"NPCLoader_Load_Prefix called in scene: {SceneManager.GetActiveScene().name}");
             
             if (saveData == null)
                 return true;
@@ -254,7 +259,12 @@ namespace S1API.Internal.Patches
 
             var s1BaseNpc = FindBaseNpcById(baseData.ID);
             if (s1BaseNpc == null)
+            {
+                Logger.Warning($"NPCLoader_Load_Prefix: Could not find base NPC with ID '{baseData.ID}', falling back to original loader");
                 return true;
+            }
+
+            Logger.Msg($"NPCLoader_Load_Prefix: Found base NPC '{baseData.ID}' with GameObject name '{s1BaseNpc.gameObject?.name}'");
 
             // Skip loader entirely for S1API per-type template prefabs
             try
@@ -343,7 +353,7 @@ namespace S1API.Internal.Patches
                                 }
                             }
                             customerComponent.enabled = true;
-                            customerComponent.Load(cust);
+                            ApplyCustomerDataSafely(customerComponent, cust);
                         }
                         catch (Exception ex)
                         {
@@ -407,6 +417,155 @@ namespace S1API.Internal.Patches
             catch { }
 
             return false; // skip original
+        }
+
+        /// <summary>
+        /// Safely applies Customer data to S1API NPCs without triggering SyncVar setter issues.
+        /// Uses reflection to access private/final/internal properties and fields to avoid network synchronization paths.
+        /// </summary>
+        private static void ApplyCustomerDataSafely(S1Economy.Customer customerComponent, S1Datas.CustomerData cust)
+        {
+            if (customerComponent == null || cust == null)
+                return;
+
+            try
+            {
+                var customerType = customerComponent.GetType();
+                
+                // Ensure internal data structures exist first
+                try
+                {
+                    // Use reflection to access currentAffinityData field/property
+                    PropertyInfo currentAffinityProp;
+                    FieldInfo currentAffinityField;
+                    currentAffinityField = customerType.GetField("currentAffinityData", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                    currentAffinityProp = customerType.GetProperty("currentAffinityData", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+
+                    S1Economy.CustomerAffinityData currentAffinity = null;
+                    if (currentAffinityField != null)
+                    {
+                        if (currentAffinityField is FieldInfo field)
+                        {
+                            currentAffinity = field.GetValue(customerComponent) as S1Economy.CustomerAffinityData;
+                        }
+                        else if (currentAffinityProp is PropertyInfo prop)
+                        {
+                            currentAffinity = prop.GetValue(customerComponent) as S1Economy.CustomerAffinityData;
+                        }
+                    }
+
+                    if (currentAffinity == null)
+                    {
+                        currentAffinity = new S1Economy.CustomerAffinityData();
+                        var customerDataProp = customerType.GetProperty("CustomerData", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                        if (customerDataProp != null)
+                        {
+                            var customerData = customerDataProp.GetValue(customerComponent);
+                            if (customerData != null)
+                            {
+                                var defaultAffinityProp = customerData.GetType().GetProperty("DefaultAffinityData", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                                var defaults = defaultAffinityProp?.GetValue(customerData);
+                                if (defaults != null)
+                                {
+                                    var copyToMethod = defaults.GetType().GetMethod("CopyTo", BindingFlags.Public | BindingFlags.Instance);
+                                    copyToMethod?.Invoke(defaults, new object[] { currentAffinity });
+                                }
+                            }
+                        }
+                        
+                        // Set the new currentAffinityData back
+                        if (currentAffinityField is FieldInfo setField)
+                        {
+                            setField.SetValue(customerComponent, currentAffinity);
+                        }
+                        else if (currentAffinityProp is PropertyInfo setProp && setProp.CanWrite)
+                        {
+                            setProp.SetValue(customerComponent, currentAffinity);
+                        }
+                    }
+                    
+                    if (cust.ProductAffinities != null && currentAffinity != null)
+                    {
+                        var productAffinitiesProp = currentAffinity.GetType().GetProperty("ProductAffinities", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                        var productAffinities = productAffinitiesProp?.GetValue(currentAffinity);
+                        if (productAffinities != null)
+                        {
+                            var countProperty = productAffinities.GetType().GetProperty("Count", BindingFlags.Public | BindingFlags.Instance);
+                            var count = countProperty != null ? (int)countProperty.GetValue(productAffinities) : 0;
+                            var actualCount = Math.Min(cust.ProductAffinities.Length, count);
+                            
+                            for (int i = 0; i < actualCount; i++)
+                            {
+                                if (!float.IsNaN(cust.ProductAffinities[i]))
+                                {
+                                    var indexer = productAffinities.GetType().GetProperty("Item", BindingFlags.Public | BindingFlags.Instance);
+                                    var affinityItem = indexer?.GetMethod?.Invoke(productAffinities, new object[] { i });
+                                    if (affinityItem != null)
+                                    {
+                                        var affinityProp = affinityItem.GetType().GetProperty("Affinity", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                                        affinityProp?.SetValue(affinityItem, cust.ProductAffinities[i]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"ApplyCustomerDataSafely currentAffinityData: {ex.Message}");
+                }
+
+                try
+                {
+                    // Restore offered contract state lightly
+                    if (cust.IsContractOffered && cust.OfferedContract != null)
+                    {
+                        var offeredContractInfoProp = customerType.GetProperty("OfferedContractInfo", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                        var offeredContractTimeProp = customerType.GetProperty("OfferedContractTime", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                        
+                        if (offeredContractInfoProp?.CanWrite == true)
+                            offeredContractInfoProp.SetValue(customerComponent, cust.OfferedContract);
+                        if (offeredContractTimeProp?.CanWrite == true)
+                            offeredContractTimeProp.SetValue(customerComponent, cust.OfferedContractTime);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"ApplyCustomerDataSafely contract data: {ex.Message}");
+                }
+
+                try
+                {
+                    // Basic counters - use reflection for inaccessible setters
+                    var timeSinceLastDealCompletedProp = customerType.GetProperty("TimeSinceLastDealCompleted", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                    var timeSinceLastDealOfferedProp = customerType.GetProperty("TimeSinceLastDealOffered", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                    var offeredDealsProp = customerType.GetProperty("OfferedDeals", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                    var completedDeliveriesProp = customerType.GetProperty("CompletedDeliveries", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                    var timeSincePlayerApproachedProp = customerType.GetProperty("TimeSincePlayerApproached", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                    var timeSinceInstantDealOfferedProp = customerType.GetProperty("TimeSinceInstantDealOffered", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+
+                    if (timeSinceLastDealCompletedProp?.CanWrite == true)
+                        timeSinceLastDealCompletedProp.SetValue(customerComponent, cust.TimeSinceLastDealCompleted);
+                    if (timeSinceLastDealOfferedProp?.CanWrite == true)
+                        timeSinceLastDealOfferedProp.SetValue(customerComponent, cust.TimeSinceLastDealOffered);
+                    if (offeredDealsProp?.CanWrite == true)
+                        offeredDealsProp.SetValue(customerComponent, cust.OfferedDeals);
+                    if (completedDeliveriesProp?.CanWrite == true)
+                        completedDeliveriesProp.SetValue(customerComponent, cust.CompletedDeals);
+                    if (timeSincePlayerApproachedProp?.CanWrite == true)
+                        timeSincePlayerApproachedProp.SetValue(customerComponent, cust.TimeSincePlayerApproached);
+                    if (timeSinceInstantDealOfferedProp?.CanWrite == true)
+                        timeSinceInstantDealOfferedProp.SetValue(customerComponent, cust.TimeSinceInstantDealOffered);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"ApplyCustomerDataSafely basic counters: {ex.Message}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"ApplyCustomerDataSafely failed: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -728,5 +887,19 @@ namespace S1API.Internal.Patches
             string sceneName = SceneManager.GetActiveScene().name;
             return string.Equals(sceneName, "Main", StringComparison.OrdinalIgnoreCase);
         }
+
+        /// <summary>
+        /// Returns true when in a loading/persistence scene where save loading occurs.
+        /// This allows S1API NPCs to be loaded properly during save restoration.
+        /// </summary>
+        private static bool IsInLoadingScene()
+        {
+            string sceneName = SceneManager.GetActiveScene().name;
+            // Allow loading in Loading, Persistence, or similar scenes
+            return string.Equals(sceneName, "Loading", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(sceneName, "Persistence", StringComparison.OrdinalIgnoreCase) ||
+                   sceneName.Contains("Load", StringComparison.OrdinalIgnoreCase);
+        }
     }
 }
+

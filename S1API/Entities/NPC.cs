@@ -611,6 +611,12 @@ namespace S1API.Entities
 
             gameObject.name = S1NPC.FirstName ?? "UnknownNPC";
 
+            // Ensure the base game NPC is added to the registry manually since Awake isn't called when inactive
+            if (!S1NPCs.NPCManager.NPCRegistry.Contains(S1NPC))
+            {
+                S1NPCs.NPCManager.NPCRegistry.Add(S1NPC);
+            }
+
             All.Add(this);
         }
 
