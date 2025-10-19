@@ -26,6 +26,7 @@ using System.Collections.Generic;
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using HarmonyLib;
 using MelonLoader;
@@ -34,6 +35,7 @@ using S1API.Entities.Relation;
 using S1API.Entities.Internal;
 using S1API.Internal.Utils;
 using S1API.Map;
+using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace S1API.Internal.Patches
@@ -45,7 +47,7 @@ namespace S1API.Internal.Patches
     internal class NPCPatches
     {
         private static readonly Logging.Log Logger = new Logging.Log("NPCPatches");
-        
+
         /// <summary>
         /// Patching performed for when game NPCs are loaded.
         /// </summary>
@@ -89,12 +91,17 @@ namespace S1API.Internal.Patches
                 {
                     var no = customNPC.gameObject.GetComponent<NetworkObject>();
                 }
-                catch { }
+                catch
+                {
+                }
+
                 try
                 {
                     var no = customNPC.gameObject.GetComponent<NetworkObject>();
                 }
-                catch { }
+                catch
+                {
+                }
 
                 try
                 {
@@ -102,14 +109,23 @@ namespace S1API.Internal.Patches
                     if (netObj == null)
                     {
                         // Add a NetworkObject on server only; clients will not instantiate these directly
-                        try { netObj = customNPC.gameObject.AddComponent<NetworkObject>(); } catch { }
+                        try
+                        {
+                            netObj = customNPC.gameObject.AddComponent<NetworkObject>();
+                        }
+                        catch
+                        {
+                        }
                     }
+
                     if (netObj != null)
                     {
                         NPCNetworkBootstrap.RegisterPendingNetworkSpawn(customNPC, netObj, 3f, 6f);
                     }
                 }
-                catch { }
+                catch
+                {
+                }
             }
         }
 
@@ -125,11 +141,14 @@ namespace S1API.Internal.Patches
             // Ensure definition arrays are not null before length/enumeration in Awake_UserLogic
 #if (IL2CPPMELON || IL2CPPBEPINEX)
             if (__instance.TestItems == null)
-                __instance.TestItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Il2CppScheduleOne.ItemFramework.ItemDefinition>(0);
+                __instance.TestItems =
+ new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Il2CppScheduleOne.ItemFramework.ItemDefinition>(0);
             if (__instance.StartupItems == null)
-                __instance.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Il2CppScheduleOne.ItemFramework.ItemDefinition>(0);
+                __instance.StartupItems =
+ new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Il2CppScheduleOne.ItemFramework.ItemDefinition>(0);
             if (__instance.RandomItemDefinitions == null)
-                __instance.RandomItemDefinitions = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Il2CppScheduleOne.ItemFramework.StorableItemDefinition>(0);
+                __instance.RandomItemDefinitions =
+ new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Il2CppScheduleOne.ItemFramework.StorableItemDefinition>(0);
 #else
             if (__instance.TestItems == null)
                 __instance.TestItems = Array.Empty<ScheduleOne.ItemFramework.ItemDefinition>();
@@ -155,7 +174,9 @@ namespace S1API.Internal.Patches
                 if (identity != null)
                     identity.ApplyTo(__instance);
             }
-            catch { }
+            catch
+            {
+            }
 
             for (int i = 0; i < NPC.All.Count; i++)
             {
@@ -187,7 +208,9 @@ namespace S1API.Internal.Patches
                     }
                 }
             }
-            catch { }
+            catch
+            {
+            }
         }
 
 
@@ -246,10 +269,10 @@ namespace S1API.Internal.Patches
             // Skip prologue/loading scenes that might cause issues, but allow save loading
             if (!IsInMainScene() && !IsInLoadingScene())
                 return true;
-            
+
             // Debug logging to understand when this patch runs
             Logger.Msg($"NPCLoader_Load_Prefix called in scene: {SceneManager.GetActiveScene().name}");
-            
+
             if (saveData == null)
                 return true;
 
@@ -260,25 +283,28 @@ namespace S1API.Internal.Patches
             var s1BaseNpc = FindBaseNpcById(baseData.ID);
             if (s1BaseNpc == null)
             {
-                Logger.Warning($"NPCLoader_Load_Prefix: Could not find base NPC with ID '{baseData.ID}', falling back to original loader");
+                Logger.Warning(
+                    $"NPCLoader_Load_Prefix: Could not find base NPC with ID '{baseData.ID}', falling back to original loader");
                 return true;
             }
 
-            Logger.Msg($"NPCLoader_Load_Prefix: Found base NPC '{baseData.ID}' with GameObject name '{s1BaseNpc.gameObject?.name}'");
+            Logger.Msg(
+                $"NPCLoader_Load_Prefix: Found base NPC '{baseData.ID}' with GameObject name '{s1BaseNpc.gameObject?.name}'");
 
             // Skip loader entirely for S1API per-type template prefabs
             try
             {
                 if (s1BaseNpc.gameObject == null)
                     return false;
-                
+
                 var go = s1BaseNpc.gameObject;
                 if (go != null && (go.name == "CivilianNPC" || go.name == "BaseNPC" || go.name.StartsWith("S1API_")))
                     return false; // skip original
             }
             catch (Exception ex)
             {
-                Logger.Warning($"NPCLoader_Load_Prefix: Exception in template check for ID '{baseData.ID}': {ex.Message}");
+                Logger.Warning(
+                    $"NPCLoader_Load_Prefix: Exception in template check for ID '{baseData.ID}': {ex.Message}");
                 return false;
             }
 
@@ -348,16 +374,20 @@ namespace S1API.Internal.Patches
                                             customerComponent.currentAffinityData = defaultData.DefaultAffinityData;
 #endif
                                         }
-                                        catch { }
+                                        catch
+                                        {
+                                        }
                                     }
                                 }
                             }
+
                             customerComponent.enabled = true;
                             ApplyCustomerDataSafely(customerComponent, cust);
                         }
                         catch (Exception ex)
                         {
-                            Logger.Warning($"NPCLoader_Load_Prefix: Exception loading Customer data for '{baseData.ID}': {ex.Message}");
+                            Logger.Warning(
+                                $"NPCLoader_Load_Prefix: Exception loading Customer data for '{baseData.ID}': {ex.Message}");
                             Logger.Warning($"NPCLoader_Load_Prefix: Stack trace: {ex.StackTrace}");
                         }
                     }
@@ -378,7 +408,8 @@ namespace S1API.Internal.Patches
                     }
                     catch (Exception ex)
                     {
-                        Logger.Warning($"NPCLoader_Load_Prefix: Exception loading Inventory data for '{baseData.ID}': {ex.Message}");
+                        Logger.Warning(
+                            $"NPCLoader_Load_Prefix: Exception loading Inventory data for '{baseData.ID}': {ex.Message}");
                     }
                 }
             }
@@ -409,12 +440,15 @@ namespace S1API.Internal.Patches
                             }
                         }
                     }
-                    
+
                     // Mark that this instance was hydrated from save data to prevent defaults overwrite
-                    typeof(NPC).GetMethod("MarkLoadedFromSave", BindingFlags.NonPublic | BindingFlags.Instance)?.Invoke(wrap, null);
+                    typeof(NPC).GetMethod("MarkLoadedFromSave", BindingFlags.NonPublic | BindingFlags.Instance)
+                        ?.Invoke(wrap, null);
                 }
             }
-            catch { }
+            catch
+            {
+            }
 
             return false; // skip original
         }
@@ -431,15 +465,17 @@ namespace S1API.Internal.Patches
             try
             {
                 var customerType = customerComponent.GetType();
-                
+
                 // Ensure internal data structures exist first
                 try
                 {
                     // Use reflection to access currentAffinityData field/property
                     PropertyInfo currentAffinityProp;
                     FieldInfo currentAffinityField;
-                    currentAffinityField = customerType.GetField("currentAffinityData", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-                    currentAffinityProp = customerType.GetProperty("currentAffinityData", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                    currentAffinityField = customerType.GetField("currentAffinityData",
+                        BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                    currentAffinityProp = customerType.GetProperty("currentAffinityData",
+                        BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
 
                     S1Economy.CustomerAffinityData currentAffinity = null;
                     if (currentAffinityField != null)
@@ -457,22 +493,25 @@ namespace S1API.Internal.Patches
                     if (currentAffinity == null)
                     {
                         currentAffinity = new S1Economy.CustomerAffinityData();
-                        var customerDataProp = customerType.GetProperty("CustomerData", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                        var customerDataProp = customerType.GetProperty("CustomerData",
+                            BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
                         if (customerDataProp != null)
                         {
                             var customerData = customerDataProp.GetValue(customerComponent);
                             if (customerData != null)
                             {
-                                var defaultAffinityProp = customerData.GetType().GetProperty("DefaultAffinityData", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                                var defaultAffinityProp = customerData.GetType().GetProperty("DefaultAffinityData",
+                                    BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
                                 var defaults = defaultAffinityProp?.GetValue(customerData);
                                 if (defaults != null)
                                 {
-                                    var copyToMethod = defaults.GetType().GetMethod("CopyTo", BindingFlags.Public | BindingFlags.Instance);
+                                    var copyToMethod = defaults.GetType().GetMethod("CopyTo",
+                                        BindingFlags.Public | BindingFlags.Instance);
                                     copyToMethod?.Invoke(defaults, new object[] { currentAffinity });
                                 }
                             }
                         }
-                        
+
                         // Set the new currentAffinityData back
                         if (currentAffinityField is FieldInfo setField)
                         {
@@ -483,26 +522,31 @@ namespace S1API.Internal.Patches
                             setProp.SetValue(customerComponent, currentAffinity);
                         }
                     }
-                    
+
                     if (cust.ProductAffinities != null && currentAffinity != null)
                     {
-                        var productAffinitiesProp = currentAffinity.GetType().GetProperty("ProductAffinities", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                        var productAffinitiesProp = currentAffinity.GetType().GetProperty("ProductAffinities",
+                            BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
                         var productAffinities = productAffinitiesProp?.GetValue(currentAffinity);
                         if (productAffinities != null)
                         {
-                            var countProperty = productAffinities.GetType().GetProperty("Count", BindingFlags.Public | BindingFlags.Instance);
+                            var countProperty = productAffinities.GetType()
+                                .GetProperty("Count", BindingFlags.Public | BindingFlags.Instance);
                             var count = countProperty != null ? (int)countProperty.GetValue(productAffinities) : 0;
                             var actualCount = Math.Min(cust.ProductAffinities.Length, count);
-                            
+
                             for (int i = 0; i < actualCount; i++)
                             {
                                 if (!float.IsNaN(cust.ProductAffinities[i]))
                                 {
-                                    var indexer = productAffinities.GetType().GetProperty("Item", BindingFlags.Public | BindingFlags.Instance);
-                                    var affinityItem = indexer?.GetMethod?.Invoke(productAffinities, new object[] { i });
+                                    var indexer = productAffinities.GetType().GetProperty("Item",
+                                        BindingFlags.Public | BindingFlags.Instance);
+                                    var affinityItem =
+                                        indexer?.GetMethod?.Invoke(productAffinities, new object[] { i });
                                     if (affinityItem != null)
                                     {
-                                        var affinityProp = affinityItem.GetType().GetProperty("Affinity", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                                        var affinityProp = affinityItem.GetType().GetProperty("Affinity",
+                                            BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
                                         affinityProp?.SetValue(affinityItem, cust.ProductAffinities[i]);
                                     }
                                 }
@@ -520,9 +564,11 @@ namespace S1API.Internal.Patches
                     // Restore offered contract state lightly
                     if (cust.IsContractOffered && cust.OfferedContract != null)
                     {
-                        var offeredContractInfoProp = customerType.GetProperty("OfferedContractInfo", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-                        var offeredContractTimeProp = customerType.GetProperty("OfferedContractTime", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-                        
+                        var offeredContractInfoProp = customerType.GetProperty("OfferedContractInfo",
+                            BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                        var offeredContractTimeProp = customerType.GetProperty("OfferedContractTime",
+                            BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+
                         if (offeredContractInfoProp?.CanWrite == true)
                             offeredContractInfoProp.SetValue(customerComponent, cust.OfferedContract);
                         if (offeredContractTimeProp?.CanWrite == true)
@@ -537,12 +583,18 @@ namespace S1API.Internal.Patches
                 try
                 {
                     // Basic counters - use reflection for inaccessible setters
-                    var timeSinceLastDealCompletedProp = customerType.GetProperty("TimeSinceLastDealCompleted", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-                    var timeSinceLastDealOfferedProp = customerType.GetProperty("TimeSinceLastDealOffered", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-                    var offeredDealsProp = customerType.GetProperty("OfferedDeals", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-                    var completedDeliveriesProp = customerType.GetProperty("CompletedDeliveries", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-                    var timeSincePlayerApproachedProp = customerType.GetProperty("TimeSincePlayerApproached", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-                    var timeSinceInstantDealOfferedProp = customerType.GetProperty("TimeSinceInstantDealOffered", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                    var timeSinceLastDealCompletedProp = customerType.GetProperty("TimeSinceLastDealCompleted",
+                        BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                    var timeSinceLastDealOfferedProp = customerType.GetProperty("TimeSinceLastDealOffered",
+                        BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                    var offeredDealsProp = customerType.GetProperty("OfferedDeals",
+                        BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                    var completedDeliveriesProp = customerType.GetProperty("CompletedDeliveries",
+                        BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                    var timeSincePlayerApproachedProp = customerType.GetProperty("TimeSincePlayerApproached",
+                        BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                    var timeSinceInstantDealOfferedProp = customerType.GetProperty("TimeSinceInstantDealOffered",
+                        BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
 
                     if (timeSinceLastDealCompletedProp?.CanWrite == true)
                         timeSinceLastDealCompletedProp.SetValue(customerComponent, cust.TimeSinceLastDealCompleted);
@@ -585,7 +637,9 @@ namespace S1API.Internal.Patches
                     Building.Unregister(building);
                 }
             }
-            catch { }
+            catch
+            {
+            }
 
             for (int i = 0; i < NPC.All.Count; i++)
             {
@@ -618,7 +672,10 @@ namespace S1API.Internal.Patches
                     }
                 }
             }
-            catch { }
+            catch
+            {
+            }
+
             return true;
         }
 
@@ -661,7 +718,8 @@ namespace S1API.Internal.Patches
                     }
                     catch (Exception ex)
                     {
-                        Logger.Warning($"NPCManager_GetSaveString_Prefix: Skipping NPC at index {i} due to exception: {ex.Message}");
+                        Logger.Warning(
+                            $"NPCManager_GetSaveString_Prefix: Skipping NPC at index {i} due to exception: {ex.Message}");
                     }
                 }
 
@@ -743,12 +801,14 @@ namespace S1API.Internal.Patches
                 }
 
                 // Random items (local-only)
-                if (__instance.RandomItems && __instance.RandomItemDefinitions != null && __instance.RandomItemDefinitions.Length > 0)
+                if (__instance.RandomItems && __instance.RandomItemDefinitions != null &&
+                    __instance.RandomItemDefinitions.Length > 0)
                 {
                     int count = UnityEngine.Random.Range(__instance.RandomItemMin, __instance.RandomItemMax + 1);
                     for (int i = 0; i < count; i++)
                     {
-                        var def = __instance.RandomItemDefinitions[UnityEngine.Random.Range(0, __instance.RandomItemDefinitions.Length)];
+                        var def = __instance.RandomItemDefinitions[
+                            UnityEngine.Random.Range(0, __instance.RandomItemDefinitions.Length)];
                         var inst = def.GetDefaultInstance();
                         __instance.InsertItem(inst, network: false);
                     }
@@ -814,9 +874,12 @@ namespace S1API.Internal.Patches
             // Mark as loaded from save so prefab defaults won't overwrite
             try
             {
-                typeof(NPC).GetMethod("MarkLoadedFromSave", BindingFlags.NonPublic | BindingFlags.Instance)?.Invoke(apiNpc, null);
+                typeof(NPC).GetMethod("MarkLoadedFromSave", BindingFlags.NonPublic | BindingFlags.Instance)
+                    ?.Invoke(apiNpc, null);
             }
-            catch { }
+            catch
+            {
+            }
         }
 
         /// <summary>
@@ -829,7 +892,7 @@ namespace S1API.Internal.Patches
                 var reg = S1NPCs.NPCManager.NPCRegistry;
                 if (reg == null)
                     return null;
-                
+
                 for (int i = 0; i < reg.Count; i++)
                 {
                     var n = reg[i];
@@ -841,6 +904,7 @@ namespace S1API.Internal.Patches
                         }
                     }
                 }
+
                 return null;
             }
             catch (Exception ex)
@@ -859,16 +923,17 @@ namespace S1API.Internal.Patches
             {
                 if (baseNpc == null)
                     return null;
-                
+
                 for (int i = 0; i < NPC.All.Count; i++)
                 {
                     var n = NPC.All[i];
                     if (n == null)
                         continue;
-                    
+
                     if (n.S1NPC == baseNpc)
                         return n;
                 }
+
                 return null;
             }
             catch (Exception ex)
@@ -900,6 +965,26 @@ namespace S1API.Internal.Patches
                    string.Equals(sceneName, "Persistence", StringComparison.OrdinalIgnoreCase) ||
                    sceneName.Contains("Load", StringComparison.OrdinalIgnoreCase);
         }
+
+        /// <summary>
+        /// Guard: Prevent SetGravityMultiplier from running if any ConstantForce components are null.
+        /// This happens on instanced custom NPCs (prefabs created in menu work correctly) and
+        /// logs NREs to Player.log
+        /// </summary>
+        /// <param name="__instance">NPCMovement instance</param>
+        /// <param name="multiplier">Gravity multiplier value</param>
+        [HarmonyPatch(typeof(S1NPCs.NPCMovement), nameof(S1NPCs.NPCMovement.SetGravityMultiplier))]
+        [HarmonyPrefix]
+        private static bool NPCMovement_SetGravityMultiplier_Prefix(S1NPCs.NPCMovement __instance, float multiplier)
+        {
+#if !IL2CPPMELON
+            var ragdollForceComponentsField = typeof(S1NPCs.NPCMovement).GetField("ragdollForceComponents",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            var ragdollForceComponents = ragdollForceComponentsField?.GetValue(__instance) as List<ConstantForce>;
+#else
+            var ragdollForceComponents = __instance.ragdollForceComponents;
+#endif
+            return ragdollForceComponents == null || ragdollForceComponents.ToArray().All(comp => comp != null);
+        }
     }
 }
-

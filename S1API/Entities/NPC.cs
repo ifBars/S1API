@@ -568,11 +568,6 @@ namespace S1API.Entities
 
             S1NPC = prefabNpc;
 
-            if (S1NPC.Movement == null)
-                S1NPC.Movement = gameObject.GetComponent<S1NPCs.NPCMovement>();
-
-            S1NPC.Movement.enabled = true;
-
             S1AvatarFramework.Avatar? runtimeAvatar = S1NPC.Avatar ?? gameObject.GetComponentInChildren<S1AvatarFramework.Avatar>(true);
             _runtimeAvatar = runtimeAvatar;
 
@@ -642,6 +637,11 @@ namespace S1API.Entities
         {
             Appearance.GenerateMugshot();
             RestoreRuntimeAvatarAppearance();
+            // Adding a movement component when NPC is created prevents it from disabling
+            if (S1NPC.Movement == null)
+                S1NPC.Movement = gameObject.GetComponent<S1NPCs.NPCMovement>();
+
+            S1NPC.Movement.enabled = true;
         }
 
         #endregion
