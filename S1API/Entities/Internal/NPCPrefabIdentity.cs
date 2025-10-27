@@ -1,13 +1,12 @@
 #if (IL2CPPMELON)
 using S1AvatarFramework = Il2CppScheduleOne.AvatarFramework;
 using S1NPCs = Il2CppScheduleOne.NPCs;
+using Il2CppInterop.Runtime.Attributes;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1AvatarFramework = ScheduleOne.AvatarFramework;
 using S1NPCs = ScheduleOne.NPCs;
 #endif
-
 using System.Collections;
-using Il2CppInterop.Runtime.Attributes;
 using UnityEngine;
 using MelonLoader;
 
@@ -36,8 +35,10 @@ namespace S1API.Entities.Internal
             if (!_applied)
                 MelonCoroutines.Start(DelayedApply());
         }
-
+        
+#if IL2CPPMELON
         [HideFromIl2Cpp]
+#endif
         private IEnumerator DelayedApply()
         {
             float start = Time.realtimeSinceStartup;
