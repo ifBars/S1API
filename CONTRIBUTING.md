@@ -34,3 +34,8 @@ Ultimately, this just saves you time and gets your changes into the API faster.
 ## Proper Contributing Channels
 All pull requests **must** go into `bleeding-edge` before `stable`.
 If you make a pull request for `stable`, I **will** be changing it to verify build.
+
+## Tracking Work & Issues
+We maintain a [Trello board](https://trello.com/b/yuRuBpIg/s1api) where known issues and tasks that need to be done are tracked. 
+While the board is not always perfectly up to date, it should typically show the known issues in the project. 
+GitHub issues opened with us will typically be added to the Trello board and then archived once closed.
