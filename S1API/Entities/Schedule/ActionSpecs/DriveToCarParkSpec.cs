@@ -14,6 +14,9 @@ using S1Vehicles = ScheduleOne.Vehicles;
 using S1VehiclesAI = ScheduleOne.Vehicles.AI;
 using S1ObjectScripts = ScheduleOne.ObjectScripts;
 #endif
+using System;
+using System.Collections;
+using System.Reflection;
 using UnityEngine;
 using S1API.Map;
 using S1API.Vehicles;
@@ -108,9 +111,59 @@ namespace S1API.Entities.Schedule
         /// </summary>
         /// <value>The vehicle wrapper, or <c>null</c> to use GUID-based lookup.</value>
         /// <remarks>
-        /// This property takes precedence over <see cref="VehicleGUID"/>.
+        /// This property takes precedence over <see cref="VehicleGUID"/> and <see cref="VehicleName"/>.
         /// </remarks>
         public LandVehicle Vehicle { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the name of the parking lot GameObject for runtime resolution.
+        /// </summary>
+        /// <value>The GameObject name, or <c>null</c> if not using name-based resolution.</value>
+        /// <remarks>
+        /// This property is used at runtime to find the parking lot by GameObject name.
+        /// Takes precedence over GUID lookup but is overridden by wrapper object.
+        /// </remarks>
+        public string ParkingLotName { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the name of the vehicle GameObject for runtime resolution.
+        /// </summary>
+        /// <value>The GameObject name, or <c>null</c> if not using name-based resolution.</value>
+        /// <remarks>
+        /// This property is used at runtime to find the vehicle by GameObject name.
+        /// Takes precedence over GUID lookup but is overridden by wrapper object.
+        /// </remarks>
+        public string VehicleName { get; set; }
+        
+        /// <summary>
+        /// Gets or sets a vehicle code for runtime vehicle creation.
+        /// </summary>
+        /// <value>The vehicle code to create (e.g., "Sedan", "SUV"), or <c>null</c> if not creating.</value>
+        /// <remarks>
+        /// This property is used at runtime to create a new vehicle if one doesn't exist.
+        /// Only used if Vehicle, VehicleGUID, and VehicleName are all null or failed resolution.
+        /// </remarks>
+        public string VehicleCode { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the spawn position for a created vehicle.
+        /// </summary>
+        /// <value>The world position where the vehicle should spawn.</value>
+        /// <remarks>
+        /// This property is used when creating a vehicle via <see cref="VehicleCode"/>.
+        /// The vehicle will be spawned at this exact position when the schedule action executes.
+        /// </remarks>
+        public Vector3 VehicleSpawnPosition { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the spawn rotation for a created vehicle.
+        /// </summary>
+        /// <value>The world rotation for the vehicle spawn, or <c>null</c> to use identity rotation.</value>
+        /// <remarks>
+        /// This property is used when creating a vehicle via <see cref="VehicleCode"/>.
+        /// If not specified, the vehicle will spawn with identity rotation (no rotation).
+        /// </remarks>
+        public Quaternion? VehicleSpawnRotation { get; set; }
 
         void IScheduleActionSpec.ApplyTo(NPCSchedule schedule)
         {
@@ -127,13 +180,18 @@ namespace S1API.Entities.Schedule
                 {
                     lotObj = ParkingLot.ResolveGameLot();
                 }
+                else if (!string.IsNullOrEmpty(ParkingLotName))
+                {
+                    var lotWrap = ParkingLotRegistry.GetByName(ParkingLotName);
+                    lotObj = lotWrap?.ResolveGameLot();
+                }
                 else if (!string.IsNullOrEmpty(ParkingLotGUID))
                 {
-                    var lotWrap = ParkingLots.GetByGUID(ParkingLotGUID);
+                    var lotWrap = ParkingLotRegistry.GetByGUID(ParkingLotGUID);
                     lotObj = lotWrap?.ResolveGameLot();
                 }
                 if (lotObj != null)
-                    action.GetType().GetField("ParkingLot")?.SetValue(action, lotObj);
+                    TrySetFieldOrProperty(action, "ParkingLot", lotObj);
 
                 // Resolve vehicle
                 object vehObj = null;
@@ -141,31 +199,107 @@ namespace S1API.Entities.Schedule
                 {
                     vehObj = Vehicle.S1LandVehicle;
                 }
+                else if (!string.IsNullOrEmpty(VehicleName))
+                {
+                    var v = VehicleRegistry.GetByName(VehicleName);
+                    vehObj = v?.S1LandVehicle;
+                }
                 else if (!string.IsNullOrEmpty(VehicleGUID))
                 {
                     var v = VehicleRegistry.GetByGUID(VehicleGUID);
                     vehObj = v?.S1LandVehicle;
                 }
+                else if (!string.IsNullOrEmpty(VehicleCode))
+                {
+                    var v = VehicleRegistry.CreateVehicle(VehicleCode);
+                    vehObj = v?.S1LandVehicle;
+                    
+                    // If we're on the server and the vehicle needs spawning, spawn it now
+                    if (vehObj != null)
+                    {
+                        var wrapper = v;
+                        if (wrapper != null && wrapper.S1LandVehicle != null)
+                        {
+                            try
+                            {
+                                #if (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
+                                var nm = FishNet.InstanceFinder.NetworkManager;
+                                #else
+                                var nm = Il2CppFishNet.InstanceFinder.NetworkManager;
+                                #endif
+                                
+                                if (nm != null && nm.IsServer)
+                                {
+                                    // Spawn the vehicle at the specified location and rotation
+                                    var spawnRot = VehicleSpawnRotation ?? Quaternion.identity;
+                                    wrapper.Spawn(VehicleSpawnPosition, spawnRot);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                UnityEngine.Debug.LogWarning($"[S1API] Failed to spawn created vehicle: {ex.Message}");
+                            }
+                        }
+                    }
+                }
                 if (vehObj != null)
-                    action.GetType().GetField("Vehicle")?.SetValue(action, vehObj);
+                    TrySetFieldOrProperty(action, "Vehicle", vehObj);
 
                 // Flags
                 if (OverrideParkingType.HasValue)
-                    action.GetType().GetField("OverrideParkingType")?.SetValue(action, OverrideParkingType.Value);
+                    TrySetFieldOrProperty(action, "OverrideParkingType", OverrideParkingType.Value);
 
-                var parkingField = action.GetType().GetField("ParkingType");
                 if (Alignment.HasValue)
                 {
                     var boxed = (S1Vehicles.EParkingAlignment)(int)Alignment.Value;
-                    parkingField?.SetValue(action, boxed);
+                    TrySetFieldOrProperty(action, "ParkingType", boxed);
                 }
                 else if (ParkingType.HasValue)
                 {
                     var boxed = (S1Vehicles.EParkingAlignment)ParkingType.Value;
-                    parkingField?.SetValue(action, boxed);
+                    TrySetFieldOrProperty(action, "ParkingType", boxed);
                 }
             }
             catch { }
+        }
+
+        private static bool TrySetFieldOrProperty(object target, string memberName, object value)
+        {
+            if (target == null) return false;
+            var type = target.GetType();
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            
+            // Try field first
+            var fi = type.GetField(memberName, flags);
+            if (fi != null)
+            {
+                try
+                {
+                    if (value == null || fi.FieldType.IsInstanceOfType(value))
+                    {
+                        fi.SetValue(target, value);
+                        return true;
+                    }
+                }
+                catch { }
+            }
+            
+            // Try property
+            var pi = type.GetProperty(memberName, flags);
+            if (pi != null && pi.CanWrite)
+            {
+                try
+                {
+                    if (value == null || pi.PropertyType.IsInstanceOfType(value))
+                    {
+                        pi.SetValue(target, value);
+                        return true;
+                    }
+                }
+                catch { }
+            }
+            
+            return false;
         }
     }
 }

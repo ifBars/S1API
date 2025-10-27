@@ -270,9 +270,6 @@ namespace S1API.Internal.Patches
             if (!IsInMainScene() && !IsInLoadingScene())
                 return true;
 
-            // Debug logging to understand when this patch runs
-            Logger.Msg($"NPCLoader_Load_Prefix called in scene: {SceneManager.GetActiveScene().name}");
-
             if (saveData == null)
                 return true;
 
@@ -281,12 +278,7 @@ namespace S1API.Internal.Patches
                 return true;
 
             var s1BaseNpc = FindBaseNpcById(baseData.ID);
-            if (s1BaseNpc == null)
-            {
-                Logger.Warning(
-                    $"NPCLoader_Load_Prefix: Could not find base NPC with ID '{baseData.ID}', falling back to original loader");
-                return true;
-            }
+            if (s1BaseNpc == null) return true;
 
             Logger.Msg(
                 $"NPCLoader_Load_Prefix: Found base NPC '{baseData.ID}' with GameObject name '{s1BaseNpc.gameObject?.name}'");

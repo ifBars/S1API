@@ -9,6 +9,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
+using S1API.Internal.Map;
+using UnityEngine.SceneManagement;
 
 namespace S1API.Map
 {
@@ -20,18 +22,67 @@ namespace S1API.Map
         // Registry (name-based)
         internal static readonly System.Collections.Generic.List<DeliveryLocation> All = new System.Collections.Generic.List<DeliveryLocation>();
 
-        internal readonly S1Economy.DeliveryLocation S1Location;
+        internal S1Economy.DeliveryLocation S1Location;
+        private bool _isDeferred;
+        private Type _deferredIdentifierType;
 
         internal DeliveryLocation(S1Economy.DeliveryLocation s1)
         {
             S1Location = s1;
+            _isDeferred = false;
+        }
+
+        /// <summary>
+        /// Creates a deferred delivery location wrapper that will be resolved later.
+        /// </summary>
+        internal DeliveryLocation(Type identifierType, string name)
+        {
+            S1Location = null;
+            _isDeferred = true;
+            _deferredIdentifierType = identifierType;
         }
 
         /// <summary>
         /// Location display name.
         /// </summary>
-        public string Name =>
-            S1Location != null ? S1Location.LocationName : string.Empty;
+        public string Name
+        {
+            get
+            {
+                if (_isDeferred && S1Location == null)
+                {
+                    TryResolveDeferred();
+                }
+                return S1Location != null ? S1Location.LocationName : string.Empty;
+            }
+        }
+
+        private void TryResolveDeferred()
+        {
+            if (!_isDeferred || S1Location != null)
+                return;
+
+            if (_deferredIdentifierType != null)
+            {
+                var name = TryGetNameFromIdentifier(_deferredIdentifierType);
+                if (!string.IsNullOrEmpty(name))
+                {
+                    var resolved = GetByName(name);
+                    if (resolved != null && !resolved._isDeferred && resolved.S1Location != null)
+                    {
+                        S1Location = resolved.S1Location;
+                        _isDeferred = false;
+                        return;
+                    }
+                }
+                var byTypeName = GetByName(_deferredIdentifierType.Name);
+                if (byTypeName != null && !byTypeName._isDeferred && byTypeName.S1Location != null)
+                {
+                    S1Location = byTypeName.S1Location;
+                    _isDeferred = false;
+                }
+            }
+        }
 
         /// <summary>
         /// Human-readable description for UI.
@@ -84,7 +135,27 @@ namespace S1API.Map
         {
             if (string.IsNullOrEmpty(name))
                 return null;
-            return All.FirstOrDefault(l => string.Equals(l?.Name, name, StringComparison.OrdinalIgnoreCase));
+
+            var found = All.FirstOrDefault(l => string.Equals(l?.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (found != null)
+                return found;
+
+            // If not found and we're in Menu scene, create deferred wrapper
+            if (DeferredMapResolver.IsMenuScene())
+            {
+                var deferredWrapper = new DeliveryLocation(typeof(object), name);
+                DeferredMapResolver.RegisterDeferredLookup(new DeferredLookup(name, (resolved) =>
+                {
+                    if (resolved is DeliveryLocation location && location != null && location.S1Location != null)
+                    {
+                        deferredWrapper.S1Location = location.S1Location;
+                        deferredWrapper._isDeferred = false;
+                    }
+                }));
+                return deferredWrapper;
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -158,9 +229,34 @@ namespace S1API.Map
             var t = typeof(T);
             string name = TryGetNameFromIdentifier(t);
             if (!string.IsNullOrEmpty(name))
-                return GetByName(name);
-            // Fallback: try the type name itself
-            return GetByName(t.Name);
+            {
+                var found = GetByName(name);
+                if (found != null)
+                    return found;
+            }
+
+            // Try type name as fallback
+            var byTypeName = GetByName(t.Name);
+            if (byTypeName != null)
+                return byTypeName;
+
+            // If still not found and we're in Menu scene, create deferred wrapper
+            if (DeferredMapResolver.IsMenuScene())
+            {
+                string deferredName = !string.IsNullOrEmpty(name) ? name : t.Name;
+                var deferredWrapper = new DeliveryLocation(t, deferredName);
+                DeferredMapResolver.RegisterDeferredLookup(new DeferredLookup(t, (resolved) =>
+                {
+                    if (resolved is DeliveryLocation location && location != null && location.S1Location != null)
+                    {
+                        deferredWrapper.S1Location = location.S1Location;
+                        deferredWrapper._isDeferred = false;
+                    }
+                }));
+                return deferredWrapper;
+            }
+
+            return null;
         }
 
         private static string TryGetNameFromIdentifier(Type t)

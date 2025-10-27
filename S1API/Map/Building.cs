@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
+using S1API.Internal.Map;
+using UnityEngine.SceneManagement;
 
 namespace S1API.Map
 {
@@ -15,13 +17,27 @@ namespace S1API.Map
         // Registry (name-based)
         internal static readonly List<Building> All = new List<Building>();
 
-        internal readonly string _name;
+        private string _name;
         internal object _gameBuilding;
+        private bool _isDeferred;
+        private Type _deferredIdentifierType;
 
         internal Building(string name, object gameBuilding)
         {
             _name = name;
             _gameBuilding = gameBuilding;
+            _isDeferred = false;
+        }
+
+        /// <summary>
+        /// Creates a deferred building wrapper that will be resolved later.
+        /// </summary>
+        internal Building(Type identifierType, string name)
+        {
+            _name = name;
+            _gameBuilding = null;
+            _isDeferred = true;
+            _deferredIdentifierType = identifierType;
         }
 
         /// <summary>
@@ -36,6 +52,32 @@ namespace S1API.Map
         {
             if (_gameBuilding != null)
                 return _gameBuilding;
+
+            // Try to resolve if deferred
+            if (_isDeferred)
+            {
+                if (_deferredIdentifierType != null)
+                {
+                    var resolved = TryResolveDeferred(_deferredIdentifierType);
+                    if (resolved != null)
+                    {
+                        _gameBuilding = resolved._gameBuilding;
+                        _name = resolved._name;
+                        _isDeferred = false;
+                        return _gameBuilding;
+                    }
+                }
+                else if (!string.IsNullOrEmpty(_name))
+                {
+                    var resolved = GetByName(_name);
+                    if (resolved != null && !resolved._isDeferred)
+                    {
+                        _gameBuilding = resolved._gameBuilding;
+                        _isDeferred = false;
+                        return _gameBuilding;
+                    }
+                }
+            }
 
             try
             {
@@ -64,6 +106,23 @@ namespace S1API.Map
             catch { /* ignore */ }
 
             return _gameBuilding;
+        }
+
+        private static Building TryResolveDeferred(Type identifierType)
+        {
+            try
+            {
+                var name = TryGetNameFromIdentifier(identifierType);
+                if (!string.IsNullOrEmpty(name))
+                {
+                    return GetByName(name);
+                }
+                return GetByName(identifierType.Name);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         // Static API
@@ -133,7 +192,28 @@ namespace S1API.Map
         public static Building GetByName(string name)
         {
             if (string.IsNullOrEmpty(name)) return null;
-            return GetAll().FirstOrDefault(b => string.Equals(b.Name, name, StringComparison.OrdinalIgnoreCase));
+            
+            var found = GetAll().FirstOrDefault(b => string.Equals(b.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (found != null)
+                return found;
+
+            // If not found and we're in Menu scene, create deferred wrapper
+            if (DeferredMapResolver.IsMenuScene())
+            {
+                var deferredWrapper = new Building(typeof(object), name);
+                DeferredMapResolver.RegisterDeferredLookup(new DeferredLookup(name, (resolved) =>
+                {
+                    if (resolved is Building building && building != null && building._gameBuilding != null)
+                    {
+                        deferredWrapper._gameBuilding = building._gameBuilding;
+                        deferredWrapper._name = building._name;
+                        deferredWrapper._isDeferred = false;
+                    }
+                }));
+                return deferredWrapper;
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -145,9 +225,35 @@ namespace S1API.Map
             var t = typeof(T);
             string name = TryGetNameFromIdentifier(t);
             if (!string.IsNullOrEmpty(name))
-                return GetByName(name);
-            // Fallback: try the type name itself
-            return GetByName(t.Name);
+            {
+                var found = GetByName(name);
+                if (found != null)
+                    return found;
+            }
+
+            // Try type name as fallback
+            var byTypeName = GetByName(t.Name);
+            if (byTypeName != null)
+                return byTypeName;
+
+            // If still not found and we're in Menu scene, create deferred wrapper
+            if (DeferredMapResolver.IsMenuScene())
+            {
+                string deferredName = !string.IsNullOrEmpty(name) ? name : t.Name;
+                var deferredWrapper = new Building(t, deferredName);
+                DeferredMapResolver.RegisterDeferredLookup(new DeferredLookup(t, (resolved) =>
+                {
+                    if (resolved is Building building && building != null && building._gameBuilding != null)
+                    {
+                        deferredWrapper._gameBuilding = building._gameBuilding;
+                        deferredWrapper._name = building._name;
+                        deferredWrapper._isDeferred = false;
+                    }
+                }));
+                return deferredWrapper;
+            }
+
+            return null;
         }
 
         private static string TryGetNameFromIdentifier(Type t)

@@ -6,6 +6,8 @@ using S1AvatarFramework = ScheduleOne.AvatarFramework;
 using S1NPCs = ScheduleOne.NPCs;
 #endif
 
+using System.Collections;
+using Il2CppInterop.Runtime.Attributes;
 using UnityEngine;
 using MelonLoader;
 
@@ -35,7 +37,8 @@ namespace S1API.Entities.Internal
                 MelonCoroutines.Start(DelayedApply());
         }
 
-        private System.Collections.IEnumerator DelayedApply()
+        [HideFromIl2Cpp]
+        private IEnumerator DelayedApply()
         {
             float start = Time.realtimeSinceStartup;
             float timeout = 3f;

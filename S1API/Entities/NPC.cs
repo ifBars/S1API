@@ -256,21 +256,14 @@ namespace S1API.Entities
                 catch { }
 
                 // Let the NPC subclass declare required components on the prefab (Customer, actions, etc.)
-                try
+                var builder = new NPCPrefabBuilder(prefabNO.gameObject, npcType);
+                if (owner != null)
                 {
-                    var builder = new NPCPrefabBuilder(prefabNO.gameObject, npcType);
-                    if (owner != null)
-                    {
-                        owner.ConfigurePrefab(builder);
-                    }
-                    else
-                    {
-                        InvokeConfigurePrefabWithoutInstance(npcType, builder);
-                    }
+                    owner.ConfigurePrefab(builder);
                 }
-                catch (Exception ex)
+                else
                 {
-                    Debug.LogWarning($"[S1API] {npcType.Name}.ConfigurePrefab failed: {ex.Message}");
+                    InvokeConfigurePrefabWithoutInstance(npcType, builder);
                 }
 
                 // Ensure schedule actions exist on the template so NetworkBehaviour indices are stable
@@ -356,10 +349,6 @@ namespace S1API.Entities
             {
                 tempInstance = (NPC)FormatterServices.GetUninitializedObject(npcType);
                 configureMethod.Invoke(tempInstance, new object[] { builder });
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[S1API] {npcType.Name}.ConfigurePrefab failed during pre-registration: {ex.Message}");
             }
             finally
             {

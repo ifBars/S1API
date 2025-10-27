@@ -9,6 +9,10 @@ using Il2CppScheduleOne.Vehicles;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using S1API.Internal.Map;
+using UnityEngine.SceneManagement;
+using GameObject = UnityEngine.GameObject;
+using Object = UnityEngine.Object;
 
 namespace S1API.Map
 {
@@ -17,13 +21,30 @@ namespace S1API.Map
     /// </summary>
     public sealed class ParkingLotWrapper
     {
-        internal readonly string _guid;
+        internal string _guid;
+        internal string _gameObjectName;
         internal ParkingLot _lot;
+        internal bool _isDeferred;
+        private Type _deferredIdentifierType;
 
         internal ParkingLotWrapper(ParkingLot lot)
         {
             _lot = lot;
             _guid = lot.GUID.ToString();
+            _gameObjectName = lot.gameObject.name;
+            _isDeferred = false;
+        }
+
+        /// <summary>
+        /// Creates a deferred parking lot wrapper that will be resolved later.
+        /// </summary>
+        internal ParkingLotWrapper(Type identifierType, string name)
+        {
+            _guid = string.Empty;
+            _gameObjectName = name;
+            _lot = null;
+            _isDeferred = true;
+            _deferredIdentifierType = identifierType;
         }
 
         /// <summary>
@@ -32,11 +53,75 @@ namespace S1API.Map
         public string GUID => _guid;
 
         /// <summary>
+        /// GameObject name of the parking lot.
+        /// </summary>
+        public string GameObjectName => _gameObjectName;
+
+        /// <summary>
         /// Optional entry point world position, if configured.
         /// </summary>
         public UnityEngine.Vector3? EntryPointPosition => _lot?.EntryPoint != null ? _lot.EntryPoint.position : (UnityEngine.Vector3?)null;
 
-        internal ParkingLot ResolveGameLot() => _lot;
+        internal ParkingLot ResolveGameLot()
+        {
+            if (_isDeferred && _lot == null)
+            {
+                // Try to resolve now that Main scene might be loaded
+                if (_deferredIdentifierType != null)
+                {
+                    var resolved = TryResolveDeferred(_deferredIdentifierType);
+                    if (resolved != null)
+                    {
+                        _lot = resolved._lot;
+                        _isDeferred = false;
+                        return _lot;
+                    }
+                }
+                else if (!string.IsNullOrEmpty(_gameObjectName))
+                {
+                    var resolved = ParkingLotRegistry.GetByName(_gameObjectName);
+                    if (resolved != null && !resolved._isDeferred)
+                    {
+                        _lot = resolved._lot;
+                        _isDeferred = false;
+                        return _lot;
+                    }
+                }
+            }
+            return _lot;
+        }
+
+        private static ParkingLotWrapper TryResolveDeferred(Type identifierType)
+        {
+            try
+            {
+                var name = TryGetNameFromIdentifier(identifierType);
+                if (!string.IsNullOrEmpty(name))
+                {
+                    return ParkingLotRegistry.GetByName(name);
+                }
+                return ParkingLotRegistry.GetByName(identifierType.Name);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string TryGetNameFromIdentifier(Type t)
+        {
+            try
+            {
+                var attr = t.GetCustomAttributes(false).FirstOrDefault(a => a.GetType().FullName == typeof(ParkingLotNameAttribute).FullName);
+                if (attr != null)
+                {
+                    var prop = attr.GetType().GetProperty("Name", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    return prop?.GetValue(attr) as string;
+                }
+            }
+            catch { }
+            return null;
+        }
     }
 
     /// <summary>
@@ -62,32 +147,16 @@ namespace S1API.Map
     /// <summary>
     /// Registry and utilities for parking-related queries.
     /// </summary>
-    public static class ParkingLots
+    public static class ParkingLotRegistry
     {
+        // Registry (automatically populated by Harmony patches)
+        internal static readonly List<ParkingLotWrapper> All = new List<ParkingLotWrapper>();
         /// <summary>
-        /// Returns all lots currently registered in GUIDManager.
+        /// Returns all lots currently registered.
         /// </summary>
         public static ParkingLotWrapper[] GetAll()
         {
-            try
-            {
-                // There is no direct list; scan active components in the scene
-                var all = UnityEngine.Object.FindObjectsOfType<ParkingLot>();
-                if (all == null || all.Length == 0)
-                    return Array.Empty<ParkingLotWrapper>();
-                
-                var results = new List<ParkingLotWrapper>();
-                foreach (var lot in all)
-                {
-                    if (lot != null)
-                        results.Add(new ParkingLotWrapper(lot));
-                }
-                return results.ToArray();
-            }
-            catch
-            {
-                return Array.Empty<ParkingLotWrapper>();
-            }
+            return All.OrderBy(l => l.GameObjectName).ToArray();
         }
 
         /// <summary>
@@ -97,22 +166,42 @@ namespace S1API.Map
         {
             if (string.IsNullOrEmpty(guid))
                 return null;
-            try
-            {
-#if MONOMELON
-                var g = new System.Guid(guid);
-#else
-                var g = new Il2CppSystem.Guid(guid);
-#endif
-                var lot = GUIDManager.GetObject<ParkingLot>(g);
-                if (lot == null)
-                    return null;
-                return new ParkingLotWrapper(lot);
-            }
-            catch
-            {
+            return All.FirstOrDefault(l => string.Equals(l?.GUID, guid, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Finds a parking lot by GameObject name.
+        /// </summary>
+        /// <param name="gameObjectName">The name of the GameObject containing the ParkingLot component.</param>
+        /// <returns>A parking lot wrapper, or null if not found.</returns>
+        public static ParkingLotWrapper GetByName(string gameObjectName)
+        {
+            if (string.IsNullOrEmpty(gameObjectName))
                 return null;
+
+            // First try to find in registry
+            var found = All.FirstOrDefault(l => string.Equals(l?.GameObjectName, gameObjectName, StringComparison.OrdinalIgnoreCase));
+            if (found != null)
+                return found;
+
+            // If not found and we're in Menu scene, create a deferred wrapper
+            if (DeferredMapResolver.IsMenuScene())
+            {
+                var deferredWrapper = new ParkingLotWrapper(typeof(object), gameObjectName);
+                DeferredMapResolver.RegisterDeferredLookup(new DeferredLookup(gameObjectName, (resolved) =>
+                {
+                    if (resolved is ParkingLotWrapper wrapper && wrapper != null && wrapper._lot != null)
+                    {
+                        deferredWrapper._lot = wrapper._lot;
+                        deferredWrapper._guid = wrapper._guid;
+                        deferredWrapper._gameObjectName = wrapper._gameObjectName;
+                        deferredWrapper._isDeferred = false;
+                    }
+                }));
+                return deferredWrapper;
             }
+
+            return null;
         }
 
         /// <summary>
@@ -137,6 +226,140 @@ namespace S1API.Map
             {
                 return Array.Empty<ParkingSpotWrapper>();
             }
+        }
+
+        /// <summary>
+        /// Finds free spots in a lot, by GameObject name.
+        /// </summary>
+        public static ParkingSpotWrapper[] GetFreeSpotsByName(string lotGameObjectName)
+        {
+            var lot = GetByName(lotGameObjectName);
+            if (lot == null)
+                return Array.Empty<ParkingSpotWrapper>();
+            try
+            {
+                var spots = lot.ResolveGameLot().GetFreeParkingSpots();
+                var results = new List<ParkingSpotWrapper>();
+                foreach (var spot in spots)
+                {
+                    results.Add(new ParkingSpotWrapper(spot));
+                }
+                return results.ToArray();
+            }
+            catch
+            {
+                return Array.Empty<ParkingSpotWrapper>();
+            }
+        }
+
+        /// <summary>
+        /// INTERNAL: Registers a parking lot with the S1API system.
+        /// Called automatically by Harmony patches when parking lots are created.
+        /// </summary>
+        /// <param name="gameParkingLot">The game's ParkingLot instance.</param>
+        internal static void Register(object gameParkingLot)
+        {
+            if (gameParkingLot == null)
+                return;
+            try
+            {
+                var lot = (ParkingLot)gameParkingLot;
+                var guid = lot.GUID.ToString();
+                // Avoid duplicates
+                if (All.Any(l => string.Equals(l?.GUID, guid, StringComparison.OrdinalIgnoreCase)))
+                    return;
+                All.Add(new ParkingLotWrapper(lot));
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// INTERNAL: Unregisters a parking lot from the S1API system.
+        /// Called automatically by Harmony patches when parking lots are destroyed.
+        /// </summary>
+        /// <param name="gameParkingLot">The game's ParkingLot instance.</param>
+        internal static void Unregister(object gameParkingLot)
+        {
+            if (gameParkingLot == null)
+                return;
+            try
+            {
+                for (int i = All.Count - 1; i >= 0; i--)
+                {
+                    if (ReferenceEquals(All[i]?._lot, gameParkingLot))
+                        All.RemoveAt(i);
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Resolves a parking lot using a typed identifier T.
+        /// Declare an identifier class annotated with [ParkingLotName("...")].
+        /// </summary>
+        /// <typeparam name="T">A type implementing IParkingLotIdentifier with ParkingLotNameAttribute</typeparam>
+        /// <returns>The parking lot wrapper, or null if not found.</returns>
+        public static ParkingLotWrapper Get<T>() where T : IParkingLotIdentifier
+        {
+            var t = typeof(T);
+            string name = TryGetNameFromIdentifier(t);
+            if (!string.IsNullOrEmpty(name))
+            {
+                var found = GetByName(name);
+                if (found != null)
+                    return found;
+            }
+
+            // Try type name as fallback
+            var byTypeName = GetByName(t.Name);
+            if (byTypeName != null)
+                return byTypeName;
+
+            // If still not found and we're in Menu scene, create deferred wrapper
+            if (DeferredMapResolver.IsMenuScene())
+            {
+                string deferredName = !string.IsNullOrEmpty(name) ? name : t.Name;
+                var deferredWrapper = new ParkingLotWrapper(t, deferredName);
+                DeferredMapResolver.RegisterDeferredLookup(new DeferredLookup(t, (resolved) =>
+                {
+                    if (resolved is ParkingLotWrapper wrapper && wrapper != null && wrapper._lot != null)
+                    {
+                        deferredWrapper._lot = wrapper._lot;
+                        deferredWrapper._guid = wrapper._guid;
+                        deferredWrapper._gameObjectName = wrapper._gameObjectName;
+                        deferredWrapper._isDeferred = false;
+                    }
+                }));
+                return deferredWrapper;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// INTERNAL: Clears all registered parking lots. Used during scene cleanup.
+        /// </summary>
+        internal static void Clear()
+        {
+            All.Clear();
+        }
+
+        /// <summary>
+        /// Helper method to extract the parking lot name from a type's ParkingLotNameAttribute.
+        /// </summary>
+        private static string TryGetNameFromIdentifier(System.Type t)
+        {
+            try
+            {
+                var attr = t.GetCustomAttributes(false).FirstOrDefault(a => a.GetType().FullName == typeof(ParkingLotNameAttribute).FullName);
+                if (attr != null)
+                {
+                    var prop = attr.GetType().GetProperty("Name", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    return prop?.GetValue(attr) as string;
+                }
+            }
+            catch { }
+            return null;
         }
     }
 }

@@ -282,6 +282,73 @@ namespace S1API.Entities.Schedule
             });
             return this;
         }
+
+        /// <summary>
+        /// Adds a "Drive to Car Park" action using GameObject names for runtime resolution.
+        /// More reliable than GUIDs for modders as names are more predictable across different players.
+        /// </summary>
+        /// <param name="parkingLotName">The GameObject name of the parking lot where the vehicle should be parked.</param>
+        /// <param name="vehicleName">The GameObject name of the vehicle that should be driven.</param>
+        /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>
+        /// <param name="alignment">The optional parking alignment to use when parking the vehicle.</param>
+        /// <param name="overrideParkingType">Whether to override the default parking type behavior.</param>
+        /// <param name="name">The optional name for this action. If <c>null</c>, uses "DriveToCarPark".</param>
+        /// <returns>This builder instance for method chaining.</returns>
+        /// <remarks>
+        /// This method creates a <see cref="DriveToCarParkSpec"/> that uses name-based resolution.
+        /// The parking lot and vehicle will be found by GameObject name at runtime, which is more
+        /// reliable than GUID-based lookup for mods that need to work across different players.
+        /// </remarks>
+        public PrefabScheduleBuilder DriveToCarParkByName(string parkingLotName, string vehicleName, int startTime, ParkingAlignment? alignment = null, bool? overrideParkingType = null, string name = null)
+        {
+            _specs.Add(new DriveToCarParkSpec
+            {
+                StartTime = startTime,
+                ParkingLotName = parkingLotName,
+                VehicleName = vehicleName,
+                Alignment = alignment,
+                OverrideParkingType = overrideParkingType,
+                Name = name
+            });
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a "Drive to Car Park" action that creates a vehicle using a vehicle code.
+        /// Useful when you don't have an existing vehicle to reference.
+        /// </summary>
+        /// <param name="parkingLotName">The GameObject name of the parking lot where the vehicle should be parked.</param>
+        /// <param name="vehicleCode">The vehicle code to create (e.g., "Sedan", "SUV", etc.).</param>
+        /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>
+        /// <param name="vehicleSpawnPosition">The world position where the vehicle should spawn.</param>
+        /// <param name="vehicleSpawnRotation">The optional rotation for the vehicle spawn. If not specified, uses identity rotation.</param>
+        /// <param name="alignment">The optional parking alignment to use when parking the vehicle.</param>
+        /// <param name="overrideParkingType">Whether to override the default parking type behavior.</param>
+        /// <param name="name">The optional name for this action. If <c>null</c>, uses "DriveToCarPark".</param>
+        /// <returns>This builder instance for method chaining.</returns>
+        /// <remarks>
+        /// This method creates a <see cref="DriveToCarParkSpec"/> that will create a new vehicle
+        /// instance at runtime using the provided vehicle code. This is useful when you don't
+        /// have an existing vehicle to reference but need the NPC to drive somewhere.
+        /// 
+        /// The vehicle will be spawned at the specified <paramref name="vehicleSpawnPosition"/> and rotation
+        /// when the schedule action executes.
+        /// </remarks>
+        public PrefabScheduleBuilder DriveToCarParkWithCreateVehicle(string parkingLotName, string vehicleCode, int startTime, Vector3 vehicleSpawnPosition, Quaternion? vehicleSpawnRotation = null, ParkingAlignment? alignment = null, bool? overrideParkingType = null, string name = null)
+        {
+            _specs.Add(new DriveToCarParkSpec
+            {
+                StartTime = startTime,
+                ParkingLotName = parkingLotName,
+                VehicleCode = vehicleCode,
+                VehicleSpawnPosition = vehicleSpawnPosition,
+                VehicleSpawnRotation = vehicleSpawnRotation,
+                Alignment = alignment,
+                OverrideParkingType = overrideParkingType,
+                Name = name
+            });
+            return this;
+        }
     }
 }
 

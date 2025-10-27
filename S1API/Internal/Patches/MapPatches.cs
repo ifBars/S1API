@@ -37,5 +37,14 @@ namespace S1API.Internal.Patches
         [HarmonyPostfix]
         private static void DeliveryLocationAwake(S1Economy.DeliveryLocation __instance) =>
             DeliveryLocation.Register(__instance);
+
+        /// <summary>
+        /// INTERNAL: Registers parking lots when they are created.
+        /// </summary>
+        /// <param name="__instance">The parking lot to register.</param>
+        [HarmonyPatch(typeof(S1Map.ParkingLot), "Awake")]
+        [HarmonyPostfix]
+        private static void ParkingLotAwake(S1Map.ParkingLot __instance) =>
+            ParkingLotRegistry.Register(__instance);
     }
 }

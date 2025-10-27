@@ -4,6 +4,7 @@ using S1API.Avatar;
 using S1API.Logging;
 using S1API.Map;
 using S1API.Quests;
+using S1API.Internal.Map;
 using UnityEngine;
 
 namespace S1API.Internal.Lifecycle
@@ -74,7 +75,14 @@ namespace S1API.Internal.Lifecycle
                     int seatCount = Seat.Count;
                     Seat.Clear();
 
-                    Logger.Msg($"[S1API] Cleaned scene state after unload of '{sceneName}' (NPCs: {npcCount} -> 0, Quests: {questCount} -> 0, Buildings: {buildingCount} -> 0, DeliveryLocations: {deliveryLocationCount} -> 0, Seats: {seatCount} -> 0)");
+                    // Parking Lots: clear S1API parking lot registry.
+                    int parkingLotCount = ParkingLotRegistry.All.Count;
+                    ParkingLotRegistry.All.Clear();
+
+                    // Clear deferred lookups
+                    DeferredMapResolver.Clear();
+
+                    Logger.Msg($"[S1API] Cleaned scene state after unload of '{sceneName}' (NPCs: {npcCount} -> 0, Quests: {questCount} -> 0, Buildings: {buildingCount} -> 0, DeliveryLocations: {deliveryLocationCount} -> 0, Seats: {seatCount} -> 0), Parking Lots: {parkingLotCount}");
                 }
                 else
                 {
@@ -91,6 +99,16 @@ namespace S1API.Internal.Lifecycle
                             NPCNetworkBootstrap.OnMainSceneInitialized();
                             // Kick off delayed seating scan once Main initializes to avoid early Awake crashes
                             try { Internal.SeatBootstrap.OnMainSceneInitialized(); } catch { }
+                            
+                            // Resolve all deferred map entity lookups now that Main scene is loaded
+                            try 
+                            { 
+                                DeferredMapResolver.ResolveAll(); 
+                            } 
+                            catch (Exception ex) 
+                            { 
+                                Logger.Warning($"[S1API] Failed to resolve deferred map lookups: {ex.Message}"); 
+                            }
                         }
                         else
                             NPCNetworkBootstrap.ResetFlags();

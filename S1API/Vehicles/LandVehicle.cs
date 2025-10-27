@@ -116,6 +116,7 @@ namespace S1API.Vehicles
         /// INTERNAL: The stored reference to the land vehicle in-game (see <see cref="S1Vehicles.LandVehicle"/>).
         /// </summary>
         internal S1Vehicles.LandVehicle S1LandVehicle = null!;
+        internal bool _isDeferredByName = false;
 
         /// <summary>
         /// INTERNAL: Creates a LandVehicle instance from an in-game land vehicle instance.
@@ -126,6 +127,15 @@ namespace S1API.Vehicles
             S1LandVehicle = landVehicle;
             SetConnection();
             UpdateGuidFromGame();
+            _isDeferredByName = false;
+        }
+
+        /// <summary>
+        /// INTERNAL: Creates a deferred LandVehicle for name-based lookup.
+        /// </summary>
+        internal LandVehicle(string vehicleName, bool isDeferred)
+        {
+            _isDeferredByName = isDeferred;
         }
         
         #endregion
