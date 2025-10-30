@@ -9,11 +9,14 @@
         <!-- Whether or not you want the build steps to copy over the newly built versions. -->
         <AutomateLocalDeployment>false</AutomateLocalDeployment>
 
-        <!-- Used when building both Il2Cpp and Mono. Typically located at `steamapps/Schedule I/MelonLoader/net6` -->
+        <!-- Used when building Il2Cpp. Typically located at `steamapps/Schedule I/MelonLoader/net6` -->
         <MelonLoaderAssembliesPath>..\ScheduleOneAssemblies\MelonLoader</MelonLoaderAssembliesPath>
         <BepInExAssembliesPath>..\ScheduleOneAssemblies\BepInEx</BepInExAssembliesPath>
 
 <!-- Mono Configuration -->
+
+        <!-- Used when building Mono. Typically located at `steamapps/Schedule I/MelonLoader/net35` -->
+        <MelonLoaderMonoAssembliesPath>..\ScheduleOneAssemblies\MelonLoaderMono</MelonLoaderMonoAssembliesPath>
 
         <!-- Used only when building against Mono. Typically located at `steamapps/Schedule I` -->
         <LocalMonoDeploymentPath>null</LocalMonoDeploymentPath>

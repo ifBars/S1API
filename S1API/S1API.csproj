@@ -117,7 +117,17 @@
     </ItemGroup>
 
     <!-- Melon Deps -->
-    <ItemGroup Condition="'$(Configuration)' == 'MonoMelon' or '$(Configuration)' == 'Il2CppMelon'">
+    <!-- MonoMelon uses net35, Il2CppMelon uses net6 -->
+    <ItemGroup Condition="'$(Configuration)' == 'MonoMelon'">
+        <Reference Include="0Harmony">
+            <HintPath>$(MelonLoaderMonoAssembliesPath)/0Harmony.dll</HintPath>
+        </Reference>
+        <Reference Include="MelonLoader">
+            <HintPath>$(MelonLoaderMonoAssembliesPath)/MelonLoader.dll</HintPath>
+        </Reference>
+    </ItemGroup>
+    
+    <ItemGroup Condition="'$(Configuration)' == 'Il2CppMelon'">
         <Reference Include="0Harmony">
             <HintPath>$(MelonLoaderAssembliesPath)/0Harmony.dll</HintPath>
         </Reference>
