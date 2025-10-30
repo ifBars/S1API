@@ -6,6 +6,7 @@ using S1Money = Il2CppScheduleOne.Money;
 using S1Economy = Il2CppScheduleOne.Economy;
 using S1Datas = Il2CppScheduleOne.Persistence.Datas;
 using S1Items = Il2CppScheduleOne.ItemFramework;
+using S1GameTime = Il2CppScheduleOne.GameTime;
 using Il2CppFishNet;
 using Il2CppFishNet.Object;
 using Il2CppScheduleOne.DevUtilities;
@@ -21,6 +22,7 @@ using S1Money = ScheduleOne.Money;
 using S1Economy = ScheduleOne.Economy;
 using S1Datas = ScheduleOne.Persistence.Datas;
 using S1Items = ScheduleOne.ItemFramework;
+using S1GameTime = ScheduleOne.GameTime;
 using System.Collections.Generic;
 #endif
 
@@ -33,6 +35,7 @@ using MelonLoader;
 using S1API.Entities;
 using S1API.Entities.Relation;
 using S1API.Entities.Internal;
+using S1API.Internal.Lifecycle;
 using S1API.Internal.Utils;
 using S1API.Map;
 using UnityEngine;
@@ -977,6 +980,60 @@ namespace S1API.Internal.Patches
             var ragdollForceComponents = __instance.ragdollForceComponents;
 #endif
             return ragdollForceComponents == null || ragdollForceComponents.ToArray().All(comp => comp != null);
+        }
+
+        /// <summary>
+        /// Patch NPCHealth.Awake to defer TimeManager hookups via shim for custom S1API NPCs.
+        /// This avoids NullReferenceExceptions during Awake when TimeManager is not yet initialized.
+        /// </summary>
+        [HarmonyPatch(typeof(S1NPCs.NPCHealth), "Awake")]
+        [HarmonyPrefix]
+        private static bool NPCHealth_Awake_Prefix(S1NPCs.NPCHealth __instance)
+        {
+            // fast path if TimeManager is initialized (for base NPCs)
+            if (S1GameTime.TimeManager.InstanceExists) return true;
+
+            // Recreate the Awake logic but defer TimeManager hookups via shim
+            __instance.NetworkInitialize___Early();
+            var npc = __instance.GetComponent<S1NPCs.NPC>();
+#if (!IL2CPPMELON)
+            var npcField = typeof(S1NPCs.NPCHealth)
+                .GetField("npc", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (npcField != null)
+                npcField.SetValue(__instance, npc);
+            
+            var sleepStartMethod = typeof(S1NPCs.NPCHealth)
+                .GetMethod("SleepStart", BindingFlags.NonPublic | BindingFlags.Instance);
+            var hourPassMethod = typeof(S1NPCs.NPCHealth)
+                .GetMethod("OnHourPass", BindingFlags.NonPublic | BindingFlags.Instance);
+
+            if (sleepStartMethod != null)
+            {
+                var sleepStartDelegate = 
+                    (Action)Delegate.CreateDelegate(typeof(Action), __instance, sleepStartMethod);
+                TimeManagerShim.Instance.onSleepStart =
+                    (Action)Delegate.Remove(TimeManagerShim.Instance.onSleepStart, sleepStartDelegate)!;
+                TimeManagerShim.Instance.onSleepStart =
+                    (Action)Delegate.Combine(TimeManagerShim.Instance.onSleepStart, sleepStartDelegate);
+            }
+
+            if (hourPassMethod != null)
+            {
+                var hourPassDelegate = 
+                    (Action)Delegate.CreateDelegate(typeof(Action), __instance, hourPassMethod);
+                TimeManagerShim.Instance.onHourPass =
+                    (Action)Delegate.Combine(TimeManagerShim.Instance.onHourPass, hourPassDelegate);
+            }
+#else
+            __instance.npc = npc;
+
+            TimeManagerShim.Instance.onSleepStart =
+                (Action)Delegate.Combine(TimeManagerShim.Instance.onSleepStart, new Action(__instance.SleepStart));
+            TimeManagerShim.Instance.onHourPass =
+                (Action)Delegate.Combine(TimeManagerShim.Instance.onHourPass, new Action(__instance.OnHourPass));
+#endif
+            __instance.NetworkInitialize__Late();
+            return false;
         }
     }
 }
