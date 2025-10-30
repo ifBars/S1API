@@ -109,9 +109,15 @@ namespace S1API.Internal.Lifecycle
                             { 
                                 Logger.Warning($"[S1API] Failed to resolve deferred map lookups: {ex.Message}"); 
                             }
+
+                            // Try to migrate any delegates from TimeManagerShim into the real TimeManager now that Main is initialized
+                            try { TimeManagerShim.Instance.AddDelegatesToReal(); } catch { }
                         }
                         else
+                        {
                             NPCNetworkBootstrap.ResetFlags();
+                            TimeManagerShim.Instance.DeleteDelegatesFromReal();
+                        }
                     }
                     catch { }
                 }
