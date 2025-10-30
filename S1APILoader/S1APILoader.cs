@@ -3,7 +3,7 @@ using System.IO;
 using System.Reflection;
 using MelonLoader;
 
-[assembly: MelonInfo(typeof(S1APILoader.S1APILoader), "S1APILoader", "1.6.7", "KaBooMa")]
+[assembly: MelonInfo(typeof(S1APILoader.S1APILoader), "S1APILoader", "2.4.4", "KaBooMa")]
 
 namespace S1APILoader
 {
