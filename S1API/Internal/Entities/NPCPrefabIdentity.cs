@@ -7,26 +7,48 @@ using S1AvatarFramework = ScheduleOne.AvatarFramework;
 using S1NPCs = ScheduleOne.NPCs;
 #endif
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using MelonLoader;
 
-namespace S1API.Entities.Internal
+namespace S1API.Internal.Entities
 {
     /// <summary>
     /// INTERNAL: Stores identity and appearance defaults on the prefab so clients receive
     /// the same configuration on network spawn without relying on RPCs/SyncVars.
+    /// On Il2Cpp, stores data in a static registry keyed by prefab name to work around
+    /// field serialization issues with RegisterTypeInIl2Cpp components.
     /// </summary>
 #if IL2CPPMELON
     [RegisterTypeInIl2Cpp]
 #endif
     public sealed class NPCPrefabIdentity : MonoBehaviour
     {
+        // Public fields for Mono compatibility (auto-serialized there)
         public string Id;
         public string FirstName;
         public string LastName;
         public S1AvatarFramework.AvatarSettings AppearanceDefaults;
 
+        // Static registry to preserve data across network instantiation on Il2Cpp
+        private static readonly Dictionary<string, IdentityData> _registry = new Dictionary<string, IdentityData>();
         private bool _applied;
+
+        private struct IdentityData
+        {
+            public string Id;
+            public string FirstName;
+            public string LastName;
+            public S1AvatarFramework.AvatarSettings AppearanceDefaults;
+        }
+
+        private void Awake()
+        {
+            // On Il2Cpp, restore fields from registry if this is a spawned instance
+            #if IL2CPPMELON
+            TryRestoreFromRegistry();
+            #endif
+        }
 
         private void Start()
         {
@@ -34,6 +56,45 @@ namespace S1API.Entities.Internal
             TryApplyNow();
             if (!_applied)
                 MelonCoroutines.Start(DelayedApply());
+        }
+
+        /// <summary>
+        /// INTERNAL: Called by NPCPrefabBuilder to register identity data for Il2Cpp.
+        /// On Mono this is unnecessary as fields auto-serialize, but on Il2Cpp we need
+        /// a static registry to survive network instantiation.
+        /// </summary>
+        internal void RegisterToStaticCache(string prefabName)
+        {
+            if (string.IsNullOrEmpty(prefabName))
+                return;
+
+            var data = new IdentityData
+            {
+                Id = this.Id,
+                FirstName = this.FirstName,
+                LastName = this.LastName,
+                AppearanceDefaults = this.AppearanceDefaults
+            };
+
+            _registry[prefabName] = data;
+        }
+
+        private void TryRestoreFromRegistry()
+        {
+            // Get prefab name - could be from the instance or from template
+            string prefabName = gameObject.name;
+            
+            // Remove "(Clone)" suffix if present
+            if (prefabName.EndsWith("(Clone)"))
+                prefabName = prefabName.Substring(0, prefabName.Length - 7);
+
+            if (_registry.TryGetValue(prefabName, out var data))
+            {
+                this.Id = data.Id;
+                this.FirstName = data.FirstName;
+                this.LastName = data.LastName;
+                this.AppearanceDefaults = data.AppearanceDefaults;
+            }
         }
         
 #if IL2CPPMELON
@@ -107,5 +168,6 @@ namespace S1API.Entities.Internal
         }
     }
 }
+
 
 

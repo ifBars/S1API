@@ -17,7 +17,7 @@ using S1API.Entities.Schedule;
 using S1API.Entities.Customer;
 using S1API.Entities.Relation;
 using System.Collections.Generic;
-using S1API.Entities.Internal;
+using S1API.Internal.Entities;
 
 namespace S1API.Entities
 {
@@ -80,6 +80,8 @@ namespace S1API.Entities
                 identity.Id = id;
                 identity.FirstName = firstName;
                 identity.LastName = lastName;
+                // Register to static cache for Il2Cpp network spawn support
+                identity.RegisterToStaticCache(prefabRoot.name);
             }
             catch { }
             return this;
@@ -167,6 +169,8 @@ namespace S1API.Entities
                 // Attach to prefab identity so clients can load it on spawn
                 var identity = EnsureIdentityComponent();
                 identity.AppearanceDefaults = settings;
+                // Register to static cache for Il2Cpp network spawn support
+                identity.RegisterToStaticCache(prefabRoot.name);
             }
             catch { }
 

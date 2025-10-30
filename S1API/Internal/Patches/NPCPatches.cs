@@ -27,6 +27,7 @@ using System.Collections.Generic;
 #endif
 
 using System;
+using System.Collections;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -34,7 +35,7 @@ using HarmonyLib;
 using MelonLoader;
 using S1API.Entities;
 using S1API.Entities.Relation;
-using S1API.Entities.Internal;
+using S1API.Internal.Entities;
 using S1API.Internal.Lifecycle;
 using S1API.Internal.Utils;
 using S1API.Map;
@@ -187,6 +188,15 @@ namespace S1API.Internal.Patches
                 if (npc.IsCustomNPC && npc.S1NPC == __instance)
                 {
                     npc.CreateInternal();
+                    
+                    // Ensure visibility is set correctly on clients based on IsPhysical
+                    // On server, this is handled in FinalizeNetworkSpawn(), but clients need it here
+                    // We use a coroutine to delay until after the NPC is fully spawned/initialized
+                    if (!InstanceFinder.IsServer)
+                    {
+                        MelonCoroutines.Start(SetClientVisibilityDelayed(__instance, npc.IsPhysical));
+                    }
+                    
                     break;
                 }
             }
@@ -213,6 +223,31 @@ namespace S1API.Internal.Patches
             }
             catch
             {
+            }
+        }
+
+        /// <summary>
+        /// Coroutine to set NPC visibility on clients after a delay to ensure the NPC is fully spawned/initialized.
+        /// </summary>
+        private static IEnumerator SetClientVisibilityDelayed(S1NPCs.NPC npc, bool isPhysical)
+        {
+            // Wait a frame to ensure the NPC is fully initialized and spawned
+            yield return null;
+            
+            // Additional small delay to ensure network spawn is complete
+            yield return new WaitForSeconds(0.1f);
+            
+            try
+            {
+                if (npc != null && npc.gameObject != null)
+                {
+                    // Set visibility directly on clients (not networked since we're a client)
+                    npc.SetVisible(isPhysical, networked: false);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Failed to set visibility for NPC '{npc?.ID}' on client: {ex.Message}");
             }
         }
 

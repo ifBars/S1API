@@ -28,7 +28,6 @@ using System.Reflection;
 using UnityEngine;
 using UnityEngine.Events;
 using MelonLoader;
-using S1API.Entities.Customer;
 using S1API.Economy;
 using S1API.Internal.Abstraction;
 #if (IL2CPPMELON)

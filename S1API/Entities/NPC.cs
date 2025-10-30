@@ -750,7 +750,7 @@ namespace S1API.Entities
         /// <summary>
         /// Override this as true to make your NPC visible in the world.
         /// </summary>
-        protected virtual bool IsPhysical => false;
+        public virtual bool IsPhysical => false;
         
         /// <summary>
         /// How aggressive this NPC is towards others.
@@ -1645,8 +1645,15 @@ namespace S1API.Entities
         {
             try
             {
-                bool broadcastVisibility = InstanceFinder.IsServer;
-                S1NPC.SetVisible(IsPhysical, networked: broadcastVisibility);
+                // Always set visibility locally first (for host/client consistency)
+                S1NPC.SetVisible(IsPhysical, networked: false);
+                
+                // If we're the server, also broadcast to clients via RPC after a delay
+                // This ensures the NPC is fully spawned before the RPC is sent
+                if (InstanceFinder.IsServer)
+                {
+                    MelonCoroutines.Start(DelayedVisibilityRPC(IsPhysical));
+                }
 
                 // If this prefab included a Customer, ensure it's initialized; otherwise, respect non-customer NPCs
                 try
@@ -1725,6 +1732,31 @@ namespace S1API.Entities
             catch (Exception ex)
             {
                 Debug.LogWarning($"[S1API] Failed to finalize NPC after spawn: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Coroutine to send visibility RPC after a delay to ensure the NPC is fully spawned.
+        /// </summary>
+        private IEnumerator DelayedVisibilityRPC(bool isPhysical)
+        {
+            // Wait a frame to ensure the NPC is fully initialized and spawned
+            yield return null;
+            
+            // Additional small delay to ensure network spawn is complete
+            yield return new WaitForSeconds(0.1f);
+            
+            try
+            {
+                if (S1NPC != null && S1NPC.gameObject != null)
+                {
+                    // Broadcast visibility to clients via RPC
+                    S1NPC.SetVisible(isPhysical, networked: true);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[S1API] Failed to send visibility RPC for NPC '{S1NPC?.ID}': {ex.Message}");
             }
         }
 
