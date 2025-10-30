@@ -352,8 +352,7 @@ namespace S1API.Internal
             var serverManager = nm.ServerManager;
             if (serverManager == null)
                 return;
-
-            var ownerConnection = GetHostConnection(nm);
+                
             float now = Time.realtimeSinceStartup;
 
             for (int i = PendingSpawns.Count - 1; i >= 0; i--)
@@ -400,7 +399,7 @@ namespace S1API.Internal
 
                 try
                 {
-                    serverManager.Spawn(netObject, ownerConnection, default(UnityEngine.SceneManagement.Scene));
+                    serverManager.Spawn(netObject, null, default(UnityEngine.SceneManagement.Scene));
                 }
                 catch (Exception ex)
                 {
