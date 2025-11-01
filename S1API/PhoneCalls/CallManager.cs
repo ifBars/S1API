@@ -12,6 +12,7 @@ using ActionPhoneCall = System.Action<ScheduleOne.ScriptableObjects.PhoneCallDat
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using MelonLoader;
 
 namespace S1API.PhoneCalls
 {
@@ -22,6 +23,7 @@ namespace S1API.PhoneCalls
     public static class CallManager
     {
         private static readonly Queue<S1ScriptableObjects.PhoneCallData> PendingCalls = new();
+        private static FieldInfo? _queuedCallDataField;
         internal static bool IsDispatchingToGameQueue;
 
         /// <summary>
@@ -76,8 +78,17 @@ namespace S1API.PhoneCalls
 
             if (S1UIPhone.CallInterface.Instance == null) return;
 
+            if (_queuedCallDataField == null)
+            {
+                _queuedCallDataField = typeof(S1Calling.CallManager).GetField("QueuedCallData", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (_queuedCallDataField == null)
+                {
+                    try { MelonLogger.Warning("[CallManager] Failed to find QueuedCallData field via reflection."); } catch { }
+                    return;
+                }
+            }
             // If the game already has a queued call, wait until it is consumed/completed.
-            if (gameCallManager.QueuedCallData != null)
+            if (_queuedCallDataField.GetValue(gameCallManager) != null)
             {
                 return;
             }

@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using HarmonyLib;
 using MelonLoader;
 using S1API.PhoneCalls;
@@ -23,6 +24,11 @@ namespace S1API.Internal.Patches
     internal static class CallManagerPatches
     {
         /// <summary>
+        /// Cached reflection FieldInfo for CallManager.QueuedCallData
+        /// </summary>
+        private static FieldInfo? _queuedCallDataField;
+
+        /// <summary>
         /// Intercept game QueueCall and route to S1API queue unless we're currently
         /// dispatching to the game (to avoid recursion).
         /// </summary>
@@ -41,9 +47,18 @@ namespace S1API.Internal.Patches
                 return true; // no game manager yet; let original handle or no-op safely
             }
 
+            if (_queuedCallDataField == null)
+            {
+                _queuedCallDataField = typeof(S1Calling.CallManager).GetField("QueuedCallData", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (_queuedCallDataField == null)
+                {
+                    try { MelonLogger.Warning("[CallManagerPatches] Failed to find QueuedCallData field via reflection."); } catch { }
+                    return true;
+                }
+            }
             // If the game already has a call queued, route additional calls through S1API
             // so ordering is preserved without re-entering the game's QueueCall here.
-            if (gameCallManager.QueuedCallData != null)
+            if (_queuedCallDataField.GetValue(gameCallManager) != null)
             {
                 CallManager.QueueCall(data);
                 return false; // skip original to avoid clobbering and recursion

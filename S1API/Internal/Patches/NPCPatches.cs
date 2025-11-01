@@ -150,16 +150,16 @@ namespace S1API.Internal.Patches
             if (__instance.StartupItems == null)
                 __instance.StartupItems =
  new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Il2CppScheduleOne.ItemFramework.ItemDefinition>(0);
-            if (__instance.RandomItemDefinitions == null)
-                __instance.RandomItemDefinitions =
- new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Il2CppScheduleOne.ItemFramework.StorableItemDefinition>(0);
+            if (__instance.RandomInventoryItems == null)
+                __instance.RandomInventoryItems =
+ new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1NPCs.NPCInventory.RandomInventoryItem>(0);
 #else
             if (__instance.TestItems == null)
                 __instance.TestItems = Array.Empty<ScheduleOne.ItemFramework.ItemDefinition>();
             if (__instance.StartupItems == null)
                 __instance.StartupItems = Array.Empty<ScheduleOne.ItemFramework.ItemDefinition>();
-            if (__instance.RandomItemDefinitions == null)
-                __instance.RandomItemDefinitions = Array.Empty<ScheduleOne.ItemFramework.StorableItemDefinition>();
+            if (__instance.RandomInventoryItems == null)
+                __instance.RandomInventoryItems = Array.Empty<S1NPCs.NPCInventory.RandomInventoryItem>();
 #endif
         }
 
@@ -831,14 +831,14 @@ namespace S1API.Internal.Patches
                 }
 
                 // Random items (local-only)
-                if (__instance.RandomItems && __instance.RandomItemDefinitions != null &&
-                    __instance.RandomItemDefinitions.Length > 0)
+                if (__instance.RandomItems && __instance.RandomInventoryItems != null &&
+                    __instance.RandomInventoryItems.Length > 0)
                 {
                     int count = UnityEngine.Random.Range(__instance.RandomItemMin, __instance.RandomItemMax + 1);
                     for (int i = 0; i < count; i++)
                     {
-                        var def = __instance.RandomItemDefinitions[
-                            UnityEngine.Random.Range(0, __instance.RandomItemDefinitions.Length)];
+                        var def = __instance.RandomInventoryItems[
+                            UnityEngine.Random.Range(0, __instance.RandomInventoryItems.Length)].ItemDefinition;
                         var inst = def.GetDefaultInstance();
                         __instance.InsertItem(inst, network: false);
                     }
