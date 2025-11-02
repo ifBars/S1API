@@ -66,6 +66,42 @@ namespace S1API.PhoneCalls
             PendingCalls.Clear();
         }
 
+        private static S1ScriptableObjects.PhoneCallData GetQueuedCallData(S1Calling.CallManager manager)
+        {
+            return TryGetFieldOrProperty(manager, "QueuedCallData") as S1ScriptableObjects.PhoneCallData;
+        }
+
+        private static object TryGetFieldOrProperty(object target, string memberName)
+        {
+            if (target == null) return null;
+            var type = target.GetType();
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            
+            // Try field first
+            var fi = type.GetField(memberName, flags);
+            if (fi != null)
+            {
+                try
+                {
+                    return fi.GetValue(target);
+                }
+                catch { }
+            }
+            
+            // Try property
+            var pi = type.GetProperty(memberName, flags);
+            if (pi != null && pi.CanRead)
+            {
+                try
+                {
+                    return pi.GetValue(target);
+                }
+                catch { }
+            }
+            
+            return null;
+        }
+
         internal static void TryProcessQueue()
         {
             var gameCallManager = S1Calling.CallManager.Instance;
@@ -74,10 +110,17 @@ namespace S1API.PhoneCalls
                 return;
             }
 
-            if (S1UIPhone.CallInterface.Instance == null) return;
+            var callInterface = S1UIPhone.CallInterface.Instance;
+            if (callInterface == null) return;
+
+            // If there's an active call in progress, wait until it completes.
+            if (callInterface.ActiveCallData != null)
+            {
+                return;
+            }
 
             // If the game already has a queued call, wait until it is consumed/completed.
-            if (gameCallManager.QueuedCallData != null)
+            if (GetQueuedCallData(gameCallManager) != null)
             {
                 return;
             }

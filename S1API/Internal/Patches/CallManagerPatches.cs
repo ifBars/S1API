@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using HarmonyLib;
 using MelonLoader;
 using S1API.PhoneCalls;
@@ -41,9 +42,14 @@ namespace S1API.Internal.Patches
                 return true; // no game manager yet; let original handle or no-op safely
             }
 
-            // If the game already has a call queued, route additional calls through S1API
+            var callInterface = S1UIPhone.CallInterface.Instance;
+            
+            // If there's an active call or a queued call, route additional calls through S1API
             // so ordering is preserved without re-entering the game's QueueCall here.
-            if (gameCallManager.QueuedCallData != null)
+            bool hasActiveCall = callInterface != null && callInterface.ActiveCallData != null;
+            var queuedCallData = TryGetFieldOrProperty(gameCallManager, "QueuedCallData") as S1ScriptableObjects.PhoneCallData;
+            
+            if (hasActiveCall || queuedCallData != null)
             {
                 CallManager.QueueCall(data);
                 return false; // skip original to avoid clobbering and recursion
@@ -89,6 +95,37 @@ namespace S1API.Internal.Patches
             {
                 try { MelonLogger.Warning($"[CallManager] StartCall_Prefix failed: {e.Message}\n{e.StackTrace}"); } catch { }
             }
+        }
+
+        private static object TryGetFieldOrProperty(object target, string memberName)
+        {
+            if (target == null) return null;
+            var type = target.GetType();
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            
+            // Try field first
+            var fi = type.GetField(memberName, flags);
+            if (fi != null)
+            {
+                try
+                {
+                    return fi.GetValue(target);
+                }
+                catch { }
+            }
+            
+            // Try property
+            var pi = type.GetProperty(memberName, flags);
+            if (pi != null && pi.CanRead)
+            {
+                try
+                {
+                    return pi.GetValue(target);
+                }
+                catch { }
+            }
+            
+            return null;
         }
     }
 }
