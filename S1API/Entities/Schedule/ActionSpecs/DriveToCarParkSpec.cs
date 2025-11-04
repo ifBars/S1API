@@ -20,6 +20,7 @@ using System.Reflection;
 using UnityEngine;
 using S1API.Map;
 using S1API.Vehicles;
+using S1API.Internal.Utils;
 
 namespace S1API.Entities.Schedule
 {
@@ -191,7 +192,7 @@ namespace S1API.Entities.Schedule
                     lotObj = lotWrap?.ResolveGameLot();
                 }
                 if (lotObj != null)
-                    TrySetFieldOrProperty(action, "ParkingLot", lotObj);
+                    ReflectionUtils.TrySetFieldOrProperty(action, "ParkingLot", lotObj);
 
                 // Resolve vehicle
                 object vehObj = null;
@@ -243,63 +244,24 @@ namespace S1API.Entities.Schedule
                     }
                 }
                 if (vehObj != null)
-                    TrySetFieldOrProperty(action, "Vehicle", vehObj);
+                    ReflectionUtils.TrySetFieldOrProperty(action, "Vehicle", vehObj);
 
                 // Flags
                 if (OverrideParkingType.HasValue)
-                    TrySetFieldOrProperty(action, "OverrideParkingType", OverrideParkingType.Value);
+                    ReflectionUtils.TrySetFieldOrProperty(action, "OverrideParkingType", OverrideParkingType.Value);
 
                 if (Alignment.HasValue)
                 {
                     var boxed = (S1Vehicles.EParkingAlignment)(int)Alignment.Value;
-                    TrySetFieldOrProperty(action, "ParkingType", boxed);
+                    ReflectionUtils.TrySetFieldOrProperty(action, "ParkingType", boxed);
                 }
                 else if (ParkingType.HasValue)
                 {
                     var boxed = (S1Vehicles.EParkingAlignment)ParkingType.Value;
-                    TrySetFieldOrProperty(action, "ParkingType", boxed);
+                    ReflectionUtils.TrySetFieldOrProperty(action, "ParkingType", boxed);
                 }
             }
             catch { }
-        }
-
-        private static bool TrySetFieldOrProperty(object target, string memberName, object value)
-        {
-            if (target == null) return false;
-            var type = target.GetType();
-            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-            
-            // Try field first
-            var fi = type.GetField(memberName, flags);
-            if (fi != null)
-            {
-                try
-                {
-                    if (value == null || fi.FieldType.IsInstanceOfType(value))
-                    {
-                        fi.SetValue(target, value);
-                        return true;
-                    }
-                }
-                catch { }
-            }
-            
-            // Try property
-            var pi = type.GetProperty(memberName, flags);
-            if (pi != null && pi.CanWrite)
-            {
-                try
-                {
-                    if (value == null || pi.PropertyType.IsInstanceOfType(value))
-                    {
-                        pi.SetValue(target, value);
-                        return true;
-                    }
-                }
-                catch { }
-            }
-            
-            return false;
         }
     }
 }

@@ -12,6 +12,7 @@ using ActionPhoneCall = System.Action<ScheduleOne.ScriptableObjects.PhoneCallDat
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using S1API.Internal.Utils;
 
 namespace S1API.PhoneCalls
 {
@@ -68,38 +69,7 @@ namespace S1API.PhoneCalls
 
         private static S1ScriptableObjects.PhoneCallData GetQueuedCallData(S1Calling.CallManager manager)
         {
-            return TryGetFieldOrProperty(manager, "QueuedCallData") as S1ScriptableObjects.PhoneCallData;
-        }
-
-        private static object TryGetFieldOrProperty(object target, string memberName)
-        {
-            if (target == null) return null;
-            var type = target.GetType();
-            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-            
-            // Try field first
-            var fi = type.GetField(memberName, flags);
-            if (fi != null)
-            {
-                try
-                {
-                    return fi.GetValue(target);
-                }
-                catch { }
-            }
-            
-            // Try property
-            var pi = type.GetProperty(memberName, flags);
-            if (pi != null && pi.CanRead)
-            {
-                try
-                {
-                    return pi.GetValue(target);
-                }
-                catch { }
-            }
-            
-            return null;
+            return ReflectionUtils.TryGetFieldOrProperty(manager, "QueuedCallData") as S1ScriptableObjects.PhoneCallData;
         }
 
         internal static void TryProcessQueue()

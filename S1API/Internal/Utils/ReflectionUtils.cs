@@ -226,5 +226,90 @@ namespace S1API.Internal.Utils
             return fields.Select(f => f.GetValue(obj))
                 .ToArray();
         }
+
+        /// <summary>
+        /// INTERNAL: Attempts to set a field or property on an object using reflection.
+        /// Tries field first, then property. Handles both public and non-public members.
+        /// </summary>
+        /// <param name="target">The target object to set the member on.</param>
+        /// <param name="memberName">The name of the field or property.</param>
+        /// <param name="value">The value to set.</param>
+        /// <returns><c>true</c> if the member was successfully set; otherwise, <c>false</c>.</returns>
+        internal static bool TrySetFieldOrProperty(object target, string memberName, object value)
+        {
+            if (target == null) return false;
+            var type = target.GetType();
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            
+            // Try field first
+            var fi = type.GetField(memberName, flags);
+            if (fi != null)
+            {
+                try
+                {
+                    if (value == null || fi.FieldType.IsInstanceOfType(value))
+                    {
+                        fi.SetValue(target, value);
+                        return true;
+                    }
+                }
+                catch { }
+            }
+            
+            // Try property
+            var pi = type.GetProperty(memberName, flags);
+            if (pi != null && pi.CanWrite)
+            {
+                try
+                {
+                    if (value == null || pi.PropertyType.IsInstanceOfType(value))
+                    {
+                        pi.SetValue(target, value);
+                        return true;
+                    }
+                }
+                catch { }
+            }
+            
+            return false;
+        }
+
+        /// <summary>
+        /// INTERNAL: Attempts to get a field or property value from an object using reflection.
+        /// Tries field first, then property. Handles both public and non-public members.
+        /// </summary>
+        /// <param name="target">The target object to get the member from.</param>
+        /// <param name="memberName">The name of the field or property.</param>
+        /// <returns>The value of the member, or <c>null</c> if not found or inaccessible.</returns>
+        internal static object TryGetFieldOrProperty(object target, string memberName)
+        {
+            if (target == null) return null;
+            var type = target.GetType();
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            
+            // Try field first
+            var fi = type.GetField(memberName, flags);
+            if (fi != null)
+            {
+                try
+                {
+                    return fi.GetValue(target);
+                }
+                catch { }
+            }
+            
+            // Try property
+            var pi = type.GetProperty(memberName, flags);
+            if (pi != null && pi.CanRead)
+            {
+                try
+                {
+                    return pi.GetValue(target);
+                }
+                catch { }
+            }
+            
+            return null;
+        }
     }
 }

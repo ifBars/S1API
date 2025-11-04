@@ -3,6 +3,7 @@ using System.Reflection;
 using HarmonyLib;
 using MelonLoader;
 using S1API.PhoneCalls;
+using S1API.Internal.Utils;
 
 #if (IL2CPPMELON)
 using S1Calling = Il2CppScheduleOne.Calling;
@@ -47,7 +48,7 @@ namespace S1API.Internal.Patches
             // If there's an active call or a queued call, route additional calls through S1API
             // so ordering is preserved without re-entering the game's QueueCall here.
             bool hasActiveCall = callInterface != null && callInterface.ActiveCallData != null;
-            var queuedCallData = TryGetFieldOrProperty(gameCallManager, "QueuedCallData") as S1ScriptableObjects.PhoneCallData;
+            var queuedCallData = ReflectionUtils.TryGetFieldOrProperty(gameCallManager, "QueuedCallData") as S1ScriptableObjects.PhoneCallData;
             
             if (hasActiveCall || queuedCallData != null)
             {
@@ -95,37 +96,6 @@ namespace S1API.Internal.Patches
             {
                 try { MelonLogger.Warning($"[CallManager] StartCall_Prefix failed: {e.Message}\n{e.StackTrace}"); } catch { }
             }
-        }
-
-        private static object TryGetFieldOrProperty(object target, string memberName)
-        {
-            if (target == null) return null;
-            var type = target.GetType();
-            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-            
-            // Try field first
-            var fi = type.GetField(memberName, flags);
-            if (fi != null)
-            {
-                try
-                {
-                    return fi.GetValue(target);
-                }
-                catch { }
-            }
-            
-            // Try property
-            var pi = type.GetProperty(memberName, flags);
-            if (pi != null && pi.CanRead)
-            {
-                try
-                {
-                    return pi.GetValue(target);
-                }
-                catch { }
-            }
-            
-            return null;
         }
     }
 }

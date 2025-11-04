@@ -17,6 +17,7 @@ using S1ObjectScripts = ScheduleOne.ObjectScripts;
 using UnityEngine;
 using S1API.Map;
 using S1API.Vehicles;
+using S1API.Internal.Utils;
 using System.Reflection;
 using System.Collections;
 
@@ -107,7 +108,7 @@ namespace S1API.Entities.Schedule
 
 			if (gameBuilding != null)
 			{
-				TrySetFieldOrProperty(action, "Building", gameBuilding);
+				ReflectionUtils.TrySetFieldOrProperty(action, "Building", gameBuilding);
 
 				if (DoorIndex.HasValue)
 				{
@@ -125,36 +126,10 @@ namespace S1API.Entities.Schedule
 					}
 					if (doorsList != null && DoorIndex.Value >= 0 && DoorIndex.Value < doorsList.Count)
 					{
-						TrySetFieldOrProperty(action, "Door", doorsList[DoorIndex.Value]);
+						ReflectionUtils.TrySetFieldOrProperty(action, "Door", doorsList[DoorIndex.Value]);
 					}
 				}
 			}
         }
-
-		private static bool TrySetFieldOrProperty(object target, string memberName, object value)
-		{
-			if (target == null) return false;
-			var type = target.GetType();
-			const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-			var fi = type.GetField(memberName, flags);
-			if (fi != null)
-			{
-				if (value == null || fi.FieldType.IsInstanceOfType(value))
-				{
-					fi.SetValue(target, value);
-					return true;
-				}
-			}
-			var pi = type.GetProperty(memberName, flags);
-			if (pi != null && pi.CanWrite)
-			{
-				if (value == null || pi.PropertyType.IsInstanceOfType(value))
-				{
-					pi.SetValue(target, value);
-					return true;
-				}
-			}
-			return false;
-		}
     }
 }

@@ -18,6 +18,7 @@ using S1Money = ScheduleOne.Money;
 #endif
 using System.Reflection;
 using UnityEngine;
+using S1API.Internal.Utils;
 
 namespace S1API.Entities.Schedule
 {
@@ -62,49 +63,10 @@ namespace S1API.Entities.Schedule
                     var guid = new Il2CppSystem.Guid(ATMGUID);
 #endif
                     var atm = GUIDManager.GetObject<S1Money.ATM>(guid);
-                    TrySetFieldOrProperty(action, "ATM", atm);
+                    ReflectionUtils.TrySetFieldOrProperty(action, "ATM", atm);
                 }
                 catch { }
             }
-        }
-
-        private static bool TrySetFieldOrProperty(object target, string memberName, object value)
-        {
-            if (target == null) return false;
-            var type = target.GetType();
-            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-            
-            // Try field first
-            var fi = type.GetField(memberName, flags);
-            if (fi != null)
-            {
-                try
-                {
-                    if (value == null || fi.FieldType.IsInstanceOfType(value))
-                    {
-                        fi.SetValue(target, value);
-                        return true;
-                    }
-                }
-                catch { }
-            }
-            
-            // Try property
-            var pi = type.GetProperty(memberName, flags);
-            if (pi != null && pi.CanWrite)
-            {
-                try
-                {
-                    if (value == null || pi.PropertyType.IsInstanceOfType(value))
-                    {
-                        pi.SetValue(target, value);
-                        return true;
-                    }
-                }
-                catch { }
-            }
-            
-            return false;
         }
     }
 }
