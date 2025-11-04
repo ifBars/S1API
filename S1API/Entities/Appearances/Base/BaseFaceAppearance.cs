@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Reflection;
+using S1API.Internal.Utils;
 
 namespace S1API.Entities.Appearances.Base
 {
@@ -10,8 +10,6 @@ namespace S1API.Entities.Appearances.Base
     /// <remarks>This is used to track the properties within the AvatarSettings</remarks>
     public class BaseFaceAppearance
     {
-        private static readonly Dictionary<Type, List<string>> _constCache = new Dictionary<Type, List<string>>();
-
         /// <summary>
         /// Retrieves and caches all public <c>const string</c> fields defined in the specified type <typeparamref name="T"/>.
         /// </summary>
@@ -26,20 +24,7 @@ namespace S1API.Entities.Appearances.Base
         /// </remarks>
         internal static List<string> GetConstPaths<T>() where T : BaseFaceAppearance
         {
-            var type = typeof(T);
-            if (_constCache.TryGetValue(type, out var cached))
-                return cached;
-
-            var consts = new List<string>();
-            var fields = type.GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
-            foreach (var field in fields)
-            {
-                if (field is { IsLiteral: true, IsInitOnly: false } && field.FieldType == typeof(string))
-                    consts.Add((string)field.GetRawConstantValue());
-            }
-
-            _constCache[type] = consts;
-            return consts;
+            return ReflectionUtils.GetConstStringFields(typeof(T));
         }
     }
 }

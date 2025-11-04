@@ -228,6 +228,42 @@ namespace S1API.Internal.Utils
         }
 
         /// <summary>
+        /// INTERNAL: Shared cache for const string field retrieval across appearance classes.
+        /// </summary>
+        private static readonly Dictionary<Type, List<string>> _constStringFieldsCache = new Dictionary<Type, List<string>>();
+
+        /// <summary>
+        /// INTERNAL: Retrieves and caches all public <c>const string</c> fields defined in the specified type.
+        /// Shared implementation used by appearance classes to avoid code duplication.
+        /// </summary>
+        /// <param name="type">The type from which to retrieve constant string fields.</param>
+        /// <returns>
+        /// A list of constant string values defined in the type.
+        /// </returns>
+        /// <remarks>
+        /// Uses reflection to gather constants and caches them for future calls to improve performance.
+        /// </remarks>
+        internal static List<string> GetConstStringFields(Type type)
+        {
+            if (type == null)
+                return new List<string>();
+
+            if (_constStringFieldsCache.TryGetValue(type, out var cached))
+                return cached;
+
+            var consts = new List<string>();
+            var fields = type.GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
+            foreach (var field in fields)
+            {
+                if (field is { IsLiteral: true, IsInitOnly: false } && field.FieldType == typeof(string))
+                    consts.Add((string)field.GetRawConstantValue());
+            }
+
+            _constStringFieldsCache[type] = consts;
+            return consts;
+        }
+
+        /// <summary>
         /// INTERNAL: Attempts to set a field or property on an object using reflection.
         /// Tries field first, then property. Handles both public and non-public members.
         /// </summary>
