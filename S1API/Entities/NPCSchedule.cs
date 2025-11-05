@@ -22,10 +22,13 @@ using S1API.Entities.Schedule;
 namespace S1API.Entities
 {
     /// <summary>
-    /// Modder-facing scheduling wrapper for an <see cref="NPC"/>.
-    /// Exposes the underlying <see cref="S1NPCs.NPCScheduleManager"/> to enable, disable,
-    /// and manage scheduled actions and curfew modes.
+    /// Modder-facing scheduling wrapper for an NPC. Exposes the underlying schedule manager to enable, disable,
+    /// and manage scheduled actions and curfew modes. Schedule configuration must be done in <see cref="NPC.ConfigurePrefab"/>.
     /// </summary>
+    /// <remarks>
+    /// Use this to control NPC movement patterns, building visits, and timed activities.
+    /// Schedules are defined in <see cref="NPC.ConfigurePrefab"/> using <see cref="NPCPrefabBuilder.WithSchedule"/> and managed at runtime via this wrapper.
+    /// </remarks>
     public sealed class NPCSchedule
     {
         internal readonly NPC NPC;
@@ -173,7 +176,7 @@ namespace S1API.Entities
         /// 
         /// If the signal already exists, it will be properly initialized and wired to the
         /// customer component. If it doesn't exist, a warning will be logged indicating that
-        /// it should be added via NPC.ConfigurePrefab.
+        /// it should be added via <see cref="NPC.ConfigurePrefab"/>.
         /// 
         /// The deal signal allows the NPC to wait for deliveries and toggle customer handover states.
         /// </remarks>
@@ -269,8 +272,6 @@ namespace S1API.Entities
             }
             return names;
         }
-
-        // Runtime schedule building is disabled. Declare schedules in NPC.ConfigurePrefab via NPCPrefabBuilder.WithSchedule.
 
         /// <summary>
         /// INTERNAL: Ensures a schedule manager exists on the NPC root.

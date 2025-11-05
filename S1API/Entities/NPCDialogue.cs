@@ -14,10 +14,13 @@ using S1API.Internal.Abstraction;
 namespace S1API.Entities
 {
     /// <summary>
-    /// Modder-facing dialogue wrapper for an <see cref="NPC"/>.
-    /// Provides helpers to start and end conversations, show worldspace text,
-    /// and play reactions using the underlying DialogueHandler.
+    /// Modder-facing dialogue wrapper for an NPC. Provides helpers to create interactive conversations with branching dialogue trees,
+    /// choice-based interactions, and dynamic responses. Use <see cref="BuildAndRegisterContainer"/> to define custom conversations.
     /// </summary>
+    /// <remarks>
+    /// Dialogue configuration is done in <see cref="NPC.OnCreated"/>. Use <see cref="BuildAndSetDatabase"/> for dialogue entries and <see cref="BuildAndRegisterContainer"/> for conversation flows.
+    /// Subscribe to choice and node events for dynamic dialogue behavior.
+    /// </remarks>
     public sealed class NPCDialogue
     {
         /// <summary>

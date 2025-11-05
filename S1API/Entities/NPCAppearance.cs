@@ -24,8 +24,13 @@ using MelonLoader;
 namespace S1API.Entities
 {
     /// <summary>
-    ///
+    /// Modder-facing appearance customization system for NPCs. Provides builders to configure visual appearance including
+    /// physical features, clothing, and accessories. Appearance configuration is done in <see cref="NPC.OnCreated"/>.
     /// </summary>
+    /// <remarks>
+    /// Use the builder pattern to configure customization fields, face layers, body layers, and accessory layers.
+    /// Always call <see cref="Build"/> at the end to generate the mugshot and apply the appearance to the avatar.
+    /// </remarks>
     public class NPCAppearance
     {
         private static readonly Log _logger = new Log("NPCAppearance");

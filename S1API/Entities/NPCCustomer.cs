@@ -47,9 +47,13 @@ using S1API.Entities.Customer;
 namespace S1API.Entities
 {
     /// <summary>
-    /// Modder-facing customer wrapper for an <see cref="NPC"/>.
-    /// Provides helpers to configure and interact with the base game's Customer behaviour.
+    /// Modder-facing customer wrapper for an NPC. Provides helpers to configure and interact with customer behavior,
+    /// including deal offers, contracts, and customer events. Customer configuration must be done in <see cref="NPC.ConfigurePrefab"/>.
     /// </summary>
+    /// <remarks>
+    /// Use this to enable NPCs to act as business customers that buy products from the player.
+    /// Subscribe to events like <see cref="OnDealCompleted"/> and <see cref="OnUnlocked"/> for dynamic customer interactions.
+    /// </remarks>
     public sealed class NPCCustomer
     {
         internal readonly NPC NPC;

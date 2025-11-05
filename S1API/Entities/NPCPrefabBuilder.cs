@@ -26,9 +26,13 @@ using S1API.Internal.Entities;
 namespace S1API.Entities
 {
     /// <summary>
-    /// Builder for composing a per-NPC prefab prior to network spawn.
-    /// Use to predeclare networked components (Customer, ScheduleManager, Actions, etc.).
+    /// Builder for composing NPC prefab configuration before network spawn. Use to declare networked components,
+    /// spawn position, customer behavior, relationships, schedules, and appearance defaults.
     /// </summary>
+    /// <remarks>
+    /// Configuration must be done in <see cref="NPC.ConfigurePrefab"/> for proper save/load behavior.
+    /// All builder methods return the builder instance for fluent chaining.
+    /// </remarks>
     public sealed class NPCPrefabBuilder
     {
         private readonly GameObject prefabRoot;
@@ -57,8 +61,12 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Ensures a Customer component exists on the prefab.
+        /// Adds customer behavior component to the NPC. Required before configuring customer defaults.
         /// </summary>
+        /// <remarks>
+        /// Enables the NPC to act as a business customer that can buy products from the player.
+        /// </remarks>
+        /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder EnsureCustomer()
         {
             var customer = prefabRoot.GetComponent<S1Economy.Customer>();
@@ -182,10 +190,14 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Plan and predeclare schedule actions on the prefab using the API schedule builder.
-        /// The plan is applied at runtime to activate and configure precreated actions.
-        /// Mirrors the clean style of other builder APIs and guards against exceptions.
+        /// Defines the NPC's schedule using the <see cref="PrefabScheduleBuilder"/>. Schedule actions are planned and pre-created on the prefab.
         /// </summary>
+        /// <remarks>
+        /// Use to configure movement patterns, building visits, and timed activities. The plan is applied at runtime to activate precreated actions.
+        /// Schedule configuration must be done in <see cref="NPC.ConfigurePrefab"/> for proper save/load behavior.
+        /// </remarks>
+        /// <param name="configure">Action to configure schedule using the builder.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithSchedule(Action<PrefabScheduleBuilder> configure)
         {
             if (configure == null)
@@ -205,9 +217,10 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Declares a schedule using a prebuilt set of specs.
-        /// Use this when composing plans externally or sharing between NPC types.
+        /// Declares a schedule using a prebuilt set of specs. Use when composing plans externally or sharing between NPC types.
         /// </summary>
+        /// <param name="specs">Enumerable collection of schedule action specifications.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithSchedule(IEnumerable<IScheduleActionSpec> specs)
         {
             if (specs == null)
@@ -232,6 +245,8 @@ namespace S1API.Entities
         /// <summary>
         /// Declares a schedule using a params array of specs for convenience.
         /// </summary>
+        /// <param name="specs">Array of schedule action specifications.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithSchedule(params IScheduleActionSpec[] specs)
         {
             if (specs == null || specs.Length == 0)
@@ -240,10 +255,14 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Declares default CustomerData for this NPC type. Ensures a Customer component exists
-        /// on the prefab and assigns the composed data as its starting configuration.
-        /// Save/load will override these values when present.
+        /// Configures customer behavior defaults using the <see cref="CustomerDataBuilder"/>. Requires <see cref="EnsureCustomer"/> to be called first.
         /// </summary>
+        /// <remarks>
+        /// Configure spending behavior, order frequency, customer standards, product preferences, and relationship requirements.
+        /// This configuration is essential for proper save/load behavior and must be done in <see cref="NPC.ConfigurePrefab"/>.
+        /// </remarks>
+        /// <param name="configure">Action to configure customer defaults using the builder.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithCustomerDefaults(Action<CustomerDataBuilder> configure)
         {
             if (configure == null)
@@ -273,9 +292,15 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Declares default relationship settings (delta, unlock type, connections) for this NPC type.
+        /// Configures default relationship settings (delta, unlock type, connections) for this NPC type.
         /// Applied to the instance after spawn and before save-data hydration.
         /// </summary>
+        /// <remarks>
+        /// Configure starting relationship level, unlock state, and connections to other NPCs.
+        /// This configuration must be done in <see cref="NPC.ConfigurePrefab"/> for proper save/load behavior.
+        /// </remarks>
+        /// <param name="configure">Action to configure relationship defaults using the builder.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithRelationshipDefaults(Action<NPCRelationshipDataBuilder> configure)
         {
             if (configure != null)
@@ -284,9 +309,14 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Sets the spawn position and rotation for this NPC type.
-        /// Applied every time the NPC is spawned (both new games and loaded games).
+        /// Sets the spawn position and rotation for this NPC type. Applied every time the NPC is spawned (new games and loaded games).
         /// </summary>
+        /// <remarks>
+        /// Use world coordinates. Consider building entrances, roads, and safe spawn areas. Position should be on a walkable surface.
+        /// </remarks>
+        /// <param name="position">World position where the NPC will spawn.</param>
+        /// <param name="rotation">Rotation for the NPC (defaults to Quaternion.identity).</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithSpawnPosition(Vector3 position, Quaternion rotation)
         {
             NPC.RegisterSpawnPositionForType(ownerType, position, rotation);
@@ -294,20 +324,23 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Sets the spawn position for this NPC type with default rotation.
-        /// Applied every time the NPC is spawned (both new games and loaded games).
+        /// Sets the spawn position with default rotation. Applied every time the NPC is spawned.
         /// </summary>
+        /// <param name="position">World position where the NPC will spawn.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithSpawnPosition(Vector3 position)
         {
             return WithSpawnPosition(position, Quaternion.identity);
         }
 
         /// <summary>
-        /// Declares default inventory configuration for this NPC type.
-        /// Supports startup items (always present) and random cash (varies on each sleep).
-        /// All configurations are optional. Applied when the NPC is spawned.
+        /// Declares default inventory configuration for this NPC type. Supports startup items (always present) and random cash (varies on each sleep).
         /// </summary>
+        /// <remarks>
+        /// All configurations are optional. Applied when the NPC is spawned.
+        /// </remarks>
         /// <param name="configure">Action to configure inventory defaults using the builder.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithInventoryDefaults(Action<RandomInventoryItemsBuilder> configure)
         {
             if (configure == null)

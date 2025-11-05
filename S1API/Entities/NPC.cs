@@ -92,8 +92,15 @@ using UnityEngine.SceneManagement;
 namespace S1API.Entities
 {
     /// <summary>
-    /// An abstract class intended to be derived from for creating custom NPCs in the game.
+    /// Abstract base class for creating custom NPCs with modular architecture supporting both physical and non-physical NPCs.
+    /// Physical NPCs are visible in the game world with 3D models, movement, and direct interaction.
+    /// Non-physical NPCs are invisible contacts primarily used for messaging and phone interactions.
     /// </summary>
+    /// <remarks>
+    /// NPCs provide access to component systems: <see cref="Appearance"/>, <see cref="Dialogue"/>, <see cref="Schedule"/>,
+    /// <see cref="Customer"/>, <see cref="Relationship"/>, <see cref="Inventory"/>, and <see cref="Movement"/>.
+    /// Customer, relationship, and schedule configuration must be done in <see cref="ConfigurePrefab"/> for proper save/load behavior.
+    /// </remarks>
     public abstract class NPC : Saveable, IEntity, IHealth
     {
         // Protected members intended to be used by modders.
@@ -568,14 +575,16 @@ namespace S1API.Entities
         protected readonly System.Collections.Generic.List<Response> Responses = new System.Collections.Generic.List<Response>();
 
         /// <summary>
-        /// Base constructor for a new NPC.
-        /// Not intended for instancing your NPC!
-        /// Instead, create your derived class and let S1API handle instancing.
+        /// Base constructor for a new NPC. Defines the NPC's basic identity and unique identifier.
         /// </summary>
-        /// <param name="id">Unique identifier for your NPC.</param>
-        /// <param name="firstName">The first name for your NPC.</param>
-        /// <param name="lastName">The last name for your NPC.</param>
-        /// <param name="icon">The icon for your NPC for messages, realationships, etc.</param>
+        /// <remarks>
+        /// Not intended for direct instancing. Create your derived class and let S1API handle instancing.
+        /// The ID must be unique across all NPCs and is used for save/load persistence.
+        /// </remarks>
+        /// <param name="id">Unique identifier used for save/load and game systems. Must be unique and descriptive (e.g., "shopkeeper_alex").</param>
+        /// <param name="firstName">Display name shown in UI elements, dialogue, and messages. Can be null for anonymous NPCs.</param>
+        /// <param name="lastName">Optional last name. Combined with firstName for full name. Can be null.</param>
+        /// <param name="icon">Optional sprite for UI elements (messages, contacts, relationships). Should be 64x64 or 128x128. Uses default if null.</param>
         protected NPC(
             string id,
             string? firstName,
@@ -642,23 +651,30 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Override to declare components your NPC prefab must contain before network spawn.
-        /// Use <see cref="NPCPrefabBuilder"/> to add Customer, ScheduleManager and pre-create actions.
-        /// Default does nothing.
+        /// Override to configure NPC components and default behavior before the NPC is spawned.
+        /// Called during prefab creation to set up spawn position, customer behavior, relationships, and schedules.
         /// </summary>
-        /// <param name="builder">Prefab builder for this NPC type.</param>
+        /// <remarks>
+        /// Customer, relationship, and schedule configuration must be done here for proper save/load behavior and network compatibility.
+        /// Use the builder pattern for fluent configuration. Runtime initialization should be done in <see cref="OnCreated"/> instead.
+        /// </remarks>
+        /// <param name="builder">Prefab builder for configuring this NPC type.</param>
         protected virtual void ConfigurePrefab(NPCPrefabBuilder builder) { }
 
         /// <summary>
-        /// Called when a response is loaded from the save file.
-        /// Override this method for attaching your callbacks to your methods.
+        /// Called when a text message response is loaded from the save file.
+        /// Override to re-attach callbacks to loaded responses.
         /// </summary>
-        /// <param name="response">The response that was loaded.</param>
+        /// <param name="response">The response that was loaded from save data.</param>
         protected virtual void OnResponseLoaded(Response response) { }
 
         /// <summary>
-        /// Override OnCreated to create the Mugshot for the NPC
+        /// Called when the NPC is fully created and spawned. Override for runtime initialization after all components are set up.
+        /// Use this to configure appearance, dialogue systems, subscribe to events, enable schedule system, and set basic properties.
         /// </summary>
+        /// <remarks>
+        /// Called after the NPC is instantiated and all components are initialized. Appearance, dialogue, and schedule setup should be done here rather than in the constructor.
+        /// </remarks>
         protected override void OnCreated()
         {
             Appearance.GenerateMugshot();
@@ -785,8 +801,12 @@ namespace S1API.Entities
             S1NPC.isVisible;
 
         /// <summary>
-        /// Override this as true to make your NPC visible in the world.
+        /// Determines if the NPC is visible in the game world. Override as true for physical NPCs with 3D models, movement, and direct interaction.
         /// </summary>
+        /// <remarks>
+        /// Physical NPCs (<c>true</c>): Visible in world, have collision detection, can move and follow schedules, can be damaged/healed.
+        /// Non-physical NPCs (<c>false</c>): Invisible, primarily for messaging and phone contacts, cannot move or be directly interacted with.
+        /// </remarks>
         public virtual bool IsPhysical => false;
         
         /// <summary>
@@ -1035,37 +1055,37 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// The current <see cref="NPCAppearance"/> instance.
+        /// Access to the appearance customization system for visual avatar management.
         /// </summary>
         public NPCAppearance Appearance { get; private set; }
 
         /// <summary>
-        /// The current <see cref="NPCMovement"/> instance.
+        /// Access to the movement system for controlling NPC movement and navigation.
         /// </summary>
         public NPCMovement Movement => new NPCMovement(this);
 
         /// <summary>
-        /// The current <see cref="NPCDialogue"/> instance.
+        /// Access to the dialogue system for interactive conversations and dialogue trees.
         /// </summary>
         public NPCDialogue Dialogue => _dialogue ?? (_dialogue = new NPCDialogue(this));
 
         /// <summary>
-        /// The current <see cref="NPCSchedule"/> instance.
+        /// Access to the schedule system for movement and activity scheduling.
         /// </summary>
         public NPCSchedule Schedule => _schedule ?? (_schedule = new NPCSchedule(this));
 
         /// <summary>
-        /// The current <see cref="NPCInventory"/> instance.
+        /// Access to the inventory system for item management.
         /// </summary>
         public NPCInventory Inventory => _inventory ?? (_inventory = new NPCInventory(this));
 
         /// <summary>
-        /// The current <see cref="NPCCustomer"/> instance.
+        /// Access to the customer behavior system for NPCs that act as business customers.
         /// </summary>
         public NPCCustomer Customer => _customer ?? (_customer = new NPCCustomer(this));
 
         /// <summary>
-        /// The current <see cref="NPCRelationship"/> instance.
+        /// Access to the relationship system for social connections and relationships with the player.
         /// </summary>
         public NPCRelationship Relationship => _relationship ?? (_relationship = new NPCRelationship(this));
 

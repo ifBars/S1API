@@ -14,10 +14,13 @@ using S1API.Entities.Relation;
 namespace S1API.Entities
 {
     /// <summary>
-    /// Modder-facing wrapper for an NPC's relationship data.
-    /// Provides safe access to relationship values, unlock state, connections,
-    /// and convenience helpers which bridge to the base game's NPCRelationData.
+    /// Modder-facing wrapper for an NPC's relationship data. Provides safe access to relationship values, unlock state, connections,
+    /// and convenience helpers which bridge to the base game's NPCRelationData. Relationship configuration must be done in <see cref="NPC.ConfigurePrefab"/>.
     /// </summary>
+    /// <remarks>
+    /// Use this to manage NPC social connections, unlock states, and relationship levels with the player and other NPCs.
+    /// Subscribe to <see cref="OnChanged"/> and <see cref="OnUnlocked"/> events for dynamic relationship interactions.
+    /// </remarks>
     public sealed class NPCRelationship
     {
         #region Types
@@ -220,7 +223,7 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Deprecated: Declare defaults in NPC.ConfigurePrefab via NPCPrefabBuilder.WithRelationshipDefaults.
+        /// Deprecated: Declare defaults in <see cref="NPC.ConfigurePrefab"/> via <see cref="NPCPrefabBuilder.WithRelationshipDefaults"/>.
         /// Runtime mutation is no longer supported to preserve save/load consistency.
         /// </summary>
         [Obsolete("Declare defaults in NPC.ConfigurePrefab via NPCPrefabBuilder.WithRelationshipDefaults. Runtime mutation is disabled.")]
