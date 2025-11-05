@@ -18,6 +18,8 @@ using S1Combat = Il2CppScheduleOne.Combat;
 using S1Items = Il2CppScheduleOne.ItemFramework;
 using S1MapBase = Il2CppScheduleOne.Map;
 using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
+using S1Registry = Il2CppScheduleOne.Registry;
+using S1Money = Il2CppScheduleOne.Money;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1DevUtilities = ScheduleOne.DevUtilities;
 using S1Interaction = ScheduleOne.Interaction;
@@ -38,6 +40,8 @@ using S1Combat = ScheduleOne.Combat;
 using S1Items = ScheduleOne.ItemFramework;
 using S1MapBase = ScheduleOne.Map;
 using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
+using S1Registry = ScheduleOne.Registry;
+using S1Money = ScheduleOne.Money;
 #endif
 
 #if (IL2CPPBEPINEX || IL2CPPMELON)
@@ -99,6 +103,7 @@ namespace S1API.Entities
         private static readonly System.Collections.Generic.Dictionary<System.Type, System.Collections.Generic.List<IScheduleActionSpec>> TypeToSchedulePlan = new System.Collections.Generic.Dictionary<System.Type, System.Collections.Generic.List<IScheduleActionSpec>>();
         private static readonly System.Collections.Generic.Dictionary<System.Type, System.Action<CustomerDataBuilder>> TypeToCustomerDefaults = new System.Collections.Generic.Dictionary<System.Type, System.Action<CustomerDataBuilder>>();
         internal static readonly System.Collections.Generic.Dictionary<System.Type, System.Action<NPCRelationshipDataBuilder>> TypeToRelationshipDefaults = new System.Collections.Generic.Dictionary<System.Type, System.Action<NPCRelationshipDataBuilder>>();
+        private static readonly System.Collections.Generic.Dictionary<System.Type, System.Action<RandomInventoryItemsBuilder>> TypeToRandomInventoryDefaults = new System.Collections.Generic.Dictionary<System.Type, System.Action<RandomInventoryItemsBuilder>>();
         private static readonly System.Collections.Generic.Dictionary<System.Type, (Vector3 position, Quaternion rotation)> TypeToSpawnPosition = new System.Collections.Generic.Dictionary<System.Type, (Vector3, Quaternion)>();
         private static readonly System.Collections.Generic.HashSet<System.Type> CustomerTypes = new System.Collections.Generic.HashSet<System.Type>();
         private static volatile bool _prefabsConfiguredForLocalProcess;
@@ -507,6 +512,38 @@ namespace S1API.Entities
             if (npcType == null || configure == null)
                 return;
             TypeToRelationshipDefaults[npcType] = configure;
+        }
+
+        internal static void RegisterRandomInventoryDefaultsForType(System.Type npcType, System.Action<RandomInventoryItemsBuilder> configure)
+        {
+            if (npcType == null || configure == null)
+                return;
+            TypeToRandomInventoryDefaults[npcType] = configure;
+        }
+
+        internal static bool HasRandomInventoryDefaultsForType(System.Type npcType)
+        {
+            if (npcType == null)
+                return false;
+            return TypeToRandomInventoryDefaults.TryGetValue(npcType, out var cfg) && cfg != null;
+        }
+
+        internal static System.Action<RandomInventoryItemsBuilder> GetRandomInventoryDefaultsForType(System.Type npcType)
+        {
+            if (npcType == null)
+                return null;
+            TypeToRandomInventoryDefaults.TryGetValue(npcType, out var cfg);
+            return cfg;
+        }
+
+        internal static RandomInventoryItemsBuilder.InventoryDefaultsData BuildRandomInventoryDefaultsForType(System.Type npcType)
+        {
+            var cfg = GetRandomInventoryDefaultsForType(npcType);
+            if (cfg == null)
+                return null;
+            var builder = new RandomInventoryItemsBuilder();
+            cfg(builder);
+            return builder.BuildInternal();
         }
 
         internal static void RegisterSpawnPositionForType(System.Type npcType, Vector3 position, Quaternion rotation)
@@ -1516,6 +1553,9 @@ namespace S1API.Entities
 
                 S1NPC.Inventory.PickpocketIntObj = pickpocket;
             }
+
+            // Apply random inventory defaults if configured
+            ApplyRandomInventoryDefaults();
         }
 
         private void InitializeRelationshipData()
@@ -1532,6 +1572,62 @@ namespace S1API.Entities
                 }
             }
             catch { /* ignore: base game will handle in its own lifecycle if not ready */ }
+        }
+
+        private void ApplyRandomInventoryDefaults()
+        {
+            if (!HasRandomInventoryDefaultsForType(GetType()))
+                return;
+
+            try
+            {
+                var data = BuildRandomInventoryDefaultsForType(GetType());
+                if (data == null)
+                    return;
+
+                var inventory = S1NPC.Inventory;
+                if (inventory == null)
+                    return;
+
+                // Apply random cash configuration
+                if (data.RandomCashMin.HasValue || data.RandomCashMax.HasValue)
+                {
+                    inventory.RandomCash = true;
+                    if (data.RandomCashMin.HasValue)
+                        inventory.RandomCashMin = data.RandomCashMin.Value;
+                    if (data.RandomCashMax.HasValue)
+                        inventory.RandomCashMax = data.RandomCashMax.Value;
+                }
+
+                // Apply ClearInventoryEachNight setting
+                if (data.ClearInventoryEachNight.HasValue)
+                    inventory.ClearInventoryEachNight = data.ClearInventoryEachNight.Value;
+
+                // Apply startup items (handled automatically by NPCInventory.Awake)
+                if (data.StartupItems != null && data.StartupItems.Count > 0)
+                {
+                    var startupItemsList = new List<S1Items.ItemDefinition>();
+                    foreach (var itemId in data.StartupItems)
+                    {
+                        var def = S1Registry.GetItem(itemId);
+                        if (def != null)
+                            startupItemsList.Add(def);
+                    }
+
+                    if (startupItemsList.Count > 0)
+                    {
+#if (IL2CPPMELON)
+                        inventory.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(startupItemsList.ToArray());
+#else
+                        inventory.StartupItems = startupItemsList.ToArray();
+#endif
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[S1API] Failed to apply random inventory defaults for NPC {GetType().Name}: {ex.Message}");
+            }
         }
 
         private S1Interaction.InteractableObject? GetPrimaryInteractable()
@@ -1713,6 +1809,9 @@ namespace S1API.Entities
                         Debug.LogWarning($"[S1API] Failed to apply relationship defaults: {ex.Message}");
                     }
                 }
+
+                // Apply random inventory defaults if configured
+                ApplyRandomInventoryDefaults();
 
                 // Apply spawn position for this NPC type (always applied, regardless of save state)
                 try

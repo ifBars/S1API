@@ -3,11 +3,15 @@ using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
 using S1Economy = Il2CppScheduleOne.Economy;
 using S1AvatarFramework = Il2CppScheduleOne.AvatarFramework;
+using S1Items = Il2CppScheduleOne.ItemFramework;
+using S1Registry = Il2CppScheduleOne.Registry;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1NPCs = ScheduleOne.NPCs;
 using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
 using S1Economy = ScheduleOne.Economy;
 using S1AvatarFramework = ScheduleOne.AvatarFramework;
+using S1Items = ScheduleOne.ItemFramework;
+using S1Registry = ScheduleOne.Registry;
 #endif
 
 using System;
@@ -296,6 +300,87 @@ namespace S1API.Entities
         public NPCPrefabBuilder WithSpawnPosition(Vector3 position)
         {
             return WithSpawnPosition(position, Quaternion.identity);
+        }
+
+        /// <summary>
+        /// Declares default inventory configuration for this NPC type.
+        /// Supports startup items (always present) and random cash (varies on each sleep).
+        /// All configurations are optional. Applied when the NPC is spawned.
+        /// </summary>
+        /// <param name="configure">Action to configure inventory defaults using the builder.</param>
+        public NPCPrefabBuilder WithInventoryDefaults(Action<RandomInventoryItemsBuilder> configure)
+        {
+            if (configure == null)
+                return this;
+
+            try
+            {
+                NPC.RegisterRandomInventoryDefaultsForType(ownerType, configure);
+                
+                // Optionally apply to prefab's NPCInventory component if it exists
+                var inventory = prefabRoot.GetComponent<S1NPCs.NPCInventory>();
+                if (inventory != null)
+                {
+                    var builder = new RandomInventoryItemsBuilder();
+                    configure(builder);
+                    var data = builder.BuildInternal();
+                    ApplyInventoryDefaultsToComponent(inventory, data);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[S1API] Failed to register inventory defaults for {ownerType.Name}: {ex.Message}");
+            }
+
+            return this;
+        }
+
+        private void ApplyInventoryDefaultsToComponent(S1NPCs.NPCInventory inventory, RandomInventoryItemsBuilder.InventoryDefaultsData data)
+        {
+            if (inventory == null || data == null)
+                return;
+
+            try
+            {
+                // Apply random cash
+                if (data.RandomCashMin.HasValue || data.RandomCashMax.HasValue)
+                {
+                    inventory.RandomCash = true;
+                    if (data.RandomCashMin.HasValue)
+                        inventory.RandomCashMin = data.RandomCashMin.Value;
+                    if (data.RandomCashMax.HasValue)
+                        inventory.RandomCashMax = data.RandomCashMax.Value;
+                }
+
+                // Apply ClearInventoryEachNight setting
+                if (data.ClearInventoryEachNight.HasValue)
+                    inventory.ClearInventoryEachNight = data.ClearInventoryEachNight.Value;
+
+                // Apply startup items
+                if (data.StartupItems != null && data.StartupItems.Count > 0)
+                {
+                    var startupItemsList = new List<S1Items.ItemDefinition>();
+                    foreach (var itemId in data.StartupItems)
+                    {
+                        var def = S1Registry.GetItem(itemId);
+                        if (def != null)
+                            startupItemsList.Add(def);
+                    }
+
+                    if (startupItemsList.Count > 0)
+                    {
+#if (IL2CPPMELON)
+                        inventory.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(startupItemsList.ToArray());
+#else
+                        inventory.StartupItems = startupItemsList.ToArray();
+#endif
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[S1API] Failed to apply inventory defaults to prefab: {ex.Message}");
+            }
         }
 
         private void PrecreateActionsForSpecs(List<IScheduleActionSpec> specs)
