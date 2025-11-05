@@ -9,6 +9,10 @@ using S1Map = Il2CppScheduleOne.Map;
 using S1DevUtilities = Il2CppScheduleOne.DevUtilities;
 using S1Schedules = Il2CppScheduleOne.NPCs.Schedules;
 using S1Quests = Il2CppScheduleOne.Quests;
+using S1Dialogue = Il2CppScheduleOne.Dialogue;
+using S1UI = Il2CppScheduleOne.UI;
+using S1VoiceOver = Il2CppScheduleOne.VoiceOver;
+using S1PlayerScripts = Il2CppScheduleOne.PlayerScripts;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1NPCs = ScheduleOne.NPCs;
 using S1Economy = ScheduleOne.Economy;
@@ -21,9 +25,15 @@ using S1Map = ScheduleOne.Map;
 using S1DevUtilities = ScheduleOne.DevUtilities;
 using S1Schedules = ScheduleOne.NPCs.Schedules;
 using S1Quests = ScheduleOne.Quests;
+using S1Dialogue = ScheduleOne.Dialogue;
+using S1UI = ScheduleOne.UI;
+using S1VoiceOver = ScheduleOne.VoiceOver;
+using S1PlayerScripts = ScheduleOne.PlayerScripts;
 #endif
 
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.Events;
@@ -140,6 +150,9 @@ namespace S1API.Entities
                 return false;
             }
             
+            // Ensure currentAffinityData is initialized before any RPC calls
+            EnsureCurrentAffinityDataInitialized(Component);
+            
             try
             {
                 // Store the original state to check if a contract was actually generated
@@ -190,6 +203,9 @@ namespace S1API.Entities
                 return false;
             }
 
+            // Ensure currentAffinityData is initialized before any RPC calls
+            EnsureCurrentAffinityDataInitialized(Component);
+
             // Convert API model to game model and invoke game logic
             var internalInfo = info.ToInternal();
             try
@@ -212,6 +228,10 @@ namespace S1API.Entities
         {
             if (Component == null)
                 return;
+            
+            // Ensure currentAffinityData is initialized before any RPC calls
+            EnsureCurrentAffinityDataInitialized(Component);
+            
             if (player == null)
             {
                 Component.RequestProduct(S1Player.Local);
@@ -352,13 +372,58 @@ namespace S1API.Entities
                     {
                         Logger.Warning($"Attempting manual field setting");
                         customerDataField.SetValue(customer, data);
-                        if (currentAffinityDataField != null)
-                            currentAffinityDataField.SetValue(customer, data.DefaultAffinityData);
                     }
+                    
+                    // Initialize currentAffinityData immediately when creating CustomerData
+                    if (currentAffinityDataField == null)
+                    {
+                        currentAffinityDataField = typeof(S1Economy.Customer).GetField("currentAffinityData",
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    }
+                    
+                    var newAffinity = new S1Economy.CustomerAffinityData();
+                    if (data.DefaultAffinityData != null)
+                    {
+                        data.DefaultAffinityData.CopyTo(newAffinity);
+                    }
+                    // Ensure ProductAffinities list is populated
+                    if (newAffinity.ProductAffinities == null || newAffinity.ProductAffinities.Count == 0)
+                    {
+                        Array drugTypesForAffinity = Enum.GetValues(typeof(S1Product.EDrugType));
+                        foreach (var dt in drugTypesForAffinity)
+                        {
+                            newAffinity.ProductAffinities.Add(new S1Economy.ProductTypeAffinity
+                            {
+                                DrugType = (S1Product.EDrugType)dt,
+                                Affinity = 0f
+                            });
+                        }
+                    }
+                    currentAffinityDataField?.SetValue(customer, newAffinity);
 #else
                     // Use property assignment for IL2CPP
                     customer.customerData = data;
-                    customer.currentAffinityData = data.DefaultAffinityData;
+                    
+                    // Initialize currentAffinityData immediately when creating CustomerData
+                    var newAffinity = new S1Economy.CustomerAffinityData();
+                    if (data.DefaultAffinityData != null)
+                    {
+                        data.DefaultAffinityData.CopyTo(newAffinity);
+                    }
+                    // Ensure ProductAffinities list is populated
+                    if (newAffinity.ProductAffinities == null || newAffinity.ProductAffinities.Count == 0)
+                    {
+                        Array drugTypesForAffinity = Enum.GetValues(typeof(S1Product.EDrugType));
+                        foreach (var dt in drugTypesForAffinity)
+                        {
+                            newAffinity.ProductAffinities.Add(new S1Economy.ProductTypeAffinity
+                            {
+                                DrugType = (S1Product.EDrugType)dt,
+                                Affinity = 0f
+                            });
+                        }
+                    }
+                    customer.currentAffinityData = newAffinity;
 #endif
                 }
             }
@@ -389,10 +454,16 @@ namespace S1API.Entities
 #endif
                 }
 
-                // currentAffinityData = new CustomerAffinityData(); data.DefaultAffinityData.CopyTo(currentAffinityData)
+                // Initialize currentAffinityData - this is critical for AdjustAffinity RPC calls
 #if MONOMELON
-                var currentAffinityField = typeof(S1Economy.Customer).GetField("currentAffinityData", BindingFlags.NonPublic | BindingFlags.Instance);
-                var currentAffinity = currentAffinityField?.GetValue(customer) as S1Economy.CustomerAffinityData;
+                // Use cached field if available, otherwise get it fresh
+                if (currentAffinityDataField == null)
+                {
+                    currentAffinityDataField = typeof(S1Economy.Customer).GetField("currentAffinityData",
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                }
+                
+                var currentAffinity = currentAffinityDataField?.GetValue(customer) as S1Economy.CustomerAffinityData;
                 if (currentAffinity == null)
                 {
                     currentAffinity = new S1Economy.CustomerAffinityData();
@@ -401,7 +472,22 @@ namespace S1API.Entities
                     {
                         data.DefaultAffinityData.CopyTo(currentAffinity);
                     }
-                    currentAffinityField?.SetValue(customer, currentAffinity);
+                    // Ensure ProductAffinities list is populated even if CopyTo didn't work
+                    if (currentAffinity.ProductAffinities == null || currentAffinity.ProductAffinities.Count == 0)
+                    {
+                        // Initialize with all drug types at neutral affinity
+                        Array drugTypes = Enum.GetValues(typeof(S1Product.EDrugType));
+                        foreach (var dt in drugTypes)
+                        {
+                            currentAffinity.ProductAffinities.Add(new S1Economy.ProductTypeAffinity
+                            {
+                                DrugType = (S1Product.EDrugType)dt,
+                                Affinity = 0f
+                            });
+                        }
+                    }
+                    currentAffinityDataField?.SetValue(customer, currentAffinity);
+                    Logger.Msg($"Initialized currentAffinityData for {NPC.ID} with {currentAffinity.ProductAffinities?.Count ?? 0} affinities");
                 }
 #else
                 var currentAffinity = customer.currentAffinityData;
@@ -413,7 +499,22 @@ namespace S1API.Entities
                     {
                         data.DefaultAffinityData.CopyTo(currentAffinity);
                     }
+                    // Ensure ProductAffinities list is populated even if CopyTo didn't work
+                    if (currentAffinity.ProductAffinities == null || currentAffinity.ProductAffinities.Count == 0)
+                    {
+                        // Initialize with all drug types at neutral affinity
+                        Array drugTypes = Enum.GetValues(typeof(S1Product.EDrugType));
+                        foreach (var dt in drugTypes)
+                        {
+                            currentAffinity.ProductAffinities.Add(new S1Economy.ProductTypeAffinity
+                            {
+                                DrugType = (S1Product.EDrugType)dt,
+                                Affinity = 0f
+                            });
+                        }
+                    }
                     customer.currentAffinityData = currentAffinity;
+                    Logger.Msg($"Initialized currentAffinityData for {NPC.ID} with {currentAffinity.ProductAffinities?.Count ?? 0} affinities");
                 }
 #endif
 
@@ -553,12 +654,23 @@ namespace S1API.Entities
             try
             {
                 var onDealCompletedField = typeof(S1Economy.Customer).GetField("onDealCompleted", BindingFlags.Public | BindingFlags.Instance);
-                if (onDealCompletedField?.GetValue(Component) is UnityEvent evt)
+                var evt = onDealCompletedField?.GetValue(Component) as UnityEvent;
+                
+                // Ensure event exists - create it if it doesn't
+                if (evt == null)
                 {
-                    EventHelper.AddListener(callback, evt);
+                    evt = new UnityEvent();
+                    onDealCompletedField?.SetValue(Component, evt);
+                    Logger.Msg($"Created onDealCompleted UnityEvent for {NPC.ID}");
                 }
+                
+                EventHelper.AddListener(callback, evt);
+                Logger.Msg($"Subscribed to OnDealCompleted for {NPC.ID}");
             }
-            catch (Exception) { }
+            catch (Exception ex) 
+            { 
+                Logger.Warning($"Exception in OnDealCompleted for {NPC.ID}: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -655,6 +767,138 @@ namespace S1API.Entities
 #endif
         private MethodInfo setupDialogueMethod = typeof(S1Economy.Customer).GetMethod("SetUpDialogue",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+        /// <summary>
+        /// INTERNAL: Ensures currentAffinityData is initialized before operations that might trigger RPCs.
+        /// </summary>
+        private void EnsureCurrentAffinityDataInitialized(S1Economy.Customer customer)
+        {
+            if (customer == null) return;
+            
+            try
+            {
+#if MONOMELON
+                if (currentAffinityDataField == null)
+                {
+                    currentAffinityDataField = typeof(S1Economy.Customer).GetField("currentAffinityData",
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                }
+                
+                var currentAffinity = currentAffinityDataField?.GetValue(customer) as S1Economy.CustomerAffinityData;
+                if (currentAffinity == null)
+                {
+                    // Re-initialize if somehow it became null
+                    InitializeRuntimeState(customer);
+                }
+#else
+                if (customer.currentAffinityData == null)
+                {
+                    // Re-initialize if somehow it became null
+                    InitializeRuntimeState(customer);
+                }
+#endif
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Exception ensuring currentAffinityData initialized for {NPC.ID}: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Recommends a dealer to the player. This marks the dealer as recommended and shows UI feedback.
+        /// </summary>
+        /// <param name="dealer">The dealer NPC to recommend.</param>
+        public void RecommendDealer(NPCDealer dealer)
+        {
+            if (dealer == null)
+            {
+                Logger.Warning($"Cannot recommend dealer: dealer is null");
+                return;
+            }
+
+            if (Component == null)
+            {
+                Logger.Warning($"Cannot recommend dealer for {NPC.ID}: Customer component is null");
+                return;
+            }
+
+            // Ensure currentAffinityData is initialized before any RPC calls
+            EnsureCurrentAffinityDataInitialized(Component);
+
+            try
+            {
+                Logger.Msg($"Customer {NPC.FullName} recommended dealer {dealer.NPC.FullName} to player");
+                
+                // Mark the dealer as recommended
+                dealer.MarkAsRecommended();
+                
+                // Show hint to player
+                var hintDisplay = S1DevUtilities.Singleton<S1UI.HintDisplay>.Instance;
+                if (hintDisplay != null)
+                {
+                    hintDisplay.ShowHint_20s($"You can now hire <h1>{dealer.NPC.FullName}</h> as a dealer.");
+                }
+                
+                // Show dialogue if player is nearby
+                var closestPlayer = S1PlayerScripts.Player.GetClosestPlayer(NPC.gameObject.transform.position, out var distance);
+                if (closestPlayer == S1PlayerScripts.Player.Local && distance < 6f)
+                {
+                    // Get dialogue database from the NPC's dialogue handler
+                    var dialogueHandler = NPC.S1NPC?.DialogueHandler;
+                    if (dialogueHandler != null && dialogueHandler.Database != null)
+                    {
+                        // Get dialogue line
+                        var dialogueLine = dialogueHandler.Database.GetLine(
+                            S1Dialogue.EDialogueModule.Customer, 
+                            "post_deal_recommend_dealer"
+                        );
+                        
+                        if (!string.IsNullOrEmpty(dialogueLine))
+                        {
+                            // Replace placeholder with dealer name
+                            dialogueLine = dialogueLine.Replace("<NAME>", dealer.NPC.FullName);
+                            
+                            // Create dialogue container
+                            var container = ScriptableObject.CreateInstance<S1Dialogue.DialogueContainer>();
+                            var nodeData = new S1Dialogue.DialogueNodeData
+                            {
+                                DialogueText = dialogueLine,
+                                choices = new S1Dialogue.DialogueChoiceData[0],
+                                DialogueNodeLabel = "ENTRY",
+                                VoiceLine = S1VoiceOver.EVOLineType.Thanks
+                            };
+                            
+                            // Create list and convert to Il2Cpp list if needed
+                            var nodeDataList = new List<S1Dialogue.DialogueNodeData> { nodeData };
+#if IL2CPPMELON
+                            var il2cppList = new Il2CppSystem.Collections.Generic.List<S1Dialogue.DialogueNodeData>();
+                            foreach (var node in nodeDataList)
+                                il2cppList.Add(node);
+                            container.DialogueNodeData = il2cppList;
+#else
+                            container.DialogueNodeData = nodeDataList;
+#endif
+                            
+                            // Start coroutine using MelonCoroutines
+                            MelonCoroutines.Start(WaitAndShowDialogue(container, dialogueHandler));
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Exception in RecommendDealer for {NPC.ID}: {ex.Message}");
+            }
+        }
+
+        private System.Collections.IEnumerator WaitAndShowDialogue(S1Dialogue.DialogueContainer container, S1Dialogue.DialogueHandler handler)
+        {
+            yield return new WaitForSeconds(0.1f);
+            if (handler != null && container != null)
+            {
+                handler.InitializeDialogue(container);
+            }
+        }
 
         private static void SetNonPublicInstanceField(object target, string fieldName, object value)
         {

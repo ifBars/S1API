@@ -79,6 +79,7 @@ using MelonLoader;
 using S1API.Entities.Interfaces;
 using S1API.Entities.Schedule;
 using S1API.Entities.Customer;
+using S1API.Entities.Dealer;
 using S1API.Entities.Relation;
 using S1API.Internal;
 using S1API.Internal.Abstraction;
@@ -111,8 +112,10 @@ namespace S1API.Entities
         private static readonly System.Collections.Generic.Dictionary<System.Type, System.Action<CustomerDataBuilder>> TypeToCustomerDefaults = new System.Collections.Generic.Dictionary<System.Type, System.Action<CustomerDataBuilder>>();
         internal static readonly System.Collections.Generic.Dictionary<System.Type, System.Action<NPCRelationshipDataBuilder>> TypeToRelationshipDefaults = new System.Collections.Generic.Dictionary<System.Type, System.Action<NPCRelationshipDataBuilder>>();
         private static readonly System.Collections.Generic.Dictionary<System.Type, System.Action<RandomInventoryItemsBuilder>> TypeToRandomInventoryDefaults = new System.Collections.Generic.Dictionary<System.Type, System.Action<RandomInventoryItemsBuilder>>();
+        private static readonly System.Collections.Generic.Dictionary<System.Type, System.Action<DealerDataBuilder>> TypeToDealerDefaults = new System.Collections.Generic.Dictionary<System.Type, System.Action<DealerDataBuilder>>();
         private static readonly System.Collections.Generic.Dictionary<System.Type, (Vector3 position, Quaternion rotation)> TypeToSpawnPosition = new System.Collections.Generic.Dictionary<System.Type, (Vector3, Quaternion)>();
         private static readonly System.Collections.Generic.HashSet<System.Type> CustomerTypes = new System.Collections.Generic.HashSet<System.Type>();
+        private static readonly System.Collections.Generic.HashSet<System.Type> DealerTypes = new System.Collections.Generic.HashSet<System.Type>();
         private static volatile bool _prefabsConfiguredForLocalProcess;
         internal static bool PrefabsConfiguredForLocalProcess => _prefabsConfiguredForLocalProcess;
         private S1AvatarFramework.Avatar? _runtimeAvatar;
@@ -196,10 +199,11 @@ namespace S1API.Entities
                     return cached;
                 }
 
-                // Prefer a spawnable prefab provided by the base game (e.g., "BaseNPC").
+                // Prefer a spawnable prefab provided by the base game.
+                // For dealer types, use "Dealer" prefab; otherwise use "BaseNPC".
                 var nm = InstanceFinder.NetworkManager;
                 if (nm == null)
-                    throw new Exception("NetworkManager not found when resolving BaseNPC prefab.");
+                    throw new Exception("NetworkManager not found when resolving NPC prefab.");
 
                 PrefabObjects spawnablePrefabs = nm.SpawnablePrefabs;
                 if (spawnablePrefabs == null)
@@ -207,13 +211,61 @@ namespace S1API.Entities
 
                 NetworkObject chosen = null;
                 int count = spawnablePrefabs.GetObjectCount();
-                for (int i = 0; i < count; i++)
+                
+                // Check if this NPC type is a dealer type by checking the IsDealer property
+                bool isDealerType = false;
+                try
                 {
-                    NetworkObject obj = spawnablePrefabs.GetObject(true, i);
-                    if (obj != null && obj.gameObject != null && obj.gameObject.name == "BaseNPC")
+                    // Create a temporary instance to check IsDealer property
+                    NPC tempInstance = (NPC)FormatterServices.GetUninitializedObject(npcType);
+                    isDealerType = tempInstance.IsDealer;
+                }
+                catch
+                {
+                    // Fallback to checking if already registered as dealer type
+                    isDealerType = IsDealerType(npcType);
+                }
+                
+                if (isDealerType)
+                {
+                    // First, try to find a prefab named "Dealer"
+                    for (int i = 0; i < count; i++)
                     {
-                        chosen = obj;
-                        break;
+                        NetworkObject obj = spawnablePrefabs.GetObject(true, i);
+                        if (obj != null && obj.gameObject != null && obj.gameObject.name == "Dealer")
+                        {
+                            chosen = obj;
+                            break;
+                        }
+                    }
+                    
+                    // If "Dealer" was not found, look for any spawnable containing a Dealer component
+                    if (chosen == null)
+                    {
+                        for (int i = 0; i < count; i++)
+                        {
+                            NetworkObject obj = spawnablePrefabs.GetObject(true, i);
+                            if (obj != null && obj.gameObject != null && obj.gameObject.GetComponent<S1Economy.Dealer>() != null)
+                            {
+                                chosen = obj;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // If not a dealer type or dealer prefab not found, use BaseNPC logic
+                if (chosen == null)
+                {
+                    // Look for "BaseNPC" prefab
+                    for (int i = 0; i < count; i++)
+                    {
+                        NetworkObject obj = spawnablePrefabs.GetObject(true, i);
+                        if (obj != null && obj.gameObject != null && obj.gameObject.name == "BaseNPC")
+                        {
+                            chosen = obj;
+                            break;
+                        }
                     }
                 }
 
@@ -232,7 +284,11 @@ namespace S1API.Entities
                 }
 
                 if (chosen == null)
-                    throw new Exception("Failed to locate a suitable NPC spawnable prefab (BaseNPC or any with S1NPCs.NPC).");
+                {
+                    string expectedPrefabName = isDealerType ? "Dealer" : "BaseNPC";
+                    string expectedComponent = isDealerType ? "Dealer" : "NPC";
+                    throw new Exception($"Failed to locate a suitable NPC spawnable prefab ({expectedPrefabName} or any with {expectedComponent} component).");
+                }
 
                 // Build a unique per-NPC prefab based on type
                 NetworkObject prefabNO = UnityEngine.Object.Instantiate<NetworkObject>(chosen);
@@ -246,8 +302,11 @@ namespace S1API.Entities
                     if (prefabNO != null && prefabNO.gameObject != null)
                     {
                         prefabNO.gameObject.SetActive(false);
-                        // If an NPC component exists and was registered, remove it from the registry immediately
-                        var npcComp = prefabNO.gameObject.GetComponent<S1NPCs.NPC>();
+                        
+                        // Handle registry cleanup for both NPC and Dealer components
+                        var dealerComp = prefabNO.gameObject.GetComponent<S1Economy.Dealer>();
+                        var npcComp = dealerComp != null ? dealerComp as S1NPCs.NPC : prefabNO.gameObject.GetComponent<S1NPCs.NPC>();
+                        
                         if (npcComp != null)
                         {
                             var reg = S1NPCs.NPCManager.NPCRegistry;
@@ -305,6 +364,27 @@ namespace S1API.Entities
                             {
                                 var data = BuildCustomerDefaultsForType(npcType);
                                 TrySetCustomerDataOnComponent(existingCustomer, data);
+                            }
+                        }
+                        
+                        // Handle dealer conversion: if dealer type, check if we already have a Dealer component
+                        if (IsDealerType(npcType))
+                        {
+                            var existingDealer = prefabNO.gameObject.GetComponent<S1Economy.Dealer>();
+                            
+                            // If Dealer already exists (from using Dealer prefab), apply dealer defaults
+                            if (existingDealer != null)
+                            {
+                                var dealerDefaults = BuildDealerDefaultsForType(npcType);
+                                if (dealerDefaults != null)
+                                {
+                                    TryApplyDealerDefaults(existingDealer, dealerDefaults);
+                                }
+                            }
+                            else
+                            {
+                                // If we're using BaseNPC prefab but need dealer functionality, warn
+                                Debug.LogWarning($"[S1API] NPC {npcType.Name} requested dealer functionality but prefab does not have Dealer component. EnsureDealer() was called before prefab creation.");
                             }
                         }
                     }
@@ -514,11 +594,86 @@ namespace S1API.Entities
             }
         }
 
+        internal static bool TryApplyDealerDefaults(S1Economy.Dealer dealerComponent, DealerDataBuilder.DealerConfigData data)
+        {
+            if (dealerComponent == null || data == null)
+                return false;
+            try
+            {
+                dealerComponent.SigningFee = data.SigningFee;
+                dealerComponent.Cut = data.Cut;
+#if MONOMELON
+                var dealerTypeField = typeof(S1Economy.Dealer).GetField("DealerType", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                if (dealerTypeField != null)
+                {
+                    var dealerTypeEnum = Enum.Parse(typeof(S1Economy.EDealerType), data.DealerType.ToString());
+                    dealerTypeField.SetValue(dealerComponent, dealerTypeEnum);
+                }
+#else
+                dealerComponent.DealerType = (S1Economy.EDealerType)(int)data.DealerType;
+#endif
+                dealerComponent.SellInsufficientQualityItems = data.SellInsufficientQualityItems;
+                dealerComponent.SellExcessQualityItems = data.SellExcessQualityItems;
+                // Note: HomeName and CompletedDealsVariable would need to be set via other means
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         internal static void RegisterRelationshipDefaultsForType(System.Type npcType, System.Action<NPCRelationshipDataBuilder> configure)
         {
             if (npcType == null || configure == null)
                 return;
             TypeToRelationshipDefaults[npcType] = configure;
+        }
+
+        internal static void RegisterDealerDefaultsForType(System.Type npcType, System.Action<DealerDataBuilder> configure)
+        {
+            if (npcType == null || configure == null)
+                return;
+            TypeToDealerDefaults[npcType] = configure;
+        }
+
+        internal static void RegisterDealerType(System.Type npcType)
+        {
+            if (npcType == null)
+                return;
+            DealerTypes.Add(npcType);
+        }
+
+        internal static bool IsDealerType(System.Type npcType)
+        {
+            if (npcType == null)
+                return false;
+            return DealerTypes.Contains(npcType);
+        }
+
+        internal static bool HasDealerDefaultsForType(System.Type npcType)
+        {
+            if (npcType == null)
+                return false;
+            return TypeToDealerDefaults.TryGetValue(npcType, out var cfg) && cfg != null;
+        }
+
+        internal static System.Action<DealerDataBuilder> GetDealerDefaultsForType(System.Type npcType)
+        {
+            if (npcType == null)
+                return null;
+            TypeToDealerDefaults.TryGetValue(npcType, out var cfg);
+            return cfg;
+        }
+
+        internal static DealerDataBuilder.DealerConfigData BuildDealerDefaultsForType(System.Type npcType)
+        {
+            var cfg = GetDealerDefaultsForType(npcType);
+            if (cfg == null)
+                return null;
+            var builder = new DealerDataBuilder();
+            cfg(builder);
+            return builder.BuildInternal();
         }
 
         internal static void RegisterRandomInventoryDefaultsForType(System.Type npcType, System.Action<RandomInventoryItemsBuilder> configure)
@@ -810,6 +965,16 @@ namespace S1API.Entities
         public virtual bool IsPhysical => false;
         
         /// <summary>
+        /// Determines if the NPC has dealer functionality. Override as true for NPCs that should be dealers.
+        /// </summary>
+        /// <remarks>
+        /// Dealer NPCs (<c>true</c>): Can manage customers, handle contracts, accept cash payments, and track inventory for sales.
+        /// When true, the NPC prefab will use the "Dealer" network prefab instead of "BaseNPC".
+        /// Non-dealer NPCs (<c>false</c>): Regular NPCs without dealer-specific functionality.
+        /// </remarks>
+        public virtual bool IsDealer => false;
+        
+        /// <summary>
         /// How aggressive this NPC is towards others.
         /// </summary>
         public float Aggressiveness
@@ -1085,6 +1250,11 @@ namespace S1API.Entities
         public NPCCustomer Customer => _customer ?? (_customer = new NPCCustomer(this));
 
         /// <summary>
+        /// Access to the dealer system for NPCs that act as product distributors.
+        /// </summary>
+        public NPCDealer Dealer => _dealer ?? (_dealer = new NPCDealer(this));
+
+        /// <summary>
         /// Access to the relationship system for social connections and relationships with the player.
         /// </summary>
         public NPCRelationship Relationship => _relationship ?? (_relationship = new NPCRelationship(this));
@@ -1263,8 +1433,12 @@ namespace S1API.Entities
                 catch { }
             }
 
-            if (S1NPC.Awareness.Responses == null && S1NPC.Responses is S1Responses.NPCResponses_Civilian civilianResponses)
-                S1NPC.Awareness.Responses = civilianResponses;
+            // Always link Awareness.Responses to the valid NPCResponses_Civilian component
+            // This ensures the reference is properly set after instantiation and component creation/replacement
+            if (S1NPC.Responses is S1Responses.NPCResponses_Civilian validCivilianResponses)
+            {
+                S1NPC.Awareness.Responses = validCivilianResponses;
+            }
         }
 
         private void InitializeBehaviourComponents()
@@ -1713,6 +1887,7 @@ namespace S1API.Entities
         private NPCSchedule _schedule;
         private NPCInventory _inventory;
         private NPCCustomer _customer;
+        private NPCDealer _dealer;
         private NPCRelationship _relationship;
         private bool _wasLoadedFromSave;
 
@@ -1761,6 +1936,13 @@ namespace S1API.Entities
         {
             try
             {
+                // Ensure NPCAwareness.Responses reference is valid after spawn
+                // Network spawning can sometimes break component references
+                if (S1NPC.Awareness != null && S1NPC.Responses is S1Responses.NPCResponses_Civilian validResponses)
+                {
+                    S1NPC.Awareness.Responses = validResponses;
+                }
+
                 // Always set visibility locally first (for host/client consistency)
                 S1NPC.SetVisible(IsPhysical, networked: false);
                 

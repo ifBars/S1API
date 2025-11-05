@@ -19,6 +19,7 @@ using System.Reflection;
 using UnityEngine;
 using S1API.Entities.Schedule;
 using S1API.Entities.Customer;
+using S1API.Entities.Dealer;
 using S1API.Entities.Relation;
 using System.Collections.Generic;
 using S1API.Internal.Entities;
@@ -255,6 +256,47 @@ namespace S1API.Entities
         }
 
         /// <summary>
+        /// Adds dealer behavior to the NPC. Required before configuring dealer defaults.
+        /// </summary>
+        /// <remarks>
+        /// Enables the NPC to act as a dealer that sells products to assigned customers.
+        /// Note: Since Dealer inherits from NPC in the base game, dealer functionality is applied
+        /// through configuration rather than component addition. This marks the NPC type as dealer-capable.
+        /// </remarks>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public NPCPrefabBuilder EnsureDealer()
+        {
+            // Since Dealer inherits from NPC (not a component), we can't add it as a component.
+            // Instead, we mark this NPC type as dealer-capable and store configuration.
+            NPC.RegisterDealerType(ownerType);
+            
+            // Ensure required schedule components exist
+            var mgr = EnsureScheduleManager();
+            
+            // Ensure NPCSignal_HandleDeal exists for dealer contract fulfillment
+            var handleDeal = prefabRoot.GetComponentInChildren<S1NPCsSchedules.NPCSignal_HandleDeal>(true);
+            if (handleDeal == null)
+            {
+                var go = new GameObject("HandleDeal");
+                go.transform.SetParent(mgr.transform, false);
+                handleDeal = go.AddComponent<S1NPCsSchedules.NPCSignal_HandleDeal>();
+                go.SetActive(false);
+            }
+            
+            // Ensure NPCEvent_StayInBuilding exists for home behavior
+            var stayInBuilding = prefabRoot.GetComponentInChildren<S1NPCsSchedules.NPCEvent_StayInBuilding>(true);
+            if (stayInBuilding == null)
+            {
+                var go = new GameObject("StayInBuilding");
+                go.transform.SetParent(mgr.transform, false);
+                stayInBuilding = go.AddComponent<S1NPCsSchedules.NPCEvent_StayInBuilding>();
+                go.SetActive(false);
+            }
+            
+            return this;
+        }
+
+        /// <summary>
         /// Configures customer behavior defaults using the <see cref="CustomerDataBuilder"/>. Requires <see cref="EnsureCustomer"/> to be called first.
         /// </summary>
         /// <remarks>
@@ -331,6 +373,32 @@ namespace S1API.Entities
         public NPCPrefabBuilder WithSpawnPosition(Vector3 position)
         {
             return WithSpawnPosition(position, Quaternion.identity);
+        }
+
+        /// <summary>
+        /// Configures dealer behavior defaults using the <see cref="DealerDataBuilder"/>. Requires <see cref="EnsureDealer"/> to be called first.
+        /// </summary>
+        /// <remarks>
+        /// Configure dealer settings such as signing fee, commission cut, dealer type, quality restrictions, and deal tracking.
+        /// This configuration is essential for proper save/load behavior and must be done in <see cref="NPC.ConfigurePrefab"/>.
+        /// </remarks>
+        /// <param name="configure">Action to configure dealer defaults using the builder.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public NPCPrefabBuilder WithDealerDefaults(Action<DealerDataBuilder> configure)
+        {
+            if (configure == null)
+                return this;
+
+            EnsureDealer();
+            
+            // Register dealer defaults for type-level application
+            NPC.RegisterDealerDefaultsForType(ownerType, configure);
+            
+            // Note: Since Dealer inherits from NPC, we can't directly apply configuration to a component.
+            // Configuration will be applied when the NPC instance is created as a Dealer.
+            // This is handled in NPC.cs during FinalizeNetworkSpawn or similar lifecycle methods.
+            
+            return this;
         }
 
         /// <summary>

@@ -300,9 +300,6 @@ namespace S1API.Internal.Patches
             var s1BaseNpc = FindBaseNpcById(baseData.ID);
             if (s1BaseNpc == null) return true;
 
-            Logger.Msg(
-                $"NPCLoader_Load_Prefix: Found base NPC '{baseData.ID}' with GameObject name '{s1BaseNpc.gameObject?.name}'");
-
             // Skip loader entirely for S1API per-type template prefabs
             try
             {
@@ -327,6 +324,14 @@ namespace S1API.Internal.Patches
             // Custom S1API NPC: perform safe subset of loading and skip original
             try
             {
+                // Ensure dealer overflow slots are initialized BEFORE calling Load
+                // This prevents null reference exceptions when Dealer.Load tries to load overflow items
+                var dealerComponent = s1BaseNpc.GetComponent<S1Economy.Dealer>();
+                if (dealerComponent != null)
+                {
+                    EnsureDealerOverflowSlots(dealerComponent);
+                }
+
                 s1BaseNpc.Load(saveData, baseData);
 
                 if (saveData.TryGetData("Relationship", out S1Datas.RelationshipData rel))
@@ -424,6 +429,7 @@ namespace S1API.Internal.Patches
                             $"NPCLoader_Load_Prefix: Exception loading Inventory data for '{baseData.ID}': {ex.Message}");
                     }
                 }
+
             }
             catch (Exception ex)
             {
@@ -927,6 +933,61 @@ namespace S1API.Internal.Patches
             {
                 Logger.Warning($"FindBaseNpcById: Exception searching for ID '{id}': {ex.Message}");
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// Ensures dealer overflow slots are initialized before loading dealer data.
+        /// Prevents null reference exceptions when Dealer.Load tries to load overflow items.
+        /// </summary>
+        private static void EnsureDealerOverflowSlots(S1Economy.Dealer dealer)
+        {
+            if (dealer == null)
+                return;
+
+            try
+            {
+#if MONOMELON
+                var overflowSlotsField = typeof(S1Economy.Dealer).GetField("overflowSlots", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (overflowSlotsField != null)
+                {
+                    var overflowSlots = overflowSlotsField.GetValue(dealer) as S1Items.ItemSlot[];
+                    if (overflowSlots == null || overflowSlots.Length == 0)
+                    {
+                        // Create overflow slots
+                        overflowSlots = new S1Items.ItemSlot[10];
+                        for (int i = 0; i < 10; i++)
+                        {
+                            overflowSlots[i] = new S1Items.ItemSlot();
+                            overflowSlots[i].SetSlotOwner(dealer);
+                        }
+                        overflowSlotsField.SetValue(dealer, overflowSlots);
+                        Logger.Msg($"Initialized overflowSlots for dealer '{dealer.NPC?.ID ?? "unknown"}'");
+                    }
+                }
+#else
+                var overflowSlotsField = typeof(S1Economy.Dealer).GetField("overflowSlots", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (overflowSlotsField != null)
+                {
+                    var overflowSlots = overflowSlotsField.GetValue(dealer) as S1Items.ItemSlot[];
+                    if (overflowSlots == null || overflowSlots.Length == 0)
+                    {
+                        overflowSlots = new S1Items.ItemSlot[10];
+                        for (int i = 0; i < 10; i++)
+                        {
+                            overflowSlots[i] = new S1Items.ItemSlot();
+                            // In IL2CPP, cast Dealer to IItemSlotOwner interface
+                            overflowSlots[i].SetSlotOwner(dealer.Cast<S1Items.IItemSlotOwner>());
+                        }
+                        overflowSlotsField.SetValue(dealer, overflowSlots);
+                        Logger.Msg($"Initialized overflowSlots for dealer '{dealer.ID ?? "unknown"}'");
+                    }
+                }
+#endif
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Exception ensuring dealer overflow slots: {ex.Message}");
             }
         }
 
