@@ -156,12 +156,13 @@ namespace S1API.Internal.Utils
         }
 
         /// <summary>
-        /// INTERNAL: Recursively searches for a method by name from a class down to the object type.
+        /// Recursively searches for a method by name from a class down to the object type.
         /// </summary>
         /// <param name="type">The type you want to recursively search.</param>
         /// <param name="methodName">The name of the method you're searching for.</param>
         /// <param name="bindingFlags">The binding flags to apply during the search.</param>
-        /// <returns></returns>
+        /// <returns>The method info if found, otherwise null.</returns>
+        [Obsolete("Use S1API.Utils.ReflectionUtils.GetMethod instead. This method will be removed in a future version.")]
         public static MethodInfo? GetMethod(Type? type, string methodName, BindingFlags bindingFlags)
         {
             while (type != null && type != typeof(object))
@@ -192,10 +193,11 @@ namespace S1API.Internal.Utils
         };
 
         /// <summary>
-        /// INTERNAL: Checks whether the object is a ValueTuple
+        /// Checks whether the object is a ValueTuple
         /// </summary>
         /// <param name="obj">The object type to check</param>
         /// <returns>Whether the type is a ValueTuple or not</returns>
+        [Obsolete("Use S1API.Utils.ReflectionUtils.IsValueTuple instead. This method will be removed in a future version.")]
         public static bool IsValueTuple(this object obj)
         {
             if (obj == null)
@@ -210,10 +212,11 @@ namespace S1API.Internal.Utils
         }
 
         /// <summary>
-        /// INTERNAL: Retrieves the Items from the ValueTuple instance.
+        /// Retrieves the Items from the ValueTuple instance.
         /// </summary>
         /// <param name="obj">The ValueTuple instance</param>
         /// <returns>The items in the ValueTuple instance.</returns>
+        [Obsolete("Use S1API.Utils.ReflectionUtils.GetValueTupleItems instead. This method will be removed in a future version.")]
         public static object[]? GetValueTupleItems(this object obj)
         {
             if (!obj.IsValueTuple())
