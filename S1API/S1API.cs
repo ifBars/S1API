@@ -4,7 +4,7 @@ using S1API.Internal.Lifecycle;
 using S1API.Map;
 
 [assembly: MelonInfo(typeof(S1API.S1API), "S1API (Forked by Bars)", "2.4.6", "KaBooMa")]
-
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 namespace S1API
 {
     /// <summary>
@@ -16,7 +16,7 @@ namespace S1API
         {
             SceneStateCleaner.ResetForSceneChange(sceneName, afterUnload: true);
         }
-
+        
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
             NPCNetworkBootstrap.EnsurePrefabsWarmup();
