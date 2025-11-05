@@ -962,7 +962,7 @@ namespace S1API.Internal.Patches
                             overflowSlots[i].SetSlotOwner(dealer);
                         }
                         overflowSlotsField.SetValue(dealer, overflowSlots);
-                        Logger.Msg($"Initialized overflowSlots for dealer '{dealer.NPC?.ID ?? "unknown"}'");
+                        Logger.Msg($"Initialized overflowSlots for dealer '{dealer.ID ?? "unknown"}'");
                     }
                 }
 #else
