@@ -33,6 +33,27 @@ namespace S1API.Utils
         /// <returns>The items in the ValueTuple instance.</returns>
         public static object[]? GetValueTupleItems(this object obj) =>
             Internal.Utils.ReflectionUtils.GetValueTupleItems(obj);
+
+        /// <summary>
+        /// Attempts to set a field or property value on an object using reflection.
+        /// Tries field first, then property. Handles both public and non-public members.
+        /// </summary>
+        /// <param name="target">The target object to set the member on.</param>
+        /// <param name="memberName">The name of the field or property.</param>
+        /// <param name="value">The value to set.</param>
+        /// <returns><c>true</c> if the member was successfully set; otherwise, <c>false</c>.</returns>
+        public static bool TrySetFieldOrProperty(object target, string memberName, object value) =>
+            Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(target, memberName, value);
+
+        /// <summary>
+        /// Attempts to get a field or property value from an object using reflection.
+        /// Tries field first, then property. Handles both public and non-public members.
+        /// </summary>
+        /// <param name="target">The target object to get the member from.</param>
+        /// <param name="memberName">The name of the field or property.</param>
+        /// <returns>The value of the member, or <c>null</c> if not found or inaccessible.</returns>
+        public static object? TryGetFieldOrProperty(object target, string memberName) =>
+            Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(target, memberName);
     }
 }
 

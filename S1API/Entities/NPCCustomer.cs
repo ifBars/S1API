@@ -487,7 +487,6 @@ namespace S1API.Entities
                         }
                     }
                     currentAffinityDataField?.SetValue(customer, currentAffinity);
-                    Logger.Msg($"Initialized currentAffinityData for {NPC.ID} with {currentAffinity.ProductAffinities?.Count ?? 0} affinities");
                 }
 #else
                 var currentAffinity = customer.currentAffinityData;
@@ -514,7 +513,6 @@ namespace S1API.Entities
                         }
                     }
                     customer.currentAffinityData = currentAffinity;
-                    Logger.Msg($"Initialized currentAffinityData for {NPC.ID} with {currentAffinity.ProductAffinities?.Count ?? 0} affinities");
                 }
 #endif
 
@@ -591,33 +589,24 @@ namespace S1API.Entities
             try
             {
                 // onUnlocked
-#if MONOMELON
-                var onDealCompletedField = typeof(S1Economy.Customer).GetField("onDealCompleted", BindingFlags.Public | BindingFlags.Instance);
-                var onUnlockedField = typeof(S1Economy.Customer).GetField("onUnlocked", BindingFlags.Public | BindingFlags.Instance);
-                var onContractAssignedField = typeof(S1Economy.Customer).GetField("onContractAssigned", BindingFlags.Public | BindingFlags.Instance);
-#else
-                var onDealCompletedField = typeof(S1Economy.Customer).GetProperty("onDealCompleted", BindingFlags.Public | BindingFlags.Instance);
-                var onUnlockedField = typeof(S1Economy.Customer).GetProperty("onUnlocked", BindingFlags.Public | BindingFlags.Instance);
-                var onContractAssignedField = typeof(S1Economy.Customer).GetProperty("onContractAssigned", BindingFlags.Public | BindingFlags.Instance);
-#endif
-                if (onUnlockedField != null && onUnlockedField.GetValue(customer) == null)
+                if (Utils.ReflectionUtils.TryGetFieldOrProperty(customer, "onUnlocked") == null)
                 {
-                    onUnlockedField.SetValue(customer, new UnityEvent());
+                    Utils.ReflectionUtils.TrySetFieldOrProperty(customer, "onUnlocked", new UnityEvent());
                 }
 
                 // onDealCompleted
-                if (onDealCompletedField != null && onDealCompletedField.GetValue(customer) == null)
+                if (Utils.ReflectionUtils.TryGetFieldOrProperty(customer, "onDealCompleted") == null)
                 {
-                    onDealCompletedField.SetValue(customer, new UnityEvent());
+                    Utils.ReflectionUtils.TrySetFieldOrProperty(customer, "onDealCompleted", new UnityEvent());
                 }
 
                 // onContractAssigned (UnityEvent<Contract>)
-                if (onContractAssignedField != null && onContractAssignedField.GetValue(customer) == null)
+                if (Utils.ReflectionUtils.TryGetFieldOrProperty(customer, "onContractAssigned") == null)
                 {
                     // Create a UnityEvent dynamically for generic arg if missing
                     var genericEventType = typeof(UnityEvent<>).MakeGenericType(typeof(S1Quests.Contract));
                     var evt = Activator.CreateInstance(genericEventType);
-                    onContractAssignedField.SetValue(customer, evt);
+                    Utils.ReflectionUtils.TrySetFieldOrProperty(customer, "onContractAssigned", evt);
                 }
             }
             catch (Exception)
@@ -635,11 +624,16 @@ namespace S1API.Entities
             if (Component == null || callback == null) return;
             try
             {
-                var onUnlockedField = typeof(S1Economy.Customer).GetField("onUnlocked", BindingFlags.Public | BindingFlags.Instance);
-                if (onUnlockedField?.GetValue(Component) is UnityEvent evt)
+                var evt = Utils.ReflectionUtils.TryGetFieldOrProperty(Component, "onUnlocked") as UnityEvent;
+                
+                // Ensure event exists - create it if it doesn't
+                if (evt == null)
                 {
-                    EventHelper.AddListener(callback, evt);
+                    evt = new UnityEvent();
+                    Utils.ReflectionUtils.TrySetFieldOrProperty(Component, "onUnlocked", evt);
                 }
+                
+                EventHelper.AddListener(callback, evt);
             }
             catch (Exception) { }
         }
@@ -653,23 +647,30 @@ namespace S1API.Entities
             if (Component == null || callback == null) return;
             try
             {
-                var onDealCompletedField = typeof(S1Economy.Customer).GetField("onDealCompleted", BindingFlags.Public | BindingFlags.Instance);
-                var evt = onDealCompletedField?.GetValue(Component) as UnityEvent;
+                var evt = Utils.ReflectionUtils.TryGetFieldOrProperty(Component, "onDealCompleted") as UnityEvent;
                 
                 // Ensure event exists - create it if it doesn't
                 if (evt == null)
                 {
                     evt = new UnityEvent();
-                    onDealCompletedField?.SetValue(Component, evt);
-                    Logger.Msg($"Created onDealCompleted UnityEvent for {NPC.ID}");
+                    bool success = Utils.ReflectionUtils.TrySetFieldOrProperty(Component, "onDealCompleted", evt);
+                    if (success)
+                    {
+                        Logger.Msg($"Created onDealCompleted UnityEvent for {NPC.ID}");
+                    }
+                    else
+                    {
+                        Logger.Warning($"Failed to set onDealCompleted event for {NPC.ID}");
+                        return;
+                    }
                 }
                 
                 EventHelper.AddListener(callback, evt);
-                Logger.Msg($"Subscribed to OnDealCompleted for {NPC.ID}");
             }
             catch (Exception ex) 
             { 
                 Logger.Warning($"Exception in OnDealCompleted for {NPC.ID}: {ex.Message}");
+                Logger.Warning($"Stack trace: {ex.StackTrace}");
             }
         }
 

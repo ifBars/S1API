@@ -7,6 +7,7 @@ using S1Economy = Il2CppScheduleOne.Economy;
 using S1Datas = Il2CppScheduleOne.Persistence.Datas;
 using S1Items = Il2CppScheduleOne.ItemFramework;
 using S1GameTime = Il2CppScheduleOne.GameTime;
+using S1Quests = Il2CppScheduleOne.Quests;
 using Il2CppFishNet;
 using Il2CppFishNet.Object;
 using Il2CppScheduleOne.DevUtilities;
@@ -23,6 +24,7 @@ using S1Economy = ScheduleOne.Economy;
 using S1Datas = ScheduleOne.Persistence.Datas;
 using S1Items = ScheduleOne.ItemFramework;
 using S1GameTime = ScheduleOne.GameTime;
+using S1Quests = ScheduleOne.Quests;
 using System.Collections.Generic;
 #endif
 
@@ -947,43 +949,78 @@ namespace S1API.Internal.Patches
 
             try
             {
-#if MONOMELON
-                var overflowSlotsField = typeof(S1Economy.Dealer).GetField("overflowSlots", BindingFlags.NonPublic | BindingFlags.Instance);
-                if (overflowSlotsField != null)
+                var overflowSlotsObj = Utils.ReflectionUtils.TryGetFieldOrProperty(dealer, "overflowSlots");
+                
+                // Check if slots exist and are properly initialized
+                bool needsInit = false;
+                int slotCount = 0;
+                
+                if (overflowSlotsObj == null)
                 {
-                    var overflowSlots = overflowSlotsField.GetValue(dealer) as S1Items.ItemSlot[];
-                    if (overflowSlots == null || overflowSlots.Length == 0)
+                    needsInit = true;
+                }
+                else
+                {
+                    // Try to get count/length regardless of array type
+                    var countProp = overflowSlotsObj.GetType().GetProperty("Length") ?? 
+                                   overflowSlotsObj.GetType().GetProperty("Count");
+                    if (countProp != null)
                     {
-                        // Create overflow slots
-                        overflowSlots = new S1Items.ItemSlot[10];
-                        for (int i = 0; i < 10; i++)
-                        {
-                            overflowSlots[i] = new S1Items.ItemSlot();
-                            overflowSlots[i].SetSlotOwner(dealer);
-                        }
-                        overflowSlotsField.SetValue(dealer, overflowSlots);
-                        Logger.Msg($"Initialized overflowSlots for dealer '{dealer.ID ?? "unknown"}'");
+                        slotCount = (int)countProp.GetValue(overflowSlotsObj);
+                        needsInit = slotCount == 0;
+                    }
+                    else
+                    {
+                        needsInit = true;
                     }
                 }
+
+                if (needsInit)
+                {
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                    // Create IL2CPP array
+                    var overflowSlots = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemSlot>(10);
+                    for (int i = 0; i < 10; i++)
+                    {
+                        overflowSlots[i] = new S1Items.ItemSlot();
+                        overflowSlots[i].SetSlotOwner(dealer.Cast<S1Items.IItemSlotOwner>());
+                    }
 #else
-                var overflowSlotsField = typeof(S1Economy.Dealer).GetField("overflowSlots", BindingFlags.NonPublic | BindingFlags.Instance);
-                if (overflowSlotsField != null)
-                {
-                    var overflowSlots = overflowSlotsField.GetValue(dealer) as S1Items.ItemSlot[];
-                    if (overflowSlots == null || overflowSlots.Length == 0)
+                    // Create regular C# array for Mono
+                    var overflowSlots = new S1Items.ItemSlot[10];
+                    for (int i = 0; i < 10; i++)
                     {
-                        overflowSlots = new S1Items.ItemSlot[10];
-                        for (int i = 0; i < 10; i++)
-                        {
-                            overflowSlots[i] = new S1Items.ItemSlot();
-                            // In IL2CPP, cast Dealer to IItemSlotOwner interface
-                            overflowSlots[i].SetSlotOwner(dealer.Cast<S1Items.IItemSlotOwner>());
-                        }
-                        overflowSlotsField.SetValue(dealer, overflowSlots);
+                        overflowSlots[i] = new S1Items.ItemSlot();
+                        overflowSlots[i].SetSlotOwner(dealer);
+                    }
+#endif
+                    
+                    if (Utils.ReflectionUtils.TrySetFieldOrProperty(dealer, "overflowSlots", overflowSlots))
+                    {
                         Logger.Msg($"Initialized overflowSlots for dealer '{dealer.ID ?? "unknown"}'");
                     }
+                    else
+                    {
+                        Logger.Warning($"Failed to set overflowSlots for dealer '{dealer.ID ?? "unknown"}'");
+                    }
                 }
+                else if (slotCount > 0)
+                {
+                    // Slots exist, ensure they have proper owners
+                    for (int i = 0; i < slotCount; i++)
+                    {
+                        var indexer = overflowSlotsObj.GetType().GetProperty("Item");
+                        var slot = indexer?.GetValue(overflowSlotsObj, new object[] { i }) as S1Items.ItemSlot;
+                        if (slot != null)
+                        {
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                            slot.SetSlotOwner(dealer.Cast<S1Items.IItemSlotOwner>());
+#else
+                            slot.SetSlotOwner(dealer);
 #endif
+                        }
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -1116,6 +1153,151 @@ namespace S1API.Internal.Patches
 #endif
             __instance.NetworkInitialize__Late();
             return false;
+        }
+
+        /// <summary>
+        /// Guard Dealer.Load to prevent ArgumentNullException when OverflowItems.LoadTo is called with null slots.
+        /// Reimplements the dealer-specific parts of Load() safely, skipping the base NPC.Load call since
+        /// the NPCLoader_Load_Prefix patch already handles that for custom NPCs.
+        /// </summary>
+        [HarmonyPatch(typeof(S1Economy.Dealer), nameof(S1Economy.Dealer.Load), new[] { typeof(S1Datas.DynamicSaveData), typeof(S1Datas.NPCData) })]
+        [HarmonyPrefix]
+        private static bool Dealer_Load_Prefix(S1Economy.Dealer __instance, S1Datas.DynamicSaveData dynamicData, S1Datas.NPCData npcData)
+        {
+            // Only guard custom S1API NPCs
+            var baseNpc = __instance as S1NPCs.NPC;
+            if (baseNpc == null)
+                return true; // Run original for non-NPC Dealers (shouldn't happen)
+
+            var apiNpc = FindWrapperForS1Npc(baseNpc);
+            if (apiNpc == null || !apiNpc.IsCustomNPC)
+                return true; // Run original for base NPCs
+
+            try
+            {
+                // Note: NPCLoader_Load_Prefix already called NPC.Load for us at line 337
+                // We only need to handle dealer-specific data here
+                
+                // Extract dealer data
+                if (!dynamicData.TryExtractBaseData<S1Datas.DealerData>(out var data))
+                {
+                    return false; // Skip original
+                }
+                
+                if (data.Recruited)
+                    __instance.SetIsRecruited(null);
+                
+                __instance.SetCash(data.Cash);
+
+                // Assign customers
+                if (data.AssignedCustomerIDs != null)
+                {
+                    for (int i = 0; i < data.AssignedCustomerIDs.Length; i++)
+                    {
+                        var npc = S1NPCs.NPCManager.GetNPC(data.AssignedCustomerIDs[i]);
+                        if (npc == null)
+                        {
+                            Logger.Warning($"Failed to find customer NPC with ID {data.AssignedCustomerIDs[i]}");
+                            continue;
+                        }
+                        var customer = npc.GetComponent<S1Economy.Customer>();
+                        if (customer == null)
+                        {
+                            Logger.Warning($"NPC is not a customer: {npc.fullName}");
+                        }
+                        else
+                        {
+                            __instance.SendAddCustomer(customer.NPC.ID);
+                        }
+                    }
+                }
+
+                // Restore contracts
+                if (data.ActiveContractGUIDs != null)
+                {
+                    for (int j = 0; j < data.ActiveContractGUIDs.Length; j++)
+                    {
+#if MONOMELON
+                        if (!GUIDManager.IsGUIDValid(data.ActiveContractGUIDs[j]))
+#else
+                        if (!Il2Cpp.GUIDManager.IsGUIDValid(data.ActiveContractGUIDs[j]))
+#endif
+                        {
+                            Logger.Warning($"Invalid contract GUID: {data.ActiveContractGUIDs[j]}");
+                            continue;
+                        }
+#if MONOMELON
+                        var contract = GUIDManager.GetObject<S1Quests.Contract>(new Guid(data.ActiveContractGUIDs[j]));
+#else
+                        var contract = Il2Cpp.GUIDManager.GetObject<S1Quests.Contract>(new Il2CppSystem.Guid(data.ActiveContractGUIDs[j]));
+#endif
+                        
+                        if (contract != null)
+                        {
+                            Type dealerType = typeof(S1Economy.Dealer);
+                            MethodInfo? addContractMethod = dealerType.GetMethod("AddContract",  BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                            if (addContractMethod != null)
+                                addContractMethod.Invoke(__instance, [contract]);
+                        }
+                    }
+                }
+
+                if (data.HasBeenRecommended)
+                    __instance.MarkAsRecommended();
+
+                // overflow items loading - ensure slots exist first
+                if (data.OverflowItems != null)
+                {
+                    EnsureDealerOverflowSlots(__instance);
+                    
+                    var overflowSlotsObj = Utils.ReflectionUtils.TryGetFieldOrProperty(__instance, "overflowSlots");
+                    
+                    if (overflowSlotsObj != null)
+                    {
+                        try
+                        {
+                            // Get the array length/count
+                            var countProp = overflowSlotsObj.GetType().GetProperty("Length") ?? 
+                                           overflowSlotsObj.GetType().GetProperty("Count");
+                            int slotCount = countProp != null ? (int)countProp.GetValue(overflowSlotsObj) : 0;
+                            
+                            if (slotCount > 0)
+                            {
+                                // Convert to ItemSlot array for LoadTo
+                                var slotsArray = new S1Items.ItemSlot[slotCount];
+                                var indexer = overflowSlotsObj.GetType().GetProperty("Item");
+                                
+                                for (int i = 0; i < slotCount; i++)
+                                {
+                                    slotsArray[i] = indexer?.GetValue(overflowSlotsObj, new object[] { i }) as S1Items.ItemSlot;
+                                }
+                                
+                                data.OverflowItems.LoadTo(slotsArray);
+                                Logger.Msg($"Successfully loaded overflow items for dealer '{baseNpc.ID}'");
+                            }
+                            else
+                            {
+                                Logger.Warning($"Overflow slots exist but have no capacity for dealer '{baseNpc.ID}'");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Warning($"Failed to load overflow items for dealer '{baseNpc.ID}': {ex.Message}");
+                        }
+                    }
+                    else
+                    {
+                        Logger.Warning($"Could not initialize overflow slots for dealer '{baseNpc.ID}'");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Dealer_Load_Prefix failed for '{baseNpc?.ID}': {ex.Message}");
+                Logger.Warning($"Stack trace: {ex.StackTrace}");
+            }
+
+            return false; // Skip original for custom NPCs
         }
     }
 }

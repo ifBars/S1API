@@ -5,12 +5,14 @@ using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
 using S1Quests = Il2CppScheduleOne.Quests;
 using S1Items = Il2CppScheduleOne.ItemFramework;
+using S1Messaging = Il2CppScheduleOne.Messaging;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1NPCs = ScheduleOne.NPCs;
 using S1Economy = ScheduleOne.Economy;
 using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
 using S1Quests = ScheduleOne.Quests;
 using S1Items = ScheduleOne.ItemFramework;
+using S1Messaging = ScheduleOne.Messaging;
 #endif
 
 using System;
@@ -80,6 +82,9 @@ namespace S1API.Entities
             
             try
             {
+                // Ensure Dealer category is set for messaging app
+                EnsureDealerCategory();
+                
                 WireCoreReferences(Component);
                 InitializeRuntimeState(Component);
                 EnsureUnityEvents(Component);
@@ -89,6 +94,97 @@ namespace S1API.Entities
             {
                 Logger.Warning($"Exception in EnsureDealer for {NPC.ID}: {ex.Message}");
                 Logger.Warning($"Stack trace: {ex.StackTrace}");
+            }
+        }
+
+        /// <summary>
+        /// Ensures the NPC has the Dealer category set for the messaging app.
+        /// Removes Customer category if present, as dealers should only show as dealers.
+        /// </summary>
+        private void EnsureDealerCategory()
+        {
+            try
+            {
+                var categoriesObj = Utils.ReflectionUtils.TryGetFieldOrProperty(NPC.S1NPC, "ConversationCategories");
+                
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                var categories = categoriesObj as Il2CppSystem.Collections.Generic.List<S1Messaging.EConversationCategory>;
+                if (categories == null)
+                {
+                    categories = new Il2CppSystem.Collections.Generic.List<S1Messaging.EConversationCategory>();
+                    Utils.ReflectionUtils.TrySetFieldOrProperty(NPC.S1NPC, "ConversationCategories", categories);
+                }
+                
+                bool changed = false;
+                
+                // Remove Customer category if present (dealers should only be dealers)
+                for (int i = categories.Count - 1; i >= 0; i--)
+                {
+                    if (categories[i] == S1Messaging.EConversationCategory.Customer)
+                    {
+                        categories.RemoveAt(i);
+                        changed = true;
+                        Logger.Msg($"Removed Customer category from dealer {NPC.ID}");
+                    }
+                }
+                
+                // Check if Dealer category is already present
+                bool hasDealer = false;
+                for (int i = 0; i < categories.Count; i++)
+                {
+                    if (categories[i] == S1Messaging.EConversationCategory.Dealer)
+                    {
+                        hasDealer = true;
+                        break;
+                    }
+                }
+                
+                if (!hasDealer)
+                {
+                    categories.Add(S1Messaging.EConversationCategory.Dealer);
+                    changed = true;
+                    Logger.Msg($"Added Dealer category to {NPC.ID}'s conversation categories");
+                }
+                
+                // Update the MSGConversation if it already exists and we made changes
+                if (changed && NPC.S1NPC.MSGConversation != null)
+                {
+                    NPC.S1NPC.MSGConversation.SetCategories(categories);
+                }
+#else
+                var categories = categoriesObj as System.Collections.Generic.List<S1Messaging.EConversationCategory>;
+                if (categories == null)
+                {
+                    categories = new System.Collections.Generic.List<S1Messaging.EConversationCategory>();
+                    Utils.ReflectionUtils.TrySetFieldOrProperty(NPC.S1NPC, "ConversationCategories", categories);
+                }
+                
+                bool changed = false;
+                
+                // Remove Customer category if present (dealers should only be dealers)
+                if (categories.Remove(S1Messaging.EConversationCategory.Customer))
+                {
+                    changed = true;
+                    Logger.Msg($"Removed Customer category from dealer {NPC.ID}");
+                }
+                
+                if (!categories.Contains(S1Messaging.EConversationCategory.Dealer))
+                {
+                    categories.Add(S1Messaging.EConversationCategory.Dealer);
+                    changed = true;
+                    Logger.Msg($"Added Dealer category to {NPC.ID}'s conversation categories");
+                }
+                
+                // Update the MSGConversation if it already exists and we made changes
+                if (changed && NPC.S1NPC.MSGConversation != null)
+                {
+                    NPC.S1NPC.MSGConversation.SetCategories(categories);
+                }
+#endif
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Exception in EnsureDealerCategory for {NPC.ID}: {ex.Message}");
             }
         }
 
@@ -180,14 +276,10 @@ namespace S1API.Entities
 
             try
             {
-#if MONOMELON
-                var cashProperty = typeof(S1Economy.Dealer).GetProperty("Cash", BindingFlags.Public | BindingFlags.Instance);
-                if (cashProperty != null)
-                    return (float)cashProperty.GetValue(Component);
-                return 0f; // Fallback if property not found
-#else
-                return Component.Cash;
-#endif
+                var cash = Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(Component, "Cash");
+                if (cash != null && cash is float cashValue)
+                    return cashValue;
+                return 0f;
             }
             catch (Exception ex)
             {
@@ -262,14 +354,10 @@ namespace S1API.Entities
 
             try
             {
-#if MONOMELON
-                var isRecruitedProperty = typeof(S1Economy.Dealer).GetProperty("IsRecruited", BindingFlags.Public | BindingFlags.Instance);
-                if (isRecruitedProperty != null)
-                    return (bool)isRecruitedProperty.GetValue(Component);
-                return false; // Fallback if property not found
-#else
-                return Component.IsRecruited;
-#endif
+                var recruited = Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(Component, "IsRecruited");
+                if (recruited != null && recruited is bool recruitedValue)
+                    return recruitedValue;
+                return false;
             }
             catch (Exception ex)
             {
@@ -289,14 +377,10 @@ namespace S1API.Entities
 
             try
             {
-#if MONOMELON
-                var hasBeenRecommendedProperty = typeof(S1Economy.Dealer).GetProperty("HasBeenRecommended", BindingFlags.Public | BindingFlags.Instance);
-                if (hasBeenRecommendedProperty != null)
-                    return (bool)hasBeenRecommendedProperty.GetValue(Component);
-                return false; // Fallback if property not found
-#else
-                return Component.HasBeenRecommended;
-#endif
+                var recommended = Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(Component, "HasBeenRecommended");
+                if (recommended != null && recommended is bool recommendedValue)
+                    return recommendedValue;
+                return false;
             }
             catch (Exception ex)
             {

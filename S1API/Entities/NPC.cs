@@ -773,7 +773,18 @@ namespace S1API.Entities
                 S1NPC.ConversationCategories = new List<S1Messaging.EConversationCategory>();
             else
                 S1NPC.ConversationCategories.Clear();
-            S1NPC.ConversationCategories.Add(S1Messaging.EConversationCategory.Customer);
+            
+            // Check if this is a Dealer to set the correct conversation category
+            var dealerComponent = S1NPC as S1Economy.Dealer;
+            if (dealerComponent != null)
+            {
+                S1NPC.ConversationCategories.Add(S1Messaging.EConversationCategory.Dealer);
+            }
+            else
+            {
+                // Default to Customer category for non-dealer NPCs
+                S1NPC.ConversationCategories.Add(S1Messaging.EConversationCategory.Customer);
+            }
 
 #if (IL2CPPMELON || IL2CPPBEPINEX)
             S1NPC.CreateMessageConversation();
