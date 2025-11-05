@@ -262,6 +262,8 @@ namespace S1API.Entities
         /// Enables the NPC to act as a dealer that sells products to assigned customers.
         /// Note: Since Dealer inherits from NPC in the base game, dealer functionality is applied
         /// through configuration rather than component addition. This marks the NPC type as dealer-capable.
+        /// When the NPC spawns, <see cref="NPCDealer.EnsureDealer"/> will be called automatically to initialize
+        /// dealer functionality and ensure the messaging app displays the correct Dealer category badge.
         /// </remarks>
         /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder EnsureDealer()

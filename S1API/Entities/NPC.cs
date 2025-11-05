@@ -774,9 +774,9 @@ namespace S1API.Entities
             else
                 S1NPC.ConversationCategories.Clear();
             
-            // Check if this is a Dealer to set the correct conversation category
-            var dealerComponent = S1NPC as S1Economy.Dealer;
-            if (dealerComponent != null)
+            // Use the IsDealer property from the custom NPC class instead of trying to cast the component
+            // This matches the logic used in GetOrCreatePerNpcPrefab to select the correct prefab
+            if (this.IsDealer)
             {
                 S1NPC.ConversationCategories.Add(S1Messaging.EConversationCategory.Dealer);
             }
@@ -1979,6 +1979,19 @@ namespace S1API.Entities
                 catch (Exception ex)
                 {
                     Debug.LogWarning($"[S1API] Failed to ensure Customer on NPC: {ex.Message}");
+                }
+
+                // If this NPC type was registered as a dealer, ensure dealer initialization and category badge
+                try
+                {
+                    if (IsCustomNPC && IsDealerType(GetType()))
+                    {
+                        Dealer.EnsureDealer();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[S1API] Failed to ensure Dealer on NPC: {ex.Message}");
                 }
 
                 // Apply any planned schedule specs for this NPC type now that the instance exists

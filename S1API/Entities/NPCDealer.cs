@@ -3,16 +3,20 @@ using Il2CppInterop.Runtime;
 using S1Economy = Il2CppScheduleOne.Economy;
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
-using S1Quests = Il2CppScheduleOne.Quests;
 using S1Items = Il2CppScheduleOne.ItemFramework;
 using S1Messaging = Il2CppScheduleOne.Messaging;
+using S1DevUtilities = Il2CppScheduleOne.DevUtilities;
+using S1UIPhoneMessages = Il2CppScheduleOne.UI.Phone.Messages;
+using S1Money = Il2CppScheduleOne.Money;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1NPCs = ScheduleOne.NPCs;
 using S1Economy = ScheduleOne.Economy;
 using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
-using S1Quests = ScheduleOne.Quests;
 using S1Items = ScheduleOne.ItemFramework;
 using S1Messaging = ScheduleOne.Messaging;
+using S1DevUtilities = ScheduleOne.DevUtilities;
+using S1UIPhoneMessages = ScheduleOne.UI.Phone.Messages;
+using S1Money = ScheduleOne.Money;
 #endif
 
 using System;
@@ -21,6 +25,7 @@ using System.Linq;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.UI;
 using MelonLoader;
 using S1API.Economy;
 using S1API.Internal.Abstraction;
@@ -70,7 +75,8 @@ namespace S1API.Entities
         /// <remarks>
         /// Note: Since Dealer inherits from NPC in the base game (not a component), this will only work
         /// if the wrapped NPC is already a Dealer instance. For custom NPCs created via S1API,
-        /// dealer functionality must be configured at prefab creation time.
+        /// dealer functionality must be configured at prefab creation time using <see cref="NPCPrefabBuilder.EnsureDealer"/>.
+        /// This method is called automatically when the NPC spawns if <see cref="NPCPrefabBuilder.EnsureDealer"/> was used.
         /// </remarks>
         public void EnsureDealer()
         {
@@ -117,6 +123,14 @@ namespace S1API.Entities
                 
                 bool changed = false;
                 
+                // Log current contents
+                try
+                {
+                    string before = string.Join(",", Enumerable.Range(0, categories.Count).Select(i => categories[i].ToString()))
+                        + $" | first={ (categories.Count>0? categories[0].ToString():"<none>") }";
+                }
+                catch { }
+                
                 // Remove Customer category if present (dealers should only be dealers)
                 for (int i = categories.Count - 1; i >= 0; i--)
                 {
@@ -124,7 +138,6 @@ namespace S1API.Entities
                     {
                         categories.RemoveAt(i);
                         changed = true;
-                        Logger.Msg($"Removed Customer category from dealer {NPC.ID}");
                     }
                 }
                 
@@ -143,15 +156,28 @@ namespace S1API.Entities
                 {
                     categories.Add(S1Messaging.EConversationCategory.Dealer);
                     changed = true;
-                    Logger.Msg($"Added Dealer category to {NPC.ID}'s conversation categories");
                 }
+                
+                // Log after contents
+                try
+                {
+                    string after = string.Join(",", Enumerable.Range(0, categories.Count).Select(i => categories[i].ToString()))
+                        + $" | first={ (categories.Count>0? categories[0].ToString():"<none>") }";
+                }
+                catch { }
                 
                 // Update the MSGConversation if it already exists and we made changes
                 if (changed && NPC.S1NPC.MSGConversation != null)
                 {
                     NPC.S1NPC.MSGConversation.SetCategories(categories);
+                    
+                    // Force UI creation if not already created, so badge exists to refresh
+                    NPC.S1NPC.MSGConversation.EnsureUIExists();
+                    
+                    TryHookConversationUIRefresh(NPC.S1NPC.MSGConversation);
+                    RefreshDealerCategoryBadge();
                 }
-#else
+ #else
                 var categories = categoriesObj as System.Collections.Generic.List<S1Messaging.EConversationCategory>;
                 if (categories == null)
                 {
@@ -161,30 +187,152 @@ namespace S1API.Entities
                 
                 bool changed = false;
                 
+                
                 // Remove Customer category if present (dealers should only be dealers)
                 if (categories.Remove(S1Messaging.EConversationCategory.Customer))
                 {
                     changed = true;
-                    Logger.Msg($"Removed Customer category from dealer {NPC.ID}");
                 }
                 
                 if (!categories.Contains(S1Messaging.EConversationCategory.Dealer))
                 {
                     categories.Add(S1Messaging.EConversationCategory.Dealer);
                     changed = true;
-                    Logger.Msg($"Added Dealer category to {NPC.ID}'s conversation categories");
                 }
+                
                 
                 // Update the MSGConversation if it already exists and we made changes
                 if (changed && NPC.S1NPC.MSGConversation != null)
                 {
                     NPC.S1NPC.MSGConversation.SetCategories(categories);
+                    
+                    // Force UI creation if not already created, so badge exists to refresh
+                    NPC.S1NPC.MSGConversation.EnsureUIExists();
+                    
+                    TryHookConversationUIRefresh(NPC.S1NPC.MSGConversation);
+                    RefreshDealerCategoryBadge();
                 }
-#endif
+ #endif
             }
             catch (Exception ex)
             {
                 Logger.Warning($"Exception in EnsureDealerCategory for {NPC.ID}: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Ensure we retry the badge refresh after the conversation UI definitely exists.
+        /// The key issue: MSGConversation.CreateUI() is called lazily (on first message/load/etc),
+        /// and it bakes the category badge from Categories[0] at creation time.
+        /// We need to detect when UI is created and immediately refresh the badge.
+        /// </summary>
+        private void TryHookConversationUIRefresh(object convoObj)
+        {
+            try
+            {
+                var convo = convoObj as S1Messaging.MSGConversation;
+                if (convo == null) return;
+
+                // Check if UI already exists (uiCreated field)
+                var uiCreatedField = typeof(S1Messaging.MSGConversation).GetField("uiCreated", 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (uiCreatedField != null)
+                {
+                    var uiCreated = uiCreatedField.GetValue(convo);
+                    
+                    if (uiCreated != null && uiCreated is bool created && created)
+                    {
+                        // UI already exists, refresh immediately
+                        RefreshDealerCategoryBadge();
+                    }
+                }
+
+                // Hook onLoaded (called after UI is loaded from save)
+                var prevLoaded = convo.onLoaded;
+                convo.onLoaded = new System.Action(() =>
+                {
+                    try { prevLoaded?.Invoke(); } catch { }
+                    RefreshDealerCategoryBadge();
+                });
+
+                // Hook onConversationOpened (called when player opens conversation)
+                var prevOpened = convo.onConversationOpened;
+                convo.onConversationOpened = new System.Action(() =>
+                {
+                    try { prevOpened?.Invoke(); } catch { }
+                    RefreshDealerCategoryBadge();
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Exception in TryHookConversationUIRefresh: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Refresh the category badge on the existing conversation entry to ensure Dealer icon/label/color are shown.
+        /// Mirrors MessagesApp.CreateConversationUI category setup.
+        /// </summary>
+        private void RefreshDealerCategoryBadge()
+        {
+            try
+            {
+                var convo = NPC.S1NPC.MSGConversation;
+                if (convo == null)
+                {
+                    return;
+                }
+                var entry = Utils.ReflectionUtils.TryGetFieldOrProperty(convo, "entry") as RectTransform;
+                if (entry == null)
+                {
+                    return;
+                }
+
+                // Resolve category info from MessagesApp for Dealer
+                var app = S1DevUtilities.PlayerSingleton<S1UIPhoneMessages.MessagesApp>.Instance;
+                if (app == null)
+                {
+                    return;
+                }
+                var info = app.GetCategoryInfo(S1Messaging.EConversationCategory.Dealer);
+                if (info == null)
+                {
+                    return;
+                }
+
+                var categoryRect = entry.Find("Category") as RectTransform;
+                if (categoryRect == null)
+                {
+                    try
+                    {
+                        for (int i = 0; i < entry.childCount; i++)
+                        {
+                            var child = entry.GetChild(i);
+                            if (child.name != null && child.name.Contains("Category"))
+                            {
+                                categoryRect = child as RectTransform;
+                            }
+                        }
+                    }
+                    catch { }
+                    if (categoryRect == null)
+                        return;
+                }
+                var label = categoryRect.Find("Label")?.GetComponent<Text>();
+                var image = categoryRect.GetComponent<Image>();
+                var nameText = entry.Find("Name")?.GetComponent<Text>();
+                if (label == null || image == null || nameText == null)
+                    return;
+
+                label.text = info.Name != null && info.Name.Length > 0 ? info.Name[0].ToString() : "D";
+                LayoutRebuilder.ForceRebuildLayoutImmediate(label.rectTransform);
+                image.color = info.Color;
+                categoryRect.anchoredPosition = new Vector2(225f + nameText.preferredWidth, categoryRect.anchoredPosition.y);
+                categoryRect.gameObject.SetActive(true);
+            }
+            catch
+            {
+                // best-effort UI refresh; avoid throwing from API layer
             }
         }
 
@@ -331,9 +479,18 @@ namespace S1API.Entities
                     float cash = GetCash();
                     if (cash > 0f)
                     {
-                        ChangeCash(-cash);
-                        // Note: Money transfer would need to be handled via MoneyManager
-                        Logger.Msg($"Collected {cash} cash from dealer {NPC.ID}");
+                        // Transfer cash to player
+                        var moneyManager = S1DevUtilities.NetworkSingleton<S1Money.MoneyManager>.Instance;
+                        if (moneyManager != null)
+                        {
+                            moneyManager.ChangeCashBalance(cash, visualizeChange: true, playCashSound: true);
+                            ChangeCash(-cash);
+                            Logger.Msg($"Collected {cash} cash from dealer {NPC.ID}");
+                        }
+                        else
+                        {
+                            Logger.Warning($"MoneyManager not available to collect cash from dealer {NPC.ID}");
+                        }
                     }
                 }
             }
