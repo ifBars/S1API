@@ -73,6 +73,9 @@ namespace S1API.Internal.Patches
 
             foreach (Type type in ReflectionUtils.GetDerivedClasses<NPC>())
             {
+                if (type.IsAbstract)
+                    return;
+                
                 NPC? customNPC = (NPC)Activator.CreateInstance(type, true)!;
                 if (customNPC == null)
                     throw new Exception($"Unable to create instance of {type.FullName}!");
