@@ -16,20 +16,21 @@ namespace S1API.UI
     /// Utility class for constructing and configuring various UI elements in Unity.
     /// </summary>
     /// <remarks>
-    /// Provides a collection of static methods to create and manage UI components, such as panels, buttons,
-    /// text fields, layouts, and more. It includes functionality for customizing appearance, alignment,
-    /// and interactive behavior, catering to the needs of efficient and dynamic UI design.
+    /// Provides static helpers for building complex hierarchies—panels, text, layouts, scroll views, buttons, etc.—
+    /// while handling RectTransform setup, layout components, and consistent styling in one place.
     /// </remarks>
     public static class UIFactory
     {
-        /// Creates a UI panel with a background color and optional anchoring.
-        /// <param name="name">The name of the GameObject representing the panel.</param>
-        /// <param name="parent">The transform to which the panel will be parented.</param>
-        /// <param name="bgColor">The background color of the panel.</param>
-        /// <param name="anchorMin">The minimum anchor point of the RectTransform. Defaults to (0.5, 0.5) if not specified.</param>
-        /// <param name="anchorMax">The maximum anchor point of the RectTransform. Defaults to (0.5, 0.5) if not specified.</param>
-        /// <param name="fullAnchor">Whether to stretch the panel across the entire parent RectTransform. Overrides anchorMin and anchorMax if true.</param>
-        /// <returns>The GameObject representing the created UI panel.</returns>
+        /// <summary>
+        /// Creates a UI panel GameObject with an Image background and configurable anchoring.
+        /// </summary>
+        /// <param name="name">Name of the panel GameObject.</param>
+        /// <param name="parent">Transform that becomes the parent of the panel.</param>
+        /// <param name="bgColor">Color applied to the panel background.</param>
+        /// <param name="anchorMin">Optional minimum anchor; defaults to centered anchor.</param>
+        /// <param name="anchorMax">Optional maximum anchor; defaults to centered anchor.</param>
+        /// <param name="fullAnchor">When true, stretches the panel to fill its parent regardless of anchor arguments.</param>
+        /// <returns>The created panel GameObject (with RectTransform/Image components attached).</returns>
         public static GameObject Panel(string name, Transform parent, Color bgColor, Vector2? anchorMin = null,
             Vector2? anchorMax = null, bool fullAnchor = false)
         {
@@ -55,14 +56,16 @@ namespace S1API.UI
             return go;
         }
 
-        /// Creates a Text UI element with specified properties.
-        /// <param name="name">The name of the GameObject to create for the text element.</param>
-        /// <param name="content">The content of the text to display.</param>
-        /// <param name="parent">The Transform to which the created text GameObject will be assigned.</param>
-        /// <param name="fontSize">The font size of the text. Defaults to 14.</param>
-        /// <param name="anchor">The alignment of the text within its RectTransform. Defaults to `TextAnchor.UpperLeft`.</param>
-        /// <param name="style">The font style of the text. Defaults to `FontStyle.Normal`.</param>
-        /// <returns>The created Text component with the specified properties applied.</returns>
+        /// <summary>
+        /// Creates a `UnityEngine.UI.Text` element configured with the supplied content and styling.
+        /// </summary>
+        /// <param name="name">Name of the GameObject to create.</param>
+        /// <param name="content">Initial string displayed inside the text component.</param>
+        /// <param name="parent">Transform that will contain the new text element.</param>
+        /// <param name="fontSize">Font size to apply, defaults to 14.</param>
+        /// <param name="anchor">Text alignment; defaults to <see cref="TextAnchor.UpperLeft"/>.</param>
+        /// <param name="style">Font style flag; defaults to <see cref="FontStyle.Normal"/>.</param>
+        /// <returns>The configured <see cref="Text"/> component.</returns>
         public static Text Text(string name, string content, Transform parent, int fontSize = 14,
             TextAnchor anchor = TextAnchor.UpperLeft, FontStyle style = FontStyle.Normal)
         {
@@ -82,11 +85,13 @@ namespace S1API.UI
             return txt;
         }
 
-        /// Creates a scrollable vertical list UI component with a configured child hierarchy, allowing vertical scrolling of dynamically added items.
-        /// <param name="name">The name of the scrollable list GameObject.</param>
-        /// <param name="parent">The parent transform where the scrollable list will be added.</param>
-        /// <param name="scrollRect">Outputs the ScrollRect component associated with the created scrollable list.</param>
-        /// <returns>Returns the RectTransform of the "Content" GameObject, allowing items to be added to the scrollable list.</returns>
+        /// <summary>
+        /// Builds a ScrollRect hierarchy configured for vertical scrolling and returns the content RectTransform.
+        /// </summary>
+        /// <param name="name">Name of the root scroll view GameObject.</param>
+        /// <param name="parent">Transform that will own the scroll view.</param>
+        /// <param name="scrollRect">Outputs the created <see cref="ScrollRect"/> component.</param>
+        /// <returns>The RectTransform of the content container where list items should be added.</returns>
         public static RectTransform ScrollableVerticalList(string name, Transform parent, out ScrollRect scrollRect)
         {
             var scrollGO = new GameObject(name);
@@ -130,9 +135,13 @@ namespace S1API.UI
             return contentRT;
         }
 
-        /// Adjusts the height of the RectTransform content to fit its children's preferred layout size.
-        /// Adds a ContentSizeFitter component to the content if one is not present.
-        /// <param name="content">The RectTransform whose height will be adjusted to match the preferred size of its children.</param>
+        /// <summary>
+        /// Ensures a content <see cref="RectTransform"/> grows tall enough to fit its children.
+        /// </summary>
+        /// <remarks>
+        /// Adds a <see cref="ContentSizeFitter"/> if one is missing and configures it for preferred vertical sizing.
+        /// </remarks>
+        /// <param name="content">The RectTransform whose vertical size should adapt to its children.</param>
         public static void FitContentHeight(RectTransform content)
         {
             var fitter = content.gameObject.GetComponent<ContentSizeFitter>();
@@ -142,22 +151,22 @@ namespace S1API.UI
         }
 
         /// <summary>
-        /// A private static field used to store a cached Sprite instance with rounded corners.
-        /// This sprite is dynamically generated within the GetRoundedSprite method and used
-        /// for UI elements requiring a rounded appearance to prevent redundant sprite creation.
+        /// Cached sprite with rounded corners generated on demand by <see cref="GetRoundedSprite"/>.
         /// </summary>
         private static Sprite roundedSprite;
 
-        /// Creates a rounded button with a label inside a mask container for rounded corners.
-        /// <param name="name">The name of the GameObject representing the button.</param>
-        /// <param name="label">The text displayed on the button.</param>
-        /// <param name="parent">The transform to which the button will be parented.</param>
-        /// <param name="bgColor">The background color of the button.</param>
-        /// <param name="width">The width of the button in pixels.</param>
-        /// <param name="height">The height of the button in pixels.</param>
-        /// <param name="fontSize">The font size of the label text.</param>
-        /// <param name="textColor">The color of the label text.</param>
-        /// <returns>A tuple containing the mask container GameObject, the Button component, and the Text component.</returns>
+        /// <summary>
+        /// Creates a rounded button composed of a mask container, button, and centered text label.
+        /// </summary>
+        /// <param name="name">Name of the underlying button GameObject.</param>
+        /// <param name="label">Text shown inside the button.</param>
+        /// <param name="parent">Parent transform for the mask container.</param>
+        /// <param name="bgColor">Background color applied to the inner button.</param>
+        /// <param name="width">Preferred width for the control (also applied to a LayoutElement).</param>
+        /// <param name="height">Preferred height for the control.</param>
+        /// <param name="fontSize">Font size for the label.</param>
+        /// <param name="textColor">Color of the label text.</param>
+        /// <returns>The tuple (mask container GameObject, Button component, Text component).</returns>
         public static (GameObject, Button, Text) RoundedButtonWithLabel(string name, string label, Transform parent,
                                         Color bgColor, float width, float height ,   int fontSize ,Color textColor)
         {
@@ -221,9 +230,10 @@ namespace S1API.UI
         }
 
 
-        /// Generates and retrieves a reusable Sprite with rounded corners for UI elements.
-        /// The sprite is created with a specified border for safe slicing and consistent scaling.
-        /// <returns>A Sprite instance with rounded corners, ready for use in UI components.</returns>
+        /// <summary>
+        /// Generates (and caches) a rounded-corner sprite suitable for sliced UI backgrounds.
+        /// </summary>
+        /// <returns>An in-memory sprite with uniform borders that can be reused across controls.</returns>
         private static Sprite GetRoundedSprite()
         {
             if (roundedSprite != null)
@@ -258,12 +268,14 @@ namespace S1API.UI
             return roundedSprite;
         }
 
-        /// Creates a horizontal row of buttons using a HorizontalLayoutGroup with configurable spacing and alignment.
-        /// <param name="name">The name of the GameObject representing the button row.</param>
-        /// <param name="parent">The transform to which the button row will be parented.</param>
-        /// <param name="spacing">The spacing between each button in the row. Defaults to 12.</param>
-        /// <param name="alignment">The alignment of the buttons within the row. Defaults to TextAnchor.MiddleCenter.</param>
-        /// <returns>The GameObject representing the created button row.</returns>
+        /// <summary>
+        /// Creates a container configured with a <see cref="HorizontalLayoutGroup"/> for arranging buttons in a row.
+        /// </summary>
+        /// <param name="name">Name of the row GameObject.</param>
+        /// <param name="parent">Transform that will hold the row.</param>
+        /// <param name="spacing">Spacing between children in the layout (defaults to 12).</param>
+        /// <param name="alignment">Child alignment; defaults to <see cref="TextAnchor.MiddleCenter"/>.</param>
+        /// <returns>The created row GameObject.</returns>
         public static GameObject ButtonRow(string name, Transform parent, float spacing = 12f, TextAnchor alignment = TextAnchor.MiddleCenter)
         {
             var row = new GameObject(name);
@@ -282,14 +294,16 @@ namespace S1API.UI
             return row;
         }
 
-        /// Creates a button with a label and specific dimensions, adding it as a child to a parent UI element.
-        /// <param name="name">The name of the button GameObject.</param>
-        /// <param name="label">The text to display on the button.</param>
-        /// <param name="parent">The Transform to which the button GameObject will be parented.</param>
-        /// <param name="bgColor">The background color of the button.</param>
-        /// <param name="Width">The width of the button.</param>
-        /// <param name="Height">The height of the button.</param>
-        /// <returns>A tuple containing the button's GameObject, Button component, and Text component.</returns>
+        /// <summary>
+        /// Creates a rectangular button with a centered text label and returns useful components.
+        /// </summary>
+        /// <param name="name">Name assigned to the button GameObject.</param>
+        /// <param name="label">Text displayed in the button.</param>
+        /// <param name="parent">Parent transform for the button.</param>
+        /// <param name="bgColor">Background color for the button image.</param>
+        /// <param name="Width">Desired width in pixels.</param>
+        /// <param name="Height">Desired height in pixels.</param>
+        /// <returns>A tuple of (GameObject, Button, Text) for further configuration.</returns>
         public static (GameObject, Button, Text) ButtonWithLabel(string name, string label, Transform parent,
             Color bgColor, float Width, float Height)
         {
@@ -346,11 +360,13 @@ namespace S1API.UI
             img.preserveAspect = true;
         }
 
-        /// Creates a text block consisting of a title, subtitle, and an optional completed status label.
-        /// <param name="parent">The parent transform where the text block will be added.</param>
-        /// <param name="title">The title text of the text block, displayed in bold.</param>
-        /// <param name="subtitle">The subtitle text of the text block, displayed below the title.</param>
-        /// <param name="isCompleted">A boolean indicating whether the text block represents a completed state. If true, an additional label indicating "Already Delivered" will be added.</param>
+        /// <summary>
+        /// Creates a stacked title/subtitle block and optionally appends a completed label.
+        /// </summary>
+        /// <param name="parent">Transform that will receive the text elements.</param>
+        /// <param name="title">Primary heading displayed in bold.</param>
+        /// <param name="subtitle">Secondary descriptive text below the title.</param>
+        /// <param name="isCompleted">Adds an "Already Delivered" status line when true.</param>
         public static void CreateTextBlock(Transform parent, string title, string subtitle, bool isCompleted)
         {
             Text(parent.name + "Title", title, parent, 16, TextAnchor.MiddleLeft, FontStyle.Bold);
@@ -360,10 +376,12 @@ namespace S1API.UI
                     TextAnchor.UpperLeft);
         }
 
-        /// Adds a button to the specified GameObject, sets its target graphic, and configures its interactivity and click behavior.
-        /// <param name="go">The GameObject to which the button component will be added.</param>
-        /// <param name="clickHandler">The UnityAction to invoke when the button is clicked.</param>
-        /// <param name="enabled">Specifies whether the button will be interactable.</param>
+        /// <summary>
+        /// Adds a <see cref="Button"/> component to a row container and wires up click/interactability.
+        /// </summary>
+        /// <param name="go">Target GameObject that already has an <see cref="Image"/> for visuals.</param>
+        /// <param name="clickHandler">Callback to invoke on button click.</param>
+        /// <param name="enabled">Whether the resulting button should start as interactable.</param>
         public static void CreateRowButton(GameObject go, UnityAction clickHandler, bool enabled)
         {
             var btn = go.AddComponent<Button>();
@@ -374,8 +392,10 @@ namespace S1API.UI
             btn.onClick.AddListener(clickHandler);
         }
 
-        /// Clears all child objects of the specified parent transform.
-        /// <param name="parent">The transform whose child objects will be destroyed.</param>
+        /// <summary>
+        /// Destroys all child GameObjects of the provided parent Transform.
+        /// </summary>
+        /// <param name="parent">Transform to clear.</param>
         public static void ClearChildren(Transform parent)
         {
             // Use index-based iteration for IL2CPP compatibility to avoid invalid cast during enumeration
@@ -386,10 +406,12 @@ namespace S1API.UI
             }
         }
 
-        /// Configures a GameObject to use a VerticalLayoutGroup with specified spacing and padding.
-        /// <param name="go">The GameObject to which a VerticalLayoutGroup will be added or configured.</param>
-        /// <param name="spacing">The spacing between child objects within the VerticalLayoutGroup. Default is 10.</param>
-        /// <param name="padding">The padding around the edges of the VerticalLayoutGroup. If null, a default RectOffset of (10, 10, 10, 10) will be used.</param>
+        /// <summary>
+        /// Adds and configures a <see cref="VerticalLayoutGroup"/> on the supplied GameObject.
+        /// </summary>
+        /// <param name="go">GameObject that should host the layout.</param>
+        /// <param name="spacing">Spacing between children in pixels (default 10).</param>
+        /// <param name="padding">Optional padding override; defaults to 10px on every side.</param>
         public static void VerticalLayoutOnGO(GameObject go, int spacing = 10, RectOffset? padding = null)
         {
             var layout = go.AddComponent<VerticalLayoutGroup>();
@@ -397,12 +419,14 @@ namespace S1API.UI
             layout.padding = padding ?? new RectOffset(10, 10, 10, 10);
         }
 
-        /// Creates a quest row GameObject with a specific layout, including an icon panel and a text panel.
-        /// <param name="name">The name of the GameObject representing the quest row.</param>
-        /// <param name="parent">The parent Transform to which the quest row will be attached.</param>
-        /// <param name="iconPanel">An output parameter that will hold the generated icon panel GameObject.</param>
-        /// <param name="textPanel">An output parameter that will hold the generated text panel GameObject.</param>
-        /// <returns>The GameObject representing the newly created quest row.</returns>
+        /// <summary>
+        /// Constructs a quest row entry with dedicated icon/text panels and common layout settings.
+        /// </summary>
+        /// <param name="name">Name suffix applied to generated GameObjects.</param>
+        /// <param name="parent">Parent transform for the row.</param>
+        /// <param name="iconPanel">Outputs the panel intended for quest icons.</param>
+        /// <param name="textPanel">Outputs the panel intended for quest title/description.</param>
+        /// <returns>The fully constructed row GameObject.</returns>
         public static GameObject CreateQuestRow(string name, Transform parent, out GameObject iconPanel,
             out GameObject textPanel)
         {
@@ -455,16 +479,18 @@ namespace S1API.UI
             return row;
         }
 
-        /// Creates a top bar UI element with customizable title and layout settings.
-        /// <param name="name">The name of the GameObject representing the top bar.</param>
-        /// <param name="parent">The transform to which the top bar will be parented.</param>
-        /// <param name="title">The text content for the title displayed in the top bar.</param>
-        /// <param name="topbarSize">The relative size of the top bar on the Y-axis.</param>
-        /// <param name="paddingLeft">The padding on the left side of the top bar.</param>
-        /// <param name="paddingRight">The padding on the right side of the top bar.</param>
-        /// <param name="paddingTop">The padding on the top side of the top bar.</param>
-        /// <param name="paddingBottom">The padding on the bottom side of the top bar.</param>
-        /// <returns>The created GameObject representing the top bar.</returns>
+        /// <summary>
+        /// Creates a top-bar container with padding, title text, and layout metadata.
+        /// </summary>
+        /// <param name="name">Name of the bar GameObject.</param>
+        /// <param name="parent">Transform that will contain the bar.</param>
+        /// <param name="title">Display text shown in the bar.</param>
+        /// <param name="topbarSize">Normalized height (Y anchor) reserved for the bar.</param>
+        /// <param name="paddingLeft">Left padding applied by the layout group.</param>
+        /// <param name="paddingRight">Right padding applied by the layout group.</param>
+        /// <param name="paddingTop">Top padding applied by the layout group.</param>
+        /// <param name="paddingBottom">Bottom padding applied by the layout group.</param>
+        /// <returns>The instantiated bar GameObject.</returns>
         public static GameObject TopBar(string name, Transform parent, string title,
             float topbarSize,
             int paddingLeft, int paddingRight, int paddingTop, int paddingBottom)
@@ -488,14 +514,16 @@ namespace S1API.UI
             return topBar;
         }
 
-        /// Adds a HorizontalLayoutGroup component to the specified GameObject and configures its settings.
-        /// <param name="go">The GameObject to which the HorizontalLayoutGroup will be added.</param>
-        /// <param name="spacing">The spacing between child elements within the layout. Defaults to 10.</param>
-        /// <param name="padLeft">The left padding of the layout's RectTransform. Defaults to 0.</param>
-        /// <param name="padRight">The right padding of the layout's RectTransform. Defaults to 0.</param>
-        /// <param name="padTop">The top padding of the layout's RectTransform. Defaults to 0.</param>
-        /// <param name="padBottom">The bottom padding of the layout's RectTransform. Defaults to 0.</param>
-        /// <param name="alignment">The alignment of the child elements within the layout. Defaults to TextAnchor.MiddleCenter.</param>
+        /// <summary>
+        /// Adds a <see cref="HorizontalLayoutGroup"/> to a GameObject and preconfigures its sizing behavior.
+        /// </summary>
+        /// <param name="go">GameObject that should host the layout group.</param>
+        /// <param name="spacing">Spacing between children; defaults to 10.</param>
+        /// <param name="padLeft">Left padding value.</param>
+        /// <param name="padRight">Right padding value.</param>
+        /// <param name="padTop">Top padding value.</param>
+        /// <param name="padBottom">Bottom padding value.</param>
+        /// <param name="alignment">Child alignment; defaults to <see cref="TextAnchor.MiddleCenter"/>.</param>
         public static void HorizontalLayoutOnGO(GameObject go, int spacing = 10, int padLeft = 0, int padRight = 0, int padTop = 0, int padBottom = 0, TextAnchor alignment = TextAnchor.MiddleCenter)
         {
             var layout = go.AddComponent<HorizontalLayoutGroup>();
@@ -506,23 +534,27 @@ namespace S1API.UI
             layout.padding = new RectOffset(padLeft, padRight, padTop, padBottom);
         }
 
-        /// Sets the padding of a given LayoutGroup.
-        /// <param name="layoutGroup">The LayoutGroup for which the padding will be set.</param>
-        /// <param name="left">The left padding value.</param>
-        /// <param name="right">The right padding value.</param>
-        /// <param name="top">The top padding value.</param>
-        /// <param name="bottom">The bottom padding value.</param>
+        /// <summary>
+        /// Convenience helper to configure the padding on any <see cref="LayoutGroup"/>.
+        /// </summary>
+        /// <param name="layoutGroup">Target layout group.</param>
+        /// <param name="left">Left padding value.</param>
+        /// <param name="right">Right padding value.</param>
+        /// <param name="top">Top padding value.</param>
+        /// <param name="bottom">Bottom padding value.</param>
         public static void SetLayoutGroupPadding(LayoutGroup layoutGroup, int left, int right, int top, int bottom)
         {
             layoutGroup.padding = new RectOffset(left, right, top, bottom);
         }
 
 
-        /// Binds an action to a button and updates its label text.
-        /// <param name="btn">The button to which the action will be bound.</param>
-        /// <param name="label">The text label associated with the button.</param>
-        /// <param name="text">The text to set as the label of the button.</param>
-        /// <param name="callback">The action that will be executed when the button is clicked.</param>
+        /// <summary>
+        /// Updates a button's display text and binds the supplied click callback.
+        /// </summary>
+        /// <param name="btn">Button to configure.</param>
+        /// <param name="label">Text component associated with the button.</param>
+        /// <param name="text">Text to assign to the label.</param>
+        /// <param name="callback">Delegate invoked when the button is clicked.</param>
         public static void BindAcceptButton(Button btn, Text label, string text, UnityAction callback)
         {
             label.text = text;
@@ -546,17 +578,20 @@ namespace S1API.UI
             /// </summary>
             private readonly UnityAction _callback;
 
-            /// Represents a handler that encapsulates a callback action to be invoked when a click event occurs.
-            /// <param name="callback">The UnityAction delegate to be executed when the click event is triggered.</param>
+            /// <summary>
+            /// Initializes a new <see cref="ClickHandler"/> with the callback invoked on `OnClick`.
+            /// </summary>
+            /// <param name="callback">UnityAction delegate to execute when a click event is triggered.</param>
             public ClickHandler(UnityAction callback)
             {
                 _callback = callback;
             }
 
-            /// Invokes the callback action associated with a click event.
+            /// <summary>
+            /// Invokes the stored callback to satisfy whatever click interaction this handler represents.
+            /// </summary>
             /// <remarks>
-            /// Executes the UnityAction delegate provided during the creation of the ClickHandler instance.
-            /// This method is used to process and handle click events associated with the handler.
+            /// Simply forwards to the UnityAction instance supplied at construction time.
             /// </remarks>
             public void OnClick()
             {
