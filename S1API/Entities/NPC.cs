@@ -494,10 +494,7 @@ namespace S1API.Entities
                     : null;
 
                 if (string.IsNullOrEmpty(typeName))
-                {
-                    Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: Could not extract type name from prefab '{prefabName}'.");
                     return null;
-                }
 
                 // Find the NPC type in loaded assemblies
                 System.Type npcType = null;
@@ -525,20 +522,14 @@ namespace S1API.Entities
                 }
 
                 if (npcType == null)
-                {
-                    Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: Could not find NPC type '{typeName}' for prefab '{prefabName}'.");
                     return null;
-                }
 
                 // Check if wrapper already exists
                 for (int i = 0; i < All.Count; i++)
                 {
                     var existing = All[i];
                     if (existing != null && existing.S1NPC == baseNpc)
-                    {
-                        Logger.Msg($"CreateWrapperForNetworkSpawnedNPC: Wrapper already exists for '{baseNpc.ID}'.");
                         return existing;
-                    }
                 }
 
                 // Create uninitialized instance (avoids constructor which creates new GameObject)
@@ -552,17 +543,6 @@ namespace S1API.Entities
                 bool gameObjectSet = false;
                 var allFields = Internal.Utils.ReflectionUtils.GetAllFields(npcType, BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
                 
-                // Debug: log all GameObject-typed fields to help diagnose
-                Logger.Msg($"CreateWrapperForNetworkSpawnedNPC: Searching for gameObject field in type '{npcType.Name}' (found {allFields.Length} total fields)");
-                for (int fi = 0; fi < allFields.Length; fi++)
-                {
-                    var field = allFields[fi];
-                    if (field.FieldType == typeof(GameObject))
-                    {
-                        Logger.Msg($"CreateWrapperForNetworkSpawnedNPC: Found GameObject field '{field.Name}' (IsPrivate={field.IsPrivate}, IsPublic={field.IsPublic})");
-                    }
-                }
-                
                 for (int fi = 0; fi < allFields.Length; fi++)
                 {
                     var field = allFields[fi];
@@ -574,7 +554,6 @@ namespace S1API.Entities
                         {
                             field.SetValue(wrapper, baseNpc.gameObject);
                             gameObjectSet = true;
-                            Logger.Msg($"CreateWrapperForNetworkSpawnedNPC: Successfully set gameObject via backing field '{field.Name}'");
                             break;
                         }
                         catch (Exception ex)
@@ -586,10 +565,7 @@ namespace S1API.Entities
                 
                 // Fallback: try the property setter if field wasn't found
                 if (!gameObjectSet)
-                {
-                    Logger.Msg($"CreateWrapperForNetworkSpawnedNPC: Backing field not found, trying property setter");
                     gameObjectSet = Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(wrapper, "gameObject", baseNpc.gameObject);
-                }
 
                 // Validate that critical fields were set
                 if (!s1NpcSet)
@@ -619,8 +595,6 @@ namespace S1API.Entities
 
                 // Add to All list
                 All.Add(wrapper);
-
-                Logger.Msg($"CreateWrapperForNetworkSpawnedNPC: Created wrapper for '{baseNpc.ID}' of type '{typeName}' on client.");
 
                 return wrapper;
             }
@@ -652,8 +626,6 @@ namespace S1API.Entities
                         registry.Add(baseNpc);
                 }
                 catch { }
-
-                Logger.Msg($"InitializeWrapperStateFromNetworkSpawn: Mirrored avatar + registry state for '{baseNpc.ID}'.");
             }
             catch (Exception ex)
             {
@@ -1235,15 +1207,11 @@ namespace S1API.Entities
         {
             try
             {
-                Logger.Msg($"EnsureMessageConversationReady start: npc='{S1NPC?.ID ?? "<null>"}', resetDefaults={resetDefaults}, server={SafeIsServer()}, convoNull={S1NPC?.MSGConversation == null}");
-
                 var categories = resetDefaults
                     ? ResetConversationCategoriesToDefaults()
                     : EnsureConversationCategoriesInitialized();
 
                 EnsureMessageConversationInstance(categories);
-
-                Logger.Msg($"EnsureMessageConversationReady done: npc='{S1NPC?.ID ?? "<null>"}', convoNull={S1NPC?.MSGConversation == null}, categories={categories?.Count ?? -1}");
             }
             catch (Exception ex)
             {
@@ -1352,10 +1320,6 @@ namespace S1API.Entities
                 {
                     Logger.Warning($"EnsureMessageConversationInstance: creation failed for '{S1NPC?.ID ?? "<null>"}'.");
                 }
-                else
-                {
-                    Logger.Msg($"EnsureMessageConversationInstance: creation succeeded for '{S1NPC?.ID ?? "<null>"}'.");
-                }
             }
 
             var convo = S1NPC.MSGConversation;
@@ -1374,7 +1338,6 @@ namespace S1API.Entities
             try
             {
                 convo.SetCategories(categories);
-                Logger.Msg($"EnsureMessageConversationInstance: applied categories to '{S1NPC?.ID ?? "<null>"}' (count={categories.Count}).");
             }
             catch (Exception ex)
             {

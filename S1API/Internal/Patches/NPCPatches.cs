@@ -182,18 +182,12 @@ namespace S1API.Internal.Patches
 
             // On clients, create wrapper if it doesn't exist (network-spawned NPCs)
             if (apiNpc == null && !InstanceFinder.IsServer)
-            {
-                Logger.Msg($"NPCStart: No wrapper found for '{__instance?.ID ?? "<null>"}' on client, attempting to create wrapper.");
                 apiNpc = NPC.CreateWrapperForNetworkSpawnedNPC(__instance);
-            }
 
             if (apiNpc != null && apiNpc.IsCustomNPC)
             {
                 // Ensure conversation exists before CreateInternal() tries to access it
-                Logger.Msg($"NPCStart: Ensuring MSGConversation for '{__instance?.ID ?? "<null>"}' on {(InstanceFinder.IsServer ? "server" : "client")}.");
                 apiNpc.EnsureMessageConversationReady(resetDefaults: false);
-                Logger.Msg($"NPCStart: Post-ensure conversation null={__instance?.MSGConversation == null} for '{__instance?.ID ?? "<null>"}'.");
-                
                 apiNpc.CreateInternal();
                 
                 // Ensure visibility is set correctly on clients based on IsPhysical
