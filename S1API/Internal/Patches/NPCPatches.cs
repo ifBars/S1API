@@ -169,22 +169,39 @@ namespace S1API.Internal.Patches
             {
             }
 
+            NPC? apiNpc = null;
             for (int i = 0; i < NPC.All.Count; i++)
             {
                 var npc = NPC.All[i];
                 if (npc.IsCustomNPC && npc.S1NPC == __instance)
                 {
-                    npc.CreateInternal();
-                    
-                    // Ensure visibility is set correctly on clients based on IsPhysical
-                    // On server, this is handled in FinalizeNetworkSpawn(), but clients need it here
-                    // We use a coroutine to delay until after the NPC is fully spawned/initialized
-                    if (!InstanceFinder.IsServer)
-                    {
-                        MelonCoroutines.Start(SetClientVisibilityDelayed(__instance, npc.IsPhysical));
-                    }
-                    
+                    apiNpc = npc;
                     break;
+                }
+            }
+
+            // On clients, create wrapper if it doesn't exist (network-spawned NPCs)
+            if (apiNpc == null && !InstanceFinder.IsServer)
+            {
+                Logger.Msg($"NPCStart: No wrapper found for '{__instance?.ID ?? "<null>"}' on client, attempting to create wrapper.");
+                apiNpc = NPC.CreateWrapperForNetworkSpawnedNPC(__instance);
+            }
+
+            if (apiNpc != null && apiNpc.IsCustomNPC)
+            {
+                // Ensure conversation exists before CreateInternal() tries to access it
+                Logger.Msg($"NPCStart: Ensuring MSGConversation for '{__instance?.ID ?? "<null>"}' on {(InstanceFinder.IsServer ? "server" : "client")}.");
+                apiNpc.EnsureMessageConversationReady(resetDefaults: false);
+                Logger.Msg($"NPCStart: Post-ensure conversation null={__instance?.MSGConversation == null} for '{__instance?.ID ?? "<null>"}'.");
+                
+                apiNpc.CreateInternal();
+                
+                // Ensure visibility is set correctly on clients based on IsPhysical
+                // On server, this is handled in FinalizeNetworkSpawn(), but clients need it here
+                // We use a coroutine to delay until after the NPC is fully spawned/initialized
+                if (!InstanceFinder.IsServer)
+                {
+                    MelonCoroutines.Start(SetClientVisibilityDelayed(__instance, apiNpc.IsPhysical));
                 }
             }
 
@@ -194,7 +211,8 @@ namespace S1API.Internal.Patches
                 if (__instance != null && __instance.gameObject != null && __instance.gameObject.name != null)
                 {
                     string n = __instance.gameObject.name;
-                    if (n.StartsWith("S1API_", System.StringComparison.Ordinal))
+                    bool isTemplatePrefab = !__instance.gameObject.activeInHierarchy || !__instance.enabled;
+                    if (isTemplatePrefab && n.StartsWith("S1API_", System.StringComparison.Ordinal))
                     {
                         var reg = S1NPCs.NPCManager.NPCRegistry;
                         for (int i = reg.Count - 1; i >= 0; i--)

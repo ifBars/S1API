@@ -23,6 +23,7 @@ using S1API.Entities.Dealer;
 using S1API.Entities.Relation;
 using System.Collections.Generic;
 using S1API.Internal.Entities;
+using S1API.Internal.Utils;
 
 namespace S1API.Entities
 {
@@ -116,12 +117,16 @@ namespace S1API.Entities
 
                 // Create a new AvatarSettings ScriptableObject and populate from wrapper values
                 var settings = ScriptableObject.CreateInstance<S1AvatarFramework.AvatarSettings>();
+                settings.hideFlags = HideFlags.DontUnloadUnusedAsset;
 
                 settings.Gender = builder.Gender;
                 settings.Height = builder.Height;
                 settings.Weight = builder.Weight;
                 settings.SkinColor = builder.SkinColor;
+                settings.LeftEyeLidColor = builder.LeftEyeLidColor;
+                settings.RightEyeLidColor = builder.RightEyeLidColor;
                 settings.EyeBallTint = builder.EyeBallTint;
+                settings.EyeballMaterialIdentifier = builder.EyeballMaterialIdentifier ?? string.Empty;
                 settings.PupilDilation = builder.PupilDilation;
                 settings.EyebrowScale = builder.EyebrowScale;
                 settings.EyebrowThickness = builder.EyebrowThickness;
@@ -184,6 +189,9 @@ namespace S1API.Entities
                 identity.AppearanceDefaults = settings;
                 // Register to static cache for Il2Cpp network spawn support
                 identity.RegisterToStaticCache(prefabRoot.name);
+
+                // Apply settings directly to Avatar component on prefab to prevent destruction issues
+                ApplyAvatarSettingsToPrefab(settings);
             }
             catch { }
 
@@ -550,6 +558,42 @@ namespace S1API.Entities
             return identity;
         }
 
+        /// <summary>
+        /// Applies AvatarSettings directly to the Avatar component on the prefab to prevent destruction issues.
+        /// Tries InitialAvatarSettings, SettingsToLoad, and CurrentSettings in that order.
+        /// Uses ReflectionUtils to handle both field and property access across Mono/Il2Cpp boundaries.
+        /// </summary>
+        private void ApplyAvatarSettingsToPrefab(S1AvatarFramework.AvatarSettings settings)
+        {
+            if (settings == null)
+                return;
+
+            try
+            {
+                // Find Avatar component on prefab or its children
+                var avatar = prefabRoot.GetComponent<S1AvatarFramework.Avatar>() 
+                    ?? prefabRoot.GetComponentInChildren<S1AvatarFramework.Avatar>(true);
+                
+                if (avatar == null)
+                    return;
+
+                // Set hideFlags to prevent destruction
+                settings.hideFlags = HideFlags.DontUnloadUnusedAsset;
+
+                // Try to set InitialAvatarSettings first (prefab-level setting)
+                if (ReflectionUtils.TrySetFieldOrProperty(avatar, "InitialAvatarSettings", settings))
+                    return;
+
+                // Try SettingsToLoad as fallback
+                if (ReflectionUtils.TrySetFieldOrProperty(avatar, "SettingsToLoad", settings))
+                    return;
+
+                // Try CurrentSettings as last resort
+                ReflectionUtils.TrySetFieldOrProperty(avatar, "CurrentSettings", settings);
+            }
+            catch { }
+        }
+
 #if (IL2CPPMELON)
         private static Il2CppSystem.Collections.Generic.List<T> ToIl2CppList<T>(System.Collections.Generic.List<T> source)
         {
@@ -576,7 +620,10 @@ namespace S1API.Entities
             public float Height { get; set; } = 1.0f;
             public float Weight { get; set; } = 0.5f;
             public Color32 SkinColor { get; set; } = new Color32(150, 120, 95, 255);
+            public Color LeftEyeLidColor { get; set; } = new Color32(150, 120, 95, 255);
+            public Color RightEyeLidColor { get; set; } = new Color32(150, 120, 95, 255);
             public Color EyeBallTint { get; set; } = Color.white;
+            public string EyeballMaterialIdentifier { get; set; } = "Default";
             public float PupilDilation { get; set; } = 1.0f;
             public float EyebrowScale { get; set; } = 1.0f;
             public float EyebrowThickness { get; set; } = 1.0f;

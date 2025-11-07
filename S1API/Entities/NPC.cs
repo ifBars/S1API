@@ -57,6 +57,12 @@ using Il2CppSystem.Collections.Generic;
 using System.Collections.Generic;
 #endif
 
+#if (IL2CPPMELON)
+using ConversationCategoryList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.Messaging.EConversationCategory>;
+#else
+using ConversationCategoryList = System.Collections.Generic.List<ScheduleOne.Messaging.EConversationCategory>;
+#endif
+
 using System;
 using System.Collections;
 using System.IO;
@@ -83,12 +89,15 @@ using S1API.Entities.Dealer;
 using S1API.Entities.Relation;
 using S1API.Internal;
 using S1API.Internal.Abstraction;
+using S1API.Internal.Entities;
 using S1API.Map;
 using S1API.Messaging;
+using S1API.Logging;
 using S1API.Vehicles;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 namespace S1API.Entities
 {
@@ -104,6 +113,7 @@ namespace S1API.Entities
     /// </remarks>
     public abstract class NPC : Saveable, IEntity, IHealth
     {
+        private static readonly Log Logger = new Log("NPC");
         // Protected members intended to be used by modders.
         // Intended to be used from within the class / derived classes ONLY.
         private static readonly System.Collections.Generic.Dictionary<System.Type, GameObject> TypeToPrefab = new System.Collections.Generic.Dictionary<System.Type, GameObject>();
@@ -455,6 +465,262 @@ namespace S1API.Entities
             return $"S1API_{typeName}";
         }
 
+        /// <summary>
+        /// INTERNAL: Creates a wrapper for a network-spawned custom NPC on clients.
+        /// Called when a client receives an NPC that was spawned on the server.
+        /// </summary>
+        internal static NPC? CreateWrapperForNetworkSpawnedNPC(S1NPCs.NPC baseNpc)
+        {
+            if (baseNpc == null)
+                return null;
+
+            try
+            {
+                // Check if this is a custom S1API NPC by looking for NPCPrefabIdentity or prefab name
+                var identity = baseNpc.GetComponent<NPCPrefabIdentity>();
+                string prefabName = baseNpc.gameObject.name;
+                
+                // Remove "(Clone)" suffix if present
+                if (prefabName.EndsWith("(Clone)"))
+                    prefabName = prefabName.Substring(0, prefabName.Length - 7);
+
+                // Check if it's an S1API prefab
+                if (!prefabName.StartsWith("S1API_", StringComparison.Ordinal) && identity == null)
+                    return null;
+
+                // Extract type name from prefab name
+                string typeName = prefabName.StartsWith("S1API_", StringComparison.Ordinal)
+                    ? prefabName.Substring(6) // Remove "S1API_" prefix
+                    : null;
+
+                if (string.IsNullOrEmpty(typeName))
+                {
+                    Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: Could not extract type name from prefab '{prefabName}'.");
+                    return null;
+                }
+
+                // Find the NPC type in loaded assemblies
+                System.Type npcType = null;
+                var baseType = typeof(NPC);
+                var asms = AppDomain.CurrentDomain.GetAssemblies();
+                for (int ai = 0; ai < asms.Length && npcType == null; ai++)
+                {
+                    var asm = asms[ai];
+                    if (asm == baseType.Assembly)
+                        continue; // Skip S1API assembly (internal wrappers)
+
+                    System.Type[] types;
+                    try { types = asm.GetTypes(); } catch { continue; }
+                    for (int ti = 0; ti < types.Length; ti++)
+                    {
+                        var t = types[ti];
+                        if (t == null || t.IsAbstract || !baseType.IsAssignableFrom(t))
+                            continue;
+                        if (t.Name == typeName)
+                        {
+                            npcType = t;
+                            break;
+                        }
+                    }
+                }
+
+                if (npcType == null)
+                {
+                    Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: Could not find NPC type '{typeName}' for prefab '{prefabName}'.");
+                    return null;
+                }
+
+                // Check if wrapper already exists
+                for (int i = 0; i < All.Count; i++)
+                {
+                    var existing = All[i];
+                    if (existing != null && existing.S1NPC == baseNpc)
+                    {
+                        Logger.Msg($"CreateWrapperForNetworkSpawnedNPC: Wrapper already exists for '{baseNpc.ID}'.");
+                        return existing;
+                    }
+                }
+
+                // Create uninitialized instance (avoids constructor which creates new GameObject)
+                NPC wrapper = (NPC)FormatterServices.GetUninitializedObject(npcType);
+                
+                // Use reflection to set readonly fields/properties
+                bool s1NpcSet = Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(wrapper, "S1NPC", baseNpc);
+                bool isCustomNpcSet = Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(wrapper, "IsCustomNPC", true);
+                
+                // gameObject is a readonly auto-property, need to find and set its backing field
+                bool gameObjectSet = false;
+                var allFields = Internal.Utils.ReflectionUtils.GetAllFields(npcType, BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+                
+                // Debug: log all GameObject-typed fields to help diagnose
+                Logger.Msg($"CreateWrapperForNetworkSpawnedNPC: Searching for gameObject field in type '{npcType.Name}' (found {allFields.Length} total fields)");
+                for (int fi = 0; fi < allFields.Length; fi++)
+                {
+                    var field = allFields[fi];
+                    if (field.FieldType == typeof(GameObject))
+                    {
+                        Logger.Msg($"CreateWrapperForNetworkSpawnedNPC: Found GameObject field '{field.Name}' (IsPrivate={field.IsPrivate}, IsPublic={field.IsPublic})");
+                    }
+                }
+                
+                for (int fi = 0; fi < allFields.Length; fi++)
+                {
+                    var field = allFields[fi];
+                    // Try compiler-generated backing field name or direct field name
+                    if ((field.Name == "<gameObject>k__BackingField" || field.Name == "gameObject") && 
+                        field.FieldType == typeof(GameObject))
+                    {
+                        try
+                        {
+                            field.SetValue(wrapper, baseNpc.gameObject);
+                            gameObjectSet = true;
+                            Logger.Msg($"CreateWrapperForNetworkSpawnedNPC: Successfully set gameObject via backing field '{field.Name}'");
+                            break;
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: Exception setting gameObject backing field '{field.Name}': {ex.Message}");
+                        }
+                    }
+                }
+                
+                // Fallback: try the property setter if field wasn't found
+                if (!gameObjectSet)
+                {
+                    Logger.Msg($"CreateWrapperForNetworkSpawnedNPC: Backing field not found, trying property setter");
+                    gameObjectSet = Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(wrapper, "gameObject", baseNpc.gameObject);
+                }
+
+                // Validate that critical fields were set
+                if (!s1NpcSet)
+                {
+                    Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: Could not set S1NPC field/property for '{baseNpc.ID}'.");
+                    return null;
+                }
+                if (!gameObjectSet)
+                {
+                    Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: Could not set gameObject field/property for '{baseNpc.ID}'. Tried backing field and property setter.");
+                    return null;
+                }
+
+                // Verify the wrapper has the correct references
+                if (wrapper.S1NPC != baseNpc)
+                {
+                    Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: S1NPC field not set correctly for '{baseNpc.ID}'.");
+                    return null;
+                }
+                if (wrapper.gameObject != baseNpc.gameObject)
+                {
+                    Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: gameObject field not set correctly for '{baseNpc.ID}'.");
+                    return null;
+                }
+
+                InitializeWrapperStateFromNetworkSpawn(wrapper, baseNpc);
+
+                // Add to All list
+                All.Add(wrapper);
+
+                Logger.Msg($"CreateWrapperForNetworkSpawnedNPC: Created wrapper for '{baseNpc.ID}' of type '{typeName}' on client.");
+
+                return wrapper;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: Exception creating wrapper for '{baseNpc?.ID ?? "<null>"}': {ex.Message}");
+                Logger.Warning($"Stack trace: {ex.StackTrace}");
+                return null;
+            }
+        }
+
+        private static void InitializeWrapperStateFromNetworkSpawn(NPC wrapper, S1NPCs.NPC baseNpc)
+        {
+            if (wrapper == null || baseNpc == null)
+                return;
+
+            try
+            {
+                var runtimeAvatar = baseNpc.Avatar ?? baseNpc.gameObject?.GetComponentInChildren<S1AvatarFramework.Avatar>(true);
+                wrapper._runtimeAvatar = runtimeAvatar;
+                wrapper.Appearance = new NPCAppearance(wrapper, runtimeAvatar);
+                wrapper.RestoreRuntimeAvatarAppearance();
+                wrapper.RefreshMessagingIcons();
+
+                try
+                {
+                    var registry = S1NPCs.NPCManager.NPCRegistry;
+                    if (registry != null && !registry.Contains(baseNpc))
+                        registry.Add(baseNpc);
+                }
+                catch { }
+
+                Logger.Msg($"InitializeWrapperStateFromNetworkSpawn: Mirrored avatar + registry state for '{baseNpc.ID}'.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"InitializeWrapperStateFromNetworkSpawn: Failed for '{baseNpc?.ID ?? "<null>"}': {ex.Message}");
+            }
+        }
+
+        internal void RefreshMessagingIcons()
+        {
+            try
+            {
+                Sprite sprite = Icon;
+                if (sprite == null)
+                    return;
+
+                var convo = S1NPC?.MSGConversation;
+                if (convo == null)
+                    return;
+
+                var entryRect = convo.entry ?? ResolveConversationRect(convo, "entry");
+                var containerRect = ResolveConversationRect(convo, "container");
+
+                TryApplyIconToRect(entryRect, sprite);
+                TryApplyIconToRect(containerRect, sprite);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"RefreshMessagingIcons failed for '{S1NPC?.ID ?? "<null>"}': {ex.Message}");
+            }
+        }
+
+        private void TryApplyIconToRect(RectTransform rect, Sprite sprite)
+        {
+            if (rect == null || sprite == null)
+                return;
+
+            ApplyIconToPath(rect, null, sprite);
+            ApplyIconToPath(rect, "Icon", sprite);
+            ApplyIconToPath(rect, "IconMask/Icon", sprite);
+        }
+
+        private static void ApplyIconToPath(RectTransform root, string childPath, Sprite sprite)
+        {
+            if (root == null || sprite == null)
+                return;
+
+            Transform target = string.IsNullOrEmpty(childPath) ? root : root.Find(childPath);
+            if (target == null)
+                return;
+
+            var image = target.GetComponent<Image>();
+            if (image == null)
+                return;
+
+            image.sprite = sprite;
+            image.enabled = true;
+        }
+
+        private static RectTransform ResolveConversationRect(S1Messaging.MSGConversation convo, string memberName)
+        {
+            if (convo == null || string.IsNullOrEmpty(memberName))
+                return null;
+
+            var value = Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(convo, memberName);
+            return value as RectTransform;
+        }
+
         internal static void RegisterSchedulePlanForType(System.Type npcType, System.Collections.Generic.List<IScheduleActionSpec> specs)
         {
             if (npcType == null || specs == null)
@@ -769,29 +1035,9 @@ namespace S1API.Entities
             S1NPC.MugshotSprite = icon ?? S1DevUtilities.PlayerSingleton<S1ContactApps.ContactsApp>.Instance.AppIcon;
             S1NPC.BakedGUID = Guid.NewGuid().ToString();
 
-            if (S1NPC.ConversationCategories == null)
-                S1NPC.ConversationCategories = new List<S1Messaging.EConversationCategory>();
-            else
-                S1NPC.ConversationCategories.Clear();
-            
-            // Use the IsDealer property from the custom NPC class instead of trying to cast the component
-            // This matches the logic used in GetOrCreatePerNpcPrefab to select the correct prefab
-            if (this.IsDealer)
-            {
-                S1NPC.ConversationCategories.Add(S1Messaging.EConversationCategory.Dealer);
-            }
-            else
-            {
-                // Default to Customer category for non-dealer NPCs
-                S1NPC.ConversationCategories.Add(S1Messaging.EConversationCategory.Customer);
-            }
-
-#if (IL2CPPMELON || IL2CPPBEPINEX)
-            S1NPC.CreateMessageConversation();
-#elif (MONOMELON || MONOBEPINEX)
-            MethodInfo createConvoMethod = AccessTools.Method(typeof(S1NPCs.NPC), "CreateMessageConversation");
-            createConvoMethod.Invoke(S1NPC, null);
-#endif
+            Logger.Msg($"NPC ctor: ensuring conversation for '{S1NPC.ID}' (server={SafeIsServer()})");
+            EnsureMessageConversationReady(resetDefaults: true);
+            Logger.Msg($"NPC ctor: ensure complete for '{S1NPC.ID}', convoNull={S1NPC.MSGConversation == null}");
 
             InitializeHealthComponent();
             InitializeAwarenessComponent();
@@ -984,6 +1230,170 @@ namespace S1API.Entities
         /// Non-dealer NPCs (<c>false</c>): Regular NPCs without dealer-specific functionality.
         /// </remarks>
         public virtual bool IsDealer => false;
+
+        internal void EnsureMessageConversationReady(bool resetDefaults)
+        {
+            try
+            {
+                Logger.Msg($"EnsureMessageConversationReady start: npc='{S1NPC?.ID ?? "<null>"}', resetDefaults={resetDefaults}, server={SafeIsServer()}, convoNull={S1NPC?.MSGConversation == null}");
+
+                var categories = resetDefaults
+                    ? ResetConversationCategoriesToDefaults()
+                    : EnsureConversationCategoriesInitialized();
+
+                EnsureMessageConversationInstance(categories);
+
+                Logger.Msg($"EnsureMessageConversationReady done: npc='{S1NPC?.ID ?? "<null>"}', convoNull={S1NPC?.MSGConversation == null}, categories={categories?.Count ?? -1}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"EnsureMessageConversationReady exception for '{S1NPC?.ID ?? "<null>"}': {ex.Message}");
+            }
+        }
+
+        private ConversationCategoryList EnsureConversationCategoriesInitialized()
+        {
+            var categories = S1NPC.ConversationCategories as ConversationCategoryList;
+
+            if (categories == null)
+            {
+                categories = new ConversationCategoryList();
+                S1NPC.ConversationCategories = categories;
+                Logger.Msg($"EnsureConversationCategoriesInitialized: created list for '{S1NPC?.ID ?? "<null>"}'.");
+            }
+
+            if (categories.Count == 0)
+            {
+                Logger.Msg($"EnsureConversationCategoriesInitialized: list empty for '{S1NPC?.ID ?? "<null>"}', resetting.");
+                ResetConversationCategoriesToDefaults(categories);
+            }
+
+            return categories;
+        }
+
+        private ConversationCategoryList ResetConversationCategoriesToDefaults()
+        {
+            var categories = S1NPC.ConversationCategories as ConversationCategoryList;
+
+            if (categories == null)
+            {
+                categories = new ConversationCategoryList();
+                S1NPC.ConversationCategories = categories;
+                Logger.Msg($"ResetConversationCategoriesToDefaults: created list for '{S1NPC?.ID ?? "<null>"}'.");
+            }
+            else
+            {
+                categories.Clear();
+                Logger.Msg($"ResetConversationCategoriesToDefaults: cleared list for '{S1NPC?.ID ?? "<null>"}'.");
+            }
+
+            ResetConversationCategoriesToDefaults(categories);
+            return categories;
+        }
+
+        private void ResetConversationCategoriesToDefaults(ConversationCategoryList categories)
+        {
+            if (categories == null)
+                return;
+
+            if (ShouldUseDealerCategory())
+            {
+                categories.Add(S1Messaging.EConversationCategory.Dealer);
+                Logger.Msg($"ResetConversationCategoriesToDefaults: dealer category applied to '{S1NPC?.ID ?? "<null>"}'.");
+            }
+            else
+            {
+                categories.Add(S1Messaging.EConversationCategory.Customer);
+                Logger.Msg($"ResetConversationCategoriesToDefaults: customer category applied to '{S1NPC?.ID ?? "<null>"}'.");
+            }
+        }
+
+        private bool ShouldUseDealerCategory()
+        {
+            bool useDealer = false;
+
+            try
+            {
+                useDealer = IsDealer;
+            }
+            catch
+            {
+            }
+
+            if (!useDealer)
+            {
+                try
+                {
+                    useDealer = IsDealerType(GetType());
+                }
+                catch
+                {
+                }
+            }
+
+            return useDealer;
+        }
+
+        private void EnsureMessageConversationInstance(ConversationCategoryList categories)
+        {
+            if (S1NPC == null)
+                return;
+
+            if (S1NPC.MSGConversation == null)
+            {
+                Logger.Warning($"EnsureMessageConversationInstance: conversation null for '{S1NPC?.ID ?? "<null>"}', creating (server={SafeIsServer()}).");
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                S1NPC.CreateMessageConversation();
+#elif (MONOMELON || MONOBEPINEX)
+                MethodInfo createConvoMethod = AccessTools.Method(typeof(S1NPCs.NPC), "CreateMessageConversation");
+                createConvoMethod?.Invoke(S1NPC, null);
+#endif
+                if (S1NPC.MSGConversation == null)
+                {
+                    Logger.Warning($"EnsureMessageConversationInstance: creation failed for '{S1NPC?.ID ?? "<null>"}'.");
+                }
+                else
+                {
+                    Logger.Msg($"EnsureMessageConversationInstance: creation succeeded for '{S1NPC?.ID ?? "<null>"}'.");
+                }
+            }
+
+            var convo = S1NPC.MSGConversation;
+            if (convo == null)
+            {
+                Logger.Warning($"EnsureMessageConversationInstance: conversation still null for '{S1NPC?.ID ?? "<null>"}'.");
+                return;
+            }
+
+            if (categories == null)
+            {
+                Logger.Warning($"EnsureMessageConversationInstance: categories null for '{S1NPC?.ID ?? "<null>"}'.");
+                return;
+            }
+
+            try
+            {
+                convo.SetCategories(categories);
+                Logger.Msg($"EnsureMessageConversationInstance: applied categories to '{S1NPC?.ID ?? "<null>"}' (count={categories.Count}).");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"EnsureMessageConversationInstance: failed to apply categories for '{S1NPC?.ID ?? "<null>"}': {ex.Message}");
+            }
+        }
+
+        private static bool SafeIsServer()
+        {
+            try
+            {
+                var nm = InstanceFinder.NetworkManager;
+                return nm != null && nm.IsServer;
+            }
+            catch
+            {
+                return false;
+            }
+        }
         
         /// <summary>
         /// How aggressive this NPC is towards others.
@@ -1280,9 +1690,27 @@ namespace S1API.Entities
         /// <param name="network">Whether this should propagate to all players or not.</param>
         public void SendTextMessage(string message, Response[]? responses = null, float responseDelay = 1f, bool network = true)
         {
+            if (S1NPC.MSGConversation == null)
+            {
+                Logger.Warning($"SendTextMessage: MSGConversation null before send for '{S1NPC.ID}'. Trying to ensure.");
+                EnsureMessageConversationReady(resetDefaults: false);
+            }
+
             S1NPC.SendTextMessage(message);
             if (responses == null || responses.Length == 0)
+            {
+                if (S1NPC.MSGConversation == null)
+                {
+                    Logger.Warning($"SendTextMessage: Conversation still null after send for '{S1NPC.ID}'.");
+                }
                 return;
+            }
+
+            if (S1NPC.MSGConversation == null)
+            {
+                Logger.Warning($"SendTextMessage: Unable to show responses because MSGConversation is null for '{S1NPC.ID}'.");
+                return;
+            }
 
             S1NPC.MSGConversation.ClearResponses();
             Responses.Clear();
@@ -1350,11 +1778,14 @@ namespace S1API.Entities
         internal override void CreateInternal()
         {
             // Assign responses to our tracked responses
-            foreach (S1Messaging.Response s1Response in S1NPC.MSGConversation.currentResponses)
+            if (S1NPC?.MSGConversation != null && S1NPC.MSGConversation.currentResponses != null)
             {
-                Response response = new Response(s1Response) { Label = s1Response.label, Text = s1Response.text };
-                Responses.Add(response);
-                OnResponseLoaded(response);
+                foreach (S1Messaging.Response s1Response in S1NPC.MSGConversation.currentResponses)
+                {
+                    Response response = new Response(s1Response) { Label = s1Response.label, Text = s1Response.text };
+                    Responses.Add(response);
+                    OnResponseLoaded(response);
+                }
             }
 
             base.CreateInternal();

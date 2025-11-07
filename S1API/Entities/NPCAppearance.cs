@@ -149,6 +149,7 @@ namespace S1API.Entities
                         generatedMugshot.Apply();
                         Sprite iconSprite = Sprite.Create(generatedMugshot, new Rect(0, 0, generatedMugshot.width, generatedMugshot.height), Vector2.zero);
                         next.NPC.Icon = iconSprite;
+                        next.NPC.RefreshMessagingIcons();
                     }
                     catch (Exception ex)
                     {
