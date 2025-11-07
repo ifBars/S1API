@@ -11,8 +11,12 @@ namespace S1API.Items
 {
     /// <summary>
     /// Represents an item definition in-game.
-    /// Use this class to read and create new item definitions dynamically.
+    /// This is the base wrapper class for all item types.
     /// </summary>
+    /// <remarks>
+    /// For creating custom items, use <see cref="ItemCreator"/> which creates StorableItemDefinition instances.
+    /// ItemDefinition is primarily used for reading existing items via <see cref="ItemManager.GetItemDefinition"/>.
+    /// </remarks>
     public class ItemDefinition : IGUIDReference
     {
         /// <summary>

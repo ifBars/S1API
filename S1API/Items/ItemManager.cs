@@ -2,10 +2,12 @@
 using S1 = Il2CppScheduleOne;
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1Product = Il2CppScheduleOne.Product;
+using S1Registry = Il2CppScheduleOne.Registry;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1 = ScheduleOne;
 using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1Product = ScheduleOne.Product;
+using S1Registry = ScheduleOne.Registry;
 #endif
 
 using S1API.Internal.Utils;
@@ -28,6 +30,10 @@ namespace S1API.Items
         {
             S1ItemFramework.ItemDefinition itemDefinition = S1.Registry.GetItem(itemID);
 
+            if (itemDefinition == null)
+                return null;
+
+            // Check for specific types first (most derived to least derived)
             if (CrossType.Is(itemDefinition,
                     out S1Product.ProductDefinition productDefinition))
                 return new ProductDefinition(productDefinition);
@@ -36,7 +42,27 @@ namespace S1API.Items
                     out S1ItemFramework.CashDefinition cashDefinition))
                 return new CashDefinition(cashDefinition);
 
+            if (CrossType.Is(itemDefinition,
+                    out S1ItemFramework.StorableItemDefinition storableItemDefinition))
+                return new StorableItemDefinition(storableItemDefinition);
+
             return new ItemDefinition(itemDefinition);
+        }
+
+        /// <summary>
+        /// Manually registers an item definition with the game's registry.
+        /// This is typically handled automatically by <see cref="ItemCreator"/> methods,
+        /// but can be used for advanced scenarios.
+        /// </summary>
+        /// <param name="definition">The item definition to register.</param>
+        public static void RegisterItem(ItemDefinition definition)
+        {
+            if (definition == null)
+            {
+                throw new System.ArgumentNullException(nameof(definition), "Cannot register null item definition");
+            }
+
+            S1Registry.Instance.AddToRegistry(definition.S1ItemDefinition);
         }
     }
 }
