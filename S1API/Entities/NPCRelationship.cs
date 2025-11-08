@@ -42,6 +42,8 @@ namespace S1API.Entities
         /// INTERNAL: Reference to the owning API NPC.
         /// </summary>
         internal readonly NPC NPC;
+        private readonly Dictionary<Action<float>, Delegate> _relationshipChangedHandlers = new Dictionary<Action<float>, Delegate>();
+        private readonly Dictionary<Action<UnlockType, bool>, Delegate> _relationshipUnlockedHandlers = new Dictionary<Action<UnlockType, bool>, Delegate>();
 
         internal NPCRelationship(NPC npc)
         {
@@ -164,62 +166,142 @@ namespace S1API.Entities
         /// Subscribes to relationship change events. Callback receives the change amount.
         /// Best-effort under IL2CPP; silently no-ops if delegate bridging is unavailable.
         /// </summary>
-        public void OnChanged(Action<float> callback)
+        public event Action<float> OnChanged
         {
-            if (callback == null || Component == null)
-                return;
-            try
+            add
             {
-                FieldInfo field = typeof(S1Relation.NPCRelationData).GetField("onRelationshipChange", BindingFlags.Public | BindingFlags.Instance);
-                if (field == null)
+                if (value == null || Component == null)
                     return;
 
-                object existing = field.GetValue(Component);
+                if (_relationshipChangedHandlers.ContainsKey(value))
+                    return;
+
+                try
+                {
+                    FieldInfo field = typeof(S1Relation.NPCRelationData).GetField("onRelationshipChange", BindingFlags.Public | BindingFlags.Instance);
+                    if (field == null)
+                        return;
+
+                    object existing = field.GetValue(Component);
 #if (IL2CPPMELON || IL2CPPBEPINEX)
-                System.Action<float> wrapped = new System.Action<float>(d => { try { callback(d); } catch { } });
-                var combined = (Il2CppSystem.Delegate)Il2CppSystem.Delegate.Combine(existing as Il2CppSystem.Delegate, (Il2CppSystem.Delegate)(object)wrapped);
-                field.SetValue(Component, combined);
+                    System.Action<float> wrapped = new System.Action<float>(d => { try { value(d); } catch { } });
+                    var combined = (Il2CppSystem.Delegate)Il2CppSystem.Delegate.Combine(existing as Il2CppSystem.Delegate, (Il2CppSystem.Delegate)(object)wrapped);
+                    field.SetValue(Component, combined);
+                    _relationshipChangedHandlers[value] = wrapped;
 #else
-                Action<float> wrapped = d => { try { callback(d); } catch { } };
-                var combined = Delegate.Combine(existing as Delegate, wrapped);
-                field.SetValue(Component, combined);
+                    Action<float> wrapped = d => { try { value(d); } catch { } };
+                    var combined = Delegate.Combine(existing as Delegate, wrapped);
+                    field.SetValue(Component, combined);
+                    _relationshipChangedHandlers[value] = wrapped;
 #endif
+                }
+                catch { }
             }
-            catch { }
+            remove
+            {
+                if (value == null || Component == null)
+                    return;
+
+                if (!_relationshipChangedHandlers.TryGetValue(value, out var wrapped))
+                    return;
+
+                _relationshipChangedHandlers.Remove(value);
+                try
+                {
+                    FieldInfo field = typeof(S1Relation.NPCRelationData).GetField("onRelationshipChange", BindingFlags.Public | BindingFlags.Instance);
+                    if (field == null)
+                        return;
+
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                    var existing = field.GetValue(Component);
+                    var remaining = existing != null
+                        ? Il2CppSystem.Delegate.Remove(existing as Il2CppSystem.Delegate, (Il2CppSystem.Delegate)(object)wrapped)
+                        : null;
+                    field.SetValue(Component, remaining);
+#else
+                    var existing = field.GetValue(Component);
+                    var remaining = existing != null
+                        ? Delegate.Remove(existing as Delegate, (Delegate)wrapped)
+                        : null;
+                    field.SetValue(Component, remaining);
+#endif
+                }
+                catch { }
+            }
         }
 
         /// <summary>
         /// Subscribes to unlocked events. Callback receives unlock type and notify flag.
         /// Best-effort under IL2CPP; silently no-ops if delegate bridging is unavailable.
         /// </summary>
-        public void OnUnlocked(Action<UnlockType, bool> callback)
+        public event Action<UnlockType, bool> OnUnlocked
         {
-            if (callback == null || Component == null)
-                return;
-            try
+            add
             {
-                FieldInfo field = typeof(S1Relation.NPCRelationData).GetField("onUnlocked", BindingFlags.Public | BindingFlags.Instance);
-                if (field == null)
+                if (value == null || Component == null)
                     return;
 
-                object existing = field.GetValue(Component);
+                if (_relationshipUnlockedHandlers.ContainsKey(value))
+                    return;
+
+                try
+                {
+                    FieldInfo field = typeof(S1Relation.NPCRelationData).GetField("onUnlocked", BindingFlags.Public | BindingFlags.Instance);
+                    if (field == null)
+                        return;
+
+                    object existing = field.GetValue(Component);
 #if (IL2CPPMELON || IL2CPPBEPINEX)
-                System.Action<S1Relation.NPCRelationData.EUnlockType, bool> wrapped = new System.Action<S1Relation.NPCRelationData.EUnlockType, bool>((t, notify) =>
-                {
-                    try { callback(FromS1(t), notify); } catch { }
-                });
-                var combined = (Il2CppSystem.Delegate)Il2CppSystem.Delegate.Combine(existing as Il2CppSystem.Delegate, (Il2CppSystem.Delegate)(object)wrapped);
-                field.SetValue(Component, combined);
+                    System.Action<S1Relation.NPCRelationData.EUnlockType, bool> wrapped = new System.Action<S1Relation.NPCRelationData.EUnlockType, bool>((t, notify) =>
+                    {
+                        try { value(FromS1(t), notify); } catch { }
+                    });
+                    var combined = (Il2CppSystem.Delegate)Il2CppSystem.Delegate.Combine(existing as Il2CppSystem.Delegate, (Il2CppSystem.Delegate)(object)wrapped);
+                    field.SetValue(Component, combined);
+                    _relationshipUnlockedHandlers[value] = wrapped;
 #else
-                Action<S1Relation.NPCRelationData.EUnlockType, bool> wrapped = (t, notify) =>
-                {
-                    try { callback(FromS1(t), notify); } catch { }
-                };
-                var combined = Delegate.Combine(existing as Delegate, wrapped);
-                field.SetValue(Component, combined);
+                    Action<S1Relation.NPCRelationData.EUnlockType, bool> wrapped = (t, notify) =>
+                    {
+                        try { value(FromS1(t), notify); } catch { }
+                    };
+                    var combined = Delegate.Combine(existing as Delegate, wrapped);
+                    field.SetValue(Component, combined);
+                    _relationshipUnlockedHandlers[value] = wrapped;
 #endif
+                }
+                catch { }
             }
-            catch { }
+            remove
+            {
+                if (value == null || Component == null)
+                    return;
+
+                if (!_relationshipUnlockedHandlers.TryGetValue(value, out var wrapped))
+                    return;
+
+                _relationshipUnlockedHandlers.Remove(value);
+                try
+                {
+                    FieldInfo field = typeof(S1Relation.NPCRelationData).GetField("onUnlocked", BindingFlags.Public | BindingFlags.Instance);
+                    if (field == null)
+                        return;
+
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                    var existing = field.GetValue(Component);
+                    var remaining = existing != null
+                        ? Il2CppSystem.Delegate.Remove(existing as Il2CppSystem.Delegate, (Il2CppSystem.Delegate)(object)wrapped)
+                        : null;
+                    field.SetValue(Component, remaining);
+#else
+                    var existing = field.GetValue(Component);
+                    var remaining = existing != null
+                        ? Delegate.Remove(existing as Delegate, (Delegate)wrapped)
+                        : null;
+                    field.SetValue(Component, remaining);
+#endif
+                }
+                catch { }
+            }
         }
 
         /// <summary>

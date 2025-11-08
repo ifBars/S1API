@@ -1006,11 +1006,8 @@ namespace S1API.Entities
             S1NPC.ID = id;
             S1NPC.MugshotSprite = icon ?? S1DevUtilities.PlayerSingleton<S1ContactApps.ContactsApp>.Instance.AppIcon;
             S1NPC.BakedGUID = Guid.NewGuid().ToString();
-
-            Logger.Msg($"NPC ctor: ensuring conversation for '{S1NPC.ID}' (server={SafeIsServer()})");
+            
             EnsureMessageConversationReady(resetDefaults: true);
-            Logger.Msg($"NPC ctor: ensure complete for '{S1NPC.ID}', convoNull={S1NPC.MSGConversation == null}");
-
             InitializeHealthComponent();
             InitializeAwarenessComponent();
             InitializeBehaviourComponents();
@@ -1247,12 +1244,10 @@ namespace S1API.Entities
             {
                 categories = new ConversationCategoryList();
                 S1NPC.ConversationCategories = categories;
-                Logger.Msg($"ResetConversationCategoriesToDefaults: created list for '{S1NPC?.ID ?? "<null>"}'.");
             }
             else
             {
                 categories.Clear();
-                Logger.Msg($"ResetConversationCategoriesToDefaults: cleared list for '{S1NPC?.ID ?? "<null>"}'.");
             }
 
             ResetConversationCategoriesToDefaults(categories);
@@ -1309,7 +1304,6 @@ namespace S1API.Entities
 
             if (S1NPC.MSGConversation == null)
             {
-                Logger.Warning($"EnsureMessageConversationInstance: conversation null for '{S1NPC?.ID ?? "<null>"}', creating (server={SafeIsServer()}).");
 #if (IL2CPPMELON || IL2CPPBEPINEX)
                 S1NPC.CreateMessageConversation();
 #elif (MONOMELON || MONOBEPINEX)

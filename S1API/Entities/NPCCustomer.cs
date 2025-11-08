@@ -618,100 +618,177 @@ namespace S1API.Entities
         /// <summary>
         /// Subscribe to customer unlocked event.
         /// </summary>
-        public void OnUnlocked(Action callback)
+        public event Action OnUnlocked
         {
-            EnsureCustomer();
-            if (Component == null || callback == null) return;
-            try
+            add
             {
-                var evt = Utils.ReflectionUtils.TryGetFieldOrProperty(Component, "onUnlocked") as UnityEvent;
-                
-                // Ensure event exists - create it if it doesn't
-                if (evt == null)
+                EnsureCustomer();
+                if (Component == null || value == null) return;
+
+                try
                 {
-                    evt = new UnityEvent();
-                    Utils.ReflectionUtils.TrySetFieldOrProperty(Component, "onUnlocked", evt);
+                    var evt = GetCustomerUnityEvent("onUnlocked", true);
+                    if (evt == null) return;
+                    EventHelper.AddListener(value, evt);
                 }
-                
-                EventHelper.AddListener(callback, evt);
+                catch (Exception) { }
             }
-            catch (Exception) { }
+            remove
+            {
+                if (Component == null || value == null) return;
+
+                try
+                {
+                    var evt = GetCustomerUnityEvent("onUnlocked", false);
+                    if (evt == null) return;
+                    EventHelper.RemoveListener(value, evt);
+                }
+                catch (Exception) { }
+            }
         }
 
         /// <summary>
         /// Subscribe to deal completed event.
         /// </summary>
-        public void OnDealCompleted(Action callback)
+        public event Action OnDealCompleted
         {
-            EnsureCustomer();
-            if (Component == null || callback == null) return;
-            try
+            add
             {
-                var evt = Utils.ReflectionUtils.TryGetFieldOrProperty(Component, "onDealCompleted") as UnityEvent;
-                
-                // Ensure event exists - create it if it doesn't
-                if (evt == null)
+                EnsureCustomer();
+                if (Component == null || value == null) return;
+
+                try
                 {
-                    evt = new UnityEvent();
-                    bool success = Utils.ReflectionUtils.TrySetFieldOrProperty(Component, "onDealCompleted", evt);
-                    if (success)
-                    {
-                        Logger.Msg($"Created onDealCompleted UnityEvent for {NPC.ID}");
-                    }
-                    else
-                    {
-                        Logger.Warning($"Failed to set onDealCompleted event for {NPC.ID}");
-                        return;
-                    }
+                    var evt = GetCustomerUnityEvent("onDealCompleted", true);
+                    if (evt == null) return;
+                    EventHelper.AddListener(value, evt);
                 }
-                
-                EventHelper.AddListener(callback, evt);
+                catch (Exception ex)
+                {
+                    Logger.Warning($"Exception in OnDealCompleted for {NPC.ID}: {ex.Message}");
+                    Logger.Warning($"Stack trace: {ex.StackTrace}");
+                }
             }
-            catch (Exception ex) 
-            { 
-                Logger.Warning($"Exception in OnDealCompleted for {NPC.ID}: {ex.Message}");
-                Logger.Warning($"Stack trace: {ex.StackTrace}");
+            remove
+            {
+                if (Component == null || value == null) return;
+
+                try
+                {
+                    var evt = GetCustomerUnityEvent("onDealCompleted", false);
+                    if (evt == null) return;
+                    EventHelper.RemoveListener(value, evt);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"Exception while removing OnDealCompleted listener for {NPC.ID}: {ex.Message}");
+                }
             }
         }
 
         /// <summary>
         /// Subscribe to contract assigned event. Provides payment, product count, and delivery window via callback.
         /// </summary>
-        public void OnContractAssigned(Action<float, int, int, int> callback)
+        public event Action<float, int, int, int> OnContractAssigned
         {
-            EnsureCustomer();
-            if (Component == null || callback == null) return;
+            add
+            {
+                EnsureCustomer();
+                if (Component == null || value == null) return;
+                if (!EnsureContractAssignedHook())
+                    return;
+
+                _onContractAssigned += value;
+            }
+            remove
+            {
+                if (value == null) return;
+                _onContractAssigned -= value;
+                if (_onContractAssigned == null)
+                {
+                    TryUnhookContractAssignedEvent();
+                }
+            }
+        }
+
+        private UnityEvent GetCustomerUnityEvent(string memberName, bool createIfMissing)
+        {
+            if (Component == null)
+                return null;
+
+            var evt = Utils.ReflectionUtils.TryGetFieldOrProperty(Component, memberName) as UnityEvent;
+            if (evt == null && createIfMissing)
+            {
+                evt = new UnityEvent();
+                Utils.ReflectionUtils.TrySetFieldOrProperty(Component, memberName, evt);
+            }
+
+            return evt;
+        }
+
+        private bool EnsureContractAssignedHook()
+        {
+            if (_contractAssignedBridge != null || Component == null)
+                return _contractAssignedBridge != null;
+
             try
             {
                 var onContractAssignedField = typeof(S1Economy.Customer).GetField("onContractAssigned", BindingFlags.Public | BindingFlags.Instance);
-                var val = onContractAssignedField?.GetValue(Component);
-                if (val == null) return;
+                var evt = onContractAssignedField?.GetValue(Component);
+                if (evt == null)
+                    return false;
 
-                // Build a UnityAction<Contract> that maps to a safe callback signature
                 var contractType = typeof(S1Quests.Contract);
                 var unityActionType = typeof(UnityAction<>).MakeGenericType(contractType);
                 var method = GetType().GetMethod(nameof(HandleContractAssigned), BindingFlags.NonPublic | BindingFlags.Instance);
                 var del = Delegate.CreateDelegate(unityActionType, this, method);
-
-                // Store user callback for use in handler
-                _onContractAssigned = callback;
-
-                // AddListener via reflection: ((UnityEvent<Contract>)val).AddListener(del)
-                var addListener = val.GetType().GetMethod("AddListener", new[] { unityActionType });
-                addListener?.Invoke(val, new object[] { del });
+                var addListener = evt.GetType().GetMethod("AddListener", new[] { unityActionType });
+                addListener?.Invoke(evt, new object[] { del });
+                _contractAssignedBridge = del;
+                _contractAssignedUnityEvent = evt;
+                return true;
             }
-            catch (Exception) { }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Exception wiring OnContractAssigned for {NPC.ID}: {ex.Message}");
+                return false;
+            }
+        }
+
+        private void TryUnhookContractAssignedEvent()
+        {
+            if (_contractAssignedBridge == null || _contractAssignedUnityEvent == null)
+                return;
+
+            try
+            {
+                var unityActionType = _contractAssignedBridge.GetType();
+                var removeListener = _contractAssignedUnityEvent.GetType().GetMethod("RemoveListener", new[] { unityActionType });
+                removeListener?.Invoke(_contractAssignedUnityEvent, new object[] { _contractAssignedBridge });
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Exception removing OnContractAssigned for {NPC.ID}: {ex.Message}");
+            }
+            finally
+            {
+                _contractAssignedBridge = null;
+                _contractAssignedUnityEvent = null;
+            }
         }
 
         private Action<float, int, int, int> _onContractAssigned;
+        private Delegate _contractAssignedBridge;
+        private object _contractAssignedUnityEvent;
 
         // Maps Contract to safe primitives for modders
         private void HandleContractAssigned(object contract)
         {
             try
             {
-                if (_onContractAssigned == null || contract == null) return;
-                // Read minimal bits via reflection: payment, total qty, window start/end
+                var handlers = _onContractAssigned;
+                if (handlers == null || contract == null) return;
+
                 float payment = 0f;
                 int totalQty = 0;
                 int winStart = 0;
@@ -749,9 +826,22 @@ namespace S1API.Entities
                     if (endField != null) winEnd = Convert.ToInt32(endField.GetValue(window));
                 }
 
-                _onContractAssigned?.Invoke(payment, totalQty, winStart, winEnd);
+                foreach (Action<float, int, int, int> handler in handlers.GetInvocationList())
+                {
+                    try
+                    {
+                        handler(payment, totalQty, winStart, winEnd);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warning($"Exception in OnContractAssigned handler for {NPC.ID}: {ex.Message}");
+                    }
+                }
             }
-            catch (Exception) { }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Exception while processing OnContractAssigned for {NPC.ID}: {ex.Message}");
+            }
         }
 
 #if MONOMELON
@@ -919,5 +1009,3 @@ namespace S1API.Entities
         }
     }
 }
-
-

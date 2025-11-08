@@ -57,6 +57,11 @@ namespace S1API.Entities
     {
         internal readonly NPC NPC;
         private static readonly Logging.Log Logger = new Logging.Log("NPCDealer");
+        private static readonly FieldInfo DealerRecruitedField = typeof(S1Economy.Dealer).GetField("onDealerRecruited", BindingFlags.Public | BindingFlags.Static);
+
+        private readonly Dictionary<Action, Action<S1Economy.Dealer>> _dealerRecruitedHandlers = new Dictionary<Action, Action<S1Economy.Dealer>>();
+        private Action _contractAcceptedHandlers;
+        private bool _contractAcceptedHooked;
 
         internal NPCDealer(NPC npc)
         {
@@ -811,145 +816,210 @@ namespace S1API.Entities
         /// <summary>
         /// Subscribe to dealer recruited event.
         /// </summary>
-        public void OnRecruited(Action callback)
+        public event Action OnRecruited
         {
-            EnsureDealer();
-            if (Component == null || callback == null) return;
-            try
+            add
             {
-                // Subscribe to static event
-                var onDealerRecruitedField = typeof(S1Economy.Dealer).GetField("onDealerRecruited", BindingFlags.Public | BindingFlags.Static);
-                if (onDealerRecruitedField != null)
+                EnsureDealer();
+                if (Component == null || value == null || DealerRecruitedField == null) return;
+                if (_dealerRecruitedHandlers.ContainsKey(value))
+                    return;
+
+                try
                 {
-                    var existingValue = onDealerRecruitedField.GetValue(null);
-                    Action<S1Economy.Dealer> evt = existingValue as Action<S1Economy.Dealer>;
-                    
-                    Action<S1Economy.Dealer> wrapper = (dealer) =>
+                    Action<S1Economy.Dealer> wrapper = dealer =>
                     {
-                        if (dealer == Component)
-                            callback();
+                        if (dealer != Component)
+                            return;
+                        try { value(); }
+                        catch (Exception ex) { Logger.Warning($"Exception in OnRecruited handler for {NPC.ID}: {ex.Message}"); }
                     };
-                    
-                    if (evt != null)
-                    {
-                        evt = (Action<S1Economy.Dealer>)Delegate.Combine(evt, wrapper);
-                    }
-                    else
-                    {
-                        evt = wrapper;
-                    }
-                    
-                    onDealerRecruitedField.SetValue(null, evt);
+
+                    var existingValue = DealerRecruitedField.GetValue(null) as Action<S1Economy.Dealer>;
+                    var combined = existingValue != null
+                        ? (Action<S1Economy.Dealer>)Delegate.Combine(existingValue, wrapper)
+                        : wrapper;
+                    DealerRecruitedField.SetValue(null, combined);
+                    _dealerRecruitedHandlers[value] = wrapper;
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"Exception wiring OnRecruited for {NPC.ID}: {ex.Message}");
                 }
             }
-            catch (Exception ex)
+            remove
             {
-                Logger.Warning($"Exception in OnRecruited for {NPC.ID}: {ex.Message}");
+                if (value == null || DealerRecruitedField == null)
+                    return;
+
+                if (!_dealerRecruitedHandlers.TryGetValue(value, out var wrapper))
+                    return;
+
+                _dealerRecruitedHandlers.Remove(value);
+                try
+                {
+                    var existingValue = DealerRecruitedField.GetValue(null) as Action<S1Economy.Dealer>;
+                    if (existingValue == null)
+                        return;
+
+                    var remaining = (Action<S1Economy.Dealer>)Delegate.Remove(existingValue, wrapper);
+                    DealerRecruitedField.SetValue(null, remaining);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"Exception removing OnRecruited handler for {NPC.ID}: {ex.Message}");
+                }
             }
         }
 
         /// <summary>
         /// Subscribe to contract accepted event.
         /// </summary>
-        public void OnContractAccepted(Action callback)
+        public event Action OnContractAccepted
         {
-            EnsureDealer();
-            if (Component == null || callback == null) return;
+            add
+            {
+                EnsureDealer();
+                if (Component == null || value == null) return;
+                EnsureContractAcceptedHook();
+                _contractAcceptedHandlers += value;
+            }
+            remove
+            {
+                if (value == null) return;
+                _contractAcceptedHandlers -= value;
+            }
+        }
+
+        private void EnsureContractAcceptedHook()
+        {
+            if (_contractAcceptedHooked || Component == null)
+                return;
+
             try
             {
 #if MONOMELON
                 var onContractAcceptedField = typeof(S1Economy.Dealer).GetField("onContractAccepted", BindingFlags.Public | BindingFlags.Instance);
-                if (onContractAcceptedField != null)
-                {
-                    var existing = onContractAcceptedField.GetValue(Component) as Action;
-                    if (existing != null)
-                    {
-                        existing = (Action)Delegate.Combine(existing, callback);
-                        onContractAcceptedField.SetValue(Component, existing);
-                    }
-                    else
-                    {
-                        onContractAcceptedField.SetValue(Component, callback);
-                    }
-                }
+                if (onContractAcceptedField == null)
+                    return;
+
+                var existing = onContractAcceptedField.GetValue(Component) as Action;
+                Action dispatch = DispatchContractAccepted;
+                var combined = existing != null ? (Action)Delegate.Combine(existing, dispatch) : dispatch;
+                onContractAcceptedField.SetValue(Component, combined);
 #else
-                // In IL2CPP, onContractAccepted is Il2CppSystem.Action, need to combine properly
-                if (Component.onContractAccepted != null)
-                {
-                    var existingAction = Component.onContractAccepted;
-                    Component.onContractAccepted = new System.Action(() =>
+                var existing = Component.onContractAccepted;
+                System.Action dispatch = DispatchContractAccepted;
+                Component.onContractAccepted = existing != null
+                    ? new System.Action(() =>
                     {
-                        existingAction?.Invoke();
-                        callback?.Invoke();
-                    });
-                }
-                else
-                {
-                    Component.onContractAccepted = callback;
-                }
+                        existing?.Invoke();
+                        dispatch();
+                    })
+                    : dispatch;
 #endif
+                _contractAcceptedHooked = true;
             }
-            catch (Exception) { }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Exception wiring OnContractAccepted for {NPC.ID}: {ex.Message}");
+            }
+        }
+
+        private void DispatchContractAccepted()
+        {
+            var handlers = _contractAcceptedHandlers;
+            if (handlers == null)
+                return;
+
+            foreach (Action handler in handlers.GetInvocationList())
+            {
+                try { handler(); }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"Exception in OnContractAccepted handler for {NPC.ID}: {ex.Message}");
+                }
+            }
         }
 
         /// <summary>
         /// Subscribe to dealer recommended event.
         /// </summary>
-        public void OnRecommended(Action callback)
+        public event Action OnRecommended
         {
-            EnsureDealer();
-            if (Component == null || callback == null) return;
-            try
+            add
             {
-                UnityEvent evt = null;
-                
+                EnsureDealer();
+                if (Component == null || value == null) return;
+                try
+                {
+                    var evt = GetRecommendedUnityEvent(true);
+                    if (evt == null) return;
+                    EventHelper.AddListener(value, evt);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"Exception in OnRecommended for {NPC.ID}: {ex.Message}");
+                }
+            }
+            remove
+            {
+                if (Component == null || value == null) return;
+                try
+                {
+                    var evt = GetRecommendedUnityEvent(false);
+                    if (evt == null) return;
+                    EventHelper.RemoveListener(value, evt);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"Exception while removing OnRecommended handler for {NPC.ID}: {ex.Message}");
+                }
+            }
+        }
+
+        private UnityEvent GetRecommendedUnityEvent(bool createIfMissing)
+        {
+            if (Component == null)
+                return null;
+
 #if MONOMELON
-                var onRecommendedField = typeof(S1Economy.Dealer).GetField("onRecommended", BindingFlags.Public | BindingFlags.Instance);
-                if (onRecommendedField != null)
-                {
-                    evt = onRecommendedField.GetValue(Component) as UnityEvent;
-                    if (evt == null)
-                    {
-                        evt = new UnityEvent();
-                        onRecommendedField.SetValue(Component, evt);
-                    }
-                }
-#else
-                // Try property first, then field
-                var onRecommendedProperty = typeof(S1Economy.Dealer).GetProperty("onRecommended", BindingFlags.Public | BindingFlags.Instance);
-                if (onRecommendedProperty != null)
-                {
-                    evt = onRecommendedProperty.GetValue(Component) as UnityEvent;
-                    if (evt == null)
-                    {
-                        evt = new UnityEvent();
-                        onRecommendedProperty.SetValue(Component, evt);
-                    }
-                }
-                else
-                {
-                    var onRecommendedField = typeof(S1Economy.Dealer).GetField("onRecommended", BindingFlags.Public | BindingFlags.Instance);
-                    if (onRecommendedField != null)
-                    {
-                        evt = onRecommendedField.GetValue(Component) as UnityEvent;
-                        if (evt == null)
-                        {
-                            evt = new UnityEvent();
-                            onRecommendedField.SetValue(Component, evt);
-                        }
-                    }
-                }
-#endif
-                
-                if (evt != null)
-                {
-                    EventHelper.AddListener(callback, evt);
-                }
-            }
-            catch (Exception ex)
+            var onRecommendedField = typeof(S1Economy.Dealer).GetField("onRecommended", BindingFlags.Public | BindingFlags.Instance);
+            if (onRecommendedField == null)
+                return null;
+            var evt = onRecommendedField.GetValue(Component) as UnityEvent;
+            if (evt == null && createIfMissing)
             {
-                Logger.Warning($"Exception in OnRecommended for {NPC.ID}: {ex.Message}");
+                evt = new UnityEvent();
+                onRecommendedField.SetValue(Component, evt);
             }
+            return evt;
+#else
+            var onRecommendedProperty = typeof(S1Economy.Dealer).GetProperty("onRecommended", BindingFlags.Public | BindingFlags.Instance);
+            if (onRecommendedProperty != null)
+            {
+                var evt = onRecommendedProperty.GetValue(Component) as UnityEvent;
+                if (evt == null && createIfMissing)
+                {
+                    evt = new UnityEvent();
+                    onRecommendedProperty.SetValue(Component, evt);
+                }
+                return evt;
+            }
+
+            var onRecommendedField = typeof(S1Economy.Dealer).GetField("onRecommended", BindingFlags.Public | BindingFlags.Instance);
+            if (onRecommendedField == null)
+                return null;
+
+            var fieldEvent = onRecommendedField.GetValue(Component) as UnityEvent;
+            if (fieldEvent == null && createIfMissing)
+            {
+                fieldEvent = new UnityEvent();
+                onRecommendedField.SetValue(Component, fieldEvent);
+            }
+
+            return fieldEvent;
+#endif
         }
 
         private static void SetNonPublicInstanceField(object target, string fieldName, object value)
@@ -970,4 +1040,3 @@ namespace S1API.Entities
         }
     }
 }
-
