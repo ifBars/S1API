@@ -185,6 +185,29 @@ namespace S1API.Internal.Patches
         private static void QuestStart(S1Quests.Quest __instance) =>
             QuestManager.Quests.FirstOrDefault(quest => quest.S1Quest == __instance)?.CreateInternal();
 
+        /// <summary>
+        /// Prevents compass element creation for quest entries that don't have a location.
+        /// This ensures quest entries without POI positions don't create unwanted compass waypoints.
+        /// </summary>
+        /// <param name="__instance">The QuestEntry instance attempting to create a compass element.</param>
+        /// <returns>False to skip the original method if PoILocation is null, true otherwise.</returns>
+        [HarmonyPatch(typeof(S1Quests.QuestEntry), nameof(S1Quests.QuestEntry.CreateCompassElement))]
+        [HarmonyPrefix]
+        private static bool QuestEntry_CreateCompassElement_Prefix(S1Quests.QuestEntry __instance)
+        {
+            // Get PoILocation using reflection to handle both Mono (field) and IL2CPP (property)
+            object? poILocation = ReflectionUtils.TryGetFieldOrProperty(__instance, "PoILocation");
+            
+            // Skip compass element creation if PoILocation is null
+            // This prevents creating compass waypoints for quest entries without locations
+            if (poILocation == null)
+            {
+                return false; // Skip the original method
+            }
+            
+            return true; // Continue with the original method
+        }
+
         /////// TODO: Quests doesn't have OnDestroy. Find another way to clean up
         // [HarmonyPatch(typeof(S1Quests.Quest), "OnDestroy")]
         // [HarmonyPostfix]

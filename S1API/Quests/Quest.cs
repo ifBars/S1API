@@ -212,14 +212,35 @@ namespace S1API.Quests
             questEntryObject.transform.SetParent(_gameObject?.transform);
 
             S1Quests.QuestEntry s1QuestEntry = questEntryObject.AddComponent<S1Quests.QuestEntry>();
-            s1QuestEntry.PoILocation = questEntryObject.transform;
+            
+            // Set PoILocation based on whether a location is provided
+            // If no location, set to null to prevent POI and compass element creation
+            if (poiPosition == null)
+            {
+                // Set PoILocation to null to prevent compass waypoint creation
+                ReflectionUtils.TrySetFieldOrProperty(s1QuestEntry, "PoILocation", null);
+                // Set AutoCreatePoI to false to prevent POI marker creation
+                ReflectionUtils.TrySetFieldOrProperty(s1QuestEntry, "AutoCreatePoI", false);
+            }
+            else
+            {
+                // Set PoILocation to the transform when a location is provided
+                s1QuestEntry.PoILocation = questEntryObject.transform;
+            }
+            
             S1Quest.Entries.Add(s1QuestEntry);
 
             QuestEntry questEntry = new QuestEntry(s1QuestEntry)
             {
-                Title = title,
-                POIPosition = poiPosition ?? Vector3.zero
+                Title = title
             };
+            
+            // Only set POIPosition if a location was provided
+            if (poiPosition != null)
+            {
+                questEntry.POIPosition = poiPosition.Value;
+            }
+            
             QuestEntries.Add(questEntry);
 
             return questEntry;

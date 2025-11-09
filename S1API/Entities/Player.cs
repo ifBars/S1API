@@ -40,6 +40,21 @@ namespace S1API.Entities
         public static readonly List<Player> All = new List<Player>();
 
         /// <summary>
+        /// Fired when any player finishes client startup.
+        /// </summary>
+        public static event Action<Player>? PlayerSpawned;
+
+        /// <summary>
+        /// Fired when the local (client-owned) player finishes client startup.
+        /// </summary>
+        public static event Action<Player>? LocalPlayerSpawned;
+
+        /// <summary>
+        /// Fired when a player is destroyed/removed.
+        /// </summary>
+        public static event Action<Player>? PlayerDespawned;
+
+        /// <summary>
         /// INTERNAL: Tracking of the S1 instance of the player.
         /// </summary>
         internal S1PlayerScripts.Player S1Player;
@@ -190,5 +205,20 @@ namespace S1API.Entities
         private static readonly HashSet<S1PlayerScripts.Player> InvinciblePlayers = new HashSet<S1PlayerScripts.Player>();
 
         internal static bool IsPlayerInvincible(S1PlayerScripts.Player player) => InvinciblePlayers.Contains(player);
+
+        internal static void RaisePlayerSpawned(Player player)
+        {
+            PlayerSpawned?.Invoke(player);
+        }
+
+        internal static void RaiseLocalPlayerSpawned(Player player)
+        {
+            LocalPlayerSpawned?.Invoke(player);
+        }
+
+        internal static void RaisePlayerDespawned(Player player)
+        {
+            PlayerDespawned?.Invoke(player);
+        }
     }
 }

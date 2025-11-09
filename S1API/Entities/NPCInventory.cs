@@ -14,6 +14,7 @@ using System;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.Events;
+using S1API.Utils;
 namespace S1API.Entities
 {
     /// <summary>
@@ -90,8 +91,7 @@ namespace S1API.Entities
             if (inv.ItemSlots == null)
             {
                 // Ensure list instance exists
-                var listProp = typeof(S1NPCs.NPCInventory).GetProperty("ItemSlots", BindingFlags.Public | BindingFlags.Instance);
-                listProp?.SetValue(inv, new System.Collections.Generic.List<S1Items.ItemSlot>());
+                ReflectionUtils.TrySetFieldOrProperty(inv, "ItemSlots", new System.Collections.Generic.List<S1Items.ItemSlot>());
             }
             if (inv.ItemSlots == null || inv.ItemSlots.Count < inv.SlotCount)
             {
@@ -105,19 +105,9 @@ namespace S1API.Entities
 #else
                     slot.SetSlotOwner(inv.Cast<S1Items.IItemSlotOwner>());
 #endif
-                    try
-                    {
-                        var activeLockProp = typeof(S1Items.ItemSlot).GetProperty("ActiveLock", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-                        var setActiveLock = activeLockProp?.GetSetMethod(true);
-                        setActiveLock?.Invoke(slot, new object[] { null });
-                    }
+                    try { ReflectionUtils.TrySetFieldOrProperty(slot, "ActiveLock", null); }
                     catch { }
-                    try
-                    {
-                        var isAddLockedProp = typeof(S1Items.ItemSlot).GetProperty("IsAddLocked", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-                        var setIsAddLocked = isAddLockedProp?.GetSetMethod(true);
-                        setIsAddLocked?.Invoke(slot, new object[] { false });
-                    }
+                    try { ReflectionUtils.TrySetFieldOrProperty(slot, "IsAddLocked", false); }
                     catch { }
 #if (IL2CPPMELON || IL2CPPBEPINEX)
                     System.Action handler = new System.Action(() =>
@@ -164,19 +154,9 @@ namespace S1API.Entities
 #else
                     s.SetSlotOwner(inv.Cast<S1Items.IItemSlotOwner>());
 #endif
-                    try
-                    {
-                        var activeLockProp = typeof(S1Items.ItemSlot).GetProperty("ActiveLock", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-                        var setActiveLock = activeLockProp?.GetSetMethod(true);
-                        setActiveLock?.Invoke(s, new object[] { null });
-                    }
+                    try { ReflectionUtils.TrySetFieldOrProperty(s, "ActiveLock", null); }
                     catch { }
-                    try
-                    {
-                        var isAddLockedProp = typeof(S1Items.ItemSlot).GetProperty("IsAddLocked", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-                        var setIsAddLocked = isAddLockedProp?.GetSetMethod(true);
-                        setIsAddLocked?.Invoke(s, new object[] { false });
-                    }
+                    try { ReflectionUtils.TrySetFieldOrProperty(s, "IsAddLocked", false); }
                     catch { }
                 }
             }
@@ -205,8 +185,7 @@ namespace S1API.Entities
 
             try
             {
-                FieldInfo npcField = typeof(S1NPCs.NPCInventory).GetField("npc", BindingFlags.NonPublic | BindingFlags.Instance);
-                npcField?.SetValue(inv, NPC.S1NPC);
+                ReflectionUtils.TrySetFieldOrProperty(inv, "npc", NPC.S1NPC);
 
                 if (inv.PickpocketIntObj != null)
                 {
@@ -228,10 +207,10 @@ namespace S1API.Entities
 
             try
             {
-                FieldInfo onChangedField = typeof(S1NPCs.NPCInventory).GetField("onContentsChanged", BindingFlags.Public | BindingFlags.Instance);
-                if (onChangedField != null && onChangedField.GetValue(inv) == null)
+                var contentsChanged = ReflectionUtils.TryGetFieldOrProperty(inv, "onContentsChanged") as UnityEvent;
+                if (contentsChanged == null)
                 {
-                    onChangedField.SetValue(inv, new UnityEvent());
+                    ReflectionUtils.TrySetFieldOrProperty(inv, "onContentsChanged", new UnityEvent());
                 }
             }
             catch { }
@@ -279,23 +258,6 @@ namespace S1API.Entities
             if (item == null) return;
             EnsureInitialized();
             Component?.InsertItem(item, network);
-        }
-
-        private static void SetNonPublicInstanceField(object target, string fieldName, object value)
-        {
-            try
-            {
-                if (target == null || string.IsNullOrEmpty(fieldName)) return;
-                var type = target.GetType();
-                FieldInfo field = null;
-                while (type != null && field == null)
-                {
-                    field = type.GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-                    type = type.BaseType;
-                }
-                field?.SetValue(target, value);
-            }
-            catch { }
         }
     }
 }

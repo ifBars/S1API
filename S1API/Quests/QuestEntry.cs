@@ -52,11 +52,27 @@ namespace S1API.Quests
 
         /// <summary>
         /// The point-of-interest world position.
+        /// Returns Vector3.zero if no location is set.
+        /// Setting a position will create/update the PoILocation transform if it doesn't exist.
         /// </summary>
         public Vector3 POIPosition
         {
-            get => S1QuestEntry.PoILocation.position;
-            set => S1QuestEntry.PoILocation.position = value;
+            get
+            {
+                object? poILocation = Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(S1QuestEntry, "PoILocation");
+                if (poILocation is Transform transform && transform != null)
+                    return transform.position;
+                return Vector3.zero;
+            }
+            set
+            {
+                object? poILocation = Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(S1QuestEntry, "PoILocation");
+                if (poILocation is Transform transform && transform != null)
+                {
+                    transform.position = value;
+                }
+                // If PoILocation is null, we can't set the position (entry has no location)
+            }
         }
 
         /// <summary>
