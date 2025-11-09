@@ -1,5 +1,6 @@
 ﻿#if (IL2CPPMELON)
 using S1PlayerScripts = Il2CppScheduleOne.PlayerScripts;
+using Il2CppInterop.Runtime;
 #else
 using S1PlayerScripts = ScheduleOne.PlayerScripts;
 #endif
@@ -22,6 +23,7 @@ namespace S1API.Internal.Patches
     internal class PlayerPatches
     {
         private static readonly Log Logger = new Log("PlayerPatches");
+
         /// <summary>
         /// INTERNAL: Static constructor to subscribe to game's player events.
         /// </summary>
@@ -30,64 +32,96 @@ namespace S1API.Internal.Patches
             try
             {
                 var playerType = typeof(S1PlayerScripts.Player);
-                
-                // Subscribe to onLocalPlayerSpawned (Action with no parameters)
-                var localEvent = ReflectionUtils.TryGetStaticFieldOrProperty(playerType, "onLocalPlayerSpawned") as Action;
-                if (localEvent != null)
-                {
-                    localEvent += HandleLocalPlayerSpawned;
-                    ReflectionUtils.TrySetStaticFieldOrProperty(playerType, "onLocalPlayerSpawned", localEvent);
-                }
-                else
-                {
-                    // Event is null, create new delegate
-                    ReflectionUtils.TrySetStaticFieldOrProperty(playerType, "onLocalPlayerSpawned", new Action(HandleLocalPlayerSpawned));
-                }
-                
-                // Subscribe to onPlayerSpawned (Action<Player>)
-                var playerSpawnedEvent = ReflectionUtils.TryGetStaticFieldOrProperty(playerType, "onPlayerSpawned");
-                if (playerSpawnedEvent != null)
-                {
-                    // Use Delegate.Combine to add our handler
-                    var existingDelegate = playerSpawnedEvent as Delegate;
-                    var newDelegate = Delegate.CreateDelegate(playerSpawnedEvent.GetType(), typeof(PlayerPatches).GetMethod(nameof(HandlePlayerSpawned), BindingFlags.NonPublic | BindingFlags.Static));
-                    var combined = Delegate.Combine(existingDelegate, newDelegate);
-                    ReflectionUtils.TrySetStaticFieldOrProperty(playerType, "onPlayerSpawned", combined);
-                }
-                else
-                {
-                    // Event is null, create new delegate
-                    var actionType = typeof(Action<>).MakeGenericType(playerType);
-                    var newDelegate = Delegate.CreateDelegate(actionType, typeof(PlayerPatches).GetMethod(nameof(HandlePlayerSpawned), BindingFlags.NonPublic | BindingFlags.Static));
-                    ReflectionUtils.TrySetStaticFieldOrProperty(playerType, "onPlayerSpawned", newDelegate);
-                }
-                
-                // Subscribe to onPlayerDespawned (Action<Player>)
-                var playerDespawnedEvent = ReflectionUtils.TryGetStaticFieldOrProperty(playerType, "onPlayerDespawned");
-                if (playerDespawnedEvent != null)
-                {
-                    // Use Delegate.Combine to add our handler
-                    var existingDelegate = playerDespawnedEvent as Delegate;
-                    var newDelegate = Delegate.CreateDelegate(playerDespawnedEvent.GetType(), typeof(PlayerPatches).GetMethod(nameof(HandlePlayerDespawned), BindingFlags.NonPublic | BindingFlags.Static));
-                    var combined = Delegate.Combine(existingDelegate, newDelegate);
-                    ReflectionUtils.TrySetStaticFieldOrProperty(playerType, "onPlayerDespawned", combined);
-                }
-                else
-                {
-                    // Event is null, create new delegate
-                    var actionType = typeof(Action<>).MakeGenericType(playerType);
-                    var newDelegate = Delegate.CreateDelegate(actionType, typeof(PlayerPatches).GetMethod(nameof(HandlePlayerDespawned), BindingFlags.NonPublic | BindingFlags.Static));
-                    ReflectionUtils.TrySetStaticFieldOrProperty(playerType, "onPlayerDespawned", newDelegate);
-                }
+
+                // onLocalPlayerSpawned (no parameters)
+#if IL2CPPMELON
+                SubscribeToIL2CPPEvent(playerType, "onLocalPlayerSpawned",
+                    nameof(HandleLocalPlayerSpawned), null);
+#else
+                SubscribeToStandardEvent(playerType, "onLocalPlayerSpawned", 
+                    new Action(HandleLocalPlayerSpawned));
+#endif
+
+                // onPlayerSpawned (Action<Player>)
+#if IL2CPPMELON
+                SubscribeToIL2CPPEvent(playerType, "onPlayerSpawned",
+                    nameof(HandlePlayerSpawned), playerType);
+#else
+                SubscribeToStandardEvent(playerType, "onPlayerSpawned", 
+                    new Action<S1PlayerScripts.Player>(HandlePlayerSpawned));
+#endif
+
+                // onPlayerDespawned (Action<Player>)
+#if IL2CPPMELON
+                SubscribeToIL2CPPEvent(playerType, "onPlayerDespawned",
+                    nameof(HandlePlayerDespawned), playerType);
+#else
+                SubscribeToStandardEvent(playerType, "onPlayerDespawned", 
+                    new Action<S1PlayerScripts.Player>(HandlePlayerDespawned));
+#endif
             }
             catch (Exception ex)
             {
-                // Log error but don't crash - events may not be available yet
                 Logger.Error($"Failed to subscribe to game player events: {ex.Message}");
                 Logger.Error($"Stack trace: {ex.StackTrace}");
             }
         }
 
+        /// <summary>
+        /// Subscribes to a static event field on Mono using standard .NET delegates.
+        /// </summary>
+        private static void SubscribeToStandardEvent(Type targetType, string eventName, Delegate handler)
+        {
+            var existing = ReflectionUtils.TryGetStaticFieldOrProperty(targetType, eventName) as Delegate;
+            var combined = existing != null ? Delegate.Combine(existing, handler) : handler;
+            ReflectionUtils.TrySetStaticFieldOrProperty(targetType, eventName, combined);
+        }
+
+#if IL2CPPMELON
+        /// <summary>
+        /// Subscribes to a static event field on IL2CPP using converted delegates.
+        /// Handles both parameterless Action and generic Action&lt;T&gt; events.
+        /// </summary>
+        private static void SubscribeToIL2CPPEvent(Type targetType, string eventName, string methodName, Type? parameterType)
+        {
+            var methodInfo = typeof(PlayerPatches).GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Static);
+            var existing = ReflectionUtils.TryGetStaticFieldOrProperty(targetType, eventName);
+    
+            object il2cppDelegate;
+    
+            if (parameterType == null)
+            {
+                // Action with no parameters
+                var managedAction = (Action)Delegate.CreateDelegate(typeof(Action), methodInfo);
+                il2cppDelegate = DelegateSupport.ConvertDelegate<Il2CppSystem.Action>(managedAction);
+            }
+            else
+            {
+                // Action<Player>
+                var managedActionType = typeof(Action<>).MakeGenericType(parameterType);
+                var managedDelegate = Delegate.CreateDelegate(managedActionType, methodInfo);
+        
+                // Convert using DelegateSupport with the generic IL2CPP Action type
+                var il2cppActionType = typeof(Il2CppSystem.Action<>).MakeGenericType(parameterType);
+                var convertMethod = typeof(DelegateSupport).GetMethod("ConvertDelegate", BindingFlags.Public | BindingFlags.Static);
+                var genericConvert = convertMethod.MakeGenericMethod(il2cppActionType);
+                il2cppDelegate = genericConvert.Invoke(null, new object[] { managedDelegate });
+            }
+    
+            if (existing != null)
+            {
+                var combined = Il2CppSystem.Delegate.Combine(
+                    existing as Il2CppSystem.Delegate, 
+                    il2cppDelegate as Il2CppSystem.Delegate
+                );
+                ReflectionUtils.TrySetStaticFieldOrProperty(targetType, eventName, combined);
+            }
+            else
+            {
+                ReflectionUtils.TrySetStaticFieldOrProperty(targetType, eventName, il2cppDelegate);
+            }
+        }
+#endif
         /// <summary>
         /// INTERNAL: Handler for when the local player spawns.
         /// </summary>

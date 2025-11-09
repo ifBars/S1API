@@ -1,11 +1,11 @@
 #if (IL2CPPMELON)
 using Il2CppScheduleOne.Product;
 using S1MethDefinition = Il2CppScheduleOne.Product.MethDefinition;
-using S1Properties = Il2CppScheduleOne.Properties;
+using S1Properties = Il2CppScheduleOne.Effects;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using ScheduleOne.Product;
 using S1MethDefinition = ScheduleOne.Product.MethDefinition;
-using S1Properties = ScheduleOne.Properties;
+using S1Properties = ScheduleOne.Effects;
 #endif
 
 using System.Collections.Generic;
@@ -66,9 +66,9 @@ namespace S1API.Products
         /// </summary>
         /// <returns>A list of raw Schedule One properties.</returns>
         [System.Obsolete("Use GetProperties() instead for IL2CPP compatibility")]
-        public List<S1Properties.Property> GetRawProperties()
+        public List<S1Properties.Effect> GetRawProperties()
         {
-            var result = new List<S1Properties.Property>();
+            var result = new List<S1Properties.Effect>();
             var list = S1MethDefinition?.Properties;
             if (list != null)
             {

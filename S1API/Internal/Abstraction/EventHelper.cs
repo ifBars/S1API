@@ -16,6 +16,32 @@ namespace S1API.Internal.Abstraction
         internal static readonly Dictionary<Action, Delegate> SubscribedActions = new Dictionary<Action, Delegate>();
 
         /// <summary>
+        /// INTERNAL: Adds a listener to the event, as well as the subscription list.
+        /// </summary>
+        /// <param name="listener">The action / method you want to subscribe.</param>
+        /// <param name="subscribe">The subscribe method to call.</param>
+        internal static void AddListener(Action listener, Action<Action> subscribe)
+        {
+            if (SubscribedActions.ContainsKey(listener))
+                return;
+            subscribe(listener);
+            SubscribedActions.Add(listener, listener);
+        }
+
+        /// <summary>
+        /// INTERNAL: Removes a listener to the event, as well as the subscription list.
+        /// </summary>
+        /// <param name="listener">The action / method you want to unsubscribe.</param>
+        /// <param name="unsubscribe">The unsubscribe method to call.</param>
+        internal static void RemoveListener(Action listener, Action<Action> unsubscribe)
+        {
+            if (!SubscribedActions.TryGetValue(listener, out _))
+                return;
+            unsubscribe(listener);
+            SubscribedActions.Remove(listener);
+        }
+
+        /// <summary>
         /// INTERNAL: Tracking for subscribed generic actions.
         /// Maps Action<T> to UnityAction<T> instances for safe remove on IL2CPP.
         /// </summary>
