@@ -6,6 +6,7 @@ using S1Quests = ScheduleOne.Quests;
 
 using System;
 using S1API.Internal.Abstraction;
+using S1API.Internal.Utils;
 using S1API.Quests.Constants;
 using UnityEngine;
 
@@ -71,7 +72,17 @@ namespace S1API.Quests
                 {
                     transform.position = value;
                 }
-                // If PoILocation is null, we can't set the position (entry has no location)
+                else
+                {
+                    // Backward compatibility: If PoILocation is null but we're setting a position,
+                    // create the transform and enable POI creation (for older mods that set POIPosition after AddEntry)
+                    Transform entryTransform = S1QuestEntry.transform;
+                    S1QuestEntry.PoILocation = entryTransform;
+                    entryTransform.position = value;
+                    
+                    // Enable AutoCreatePoI if it exists (to allow POI marker creation)
+                    ReflectionUtils.TrySetFieldOrProperty(S1QuestEntry, "AutoCreatePoI", true);
+                }
             }
         }
 

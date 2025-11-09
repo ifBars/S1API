@@ -82,9 +82,11 @@ using FishNet.Managing.Object;
 using FishNet.Object;
 #endif
 using MelonLoader;
+using S1API.Entities.Behaviour;
 using S1API.Entities.Interfaces;
 using S1API.Entities.Schedule;
 using S1API.Entities.Customer;
+using S1API.Entities.Equippables;
 using S1API.Entities.Dealer;
 using S1API.Entities.Relation;
 using S1API.Internal;
@@ -1606,6 +1608,11 @@ namespace S1API.Entities
         /// Access to the movement system for controlling NPC movement and navigation.
         /// </summary>
         public NPCMovement Movement => new NPCMovement(this);
+        
+        /// <summary>
+        /// The current <see cref="CombatBehaviour"/> instance.
+        /// </summary>
+        public CombatBehaviour CombatBehaviour => new CombatBehaviour(this);
 
         /// <summary>
         /// Access to the dialogue system for interactive conversations and dialogue trees.
@@ -1695,6 +1702,12 @@ namespace S1API.Entities
             get => S1NPC.ConversationCanBeHidden;
             set => S1NPC.ConversationCanBeHidden = value;
         }
+
+        /// <summary>
+        /// Sets an equippable item for the NPC.
+        /// </summary>
+        /// <param name="assetPath">The asset path to the equippable item. <see cref="Misc"/> can be used here.</param>
+        public void SetEquippable(string assetPath) => S1NPC.SetEquippable_Return(assetPath);
 
         /// <summary>
         /// Gets the instance of an NPC.
