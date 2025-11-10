@@ -1,6 +1,7 @@
 ﻿#if (IL2CPPMELON)
 using S1Loaders = Il2CppScheduleOne.Persistence.Loaders;
 using S1NPCs = Il2CppScheduleOne.NPCs;
+using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
 using S1Map = Il2CppScheduleOne.Map;
 using S1Money = Il2CppScheduleOne.Money;
 using S1Economy = Il2CppScheduleOne.Economy;
@@ -15,6 +16,7 @@ using Il2CppSystem.Collections.Generic;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Loaders = ScheduleOne.Persistence.Loaders;
 using S1NPCs = ScheduleOne.NPCs;
+using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
 using FishNet;
 using FishNet.Object;
 using ScheduleOne.DevUtilities;
@@ -1313,6 +1315,68 @@ namespace S1API.Internal.Patches
             }
 
             return false; // Skip original for custom NPCs
+        }
+
+        /// <summary>
+        /// Fixes the inconsistent comparison function in NPCScheduleManager.InitializeActions()
+        /// that causes sort failures when multiple actions have the same StartTime.
+        /// The original comparison only checks a.IsSignal without comparing to b.IsSignal,
+        /// violating the comparison contract (Compare(a,b) must equal -Compare(b,a)).
+        /// </summary>
+        /// <param name="__instance">NPCScheduleManager instance</param>
+        [HarmonyPatch(typeof(S1NPCs.NPCScheduleManager), nameof(S1NPCs.NPCScheduleManager.InitializeActions))]
+        [HarmonyPrefix]
+        private static bool NPCScheduleManager_InitializeActions_Prefix(S1NPCs.NPCScheduleManager __instance)
+        {
+            if (__instance == null)
+                return true; // Run original if instance is null
+
+            try
+            {
+                // Get all actions including inactive ones (for S1API pooling)
+                var list = __instance.gameObject.GetComponentsInChildren<S1NPCsSchedules.NPCAction>(includeInactive: true).ToList();
+                
+                // Sort with fixed comparison function
+                list.Sort(delegate(S1NPCsSchedules.NPCAction a, S1NPCsSchedules.NPCAction b)
+                {
+                    int timeComparison = a.StartTime.CompareTo(b.StartTime);
+                    if (timeComparison != 0)
+                    {
+                        return timeComparison;
+                    }
+                    // When StartTime is equal, signals come before non-signals
+                    // Both signals or both non-signals = equal (return 0)
+                    if (a.IsSignal == b.IsSignal)
+                    {
+                        return 0;
+                    }
+                    return a.IsSignal ? -1 : 1; // Signal comes before non-signal
+                });
+
+                // Editor-only: rename objects with time descriptions
+                if (!UnityEngine.Application.isPlaying)
+                {
+                    foreach (var item in list)
+                    {
+                        if (item != null && item.transform != null)
+                        {
+                            item.transform.name = item.GetName() + " (" + item.GetTimeDescription() + ")";
+                            item.transform.SetAsLastSibling();
+                        }
+                    }
+                }
+
+                // Set the sorted list (use ReflectionUtils to handle both Mono fields and IL2CPP properties)
+                Utils.ReflectionUtils.TrySetFieldOrProperty(__instance, "ActionList", list);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"NPCScheduleManager_InitializeActions_Prefix failed: {ex.Message}");
+                Logger.Warning($"Stack trace: {ex.StackTrace}");
+                return true; // Fall back to original on error
+            }
+
+            return false; // Skip original method
         }
     }
 }

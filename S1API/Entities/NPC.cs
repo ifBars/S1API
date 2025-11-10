@@ -1226,12 +1226,10 @@ namespace S1API.Entities
             {
                 categories = new ConversationCategoryList();
                 S1NPC.ConversationCategories = categories;
-                Logger.Msg($"EnsureConversationCategoriesInitialized: created list for '{S1NPC?.ID ?? "<null>"}'.");
             }
 
             if (categories.Count == 0)
             {
-                Logger.Msg($"EnsureConversationCategoriesInitialized: list empty for '{S1NPC?.ID ?? "<null>"}', resetting.");
                 ResetConversationCategoriesToDefaults(categories);
             }
 
@@ -1264,12 +1262,10 @@ namespace S1API.Entities
             if (ShouldUseDealerCategory())
             {
                 categories.Add(S1Messaging.EConversationCategory.Dealer);
-                Logger.Msg($"ResetConversationCategoriesToDefaults: dealer category applied to '{S1NPC?.ID ?? "<null>"}'.");
             }
             else
             {
                 categories.Add(S1Messaging.EConversationCategory.Customer);
-                Logger.Msg($"ResetConversationCategoriesToDefaults: customer category applied to '{S1NPC?.ID ?? "<null>"}'.");
             }
         }
 
@@ -2405,7 +2401,17 @@ namespace S1API.Entities
                         {
                             var spec = planned[i];
                             if (spec != null)
-                                spec.ApplyTo(Schedule);
+                            {
+                                try
+                                {
+                                    spec.ApplyTo(Schedule);
+                                }
+                                catch (Exception specEx)
+                                {
+                                    Logger.Error($"Failed to apply schedule spec {i} ({spec.GetType().Name}) for NPC type {t.Name}: {specEx.Message}");
+                                    Logger.Error($"Stack trace: {specEx.StackTrace}");
+                                }
+                            }
                         }
                         Schedule.InitializeActions();
                         Schedule.EnforceState();
@@ -2413,7 +2419,8 @@ namespace S1API.Entities
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"[S1API] Failed to apply planned schedule: {ex.Message}");
+                    Logger.Error($"Failed to apply planned schedule for NPC type {GetType().Name}: {ex.Message}");
+                    Logger.Error($"Stack trace: {ex.StackTrace}");
                 }
 
                 // Apply per-type relationship defaults after base fields are present, unless loaded from save

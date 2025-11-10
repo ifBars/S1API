@@ -24,6 +24,7 @@ using S1API.Entities.Relation;
 using System.Collections.Generic;
 using S1API.Internal.Entities;
 using S1API.Internal.Utils;
+using S1API.Logging;
 
 namespace S1API.Entities
 {
@@ -37,6 +38,7 @@ namespace S1API.Entities
     /// </remarks>
     public sealed class NPCPrefabBuilder
     {
+        private static readonly Log Logger = new Log("NPCPrefabBuilder");
         private readonly GameObject prefabRoot;
         private readonly Type ownerType;
 
@@ -219,8 +221,10 @@ namespace S1API.Entities
                 var specs = planner.Build();
                 return WithSchedule(specs);
             }
-            catch
+            catch (Exception ex)
             {
+                Logger.Error($"Failed to build schedule for NPC type {ownerType?.Name ?? "Unknown"}: {ex.Message}");
+                Logger.Error($"Stack trace: {ex.StackTrace}");
                 return this;
             }
         }
@@ -246,7 +250,11 @@ namespace S1API.Entities
                 // Pre-create actions based on the plan to keep FishNet indices stable
                 PrecreateActionsForSpecs(list);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.Error($"Failed to register schedule plan for NPC type {ownerType?.Name ?? "Unknown"}: {ex.Message}");
+                Logger.Error($"Stack trace: {ex.StackTrace}");
+            }
 
             return this;
         }
@@ -544,7 +552,10 @@ namespace S1API.Entities
                     var schedField = typeof(T).GetField("schedule", BindingFlags.NonPublic | BindingFlags.Instance);
                     schedField?.SetValue(comp, mgr);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"Failed to set npc/schedule fields on prefab action {typeof(T).Name} for NPC type {ownerType?.Name ?? "Unknown"}: {ex.Message}");
+                }
                 go.SetActive(false);
                 comp.enabled = false;
             }

@@ -44,6 +44,17 @@ namespace S1API.Entities.Schedule
         public int StartTime { get; set; }
         
         /// <summary>
+        /// Gets or sets the optional forward direction for the destination marker.
+        /// </summary>
+        /// <value>The forward direction vector, or <c>null</c> to auto-calculate from NPC position to destination.</value>
+        /// <remarks>
+        /// If specified, this vector will be used to orient the destination marker.
+        /// If not specified, the direction will be calculated from the NPC's current position
+        /// to the destination.
+        /// </remarks>
+        public Vector3? Forward { get; set; }
+        
+        /// <summary>
         /// Gets or sets whether the NPC should face the destination direction when walking.
         /// </summary>
         /// <value><c>true</c> to make the NPC face the destination; otherwise, <c>false</c>. Default is <c>true</c>.</value>
@@ -81,10 +92,24 @@ namespace S1API.Entities.Schedule
             if (action == null)
                 return;
 
-            // Calculate forward direction towards current NPC position
-            var look = schedule.NPC.gameObject.transform.position;
-            var forward = (Destination - look);
-            Vector3? forwardDirection = forward.sqrMagnitude > 0.001f ? forward.normalized : null;
+            // Use custom forward direction if provided, otherwise calculate from NPC position to destination
+            Vector3? forwardDirection = null;
+            
+            if (Forward.HasValue && Forward.Value.sqrMagnitude > 0.001f)
+            {
+                // Use and normalize the custom forward direction
+                forwardDirection = Forward.Value.normalized;
+            }
+            else
+            {
+                // Calculate forward direction from NPC position to destination
+                var look = schedule.NPC.gameObject.transform.position;
+                var forward = (Destination - look);
+                if (forward.sqrMagnitude > 0.001f)
+                {
+                    forwardDirection = forward.normalized;
+                }
+            }
 
             // Create destination marker in NPC's dedicated container
             var destinationTransform = NPCDestinationContainer.CreateDestinationMarker(
@@ -96,7 +121,9 @@ namespace S1API.Entities.Schedule
             if (destinationTransform != null)
             {
                 action.Destination = destinationTransform;
-                action.FaceDestinationDir = FaceDestinationDirection;
+                // If a custom forward direction was provided, ensure FaceDestinationDir is true so it's used
+                // Otherwise use the FaceDestinationDirection setting
+                action.FaceDestinationDir = Forward.HasValue && Forward.Value.sqrMagnitude > 0.001f ? true : FaceDestinationDirection;
                 action.DestinationThreshold = Mathf.Max(0.01f, Within);
                 action.WarpIfSkipped = WarpIfSkipped;
             }

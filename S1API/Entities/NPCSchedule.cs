@@ -66,10 +66,10 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Initializes the order/names of the schedules on this NPC.
+        /// Initializes/sorts the order of the schedules on this NPC.
         /// This method is responsible for adding times to the schedule names.
         /// </summary>
-        public void InitializeActions()
+        internal void InitializeActions()
         {
             EnsureManager();
             Manager?.InitializeActions();
@@ -150,9 +150,8 @@ namespace S1API.Entities
                 chosen.gameObject.SetActive(true);
             chosen.enabled = true;
 
-            // Let the manager pick up and sort the action immediately
-            Manager.InitializeActions();
-            Manager.EnforceState();
+            // Note: InitializeActions() and EnforceState() are called after all actions are added in FinalizeNetworkSpawn
+            // Calling them here causes inconsistent sort results when building the schedule
             return chosen;
         }
 
