@@ -891,7 +891,15 @@ namespace S1API.Entities
                     foreach (var dt in allDrugTypes)
                     {
                         var drugType = (S1Product.EDrugType)dt;
-                        var existing = currentAffinity.ProductAffinities.Find(x => x.DrugType == drugType);
+                        S1Economy.ProductTypeAffinity existing = null;
+                        foreach (var item in currentAffinity.ProductAffinities)
+                        {
+                            if (item != null && item.DrugType == drugType)
+                            {
+                                existing = item;
+                                break;
+                            }
+                        }
                         if (existing == null)
                         {
                             // Add missing drug type with neutral affinity
@@ -917,7 +925,15 @@ namespace S1API.Entities
                     foreach (var dt in allDrugTypes)
                     {
                         var drugType = (S1Product.EDrugType)dt;
-                        var existing = customer.currentAffinityData.ProductAffinities.Find(x => x.DrugType == drugType);
+                        S1Economy.ProductTypeAffinity existing = null;
+                        foreach (var item in customer.currentAffinityData.ProductAffinities)
+                        {
+                            if (item != null && item.DrugType == drugType)
+                            {
+                                existing = item;
+                                break;
+                            }
+                        }
                         if (existing == null)
                         {
                             // Add missing drug type with neutral affinity

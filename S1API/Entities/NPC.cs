@@ -970,22 +970,13 @@ namespace S1API.Entities
         protected readonly System.Collections.Generic.List<Response> Responses = new System.Collections.Generic.List<Response>();
 
         /// <summary>
-        /// Base constructor for a new NPC. Defines the NPC's basic identity and unique identifier.
+        /// Base constructor for a new NPC. Identity is configured via <see cref="ConfigurePrefab"/> using <see cref="NPCPrefabBuilder.WithIdentity"/> and optionally <see cref="NPCPrefabBuilder.WithIcon"/>.
         /// </summary>
         /// <remarks>
         /// Not intended for direct instancing. Create your derived class and let S1API handle instancing.
-        /// The ID must be unique across all NPCs and is used for save/load persistence.
+        /// Identity information (ID, firstName, lastName, icon) must be provided in <see cref="ConfigurePrefab"/> using the builder methods.
         /// </remarks>
-        /// <param name="id">Unique identifier used for save/load and game systems. Must be unique and descriptive (e.g., "shopkeeper_alex").</param>
-        /// <param name="firstName">Display name shown in UI elements, dialogue, and messages. Can be null for anonymous NPCs.</param>
-        /// <param name="lastName">Optional last name. Combined with firstName for full name. Can be null.</param>
-        /// <param name="icon">Optional sprite for UI elements (messages, contacts, relationships). Should be 64x64 or 128x128. Uses default if null.</param>
-        protected NPC(
-            string id,
-            string? firstName,
-            string? lastName,
-            Sprite? icon = null
-            )
+        protected NPC()
         {
             IsCustomNPC = true;
 
@@ -1003,10 +994,24 @@ namespace S1API.Entities
 
             // EnsureTextMeshProFonts();
 
-            S1NPC.FirstName = firstName;
-            S1NPC.LastName = lastName;
-            S1NPC.ID = id;
-            S1NPC.MugshotSprite = icon ?? S1DevUtilities.PlayerSingleton<S1ContactApps.ContactsApp>.Instance.AppIcon;
+            // Read identity from NPCPrefabIdentity component (set by ConfigurePrefab via WithIdentity/WithIcon)
+            var identity = gameObject.GetComponent<NPCPrefabIdentity>();
+            if (identity != null)
+            {
+                if (!string.IsNullOrEmpty(identity.Id))
+                    S1NPC.ID = identity.Id;
+                if (!string.IsNullOrEmpty(identity.FirstName))
+                    S1NPC.FirstName = identity.FirstName;
+                if (!string.IsNullOrEmpty(identity.LastName))
+                    S1NPC.LastName = identity.LastName;
+                if (identity.Icon != null)
+                    S1NPC.MugshotSprite = identity.Icon;
+            }
+
+            // Use default icon if none was set
+            if (S1NPC.MugshotSprite == null)
+                S1NPC.MugshotSprite = S1DevUtilities.PlayerSingleton<S1ContactApps.ContactsApp>.Instance.AppIcon;
+
             S1NPC.BakedGUID = Guid.NewGuid().ToString();
             
             EnsureMessageConversationReady(resetDefaults: true);

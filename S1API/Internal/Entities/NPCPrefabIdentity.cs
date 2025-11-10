@@ -28,6 +28,7 @@ namespace S1API.Internal.Entities
         public string Id;
         public string FirstName;
         public string LastName;
+        public Sprite Icon;
         public S1AvatarFramework.AvatarSettings AppearanceDefaults;
 
         // Static registry to preserve data across network instantiation on Il2Cpp
@@ -40,6 +41,7 @@ namespace S1API.Internal.Entities
             public string Id;
             public string FirstName;
             public string LastName;
+            public Sprite Icon;
             public AvatarSettingsData AppearanceDefaults;
         }
 
@@ -80,6 +82,7 @@ namespace S1API.Internal.Entities
                 Id = this.Id,
                 FirstName = this.FirstName,
                 LastName = this.LastName,
+                Icon = this.Icon,
                 AppearanceDefaults = CloneAvatarSettingsData(avatarData)
             };
 
@@ -103,6 +106,7 @@ namespace S1API.Internal.Entities
                 this.Id = data.Id;
                 this.FirstName = data.FirstName;
                 this.LastName = data.LastName;
+                this.Icon = data.Icon;
                 _cachedAppearanceDefaults = CloneAvatarSettingsData(data.AppearanceDefaults);
                 if (_cachedAppearanceDefaults != null)
                     this.AppearanceDefaults = CreateAvatarSettings(_cachedAppearanceDefaults);
@@ -151,6 +155,12 @@ namespace S1API.Internal.Entities
             {
                 if (!string.IsNullOrEmpty(Id))
                     npc.ID = Id;
+            }
+            catch { }
+            try
+            {
+                if (Icon != null)
+                    npc.MugshotSprite = Icon;
             }
             catch { }
 

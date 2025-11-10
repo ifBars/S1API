@@ -104,6 +104,26 @@ namespace S1API.Entities
         }
 
         /// <summary>
+        /// Declares the icon sprite to be embedded on the prefab.
+        /// This sprite is used for UI elements such as messages, contacts, and relationships.
+        /// Should be 64x64 or 128x128 pixels. Uses default if not set.
+        /// </summary>
+        /// <param name="icon">Optional sprite for UI elements. Uses default if null.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public NPCPrefabBuilder WithIcon(Sprite? icon)
+        {
+            try
+            {
+                var identity = EnsureIdentityComponent();
+                identity.Icon = icon;
+                // Register to static cache for Il2Cpp network spawn support
+                identity.RegisterToStaticCache(prefabRoot.name);
+            }
+            catch { }
+            return this;
+        }
+
+        /// <summary>
         /// Declares appearance defaults via a wrapper builder. Values are embedded as an AvatarSettings
         /// asset reference on the prefab and applied to the runtime avatar on spawn (server and clients).
         /// </summary>

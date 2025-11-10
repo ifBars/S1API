@@ -161,7 +161,15 @@ namespace S1API.Entities.Customer
                     {
                         var drugType = (S1Product.EDrugType)parsed;
                         // Find and update existing entry
-                        var existing = _data.DefaultAffinityData.ProductAffinities.Find(x => x.DrugType == drugType);
+                        S1Economy.ProductTypeAffinity existing = null;
+                        foreach (var item in _data.DefaultAffinityData.ProductAffinities)
+                        {
+                            if (item != null && item.DrugType == drugType)
+                            {
+                                existing = item;
+                                break;
+                            }
+                        }
                         if (existing != null)
                         {
                             existing.Affinity = Mathf.Clamp(aff, -1f, 1f);
@@ -199,7 +207,15 @@ namespace S1API.Entities.Customer
                 {
                     var drugType = (S1Product.EDrugType)(int)type;
                     // Find and update existing entry
-                    var existing = _data.DefaultAffinityData.ProductAffinities.Find(x => x.DrugType == drugType);
+                    S1Economy.ProductTypeAffinity existing = null;
+                    foreach (var item in _data.DefaultAffinityData.ProductAffinities)
+                    {
+                        if (item != null && item.DrugType == drugType)
+                        {
+                            existing = item;
+                            break;
+                        }
+                    }
                     if (existing != null)
                     {
                         existing.Affinity = Mathf.Clamp(aff, -1f, 1f);
