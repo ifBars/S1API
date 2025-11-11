@@ -996,17 +996,49 @@ namespace S1API.Entities
 
             // Read identity from NPCPrefabIdentity component (set by ConfigurePrefab via WithIdentity/WithIcon)
             var identity = gameObject.GetComponent<NPCPrefabIdentity>();
+            string id = null;
+            string firstName = null;
+            string lastName = null;
+            Sprite icon = null;
+
             if (identity != null)
             {
-                if (!string.IsNullOrEmpty(identity.Id))
-                    S1NPC.ID = identity.Id;
-                if (!string.IsNullOrEmpty(identity.FirstName))
-                    S1NPC.FirstName = identity.FirstName;
-                if (!string.IsNullOrEmpty(identity.LastName))
-                    S1NPC.LastName = identity.LastName;
-                if (identity.Icon != null)
-                    S1NPC.MugshotSprite = identity.Icon;
+                // On Mono, fields are auto-serialized and available directly
+                // On Il2Cpp, fields may not be populated yet, so check registry
+#if IL2CPPMELON
+                string prefabName = gameObject.name;
+                if (NPCPrefabIdentity.TryGetIdentityFromRegistry(prefabName, out string regId, out string regFirstName, out string regLastName, out Sprite regIcon))
+                {
+                    id = regId;
+                    firstName = regFirstName;
+                    lastName = regLastName;
+                    icon = regIcon;
+                }
+                else
+                {
+                    // Fallback to component fields if registry lookup fails
+                    id = identity.Id;
+                    firstName = identity.FirstName;
+                    lastName = identity.LastName;
+                    icon = identity.Icon;
+                }
+#else
+                id = identity.Id;
+                firstName = identity.FirstName;
+                lastName = identity.LastName;
+                icon = identity.Icon;
+#endif
             }
+
+            // Apply identity values
+            if (!string.IsNullOrEmpty(id))
+                S1NPC.ID = id;
+            if (!string.IsNullOrEmpty(firstName))
+                S1NPC.FirstName = firstName;
+            if (!string.IsNullOrEmpty(lastName))
+                S1NPC.LastName = lastName;
+            if (icon != null)
+                S1NPC.MugshotSprite = icon;
 
             // Use default icon if none was set
             if (S1NPC.MugshotSprite == null)
