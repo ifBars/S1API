@@ -518,48 +518,9 @@ var allQuests = QuestManager.GetAllQuests();
 
 7. **State Management**: Check quest state before making changes to prevent invalid operations
 
-## Integration with NPCs
-
-Quests often integrate with NPCs for triggers and rewards:
-
-```csharp
-using S1API.Entities;
-using S1API.Quests;
-
-public class QuestGiverNPC : NPC
-{
-    private DeliveryQuest _deliveryQuest;
-
-    protected override void OnCreated()
-    {
-        base.OnCreated();
-
-        // Create quest when NPC is created
-        _deliveryQuest = new DeliveryQuest();
-
-        Dialogue.BuildAndSetDatabase(db =>
-        {
-            db.WithModuleEntry("Reactions", "GREETING",
-                "I have a job for you. Check your quest log.");
-        });
-    }
-
-    protected override void OnInteracted()
-    {
-        base.OnInteracted();
-
-        if (_deliveryQuest != null && _deliveryQuest.State == QuestState.Complete)
-        {
-            SendTextMessage("Thanks for completing the delivery!");
-            // Give rewards
-        }
-    }
-}
-```
-
 ## See Also
 
-- [S1NotesApp Example](https://github.com/ifBars/S1API/tree/main/S1NotesApp) - Contains `StarredNoteQuest`
+- [S1NotesApp Example](https://github.com/ifBars/S1NotesApp) - Contains `StarredNoteQuest`
 - [Save System](save-system.md) - For persisting quest data
 - [Custom NPCs](custom-npcs.md) - For quest-giving NPCs
 - [Quests API Reference](../api/S1API.Quests.html)
