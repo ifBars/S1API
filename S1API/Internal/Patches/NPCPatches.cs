@@ -1318,6 +1318,91 @@ namespace S1API.Internal.Patches
         }
 
         /// <summary>
+        /// Guards GetActionsTotallyOccurringWithinRange to skip pre-created disabled NPCAction components
+        /// from S1API's prefab pooling system. These components are inactive and should not be processed
+        /// until they are properly configured and activated by the schedule runtime.
+        /// </summary>
+        [HarmonyPatch(typeof(S1NPCs.NPCScheduleManager), "GetActionsTotallyOccurringWithinRange")]
+        [HarmonyPrefix]
+        private static bool NPCScheduleManager_GetActionsTotallyOccurringWithinRange_Prefix(
+            S1NPCs.NPCScheduleManager __instance,
+            int min,
+            int max,
+            bool checkShouldStart,
+            ref List<S1NPCsSchedules.NPCAction> __result)
+        {
+            if (__instance == null)
+                return true; // Run original if instance is null
+
+            try
+            {
+                // Get the ActionList from the schedule manager
+                var actionList = Utils.ReflectionUtils.TryGetFieldOrProperty(__instance, "ActionList") as List<S1NPCsSchedules.NPCAction>;
+                if (actionList == null)
+                    return true; // Run original if we can't get the list
+
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                var list = new Il2CppSystem.Collections.Generic.List<S1NPCsSchedules.NPCAction>();
+#else
+                var list = new List<S1NPCsSchedules.NPCAction>();
+#endif
+
+                // Iterate through actions, skipping null or inactive (pre-created) ones
+                for (int i = 0; i < actionList.Count; i++)
+                {
+                    var action = actionList[i];
+
+                    // Skip null actions
+                    if (action == null)
+                        continue;
+
+                    // Skip inactive/disabled actions (pre-created pool components)
+                    if (action.gameObject == null || !action.gameObject.activeInHierarchy)
+                        continue;
+
+                    // Check if action should start and if it occurs within the time range
+                    if ((!checkShouldStart || action.ShouldStart()) &&
+                        S1GameTime.TimeManager.IsGivenTimeWithinRange(action.StartTime, min, max) &&
+                        S1GameTime.TimeManager.IsGivenTimeWithinRange(action.GetEndTime(), min, max))
+                    {
+                        list.Add(action);
+                    }
+                }
+
+                // Sort by priority (descending)
+                try
+                {
+                    var orderByDescending = Utils.ReflectionUtils.TryGetFieldOrProperty(__instance, "orderByDescending");
+                    if (orderByDescending != null)
+                    {
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                        var comparer = orderByDescending as Il2CppSystem.Collections.Generic.IComparer<S1NPCsSchedules.NPCAction>;
+                        if (comparer != null)
+                            list.Sort(comparer);
+#else
+                        var comparer = orderByDescending as System.Collections.Generic.IComparer<S1NPCsSchedules.NPCAction>;
+                        if (comparer != null)
+                            list.Sort(comparer);
+#endif
+                    }
+                }
+                catch
+                {
+                    // If sorting fails, continue without sorting
+                }
+
+                __result = list;
+                return false; // Skip original method
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"NPCScheduleManager_GetActionsTotallyOccurringWithinRange_Prefix failed: {ex.Message}");
+                Logger.Warning($"Stack trace: {ex.StackTrace}");
+                return true; // Fall back to original on error
+            }
+        }
+
+        /// <summary>
         /// Fixes the inconsistent comparison function in NPCScheduleManager.InitializeActions()
         /// that causes sort failures when multiple actions have the same StartTime.
         /// The original comparison only checks a.IsSignal without comparing to b.IsSignal,
