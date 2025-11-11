@@ -281,14 +281,6 @@ public sealed class ProfessionalDealer : NPC
             Appearance.Build();
 
             SendTextMessage("Looking for work. Got product to move?");
-
-            // Set up dialogue
-            Dialogue.BuildAndSetDatabase(db =>
-            {
-                db.WithModuleEntry("Reactions", "GREETING",
-                    "I'm a professional. I can move your product reliably.");
-            });
-
             WireDealerEvents();
 
             Aggressiveness = 2f;
@@ -423,7 +415,7 @@ Without `EnsureDealSignal()`, the dealer won't be able to accept or complete con
 
 ## See Also
 
-- [CustomNPCTest Example](https://github.com/ifBars/S1API/tree/main/CustomNPCTest) - Contains `ExamplePhysicalDealerNPC`
+- [CustomNPCTest Example](https://github.com/ifBars/S1APINPCExample) - Contains `ExamplePhysicalDealerNPC`
 - [Custom NPCs](custom-npcs.md) - Core NPC creation guide
 - [Customer Behavior](customer-behavior.md) - For creating customer NPCs
 - [Economy API Reference](../api/S1API.Economy.html)
