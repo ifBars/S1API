@@ -2,6 +2,8 @@
   href: introduction.md
 - name: Getting Started
   href: getting-started.md
+- name: API Overview
+  href: api-overview.md
 - name: Custom NPCs
   href: custom-npcs.md
   items:
@@ -27,6 +29,16 @@
       href: relationship-management.md
     - name: Runtime Management
       href: runtime-management.md
+- name: Dealer System
+  href: dealer-system.md
+- name: Products & Properties
+  href: products-system.md
+- name: Quests
+  href: quests-system.md
+- name: Cartel System
+  href: cartel-system.md
+- name: Items
+  href: items.md
 - name: Phone Apps
   href: phone-app.md
 - name: UI
