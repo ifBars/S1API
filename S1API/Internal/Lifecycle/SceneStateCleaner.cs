@@ -5,6 +5,7 @@ using S1API.Logging;
 using S1API.Map;
 using S1API.Quests;
 using S1API.Internal.Map;
+using S1API.Internal.Patches;
 using UnityEngine;
 
 namespace S1API.Internal.Lifecycle
@@ -58,6 +59,7 @@ namespace S1API.Internal.Lifecycle
                         }
                     }
                     NPC.All.Clear();
+                    NPCPatches.CustomNpcsReady = false; // Reset flag for next scene load
 
                     // Quests: clear S1API quest registry. The base game manages its own instances.
                     int questCount = QuestManager.Quests.Count;

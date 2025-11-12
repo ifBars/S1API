@@ -55,6 +55,8 @@ namespace S1API.Internal.Patches
     internal class NPCPatches
     {
         private static readonly Logging.Log Logger = new Logging.Log("NPCPatches");
+        
+        internal static bool CustomNpcsReady = false;
 
         /// <summary>
         /// Patching performed for when game NPCs are loaded.
@@ -921,6 +923,8 @@ namespace S1API.Internal.Patches
             catch
             {
             }
+
+            CustomNpcsReady = true;
         }
 
         /// <summary>
