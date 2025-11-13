@@ -2333,23 +2333,50 @@ namespace S1API.Entities
                     inventory.ClearInventoryEachNight = data.ClearInventoryEachNight.Value;
 
                 // Apply startup items (handled automatically by NPCInventory.Awake)
+                // Only set if StartupItems hasn't been set yet to avoid duplicate insertion
+                // Check if Awake has already processed items by checking if StartupItems is null or empty
                 if (data.StartupItems != null && data.StartupItems.Count > 0)
                 {
-                    var startupItemsList = new List<S1Items.ItemDefinition>();
-                    foreach (var itemId in data.StartupItems)
+                    // Check if StartupItems is already populated (indicating Awake may have already run)
+                    bool startupItemsAlreadySet = false;
+                    try
                     {
-                        var def = S1Registry.GetItem(itemId);
-                        if (def != null)
-                            startupItemsList.Add(def);
-                    }
-
-                    if (startupItemsList.Count > 0)
-                    {
+                        if (inventory.StartupItems != null)
+                        {
 #if (IL2CPPMELON)
-                        inventory.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(startupItemsList.ToArray());
+                            var il2cppArray = inventory.StartupItems as Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>;
+                            startupItemsAlreadySet = il2cppArray != null && il2cppArray.Length > 0;
 #else
-                        inventory.StartupItems = startupItemsList.ToArray();
+                            var array = inventory.StartupItems as S1Items.ItemDefinition[];
+                            startupItemsAlreadySet = array != null && array.Length > 0;
 #endif
+                        }
+                    }
+                    catch
+                    {
+                        // If check fails, assume not set and proceed
+                        startupItemsAlreadySet = false;
+                    }
+                    
+                    // Only set if not already set to prevent duplicate insertion
+                    if (!startupItemsAlreadySet)
+                    {
+                        var startupItemsList = new List<S1Items.ItemDefinition>();
+                        foreach (var itemId in data.StartupItems)
+                        {
+                            var def = S1Registry.GetItem(itemId);
+                            if (def != null)
+                                startupItemsList.Add(def);
+                        }
+
+                        if (startupItemsList.Count > 0)
+                        {
+#if (IL2CPPMELON)
+                            inventory.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(startupItemsList.ToArray());
+#else
+                            inventory.StartupItems = startupItemsList.ToArray();
+#endif
+                        }
                     }
                 }
             }
@@ -2571,8 +2598,8 @@ namespace S1API.Entities
                     }
                 }
 
-                // Apply random inventory defaults if configured
-                ApplyRandomInventoryDefaults();
+                // Note: Random inventory defaults are applied in InitializeInventoryComponent, not here
+                // to avoid duplicate item insertion when StartupItems is processed by NPCInventory.Awake
 
                 // Apply spawn position for this NPC type (always applied, regardless of save state)
                 try
