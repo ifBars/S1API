@@ -1071,6 +1071,96 @@ namespace S1API.Entities
         }
 
         /// <summary>
+        /// Backwards-compatible constructor for non-physical NPCs that provides identity directly via parameters.
+        /// This constructor is intended for backwards compatibility with mods that used the old constructor pattern.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This constructor is marked as obsolete. For new code, use the parameterless constructor and configure identity
+        /// via <see cref="ConfigurePrefab"/> using <see cref="NPCPrefabBuilder.WithIdentity"/> and optionally <see cref="NPCPrefabBuilder.WithIcon"/>.
+        /// </para>
+        /// <para>
+        /// This constructor is appropriate for non-physical NPCs (where <see cref="IsPhysical"/> returns <c>false</c>) that
+        /// don't require prefab configuration. Physical NPCs should use <see cref="ConfigurePrefab"/> for proper network spawn support.
+        /// </para>
+        /// </remarks>
+        /// <param name="id">Unique identifier for the NPC.</param>
+        /// <param name="firstName">The first name for the NPC.</param>
+        /// <param name="lastName">The last name for the NPC. Can be null.</param>
+        /// <param name="icon">The icon sprite for the NPC. Can be null to use default.</param>
+        [Obsolete("Use the parameterless constructor and configure identity via ConfigurePrefab with NPCPrefabBuilder.WithIdentity. This constructor is provided for backwards compatibility with non-physical NPCs.")]
+        protected NPC(string id, string? firstName, string? lastName, Sprite? icon = null) : this()
+        {
+            bool hasId = !string.IsNullOrEmpty(id);
+            bool hasFirstName = !string.IsNullOrEmpty(firstName);
+            bool hasLastName = !string.IsNullOrEmpty(lastName);
+
+            if (hasId)
+                S1NPC.ID = id!;
+            if (hasFirstName)
+                S1NPC.FirstName = firstName!;
+            if (hasLastName)
+                S1NPC.LastName = lastName!;
+            else
+                S1NPC.hasLastName = false;
+            if (icon != null)
+                S1NPC.MugshotSprite = icon;
+
+            var identity = gameObject.GetComponent<NPCPrefabIdentity>();
+            if (identity != null)
+            {
+                if (hasId)
+                    identity.Id = id!;
+                if (hasFirstName)
+                    identity.FirstName = firstName!;
+                if (hasLastName)
+                    identity.LastName = lastName!;
+                if (icon != null)
+                    identity.Icon = icon;
+
+                identity.RegisterToStaticCache(gameObject.name);
+            }
+
+            if (S1NPC.MugshotSprite == null)
+                S1NPC.MugshotSprite = S1DevUtilities.PlayerSingleton<S1ContactApps.ContactsApp>.Instance.AppIcon;
+
+            string displayName = S1NPC.FirstName;
+            if (string.IsNullOrEmpty(displayName))
+                displayName = hasId ? id! : "UnknownNPC";
+            gameObject.name = displayName;
+
+            // Update the message conversation's contact name if it was already created
+            if (S1NPC.MSGConversation != null)
+            {
+                try
+                {
+                    // Update contactName field/property in MSGConversation
+                    string newContactName = S1NPC.fullName;
+                    if (string.IsNullOrEmpty(newContactName))
+                        newContactName = hasFirstName ? firstName! : (hasId ? id! : "Unknown");
+                    
+                    Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(S1NPC.MSGConversation, "contactName", newContactName);
+
+                    // Refresh the UI to show the updated name
+                    RefreshMessagingIcons();
+                    
+                    // Update the entry name text if UI exists by calling SetIsKnown with current value
+                    var setIsKnownMethod = typeof(S1Messaging.MSGConversation).GetMethod("SetIsKnown", BindingFlags.Public | BindingFlags.Instance);
+                    if (setIsKnownMethod != null)
+                    {
+                        var isKnownValue = Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(S1NPC.MSGConversation, "IsSenderKnown");
+                        bool isKnown = isKnownValue is bool known ? known : true;
+                        setIsKnownMethod.Invoke(S1NPC.MSGConversation, new object[] { isKnown });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"Failed to update MSGConversation contactName for '{S1NPC?.ID ?? "<null>"}': {ex.Message}");
+                }
+            }
+        }
+
+        /// <summary>
         /// Override to configure NPC components and default behavior before the NPC is spawned.
         /// Called during prefab creation to set up spawn position, customer behavior, relationships, and schedules.
         /// </summary>
