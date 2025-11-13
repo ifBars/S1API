@@ -11,6 +11,6 @@ namespace S1API.Entities.Appearances.AccessoryFields
         public const string Belt = "Avatar/Accessories/Waist/Belt/Belt";
         public const string HazmatSuit = "Avatar/Accessories/Waist/HazmatSuit/HazmatSuit";
         public const string PoliceBelt = "Avatar/Accessories/Waist/PoliceBelt/PoliceBelt";
-        public const string PriestGown = "Avatar/Accessories/Neck/PriestGown/PriestGown";
+        public const string PriestGown = "Avatar/Accessories/Waist/PriestGown/PriestGown";
     }
 }
