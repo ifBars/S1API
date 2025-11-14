@@ -122,6 +122,8 @@ namespace S1API.Internal.Patches
                 {
                 }
             }
+
+            CustomNpcsReady = true;
         }
 
         /// <summary>

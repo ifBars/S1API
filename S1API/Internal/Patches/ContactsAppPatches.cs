@@ -20,6 +20,7 @@ using HarmonyLib;
 using MelonLoader;
 using S1API.Entities;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
 
@@ -40,11 +41,14 @@ namespace S1API.Internal.Patches
         [HarmonyPatch(typeof(S1ContactsApp.ContactsApp), "Start")]
         private static bool ContactsApp_Start_Prefix(S1ContactsApp.ContactsApp __instance)
         {
+            // skip patch if in the tutorial
+            if (SceneManager.GetActiveScene().name == "Tutorial") return true;
             if (!_contactsReady)
             {
                 MelonCoroutines.Start(WaitForNPCs(__instance));
                 return false;
             }
+            _contactsReady = false;
 
             return true;
         }
@@ -56,6 +60,8 @@ namespace S1API.Internal.Patches
         [HarmonyPatch(typeof(S1ContactsApp.ContactsApp), "Update")]
         private static bool ContactsApp_Update_Prefix(S1ContactsApp.ContactsApp __instance)
         {
+            // skip patch if in the tutorial
+            if (SceneManager.GetActiveScene().name == "Tutorial") return true;
             return _contactsReady;
         }
 
@@ -74,11 +80,16 @@ namespace S1API.Internal.Patches
             }));
 
             AddRelationCircles(contactsApp);
-            _contactsReady = true;
 
             var originalStart = typeof(S1ContactsApp.ContactsApp)
                 .GetMethod("Start", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            originalStart?.Invoke(contactsApp, null);
+            if (originalStart == null)
+            {
+                Debug.LogError("[ContactsPatches] Couldn't find Start");
+                yield break;
+            }
+            _contactsReady = true;
+            originalStart.Invoke(contactsApp, null);
         }
 
         /// <summary>
