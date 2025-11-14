@@ -86,7 +86,10 @@ namespace S1API.Internal.Patches
         /// </summary>
         private static void AddRelationCircles(S1ContactsApp.ContactsApp contactsApp)
         {
-            var customNPCs = NPC.All.Where(n => n.IsCustomNPC && NPC.IsCustomerType(n.GetType())).ToList();
+            var customNPCs = NPC.All
+                .Where(n => n.IsCustomNPC &&
+                            (NPC.IsCustomerType(n.GetType()) || NPC.IsDealerType(n.GetType())))
+                .ToList();
             var regionUIs = contactsApp.RegionUIs.ToDictionary(r => r.Region, r => r);
             var placeholders = new System.Collections.Generic.Dictionary<NPC, S1Relations.RelationCircle>();
 
@@ -111,6 +114,7 @@ namespace S1API.Internal.Patches
                 var circle = go.GetComponent<S1Relations.RelationCircle>();
                 circle.AssignedNPC = npc.S1NPC;
                 circle.AssignedNPC_ID = npc.S1NPC.ID;
+                EnableDealerIndicator(circle, npc);
                 placeholders[npc] = circle;
             }
 
@@ -618,6 +622,22 @@ namespace S1API.Internal.Patches
 
             var closest = lineStart + lineNorm * t;
             return Vector2.Distance(point, closest);
+        }
+
+        /// <summary>
+        /// Enables the dealer indicator for dealer NPCs if a matching child exists on the relation circle.
+        /// </summary>
+        private static void EnableDealerIndicator(S1Relations.RelationCircle circle, NPC npc)
+        {
+            if (circle == null || npc == null)
+                return;
+
+            var indicator = circle.transform?.Find("DealerIndicator");
+            if (indicator == null)
+                return;
+
+            var isDealer = NPC.IsDealerType(npc.GetType());
+            indicator.gameObject.SetActive(isDealer);
         }
     }
 }
