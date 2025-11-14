@@ -75,7 +75,7 @@ namespace S1API.Internal.Patches
             var customNPCs = NPC.All.Where(n => n.IsCustomNPC).ToList();
             yield return new WaitUntil((Func<bool>)(() =>
             {
-                var allSceneNPCs = Object.FindObjectsOfType<S1NPCs.NPC>();
+                var allSceneNPCs = Object.FindObjectsOfType<S1NPCs.NPC>(true);
                 return customNPCs.All(npc => allSceneNPCs.Any(sn => sn.ID == npc.ID));
             }));
 
