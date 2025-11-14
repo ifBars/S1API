@@ -1071,6 +1071,96 @@ namespace S1API.Entities
         }
 
         /// <summary>
+        /// Backwards-compatible constructor for non-physical NPCs that provides identity directly via parameters.
+        /// This constructor is intended for backwards compatibility with mods that used the old constructor pattern.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This constructor is marked as obsolete. For new code, use the parameterless constructor and configure identity
+        /// via <see cref="ConfigurePrefab"/> using <see cref="NPCPrefabBuilder.WithIdentity"/> and optionally <see cref="NPCPrefabBuilder.WithIcon"/>.
+        /// </para>
+        /// <para>
+        /// This constructor is appropriate for non-physical NPCs (where <see cref="IsPhysical"/> returns <c>false</c>) that
+        /// don't require prefab configuration. Physical NPCs should use <see cref="ConfigurePrefab"/> for proper network spawn support.
+        /// </para>
+        /// </remarks>
+        /// <param name="id">Unique identifier for the NPC.</param>
+        /// <param name="firstName">The first name for the NPC.</param>
+        /// <param name="lastName">The last name for the NPC. Can be null.</param>
+        /// <param name="icon">The icon sprite for the NPC. Can be null to use default.</param>
+        [Obsolete("Use the parameterless constructor and configure identity via ConfigurePrefab with NPCPrefabBuilder.WithIdentity. This constructor is provided for backwards compatibility with non-physical NPCs.")]
+        protected NPC(string id, string? firstName, string? lastName, Sprite? icon = null) : this()
+        {
+            bool hasId = !string.IsNullOrEmpty(id);
+            bool hasFirstName = !string.IsNullOrEmpty(firstName);
+            bool hasLastName = !string.IsNullOrEmpty(lastName);
+
+            if (hasId)
+                S1NPC.ID = id!;
+            if (hasFirstName)
+                S1NPC.FirstName = firstName!;
+            if (hasLastName)
+                S1NPC.LastName = lastName!;
+            else
+                S1NPC.hasLastName = false;
+            if (icon != null)
+                S1NPC.MugshotSprite = icon;
+
+            var identity = gameObject.GetComponent<NPCPrefabIdentity>();
+            if (identity != null)
+            {
+                if (hasId)
+                    identity.Id = id!;
+                if (hasFirstName)
+                    identity.FirstName = firstName!;
+                if (hasLastName)
+                    identity.LastName = lastName!;
+                if (icon != null)
+                    identity.Icon = icon;
+
+                identity.RegisterToStaticCache(gameObject.name);
+            }
+
+            if (S1NPC.MugshotSprite == null)
+                S1NPC.MugshotSprite = S1DevUtilities.PlayerSingleton<S1ContactApps.ContactsApp>.Instance.AppIcon;
+
+            string displayName = S1NPC.FirstName;
+            if (string.IsNullOrEmpty(displayName))
+                displayName = hasId ? id! : "UnknownNPC";
+            gameObject.name = displayName;
+
+            // Update the message conversation's contact name if it was already created
+            if (S1NPC.MSGConversation != null)
+            {
+                try
+                {
+                    // Update contactName field/property in MSGConversation
+                    string newContactName = S1NPC.fullName;
+                    if (string.IsNullOrEmpty(newContactName))
+                        newContactName = hasFirstName ? firstName! : (hasId ? id! : "Unknown");
+                    
+                    Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(S1NPC.MSGConversation, "contactName", newContactName);
+
+                    // Refresh the UI to show the updated name
+                    RefreshMessagingIcons();
+                    
+                    // Update the entry name text if UI exists by calling SetIsKnown with current value
+                    var setIsKnownMethod = typeof(S1Messaging.MSGConversation).GetMethod("SetIsKnown", BindingFlags.Public | BindingFlags.Instance);
+                    if (setIsKnownMethod != null)
+                    {
+                        var isKnownValue = Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(S1NPC.MSGConversation, "IsSenderKnown");
+                        bool isKnown = isKnownValue is bool known ? known : true;
+                        setIsKnownMethod.Invoke(S1NPC.MSGConversation, new object[] { isKnown });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"Failed to update MSGConversation contactName for '{S1NPC?.ID ?? "<null>"}': {ex.Message}");
+                }
+            }
+        }
+
+        /// <summary>
         /// Override to configure NPC components and default behavior before the NPC is spawned.
         /// Called during prefab creation to set up spawn position, customer behavior, relationships, and schedules.
         /// </summary>
@@ -2243,23 +2333,50 @@ namespace S1API.Entities
                     inventory.ClearInventoryEachNight = data.ClearInventoryEachNight.Value;
 
                 // Apply startup items (handled automatically by NPCInventory.Awake)
+                // Only set if StartupItems hasn't been set yet to avoid duplicate insertion
+                // Check if Awake has already processed items by checking if StartupItems is null or empty
                 if (data.StartupItems != null && data.StartupItems.Count > 0)
                 {
-                    var startupItemsList = new List<S1Items.ItemDefinition>();
-                    foreach (var itemId in data.StartupItems)
+                    // Check if StartupItems is already populated (indicating Awake may have already run)
+                    bool startupItemsAlreadySet = false;
+                    try
                     {
-                        var def = S1Registry.GetItem(itemId);
-                        if (def != null)
-                            startupItemsList.Add(def);
-                    }
-
-                    if (startupItemsList.Count > 0)
-                    {
+                        if (inventory.StartupItems != null)
+                        {
 #if (IL2CPPMELON)
-                        inventory.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(startupItemsList.ToArray());
+                            var il2cppArray = inventory.StartupItems as Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>;
+                            startupItemsAlreadySet = il2cppArray != null && il2cppArray.Length > 0;
 #else
-                        inventory.StartupItems = startupItemsList.ToArray();
+                            var array = inventory.StartupItems as S1Items.ItemDefinition[];
+                            startupItemsAlreadySet = array != null && array.Length > 0;
 #endif
+                        }
+                    }
+                    catch
+                    {
+                        // If check fails, assume not set and proceed
+                        startupItemsAlreadySet = false;
+                    }
+                    
+                    // Only set if not already set to prevent duplicate insertion
+                    if (!startupItemsAlreadySet)
+                    {
+                        var startupItemsList = new List<S1Items.ItemDefinition>();
+                        foreach (var itemId in data.StartupItems)
+                        {
+                            var def = S1Registry.GetItem(itemId);
+                            if (def != null)
+                                startupItemsList.Add(def);
+                        }
+
+                        if (startupItemsList.Count > 0)
+                        {
+#if (IL2CPPMELON)
+                            inventory.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(startupItemsList.ToArray());
+#else
+                            inventory.StartupItems = startupItemsList.ToArray();
+#endif
+                        }
                     }
                 }
             }
@@ -2481,8 +2598,8 @@ namespace S1API.Entities
                     }
                 }
 
-                // Apply random inventory defaults if configured
-                ApplyRandomInventoryDefaults();
+                // Note: Random inventory defaults are applied in InitializeInventoryComponent, not here
+                // to avoid duplicate item insertion when StartupItems is processed by NPCInventory.Awake
 
                 // Apply spawn position for this NPC type (always applied, regardless of save state)
                 try

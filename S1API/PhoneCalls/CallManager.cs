@@ -81,7 +81,10 @@ namespace S1API.PhoneCalls
             }
 
             var callInterface = S1UIPhone.CallInterface.Instance;
-            if (callInterface == null) return;
+            if (callInterface == null)
+            {
+                return;
+            }
 
             // If there's an active call in progress, wait until it completes.
             if (callInterface.ActiveCallData != null)
@@ -137,6 +140,7 @@ namespace S1API.PhoneCalls
             {
                 return;
             }
+
             IsDispatchingToGameQueue = true;
             try
             {

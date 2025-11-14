@@ -495,26 +495,11 @@ namespace S1API.Entities
                 if (data.ClearInventoryEachNight.HasValue)
                     inventory.ClearInventoryEachNight = data.ClearInventoryEachNight.Value;
 
-                // Apply startup items
-                if (data.StartupItems != null && data.StartupItems.Count > 0)
-                {
-                    var startupItemsList = new List<S1Items.ItemDefinition>();
-                    foreach (var itemId in data.StartupItems)
-                    {
-                        var def = S1Registry.GetItem(itemId);
-                        if (def != null)
-                            startupItemsList.Add(def);
-                    }
-
-                    if (startupItemsList.Count > 0)
-                    {
-#if (IL2CPPMELON)
-                        inventory.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(startupItemsList.ToArray());
-#else
-                        inventory.StartupItems = startupItemsList.ToArray();
-#endif
-                    }
-                }
+                // Do NOT set StartupItems here on the prefab - they will be set during runtime initialization
+                // in NPC.InitializeInventoryComponent to avoid duplicate insertion when NPCInventory.Awake runs.
+                // StartupItems are processed by NPCInventory.Awake, and setting them on the prefab causes
+                // items to be inserted when the prefab is instantiated, then again when ApplyRandomInventoryDefaults
+                // sets them during initialization.
             }
             catch (Exception ex)
             {
