@@ -57,6 +57,25 @@ namespace S1API.Internal.Patches
         private static readonly Logging.Log Logger = new Logging.Log("NPCPatches");
 
         /// <summary>
+        /// Comparison function for sorting NPCAction by StartTime, with signals coming before non-signals when times are equal.
+        /// </summary>
+        private static int CompareNPCActions(S1NPCsSchedules.NPCAction a, S1NPCsSchedules.NPCAction b)
+        {
+            int timeComparison = a.StartTime.CompareTo(b.StartTime);
+            if (timeComparison != 0)
+            {
+                return timeComparison;
+            }
+            // When StartTime is equal, signals come before non-signals
+            // Both signals or both non-signals = equal (return 0)
+            if (a.IsSignal == b.IsSignal)
+            {
+                return 0;
+            }
+            return a.IsSignal ? -1 : 1; // Signal comes before non-signal
+        }
+
+        /// <summary>
         /// Patching performed for when game NPCs are loaded.
         /// </summary>
         /// <param name="__instance">NPCsLoader</param>
@@ -1337,9 +1356,25 @@ namespace S1API.Internal.Patches
             try
             {
                 // Get the ActionList from the schedule manager
-                var actionList = Utils.ReflectionUtils.TryGetFieldOrProperty(__instance, "ActionList") as List<S1NPCsSchedules.NPCAction>;
-                if (actionList == null)
+                var actionListObj = Utils.ReflectionUtils.TryGetFieldOrProperty(__instance, "ActionList");
+                if (actionListObj == null)
                     return true; // Run original if we can't get the list
+
+                // Handle both System.List and Il2CppList types
+                int actionCount = 0;
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                var il2cppList = actionListObj as Il2CppSystem.Collections.Generic.List<S1NPCsSchedules.NPCAction>;
+                if (il2cppList != null)
+                    actionCount = il2cppList.Count;
+                else
+                    return true; // Unexpected type, fall back to original
+#else
+                var monoList = actionListObj as List<S1NPCsSchedules.NPCAction>;
+                if (monoList != null)
+                    actionCount = monoList.Count;
+                else
+                    return true; // Unexpected type, fall back to original
+#endif
 
 #if (IL2CPPMELON || IL2CPPBEPINEX)
                 var list = new Il2CppSystem.Collections.Generic.List<S1NPCsSchedules.NPCAction>();
@@ -1348,9 +1383,14 @@ namespace S1API.Internal.Patches
 #endif
 
                 // Iterate through actions, skipping null or inactive (pre-created) ones
-                for (int i = 0; i < actionList.Count; i++)
+                for (int i = 0; i < actionCount; i++)
                 {
-                    var action = actionList[i];
+                    S1NPCsSchedules.NPCAction action = null;
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                    action = il2cppList[i];
+#else
+                    action = monoList[i];
+#endif
 
                     // Skip null actions
                     if (action == null)
@@ -1419,30 +1459,63 @@ namespace S1API.Internal.Patches
             try
             {
                 // Get all actions including inactive ones (for S1API pooling)
-                var list = __instance.gameObject.GetComponentsInChildren<S1NPCsSchedules.NPCAction>(includeInactive: true).ToList();
+                var actionsArray = __instance.gameObject.GetComponentsInChildren<S1NPCsSchedules.NPCAction>(includeInactive: true);
+                
+                // Create appropriate list type for the platform
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                var list = new Il2CppSystem.Collections.Generic.List<S1NPCsSchedules.NPCAction>();
+#else
+                var list = new List<S1NPCsSchedules.NPCAction>();
+#endif
+                
+                // Add all actions to the list
+                for (int i = 0; i < actionsArray.Length; i++)
+                {
+                    if (actionsArray[i] != null)
+                        list.Add(actionsArray[i]);
+                }
                 
                 // Sort with fixed comparison function
-                list.Sort(delegate(S1NPCsSchedules.NPCAction a, S1NPCsSchedules.NPCAction b)
+                // Use manual bubble sort for IL2CPP compatibility (can't use delegates or IComparer easily)
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                // Manual sort for IL2CPP - convert to array, sort, rebuild list
+                var sortArray = new S1NPCsSchedules.NPCAction[list.Count];
+                for (int i = 0; i < list.Count; i++)
                 {
-                    int timeComparison = a.StartTime.CompareTo(b.StartTime);
-                    if (timeComparison != 0)
+                    sortArray[i] = list[i];
+                }
+                
+                // Simple bubble sort (acceptable for small action lists)
+                for (int i = 0; i < sortArray.Length - 1; i++)
+                {
+                    for (int j = 0; j < sortArray.Length - i - 1; j++)
                     {
-                        return timeComparison;
+                        if (CompareNPCActions(sortArray[j], sortArray[j + 1]) > 0)
+                        {
+                            var temp = sortArray[j];
+                            sortArray[j] = sortArray[j + 1];
+                            sortArray[j + 1] = temp;
+                        }
                     }
-                    // When StartTime is equal, signals come before non-signals
-                    // Both signals or both non-signals = equal (return 0)
-                    if (a.IsSignal == b.IsSignal)
-                    {
-                        return 0;
-                    }
-                    return a.IsSignal ? -1 : 1; // Signal comes before non-signal
-                });
+                }
+                
+                // Rebuild the list
+                list.Clear();
+                for (int i = 0; i < sortArray.Length; i++)
+                {
+                    list.Add(sortArray[i]);
+                }
+#else
+                // Mono can use Comparison<T> delegate
+                list.Sort(CompareNPCActions);
+#endif
 
                 // Editor-only: rename objects with time descriptions
                 if (!UnityEngine.Application.isPlaying)
                 {
-                    foreach (var item in list)
+                    for (int i = 0; i < list.Count; i++)
                     {
+                        var item = list[i];
                         if (item != null && item.transform != null)
                         {
                             item.transform.name = item.GetName() + " (" + item.GetTimeDescription() + ")";
@@ -1452,7 +1525,21 @@ namespace S1API.Internal.Patches
                 }
 
                 // Set the sorted list (use ReflectionUtils to handle both Mono fields and IL2CPP properties)
-                Utils.ReflectionUtils.TrySetFieldOrProperty(__instance, "ActionList", list);
+                bool setSuccess = Utils.ReflectionUtils.TrySetFieldOrProperty(__instance, "ActionList", list);
+                if (!setSuccess)
+                {
+                    Logger.Warning($"NPCScheduleManager_InitializeActions_Prefix: Failed to set ActionList on {__instance?.GetType().Name ?? "null"}");
+                    // Try to get the property/field type to debug
+                    try
+                    {
+                        var prop = __instance.GetType().GetProperty("ActionList", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                        var field = __instance.GetType().GetField("ActionList", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                        var memberType = prop?.PropertyType ?? field?.FieldType;
+                        Logger.Warning($"ActionList member type: {memberType?.FullName ?? "null"}, list type: {list.GetType().FullName}");
+                    }
+                    catch { }
+                    return true; // Fall back to original on failure
+                }
             }
             catch (Exception ex)
             {
