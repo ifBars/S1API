@@ -62,12 +62,11 @@ namespace S1API.Quests
         /// The current quest state for this quest
         /// </summary>
         protected QuestState QuestState => (QuestState)S1Quest.State;
-
-        // ReSharper disable once MemberCanBePrivate.Global
+        
         /// <summary>
         /// A list of all quest entries added to this quest.
         /// </summary>
-        protected readonly System.Collections.Generic.List<QuestEntry> QuestEntries = new System.Collections.Generic.List<QuestEntry>();
+        public readonly System.Collections.Generic.List<QuestEntry> QuestEntries = new System.Collections.Generic.List<QuestEntry>();
 
         [SaveableField("QuestData")]
         private readonly QuestData _questData;
@@ -199,6 +198,12 @@ namespace S1API.Quests
         /// <param name="questState">The state it ended in.</param>
         internal void OnQuestEnded(S1Quests.EQuestState questState)
         {
+            // Fire OnFail event if quest failed
+            if (questState == S1Quests.EQuestState.Failed)
+            {
+                OnFail?.Invoke();
+            }
+            
             // Cleanup our quest in the API manager as well as game quests list
             S1Quests.Quest.Quests.Remove(S1Quest);
             QuestManager.Quests.Remove(this);
@@ -317,6 +322,11 @@ namespace S1API.Quests
             add => EventHelper.AddListener(value, S1Quest.onComplete);
             remove => EventHelper.RemoveListener(value, S1Quest.onComplete);
         }
+
+        /// <summary>
+        /// An action called once a quest has been failed.
+        /// </summary>
+        public event Action? OnFail;
 
         /// <summary>
         /// Starts the quest for the save file.
