@@ -33,5 +33,7 @@ namespace S1API.Entities.Appearances.CustomizationFields
         public const string ShoulderLength = "Avatar/Hair/shoulderlength/ShoulderLength";
         public const string SidePartBob = "Avatar/Hair/sidepartbob/SidePartBob";
         public const string Spiky = "Avatar/Hair/spiky/Spiky";
+        public const string CloseBuzzCut = "Avatar/Hair/closebuzzcut/CloseBuzzCut";
+        public const string Tony = "Avatar/Hair/tony/Tony";
     }
 }

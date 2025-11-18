@@ -8,7 +8,7 @@ namespace S1API.Entities.Appearances.FaceLayerFields
     public class Face : BaseFaceAppearance
     {
         public const string Agape = "Avatar/Layers/Face/Face_Agape";
-        public const string Agited = "Avatar/Layers/Face/Face_Agited";
+        public const string Agitated = "Avatar/Layers/Face/Face_Agitated";
         public const string FrownPout = "Avatar/Layers/Face/Face_FrownPout";
         public const string Neutral = "Avatar/Layers/Face/Face_Neutral";
         public const string NeutralPout = "Avatar/Layers/Face/Face_NeutralPout";
@@ -19,5 +19,6 @@ namespace S1API.Entities.Appearances.FaceLayerFields
         public const string Smile = "Avatar/Layers/Face/Face_Smile";
         public const string SmugPout = "Avatar/Layers/Face/Face_SmugPout";
         public const string Surprised = "Avatar/Layers/Face/Face_Surprised";
+        public const string FaceTattoos1 = "Avatar/Layers/Face/FaceTattoos1";
     }
 }

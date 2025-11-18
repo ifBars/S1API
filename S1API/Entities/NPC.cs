@@ -82,9 +82,11 @@ using FishNet.Managing.Object;
 using FishNet.Object;
 #endif
 using MelonLoader;
+using S1API.Entities.Behaviour;
 using S1API.Entities.Interfaces;
 using S1API.Entities.Schedule;
 using S1API.Entities.Customer;
+using S1API.Entities.Equippables;
 using S1API.Entities.Dealer;
 using S1API.Entities.Relation;
 using S1API.Internal;
@@ -852,7 +854,31 @@ namespace S1API.Entities
 #endif
                 dealerComponent.SellInsufficientQualityItems = data.SellInsufficientQualityItems;
                 dealerComponent.SellExcessQualityItems = data.SellExcessQualityItems;
-                // Note: HomeName and CompletedDealsVariable would need to be set via other means
+                
+                // Set Home building if provided
+                if (data.Home != null)
+                {
+                    var homeBuilding = data.Home.ResolveGameBuilding();
+                    if (homeBuilding != null)
+                    {
+                        Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(dealerComponent, "Home", homeBuilding);
+                    }
+                }
+                else if (!string.IsNullOrEmpty(data.HomeName))
+                {
+                    // Fallback: try to find building by name if Home wasn't set
+                    var building = Map.Building.GetByName(data.HomeName);
+                    if (building != null)
+                    {
+                        var homeBuilding = building.ResolveGameBuilding();
+                        if (homeBuilding != null)
+                        {
+                            Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(dealerComponent, "Home", homeBuilding);
+                        }
+                    }
+                }
+                
+                // Note: CompletedDealsVariable would need to be set via other means
                 return true;
             }
             catch
@@ -968,22 +994,13 @@ namespace S1API.Entities
         protected readonly System.Collections.Generic.List<Response> Responses = new System.Collections.Generic.List<Response>();
 
         /// <summary>
-        /// Base constructor for a new NPC. Defines the NPC's basic identity and unique identifier.
+        /// Base constructor for a new NPC. Identity is configured via <see cref="ConfigurePrefab"/> using <see cref="NPCPrefabBuilder.WithIdentity"/> and optionally <see cref="NPCPrefabBuilder.WithIcon"/>.
         /// </summary>
         /// <remarks>
         /// Not intended for direct instancing. Create your derived class and let S1API handle instancing.
-        /// The ID must be unique across all NPCs and is used for save/load persistence.
+        /// Identity information (ID, firstName, lastName, icon) must be provided in <see cref="ConfigurePrefab"/> using the builder methods.
         /// </remarks>
-        /// <param name="id">Unique identifier used for save/load and game systems. Must be unique and descriptive (e.g., "shopkeeper_alex").</param>
-        /// <param name="firstName">Display name shown in UI elements, dialogue, and messages. Can be null for anonymous NPCs.</param>
-        /// <param name="lastName">Optional last name. Combined with firstName for full name. Can be null.</param>
-        /// <param name="icon">Optional sprite for UI elements (messages, contacts, relationships). Should be 64x64 or 128x128. Uses default if null.</param>
-        protected NPC(
-            string id,
-            string? firstName,
-            string? lastName,
-            Sprite? icon = null
-            )
+        protected NPC()
         {
             IsCustomNPC = true;
 
@@ -1001,10 +1018,56 @@ namespace S1API.Entities
 
             // EnsureTextMeshProFonts();
 
-            S1NPC.FirstName = firstName;
-            S1NPC.LastName = lastName;
-            S1NPC.ID = id;
-            S1NPC.MugshotSprite = icon ?? S1DevUtilities.PlayerSingleton<S1ContactApps.ContactsApp>.Instance.AppIcon;
+            // Read identity from NPCPrefabIdentity component (set by ConfigurePrefab via WithIdentity/WithIcon)
+            var identity = gameObject.GetComponent<NPCPrefabIdentity>();
+            string id = null;
+            string firstName = null;
+            string lastName = null;
+            Sprite icon = null;
+
+            if (identity != null)
+            {
+                // On Mono, fields are auto-serialized and available directly
+                // On Il2Cpp, fields may not be populated yet, so check registry
+#if IL2CPPMELON
+                string prefabName = gameObject.name;
+                if (NPCPrefabIdentity.TryGetIdentityFromRegistry(prefabName, out string regId, out string regFirstName, out string regLastName, out Sprite regIcon))
+                {
+                    id = regId;
+                    firstName = regFirstName;
+                    lastName = regLastName;
+                    icon = regIcon;
+                }
+                else
+                {
+                    // Fallback to component fields if registry lookup fails
+                    id = identity.Id;
+                    firstName = identity.FirstName;
+                    lastName = identity.LastName;
+                    icon = identity.Icon;
+                }
+#else
+                id = identity.Id;
+                firstName = identity.FirstName;
+                lastName = identity.LastName;
+                icon = identity.Icon;
+#endif
+            }
+
+            // Apply identity values
+            if (!string.IsNullOrEmpty(id))
+                S1NPC.ID = id;
+            if (!string.IsNullOrEmpty(firstName))
+                S1NPC.FirstName = firstName;
+            if (!string.IsNullOrEmpty(lastName))
+                S1NPC.LastName = lastName;
+            if (icon != null)
+                S1NPC.MugshotSprite = icon;
+
+            // Use default icon if none was set
+            if (S1NPC.MugshotSprite == null)
+                S1NPC.MugshotSprite = S1DevUtilities.PlayerSingleton<S1ContactApps.ContactsApp>.Instance.AppIcon;
+
             S1NPC.BakedGUID = Guid.NewGuid().ToString();
             
             EnsureMessageConversationReady(resetDefaults: true);
@@ -1029,6 +1092,96 @@ namespace S1API.Entities
             }
 
             All.Add(this);
+        }
+
+        /// <summary>
+        /// Backwards-compatible constructor for non-physical NPCs that provides identity directly via parameters.
+        /// This constructor is intended for backwards compatibility with mods that used the old constructor pattern.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This constructor is marked as obsolete. For new code, use the parameterless constructor and configure identity
+        /// via <see cref="ConfigurePrefab"/> using <see cref="NPCPrefabBuilder.WithIdentity"/> and optionally <see cref="NPCPrefabBuilder.WithIcon"/>.
+        /// </para>
+        /// <para>
+        /// This constructor is appropriate for non-physical NPCs (where <see cref="IsPhysical"/> returns <c>false</c>) that
+        /// don't require prefab configuration. Physical NPCs should use <see cref="ConfigurePrefab"/> for proper network spawn support.
+        /// </para>
+        /// </remarks>
+        /// <param name="id">Unique identifier for the NPC.</param>
+        /// <param name="firstName">The first name for the NPC.</param>
+        /// <param name="lastName">The last name for the NPC. Can be null.</param>
+        /// <param name="icon">The icon sprite for the NPC. Can be null to use default.</param>
+        [Obsolete("Use the parameterless constructor and configure identity via ConfigurePrefab with NPCPrefabBuilder.WithIdentity. This constructor is provided for backwards compatibility with non-physical NPCs.")]
+        protected NPC(string id, string? firstName, string? lastName, Sprite? icon = null) : this()
+        {
+            bool hasId = !string.IsNullOrEmpty(id);
+            bool hasFirstName = !string.IsNullOrEmpty(firstName);
+            bool hasLastName = !string.IsNullOrEmpty(lastName);
+
+            if (hasId)
+                S1NPC.ID = id!;
+            if (hasFirstName)
+                S1NPC.FirstName = firstName!;
+            if (hasLastName)
+                S1NPC.LastName = lastName!;
+            else
+                S1NPC.hasLastName = false;
+            if (icon != null)
+                S1NPC.MugshotSprite = icon;
+
+            var identity = gameObject.GetComponent<NPCPrefabIdentity>();
+            if (identity != null)
+            {
+                if (hasId)
+                    identity.Id = id!;
+                if (hasFirstName)
+                    identity.FirstName = firstName!;
+                if (hasLastName)
+                    identity.LastName = lastName!;
+                if (icon != null)
+                    identity.Icon = icon;
+
+                identity.RegisterToStaticCache(gameObject.name);
+            }
+
+            if (S1NPC.MugshotSprite == null)
+                S1NPC.MugshotSprite = S1DevUtilities.PlayerSingleton<S1ContactApps.ContactsApp>.Instance.AppIcon;
+
+            string displayName = S1NPC.FirstName;
+            if (string.IsNullOrEmpty(displayName))
+                displayName = hasId ? id! : "UnknownNPC";
+            gameObject.name = displayName;
+
+            // Update the message conversation's contact name if it was already created
+            if (S1NPC.MSGConversation != null)
+            {
+                try
+                {
+                    // Update contactName field/property in MSGConversation
+                    string newContactName = S1NPC.fullName;
+                    if (string.IsNullOrEmpty(newContactName))
+                        newContactName = hasFirstName ? firstName! : (hasId ? id! : "Unknown");
+                    
+                    Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(S1NPC.MSGConversation, "contactName", newContactName);
+
+                    // Refresh the UI to show the updated name
+                    RefreshMessagingIcons();
+                    
+                    // Update the entry name text if UI exists by calling SetIsKnown with current value
+                    var setIsKnownMethod = typeof(S1Messaging.MSGConversation).GetMethod("SetIsKnown", BindingFlags.Public | BindingFlags.Instance);
+                    if (setIsKnownMethod != null)
+                    {
+                        var isKnownValue = Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(S1NPC.MSGConversation, "IsSenderKnown");
+                        bool isKnown = isKnownValue is bool known ? known : true;
+                        setIsKnownMethod.Invoke(S1NPC.MSGConversation, new object[] { isKnown });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"Failed to update MSGConversation contactName for '{S1NPC?.ID ?? "<null>"}': {ex.Message}");
+                }
+            }
         }
 
         /// <summary>
@@ -1224,12 +1377,10 @@ namespace S1API.Entities
             {
                 categories = new ConversationCategoryList();
                 S1NPC.ConversationCategories = categories;
-                Logger.Msg($"EnsureConversationCategoriesInitialized: created list for '{S1NPC?.ID ?? "<null>"}'.");
             }
 
             if (categories.Count == 0)
             {
-                Logger.Msg($"EnsureConversationCategoriesInitialized: list empty for '{S1NPC?.ID ?? "<null>"}', resetting.");
                 ResetConversationCategoriesToDefaults(categories);
             }
 
@@ -1262,12 +1413,10 @@ namespace S1API.Entities
             if (ShouldUseDealerCategory())
             {
                 categories.Add(S1Messaging.EConversationCategory.Dealer);
-                Logger.Msg($"ResetConversationCategoriesToDefaults: dealer category applied to '{S1NPC?.ID ?? "<null>"}'.");
             }
             else
             {
                 categories.Add(S1Messaging.EConversationCategory.Customer);
-                Logger.Msg($"ResetConversationCategoriesToDefaults: customer category applied to '{S1NPC?.ID ?? "<null>"}'.");
             }
         }
 
@@ -1606,6 +1755,11 @@ namespace S1API.Entities
         /// Access to the movement system for controlling NPC movement and navigation.
         /// </summary>
         public NPCMovement Movement => new NPCMovement(this);
+        
+        /// <summary>
+        /// The current <see cref="CombatBehaviour"/> instance.
+        /// </summary>
+        public CombatBehaviour CombatBehaviour => new CombatBehaviour(this);
 
         /// <summary>
         /// Access to the dialogue system for interactive conversations and dialogue trees.
@@ -1695,6 +1849,12 @@ namespace S1API.Entities
             get => S1NPC.ConversationCanBeHidden;
             set => S1NPC.ConversationCanBeHidden = value;
         }
+
+        /// <summary>
+        /// Sets an equippable item for the NPC.
+        /// </summary>
+        /// <param name="assetPath">The asset path to the equippable item. <see cref="Misc"/> can be used here.</param>
+        public void SetEquippable(string assetPath) => S1NPC.SetEquippable_Return(assetPath);
 
         /// <summary>
         /// Gets the instance of an NPC.
@@ -2097,45 +2257,6 @@ namespace S1API.Entities
             if (S1NPC.Inventory == null)
                 S1NPC.Inventory = gameObject.GetComponentInChildren<S1NPCs.NPCInventory>(true) ?? gameObject.AddComponent<S1NPCs.NPCInventory>();
 
-            // Guarantee slots exist to support capacity checks and insertions
-            try
-            {
-                if (S1NPC.Inventory.ItemSlots == null || S1NPC.Inventory.ItemSlots.Count == 0)
-                {
-                    for (int i = 0; i < S1NPC.Inventory.SlotCount; i++)
-                    {
-                        var slot = new S1Items.ItemSlot();
-#if MONOMELON
-                        slot.SetSlotOwner(S1NPC.Inventory);
-#else
-                        slot.SetSlotOwner(S1NPC.Inventory.Cast<S1Items.IItemSlotOwner>());
-#endif
-#if (IL2CPPMELON || IL2CPPBEPINEX)
-                        System.Action handler = new System.Action(() =>
-                        {
-                    if (S1NPC.Inventory != null && S1NPC.Inventory.onContentsChanged != null)
-                        S1NPC.Inventory.onContentsChanged.Invoke();
-                        });
-                        slot.onItemDataChanged = (Il2CppSystem.Action)Il2CppSystem.Delegate.Combine(
-                            slot.onItemDataChanged,
-                            (Il2CppSystem.Action)handler
-                        );
-#else
-                        slot.onItemDataChanged = (Action)Delegate.Combine(
-                            slot.onItemDataChanged,
-                    new Action(() =>
-                    {
-                        if (S1NPC.Inventory != null && S1NPC.Inventory.onContentsChanged != null)
-                            S1NPC.Inventory.onContentsChanged.Invoke();
-                    })
-                        );
-#endif
-                        S1NPC.Inventory.ItemSlots.Add(slot);
-                    }
-                }
-            }
-            catch { /* ignore */ }
-
             if (S1NPC.Inventory.PickpocketIntObj == null)
             {
                 S1Interaction.InteractableObject? talkInteractable = GetPrimaryInteractable();
@@ -2153,8 +2274,12 @@ namespace S1API.Entities
 
         private void InitializeRelationshipData()
         {
+            string npcId = S1NPC?.ID ?? "<null>";
+            
             if (S1NPC.RelationData == null)
+            {
                 S1NPC.RelationData = new S1Relation.NPCRelationData();
+            }
 
             // Ensure the relation data is bound to this NPC and initialized
             try
@@ -2163,8 +2288,17 @@ namespace S1API.Entities
                 {
                     S1NPC.RelationData.Init(S1NPC);
                 }
+                else
+                {
+                    Logger.Warning($"[NPC] InitializeRelationshipData: RelationData is still null after creation attempt for NPC '{npcId}'");
+                }
             }
-            catch { /* ignore: base game will handle in its own lifecycle if not ready */ }
+            catch (Exception ex)
+            {
+                Logger.Error($"[NPC] InitializeRelationshipData: Exception during Init() for NPC '{npcId}': {ex.Message}");
+                Logger.Error($"[NPC] InitializeRelationshipData: Stack trace: {ex.StackTrace}");
+                /* ignore: base game will handle in its own lifecycle if not ready */
+            }
         }
 
         private void ApplyRandomInventoryDefaults()
@@ -2196,7 +2330,9 @@ namespace S1API.Entities
                 if (data.ClearInventoryEachNight.HasValue)
                     inventory.ClearInventoryEachNight = data.ClearInventoryEachNight.Value;
 
-                // Apply startup items (handled automatically by NPCInventory.Awake)
+                // Apply startup items
+                // Always insert items directly and clear StartupItems immediately to prevent Awake from processing them
+                // This ensures items are only inserted once, regardless of when ApplyRandomInventoryDefaults() runs
                 if (data.StartupItems != null && data.StartupItems.Count > 0)
                 {
                     var startupItemsList = new List<S1Items.ItemDefinition>();
@@ -2209,11 +2345,65 @@ namespace S1API.Entities
 
                     if (startupItemsList.Count > 0)
                     {
+                        // Check if Awake has already run (slots exist)
+                        bool slotsExist = inventory.ItemSlots != null && inventory.ItemSlots.Count > 0;
+                        
+                        if (slotsExist)
+                        {
+                            // Awake has run, insert items directly
+                            foreach (var itemDef in startupItemsList)
+                            {
+                                try
+                                {
+                                    var itemInstance = itemDef.GetDefaultInstance();
+                                    if (itemInstance != null)
+                                        inventory.InsertItem(itemInstance, network: false);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Debug.LogWarning($"[S1API] Failed to insert startup item {itemDef.ID}: {ex.Message}");
+                                }
+                            }
+                            
+                            // Clear StartupItems to prevent Awake from processing them again
 #if (IL2CPPMELON)
-                        inventory.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(startupItemsList.ToArray());
+                            inventory.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(0);
 #else
-                        inventory.StartupItems = startupItemsList.ToArray();
+                            inventory.StartupItems = Array.Empty<S1Items.ItemDefinition>();
 #endif
+                        }
+                        else
+                        {
+                            // Awake hasn't run yet, set StartupItems for Awake to process
+                            // But first check if StartupItems is already set to avoid overwriting
+                            bool startupItemsAlreadySet = false;
+                            try
+                            {
+                                if (inventory.StartupItems != null)
+                                {
+#if (IL2CPPMELON)
+                                    var il2cppArray = inventory.StartupItems as Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>;
+                                    startupItemsAlreadySet = il2cppArray != null && il2cppArray.Length > 0;
+#else
+                                    var array = inventory.StartupItems as S1Items.ItemDefinition[];
+                                    startupItemsAlreadySet = array != null && array.Length > 0;
+#endif
+                                }
+                            }
+                            catch
+                            {
+                                startupItemsAlreadySet = false;
+                            }
+
+                            if (!startupItemsAlreadySet)
+                            {
+#if (IL2CPPMELON)
+                                inventory.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(startupItemsList.ToArray());
+#else
+                                inventory.StartupItems = startupItemsList.ToArray();
+#endif
+                            }
+                        }
                     }
                 }
             }
@@ -2289,6 +2479,7 @@ namespace S1API.Entities
         private NPCDealer _dealer;
         private NPCRelationship _relationship;
         private bool _wasLoadedFromSave;
+        private S1Relation.NPCRelationData.EUnlockType? _loadedUnlockType;
 
         private void MarkLoadedFromSave()
         {
@@ -2392,7 +2583,17 @@ namespace S1API.Entities
                         {
                             var spec = planned[i];
                             if (spec != null)
-                                spec.ApplyTo(Schedule);
+                            {
+                                try
+                                {
+                                    spec.ApplyTo(Schedule);
+                                }
+                                catch (Exception specEx)
+                                {
+                                    Logger.Error($"Failed to apply schedule spec {i} ({spec.GetType().Name}) for NPC type {t.Name}: {specEx.Message}");
+                                    Logger.Error($"Stack trace: {specEx.StackTrace}");
+                                }
+                            }
                         }
                         Schedule.InitializeActions();
                         Schedule.EnforceState();
@@ -2400,32 +2601,71 @@ namespace S1API.Entities
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"[S1API] Failed to apply planned schedule: {ex.Message}");
+                    Logger.Error($"Failed to apply planned schedule for NPC type {GetType().Name}: {ex.Message}");
+                    Logger.Error($"Stack trace: {ex.StackTrace}");
                 }
 
                 // Apply per-type relationship defaults after base fields are present, unless loaded from save
-                if (!_wasLoadedFromSave)
+                // Also preserve unlock state if NPC is already unlocked (might have been loaded from save)
+                bool relationDataExists = S1NPC.RelationData != null;
+                
+                // Check if relationship data appears to have been loaded from save (unlocked or non-default delta)
+                // This handles the case where load happens after FinalizeNetworkSpawn but before it runs
+                bool appearsLoadedFromSave = false;
+                if (relationDataExists)
+                {
+                    bool isUnlocked = S1NPC.RelationData.Unlocked;
+                    float delta = S1NPC.RelationData.RelationDelta;
+                    
+                    // If NPC is unlocked or delta is not default (2.0), it likely came from save data
+                    // This prevents defaults from overwriting loaded relationship data
+                    appearsLoadedFromSave = isUnlocked || (Math.Abs(delta - S1Relation.NPCRelationData.DEFAULT_RELATION_DELTA) > 0.01f);
+                }
+                
+                if (!_wasLoadedFromSave && !appearsLoadedFromSave)
                 {
                     try
                     {
                         var t = GetType();
-                        if (TypeToRelationshipDefaults.TryGetValue(t, out var relCfg) && relCfg != null)
+                        bool hasDefaults = TypeToRelationshipDefaults.TryGetValue(t, out var relCfg) && relCfg != null;
+                        
+                        if (hasDefaults)
                         {
                             var builder = new NPCRelationshipDataBuilder();
                             relCfg(builder);
                             var rel = S1NPC.RelationData;
                             if (rel != null)
-                                builder.ApplyTo(rel, S1NPC);
+                            {
+                                // Preserve unlock state if NPC is already unlocked (may have been loaded from save)
+                                // This prevents overwriting unlock state if FinalizeNetworkSpawn runs after load
+                                bool alreadyUnlocked = rel.Unlocked;
+                                
+                                builder.ApplyTo(rel, S1NPC, preserveUnlockState: alreadyUnlocked);
+                                
+                                // Verify unlock state wasn't accidentally overwritten
+                                if (alreadyUnlocked && !rel.Unlocked)
+                                {
+                                    Logger.Warning($"[NPC] FinalizeNetworkSpawn: WARNING - Unlock state was lost for NPC '{S1NPC.ID}' after applying defaults. Restoring...");
+                                    // Restore unlock state using stored unlock type, or default to DirectApproach
+                                    var unlockType = _loadedUnlockType ?? S1Relation.NPCRelationData.EUnlockType.DirectApproach;
+                                    rel.Unlock(unlockType, notify: false);
+                                }
+                            }
+                            else
+                            {
+                                Logger.Warning($"[NPC] FinalizeNetworkSpawn: RelationData is null for NPC '{S1NPC.ID}' - cannot apply defaults!");
+                            }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogWarning($"[S1API] Failed to apply relationship defaults: {ex.Message}");
+                        Logger.Error($"[NPC] FinalizeNetworkSpawn: Failed to apply relationship defaults for NPC '{S1NPC.ID}': {ex.Message}");
+                        Logger.Error($"[NPC] FinalizeNetworkSpawn: Stack trace: {ex.StackTrace}");
                     }
                 }
 
-                // Apply random inventory defaults if configured
-                ApplyRandomInventoryDefaults();
+                // Note: Random inventory defaults are applied in InitializeInventoryComponent, not here
+                // to avoid duplicate item insertion when StartupItems is processed by NPCInventory.Awake
 
                 // Apply spawn position for this NPC type (always applied, regardless of save state)
                 try

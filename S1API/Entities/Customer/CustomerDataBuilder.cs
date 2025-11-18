@@ -133,23 +133,48 @@ namespace S1API.Entities.Customer
 
         /// <summary>
         /// Sets product type affinities by drug-type name. e.g., ("Weed", 0.3f), ("Cocaine", -0.5f).
+        /// Ensures all drug types are initialized (unspecified ones default to neutral affinity).
         /// </summary>
         public CustomerDataBuilder WithAffinities(IEnumerable<(string drugType, float affinity)> entries)
         {
-            if (entries == null)
-                return this;
             _data.DefaultAffinityData = new S1Economy.CustomerAffinityData();
-            foreach (var (name, aff) in entries)
+            
+            // First, initialize all drug types with neutral affinity
+            Array drugTypes = Enum.GetValues(typeof(S1Product.EDrugType));
+            foreach (var dt in drugTypes)
             {
-                if (string.IsNullOrEmpty(name))
-                    continue;
-                if (Enum.TryParse(typeof(S1Product.EDrugType), name, true, out var parsed))
+                _data.DefaultAffinityData.ProductAffinities.Add(new S1Economy.ProductTypeAffinity
                 {
-                    _data.DefaultAffinityData.ProductAffinities.Add(new S1Economy.ProductTypeAffinity
+                    DrugType = (S1Product.EDrugType)dt,
+                    Affinity = 0f
+                });
+            }
+            
+            // Then override with specified affinities
+            if (entries != null)
+            {
+                foreach (var (name, aff) in entries)
+                {
+                    if (string.IsNullOrEmpty(name))
+                        continue;
+                    if (Enum.TryParse(typeof(S1Product.EDrugType), name, true, out var parsed))
                     {
-                        DrugType = (S1Product.EDrugType)parsed,
-                        Affinity = Mathf.Clamp(aff, -1f, 1f)
-                    });
+                        var drugType = (S1Product.EDrugType)parsed;
+                        // Find and update existing entry
+                        S1Economy.ProductTypeAffinity existing = null;
+                        foreach (var item in _data.DefaultAffinityData.ProductAffinities)
+                        {
+                            if (item != null && item.DrugType == drugType)
+                            {
+                                existing = item;
+                                break;
+                            }
+                        }
+                        if (existing != null)
+                        {
+                            existing.Affinity = Mathf.Clamp(aff, -1f, 1f);
+                        }
+                    }
                 }
             }
             return this;
@@ -158,19 +183,44 @@ namespace S1API.Entities.Customer
         /// <summary>
         /// Sets product type affinities using the enum.
         /// Replaces any existing default affinity data.
+        /// Ensures all drug types are initialized (unspecified ones default to neutral affinity).
         /// </summary>
         public CustomerDataBuilder WithAffinities(IEnumerable<(DrugType drugType, float affinity)> entries)
         {
-            if (entries == null)
-                return this;
             _data.DefaultAffinityData = new S1Economy.CustomerAffinityData();
-            foreach (var (type, aff) in entries)
+            
+            // First, initialize all drug types with neutral affinity
+            Array drugTypes = Enum.GetValues(typeof(S1Product.EDrugType));
+            foreach (var dt in drugTypes)
             {
                 _data.DefaultAffinityData.ProductAffinities.Add(new S1Economy.ProductTypeAffinity
                 {
-                    DrugType = (S1Product.EDrugType)(int)type,
-                    Affinity = Mathf.Clamp(aff, -1f, 1f)
+                    DrugType = (S1Product.EDrugType)dt,
+                    Affinity = 0f
                 });
+            }
+            
+            // Then override with specified affinities
+            if (entries != null)
+            {
+                foreach (var (type, aff) in entries)
+                {
+                    var drugType = (S1Product.EDrugType)(int)type;
+                    // Find and update existing entry
+                    S1Economy.ProductTypeAffinity existing = null;
+                    foreach (var item in _data.DefaultAffinityData.ProductAffinities)
+                    {
+                        if (item != null && item.DrugType == drugType)
+                        {
+                            existing = item;
+                            break;
+                        }
+                    }
+                    if (existing != null)
+                    {
+                        existing.Affinity = Mathf.Clamp(aff, -1f, 1f);
+                    }
+                }
             }
             return this;
         }

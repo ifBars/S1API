@@ -124,7 +124,8 @@ namespace S1API.Entities.Relation
         /// <summary>
         /// INTERNAL: Applies the configured values to a relation data instance.
         /// </summary>
-        public void ApplyTo(S1Relation.NPCRelationData relationData, S1NPCs.NPC owner)
+        /// <param name="preserveUnlockState">If true, will not modify unlock state if the NPC is already unlocked (preserves save data).</param>
+        public void ApplyTo(S1Relation.NPCRelationData relationData, S1NPCs.NPC owner, bool preserveUnlockState = false)
         {
             if (relationData == null)
                 return;
@@ -165,12 +166,14 @@ namespace S1API.Entities.Relation
                         }
                     }
                 }
+
             }
             catch { }
 
             try
             {
-                if (_unlocked.HasValue)
+                // Only apply unlock state if not preserving (i.e., not loaded from save)
+                if (!preserveUnlockState && _unlocked.HasValue)
                 {
                     if (_unlocked.Value)
                     {
@@ -185,7 +188,7 @@ namespace S1API.Entities.Relation
                         setter?.Invoke(relationData, new object[] { ToS1(_unlockType.Value) });
                     }
                 }
-                else if (_unlockType.HasValue)
+                else if (_unlockType.HasValue && !preserveUnlockState)
                 {
                     var prop = typeof(S1Relation.NPCRelationData).GetProperty("UnlockType", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                     var setter = prop?.GetSetMethod(true);
@@ -201,5 +204,6 @@ namespace S1API.Entities.Relation
                 : S1Relation.NPCRelationData.EUnlockType.DirectApproach;
     }
 }
+
 
 

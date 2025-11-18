@@ -28,6 +28,7 @@ namespace S1API.Internal.Entities
         public string Id;
         public string FirstName;
         public string LastName;
+        public Sprite Icon;
         public S1AvatarFramework.AvatarSettings AppearanceDefaults;
 
         // Static registry to preserve data across network instantiation on Il2Cpp
@@ -40,6 +41,7 @@ namespace S1API.Internal.Entities
             public string Id;
             public string FirstName;
             public string LastName;
+            public Sprite Icon;
             public AvatarSettingsData AppearanceDefaults;
         }
 
@@ -80,6 +82,7 @@ namespace S1API.Internal.Entities
                 Id = this.Id,
                 FirstName = this.FirstName,
                 LastName = this.LastName,
+                Icon = this.Icon,
                 AppearanceDefaults = CloneAvatarSettingsData(avatarData)
             };
 
@@ -103,6 +106,7 @@ namespace S1API.Internal.Entities
                 this.Id = data.Id;
                 this.FirstName = data.FirstName;
                 this.LastName = data.LastName;
+                this.Icon = data.Icon;
                 _cachedAppearanceDefaults = CloneAvatarSettingsData(data.AppearanceDefaults);
                 if (_cachedAppearanceDefaults != null)
                     this.AppearanceDefaults = CreateAvatarSettings(_cachedAppearanceDefaults);
@@ -136,6 +140,14 @@ namespace S1API.Internal.Entities
             if (npc == null)
                 return;
 
+            // On Il2Cpp, ensure fields are populated from registry if they're empty
+#if IL2CPPMELON
+            if (string.IsNullOrEmpty(Id) && string.IsNullOrEmpty(FirstName))
+            {
+                TryRestoreFromRegistry();
+            }
+#endif
+
             try {
                 if (!string.IsNullOrEmpty(FirstName))
                     npc.FirstName = FirstName;
@@ -151,6 +163,12 @@ namespace S1API.Internal.Entities
             {
                 if (!string.IsNullOrEmpty(Id))
                     npc.ID = Id;
+            }
+            catch { }
+            try
+            {
+                if (Icon != null)
+                    npc.MugshotSprite = Icon;
             }
             catch { }
 
@@ -209,6 +227,39 @@ namespace S1API.Internal.Entities
                 prefabName = prefabName.Substring(0, prefabName.Length - 7);
 
             return _registry.TryGetValue(prefabName, out data);
+        }
+
+        /// <summary>
+        /// INTERNAL: Retrieves identity data from the static registry by prefab name.
+        /// Used by NPC constructor on Il2Cpp to read identity before Awake() is called.
+        /// </summary>
+#if IL2CPPMELON
+        [HideFromIl2Cpp]
+#endif
+        internal static bool TryGetIdentityFromRegistry(string prefabName, out string id, out string firstName, out string lastName, out Sprite icon)
+        {
+            id = null;
+            firstName = null;
+            lastName = null;
+            icon = null;
+
+            if (string.IsNullOrEmpty(prefabName))
+                return false;
+
+            // Remove "(Clone)" suffix if present
+            if (prefabName.EndsWith("(Clone)"))
+                prefabName = prefabName.Substring(0, prefabName.Length - 7);
+
+            if (_registry.TryGetValue(prefabName, out var data))
+            {
+                id = data.Id;
+                firstName = data.FirstName;
+                lastName = data.LastName;
+                icon = data.Icon;
+                return true;
+            }
+
+            return false;
         }
 
 #if IL2CPPMELON

@@ -24,6 +24,7 @@ using S1API.Entities.Relation;
 using System.Collections.Generic;
 using S1API.Internal.Entities;
 using S1API.Internal.Utils;
+using S1API.Logging;
 
 namespace S1API.Entities
 {
@@ -37,6 +38,7 @@ namespace S1API.Entities
     /// </remarks>
     public sealed class NPCPrefabBuilder
     {
+        private static readonly Log Logger = new Log("NPCPrefabBuilder");
         private readonly GameObject prefabRoot;
         private readonly Type ownerType;
 
@@ -94,6 +96,26 @@ namespace S1API.Entities
                 identity.Id = id;
                 identity.FirstName = firstName;
                 identity.LastName = lastName;
+                // Register to static cache for Il2Cpp network spawn support
+                identity.RegisterToStaticCache(prefabRoot.name);
+            }
+            catch { }
+            return this;
+        }
+
+        /// <summary>
+        /// Declares the icon sprite to be embedded on the prefab.
+        /// This sprite is used for UI elements such as messages, contacts, and relationships.
+        /// Should be 64x64 or 128x128 pixels. Uses default if not set.
+        /// </summary>
+        /// <param name="icon">Optional sprite for UI elements. Uses default if null.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public NPCPrefabBuilder WithIcon(Sprite? icon)
+        {
+            try
+            {
+                var identity = EnsureIdentityComponent();
+                identity.Icon = icon;
                 // Register to static cache for Il2Cpp network spawn support
                 identity.RegisterToStaticCache(prefabRoot.name);
             }
@@ -219,8 +241,10 @@ namespace S1API.Entities
                 var specs = planner.Build();
                 return WithSchedule(specs);
             }
-            catch
+            catch (Exception ex)
             {
+                Logger.Error($"Failed to build schedule for NPC type {ownerType?.Name ?? "Unknown"}: {ex.Message}");
+                Logger.Error($"Stack trace: {ex.StackTrace}");
                 return this;
             }
         }
@@ -246,7 +270,11 @@ namespace S1API.Entities
                 // Pre-create actions based on the plan to keep FishNet indices stable
                 PrecreateActionsForSpecs(list);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.Error($"Failed to register schedule plan for NPC type {ownerType?.Name ?? "Unknown"}: {ex.Message}");
+                Logger.Error($"Stack trace: {ex.StackTrace}");
+            }
 
             return this;
         }
@@ -467,26 +495,11 @@ namespace S1API.Entities
                 if (data.ClearInventoryEachNight.HasValue)
                     inventory.ClearInventoryEachNight = data.ClearInventoryEachNight.Value;
 
-                // Apply startup items
-                if (data.StartupItems != null && data.StartupItems.Count > 0)
-                {
-                    var startupItemsList = new List<S1Items.ItemDefinition>();
-                    foreach (var itemId in data.StartupItems)
-                    {
-                        var def = S1Registry.GetItem(itemId);
-                        if (def != null)
-                            startupItemsList.Add(def);
-                    }
-
-                    if (startupItemsList.Count > 0)
-                    {
-#if (IL2CPPMELON)
-                        inventory.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(startupItemsList.ToArray());
-#else
-                        inventory.StartupItems = startupItemsList.ToArray();
-#endif
-                    }
-                }
+                // Do NOT set StartupItems here on the prefab - they will be set during runtime initialization
+                // in NPC.InitializeInventoryComponent to avoid duplicate insertion when NPCInventory.Awake runs.
+                // StartupItems are processed by NPCInventory.Awake, and setting them on the prefab causes
+                // items to be inserted when the prefab is instantiated, then again when ApplyRandomInventoryDefaults
+                // sets them during initialization.
             }
             catch (Exception ex)
             {
@@ -544,7 +557,10 @@ namespace S1API.Entities
                     var schedField = typeof(T).GetField("schedule", BindingFlags.NonPublic | BindingFlags.Instance);
                     schedField?.SetValue(comp, mgr);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"Failed to set npc/schedule fields on prefab action {typeof(T).Name} for NPC type {ownerType?.Name ?? "Unknown"}: {ex.Message}");
+                }
                 go.SetActive(false);
                 comp.enabled = false;
             }

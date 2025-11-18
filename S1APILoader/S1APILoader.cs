@@ -18,59 +18,103 @@ namespace S1APILoader
                 throw new Exception("Failed to identify plugins folder.");
             
             string modsFolder = Path.GetFullPath(Path.Combine(pluginsFolder, "../Mods"));
+            string s1apiPluginsFolder = Path.Combine(pluginsFolder, BuildFolderName);
 
             string activeBuild = MelonUtils.IsGameIl2Cpp() ? "Il2Cpp" : "Mono";
             string inactiveBuild = !MelonUtils.IsGameIl2Cpp() ? "Il2Cpp" : "Mono";
             
             MelonLogger.Msg($"Loading S1API for {activeBuild}...");
             
-            // Normalize both builds: keep exactly one file per build
+            // Normalize both builds in Mods folder: keep exactly one file per build
             // - Active build: keep enabled dll (newest by assembly version or write time)
             // - Inactive build: keep disabled dll (newest by assembly version or write time)
-            NormalizeBuild(modsFolder, activeBuild, shouldBeEnabled: true);
-            NormalizeBuild(modsFolder, inactiveBuild, shouldBeEnabled: false);
+            NormalizeBuild(modsFolder, activeBuild, shouldBeEnabled: true, fileNamePattern: "S1API.{0}.MelonLoader.dll");
+            NormalizeBuild(modsFolder, inactiveBuild, shouldBeEnabled: false, fileNamePattern: "S1API.{0}.MelonLoader.dll");
+            
+            // Normalize both builds in Plugins/S1API folder: keep exactly one file per build
+            // - Active build: keep enabled dll (newest by assembly version or write time)
+            // - Inactive build: keep disabled dll (newest by assembly version or write time)
+            NormalizeBuild(s1apiPluginsFolder, activeBuild, shouldBeEnabled: true, fileNamePattern: "S1API.{0}.dll");
+            NormalizeBuild(s1apiPluginsFolder, inactiveBuild, shouldBeEnabled: false, fileNamePattern: "S1API.{0}.dll");
             
             MelonLogger.Msg($"Successfully loaded S1API for {activeBuild}!");
         }
 
-        private static void NormalizeBuild(string modsFolder, string build, bool shouldBeEnabled)
+        private static void NormalizeBuild(string folder, string build, bool shouldBeEnabled, string fileNamePattern)
         {
-            string enabledPath = Path.Combine(modsFolder, $"S1API.{build}.MelonLoader.dll");
+            // Ensure folder exists
+            if (!Directory.Exists(folder))
+                return; // Folder doesn't exist, nothing to do
+
+            string fileName = string.Format(fileNamePattern, build);
+            string enabledPath = Path.Combine(folder, fileName);
             string disabledPath = $"{enabledPath}.disabled";
 
             bool enabledExists = File.Exists(enabledPath);
             bool disabledExists = File.Exists(disabledPath);
 
-            string? newestPath = null;
-            if (enabledExists)
-                newestPath = enabledPath;
-            if (disabledExists)
-                newestPath = ChooseNewest(newestPath, disabledPath);
-
-            if (newestPath == null)
+            if (!enabledExists && !disabledExists)
                 return; // Nothing to do for this build
 
             if (shouldBeEnabled)
             {
-                // Ensure newest is enabled
-                if (!StringComparer.OrdinalIgnoreCase.Equals(newestPath, enabledPath))
+                // We want this build to be enabled
+                if (enabledExists && !disabledExists)
+                {
+                    // Already enabled, nothing to do
+                    return;
+                }
+
+                // We need to ensure it's enabled
+                string? sourcePath = null;
+                if (disabledExists)
+                    sourcePath = disabledPath;
+                if (enabledExists)
+                    sourcePath = ChooseNewest(sourcePath, enabledPath);
+
+                if (sourcePath == null)
+                    return;
+
+                // If source is disabled, move it to enabled
+                if (StringComparer.OrdinalIgnoreCase.Equals(sourcePath, disabledPath))
                 {
                     SafeDelete(enabledPath);
-                    SafeMoveReplace(newestPath, enabledPath);
+                    SafeMoveReplace(disabledPath, enabledPath);
                 }
-                // Remove any leftover disabled duplicate
-                SafeDelete(disabledPath);
+                // Remove any leftover disabled duplicate if we have an enabled version
+                else if (disabledExists)
+                {
+                    SafeDelete(disabledPath);
+                }
             }
             else
             {
-                // Ensure newest is disabled
-                if (!StringComparer.OrdinalIgnoreCase.Equals(newestPath, disabledPath))
+                // We want this build to be disabled
+                if (!enabledExists && disabledExists)
                 {
-                    SafeDelete(disabledPath);
-                    SafeMoveReplace(newestPath, disabledPath);
+                    // Already disabled, nothing to do
+                    return;
                 }
-                // Remove any leftover enabled duplicate
-                SafeDelete(enabledPath);
+
+                // We need to ensure it's disabled
+                if (enabledExists)
+                {
+                    // Delete any existing disabled version first (in case it's older)
+                    SafeDelete(disabledPath);
+                    // Move the enabled file to disabled
+                    bool moveSucceeded = SafeMoveReplace(enabledPath, disabledPath);
+                    
+                    // Verify the disable operation succeeded
+                    if (!moveSucceeded || File.Exists(enabledPath))
+                    {
+                        MelonLogger.Warning($"Failed to disable '{enabledPath}'. File may be locked or in use.");
+                        // Try alternative: copy and delete
+                        if (File.Exists(enabledPath))
+                        {
+                            TryCopyAndDelete(enabledPath, disabledPath);
+                        }
+                    }
+                }
             }
         }
 
@@ -114,17 +158,42 @@ namespace S1APILoader
             }
         }
 
-        private static void SafeMoveReplace(string sourcePath, string destinationPath)
+        private static bool SafeMoveReplace(string sourcePath, string destinationPath)
         {
             try
             {
                 if (File.Exists(destinationPath))
                     File.Delete(destinationPath);
                 File.Move(sourcePath, destinationPath);
+                return true;
             }
             catch (Exception ex)
             {
                 MelonLogger.Warning($"Failed to move '{sourcePath}' to '{destinationPath}': {ex.Message}");
+                return false;
+            }
+        }
+
+        private static void TryCopyAndDelete(string sourcePath, string destinationPath)
+        {
+            try
+            {
+                if (File.Exists(destinationPath))
+                    File.Delete(destinationPath);
+                File.Copy(sourcePath, destinationPath, overwrite: true);
+                // Try to delete the source, but don't fail if it's locked
+                try
+                {
+                    File.Delete(sourcePath);
+                }
+                catch
+                {
+                    MelonLogger.Warning($"Copied '{sourcePath}' to '{destinationPath}' but could not delete source. You may need to manually delete it.");
+                }
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning($"Failed to copy '{sourcePath}' to '{destinationPath}': {ex.Message}");
             }
         }
 

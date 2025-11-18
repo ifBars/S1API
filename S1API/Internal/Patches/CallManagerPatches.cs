@@ -45,18 +45,23 @@ namespace S1API.Internal.Patches
 
             var callInterface = S1UIPhone.CallInterface.Instance;
             
-            // If there's an active call or a queued call, route additional calls through S1API
-            // so ordering is preserved without re-entering the game's QueueCall here.
+            // Route base game calls through S1API queue if:
+            // 1. There's an active call (need to preserve order)
+            // 2. S1API has pending calls (S1API is managing the queue)
+            // 3. The game has a queued call (could be from S1API, need to preserve order)
+            // This ensures proper ordering: if anything is queued or active, route through S1API.
             bool hasActiveCall = callInterface != null && callInterface.ActiveCallData != null;
+            bool hasPendingCalls = CallManager.PendingCount > 0;
             var queuedCallData = ReflectionUtils.TryGetFieldOrProperty(gameCallManager, "QueuedCallData") as S1ScriptableObjects.PhoneCallData;
+            bool hasQueuedCall = queuedCallData != null;
             
-            if (hasActiveCall || queuedCallData != null)
+            if (hasActiveCall || hasPendingCalls || hasQueuedCall)
             {
                 CallManager.QueueCall(data);
-                return false; // skip original to avoid clobbering and recursion
+                return false; // skip original to avoid CLOBBERIN' TIME
             }
 
-            // No call currently queued by the game; allow the original to proceed.
+            // No active call, no queued call, and S1API queue is empty; allow the original to proceed.
             return true;
         }
 
@@ -65,6 +70,25 @@ namespace S1API.Internal.Patches
         private static void CallCompleted_Postfix()
         {
             CallManager.TryProcessQueue();
+        }
+
+        /// <summary>
+        /// Process the queue after CallInterface.Close() clears ActiveCallData.
+        /// This ensures we process the queue after ActiveCallData is actually null, not just when CallCompleted fires.
+        /// </summary>
+        [HarmonyPatch(typeof(S1UIPhone.CallInterface), "Close")]
+        [HarmonyPostfix]
+        private static void Close_Postfix()
+        {
+            var callInterface = S1UIPhone.CallInterface.Instance;
+            if (callInterface == null)
+                return;
+            
+            // Only process if the interface is actually closed and ActiveCallData is cleared
+            if (!callInterface.IsOpen && callInterface.ActiveCallData == null)
+            {
+                CallManager.TryProcessQueue();
+            }
         }
 
         /// <summary>

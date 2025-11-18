@@ -7,6 +7,7 @@ using S1Economy = ScheduleOne.Economy;
 using System;
 using UnityEngine;
 using S1API.Economy;
+using S1API.Map;
 
 namespace S1API.Entities.Dealer
 {
@@ -22,6 +23,7 @@ namespace S1API.Entities.Dealer
             public float Cut { get; set; } = 0.2f;
             public DealerType DealerType { get; set; } = DealerType.PlayerDealer;
             public string HomeName { get; set; } = "Home";
+            public Building? Home { get; set; } = null;
             public bool SellInsufficientQualityItems { get; set; } = false;
             public bool SellExcessQualityItems { get; set; } = true;
             public string CompletedDealsVariable { get; set; } = string.Empty;
@@ -68,6 +70,20 @@ namespace S1API.Entities.Dealer
         public DealerDataBuilder WithHomeName(string name)
         {
             _data.HomeName = name ?? "Home";
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the home building for this dealer using a Building wrapper.
+        /// </summary>
+        /// <param name="building">The Building wrapper for the dealer's home.</param>
+        public DealerDataBuilder WithHome(Building building)
+        {
+            _data.Home = building;
+            if (building != null)
+            {
+                _data.HomeName = building.Name;
+            }
             return this;
         }
 

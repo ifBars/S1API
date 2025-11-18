@@ -861,6 +861,7 @@ namespace S1API.Entities
 
         /// <summary>
         /// INTERNAL: Ensures currentAffinityData is initialized before operations that might trigger RPCs.
+        /// Also ensures all drug types are present to prevent null reference exceptions in AdjustAffinity RPC.
         /// </summary>
         private void EnsureCurrentAffinityDataInitialized(S1Economy.Customer customer)
         {
@@ -880,12 +881,69 @@ namespace S1API.Entities
                 {
                     // Re-initialize if somehow it became null
                     InitializeRuntimeState(customer);
+                    currentAffinity = currentAffinityDataField?.GetValue(customer) as S1Economy.CustomerAffinityData;
+                }
+                
+                // Ensure all drug types are present
+                if (currentAffinity != null && currentAffinity.ProductAffinities != null)
+                {
+                    Array allDrugTypes = Enum.GetValues(typeof(S1Product.EDrugType));
+                    foreach (var dt in allDrugTypes)
+                    {
+                        var drugType = (S1Product.EDrugType)dt;
+                        S1Economy.ProductTypeAffinity existing = null;
+                        foreach (var item in currentAffinity.ProductAffinities)
+                        {
+                            if (item != null && item.DrugType == drugType)
+                            {
+                                existing = item;
+                                break;
+                            }
+                        }
+                        if (existing == null)
+                        {
+                            // Add missing drug type with neutral affinity
+                            currentAffinity.ProductAffinities.Add(new S1Economy.ProductTypeAffinity
+                            {
+                                DrugType = drugType,
+                                Affinity = 0f
+                            });
+                        }
+                    }
                 }
 #else
                 if (customer.currentAffinityData == null)
                 {
                     // Re-initialize if somehow it became null
                     InitializeRuntimeState(customer);
+                }
+                
+                // Ensure all drug types are present
+                if (customer.currentAffinityData != null && customer.currentAffinityData.ProductAffinities != null)
+                {
+                    Array allDrugTypes = Enum.GetValues(typeof(S1Product.EDrugType));
+                    foreach (var dt in allDrugTypes)
+                    {
+                        var drugType = (S1Product.EDrugType)dt;
+                        S1Economy.ProductTypeAffinity existing = null;
+                        foreach (var item in customer.currentAffinityData.ProductAffinities)
+                        {
+                            if (item != null && item.DrugType == drugType)
+                            {
+                                existing = item;
+                                break;
+                            }
+                        }
+                        if (existing == null)
+                        {
+                            // Add missing drug type with neutral affinity
+                            customer.currentAffinityData.ProductAffinities.Add(new S1Economy.ProductTypeAffinity
+                            {
+                                DrugType = drugType,
+                                Affinity = 0f
+                            });
+                        }
+                    }
                 }
 #endif
             }

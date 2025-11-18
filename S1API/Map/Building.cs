@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using UnityEngine;
 using S1API.Internal.Map;
+using S1API.Entities.Schedule;
 using UnityEngine.SceneManagement;
 
 namespace S1API.Map
@@ -44,6 +45,16 @@ namespace S1API.Map
         /// Display name of the building.
         /// </summary>
         public string Name => _name;
+
+        /// <summary>
+        /// INTERNAL: Gets the deferred identifier type if this building is deferred, otherwise null.
+        /// </summary>
+        internal Type DeferredIdentifierType => _isDeferred ? _deferredIdentifierType : null;
+
+        /// <summary>
+        /// INTERNAL: Whether this building wrapper is deferred and not yet resolved.
+        /// </summary>
+        internal bool IsDeferred => _isDeferred;
 
         /// <summary>
         /// Returns the underlying game building object, resolving if needed.
@@ -151,10 +162,18 @@ namespace S1API.Map
                 if (existing != null)
                 {
                     existing._gameBuilding = gameBuilding;
+                    existing._isDeferred = false;
+                    
+                    // Notify pending schedule actions that this building is now available
+                    TryResolvePendingScheduleActions(name, gameBuilding);
                     return;
                 }
 
-                All.Add(new Building(name, gameBuilding));
+                var newBuilding = new Building(name, gameBuilding);
+                All.Add(newBuilding);
+                
+                // Notify pending schedule actions that this building is now available
+                TryResolvePendingScheduleActions(name, gameBuilding);
             }
             catch { }
         }
@@ -269,6 +288,21 @@ namespace S1API.Map
             }
             catch { }
             return null;
+        }
+
+        /// <summary>
+        /// INTERNAL: Attempts to resolve pending schedule actions that are waiting for this building.
+        /// </summary>
+        private static void TryResolvePendingScheduleActions(string buildingName, object gameBuilding)
+        {
+            try
+            {
+                StayInBuildingSpec.TryResolvePendingActions();
+            }
+            catch
+            {
+                // Silently ignore - this is best-effort
+            }
         }
     }
 }
