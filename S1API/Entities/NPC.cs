@@ -854,7 +854,31 @@ namespace S1API.Entities
 #endif
                 dealerComponent.SellInsufficientQualityItems = data.SellInsufficientQualityItems;
                 dealerComponent.SellExcessQualityItems = data.SellExcessQualityItems;
-                // Note: HomeName and CompletedDealsVariable would need to be set via other means
+                
+                // Set Home building if provided
+                if (data.Home != null)
+                {
+                    var homeBuilding = data.Home.ResolveGameBuilding();
+                    if (homeBuilding != null)
+                    {
+                        Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(dealerComponent, "Home", homeBuilding);
+                    }
+                }
+                else if (!string.IsNullOrEmpty(data.HomeName))
+                {
+                    // Fallback: try to find building by name if Home wasn't set
+                    var building = Map.Building.GetByName(data.HomeName);
+                    if (building != null)
+                    {
+                        var homeBuilding = building.ResolveGameBuilding();
+                        if (homeBuilding != null)
+                        {
+                            Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(dealerComponent, "Home", homeBuilding);
+                        }
+                    }
+                }
+                
+                // Note: CompletedDealsVariable would need to be set via other means
                 return true;
             }
             catch
@@ -2233,45 +2257,6 @@ namespace S1API.Entities
             if (S1NPC.Inventory == null)
                 S1NPC.Inventory = gameObject.GetComponentInChildren<S1NPCs.NPCInventory>(true) ?? gameObject.AddComponent<S1NPCs.NPCInventory>();
 
-            // Guarantee slots exist to support capacity checks and insertions
-            try
-            {
-                if (S1NPC.Inventory.ItemSlots == null || S1NPC.Inventory.ItemSlots.Count == 0)
-                {
-                    for (int i = 0; i < S1NPC.Inventory.SlotCount; i++)
-                    {
-                        var slot = new S1Items.ItemSlot();
-#if MONOMELON
-                        slot.SetSlotOwner(S1NPC.Inventory);
-#else
-                        slot.SetSlotOwner(S1NPC.Inventory.Cast<S1Items.IItemSlotOwner>());
-#endif
-#if (IL2CPPMELON || IL2CPPBEPINEX)
-                        System.Action handler = new System.Action(() =>
-                        {
-                    if (S1NPC.Inventory != null && S1NPC.Inventory.onContentsChanged != null)
-                        S1NPC.Inventory.onContentsChanged.Invoke();
-                        });
-                        slot.onItemDataChanged = (Il2CppSystem.Action)Il2CppSystem.Delegate.Combine(
-                            slot.onItemDataChanged,
-                            (Il2CppSystem.Action)handler
-                        );
-#else
-                        slot.onItemDataChanged = (Action)Delegate.Combine(
-                            slot.onItemDataChanged,
-                    new Action(() =>
-                    {
-                        if (S1NPC.Inventory != null && S1NPC.Inventory.onContentsChanged != null)
-                            S1NPC.Inventory.onContentsChanged.Invoke();
-                    })
-                        );
-#endif
-                        S1NPC.Inventory.ItemSlots.Add(slot);
-                    }
-                }
-            }
-            catch { /* ignore */ }
-
             if (S1NPC.Inventory.PickpocketIntObj == null)
             {
                 S1Interaction.InteractableObject? talkInteractable = GetPrimaryInteractable();
@@ -2289,8 +2274,12 @@ namespace S1API.Entities
 
         private void InitializeRelationshipData()
         {
+            string npcId = S1NPC?.ID ?? "<null>";
+            
             if (S1NPC.RelationData == null)
+            {
                 S1NPC.RelationData = new S1Relation.NPCRelationData();
+            }
 
             // Ensure the relation data is bound to this NPC and initialized
             try
@@ -2299,8 +2288,17 @@ namespace S1API.Entities
                 {
                     S1NPC.RelationData.Init(S1NPC);
                 }
+                else
+                {
+                    Logger.Warning($"[NPC] InitializeRelationshipData: RelationData is still null after creation attempt for NPC '{npcId}'");
+                }
             }
-            catch { /* ignore: base game will handle in its own lifecycle if not ready */ }
+            catch (Exception ex)
+            {
+                Logger.Error($"[NPC] InitializeRelationshipData: Exception during Init() for NPC '{npcId}': {ex.Message}");
+                Logger.Error($"[NPC] InitializeRelationshipData: Stack trace: {ex.StackTrace}");
+                /* ignore: base game will handle in its own lifecycle if not ready */
+            }
         }
 
         private void ApplyRandomInventoryDefaults()
@@ -2332,50 +2330,79 @@ namespace S1API.Entities
                 if (data.ClearInventoryEachNight.HasValue)
                     inventory.ClearInventoryEachNight = data.ClearInventoryEachNight.Value;
 
-                // Apply startup items (handled automatically by NPCInventory.Awake)
-                // Only set if StartupItems hasn't been set yet to avoid duplicate insertion
-                // Check if Awake has already processed items by checking if StartupItems is null or empty
+                // Apply startup items
+                // Always insert items directly and clear StartupItems immediately to prevent Awake from processing them
+                // This ensures items are only inserted once, regardless of when ApplyRandomInventoryDefaults() runs
                 if (data.StartupItems != null && data.StartupItems.Count > 0)
                 {
-                    // Check if StartupItems is already populated (indicating Awake may have already run)
-                    bool startupItemsAlreadySet = false;
-                    try
+                    var startupItemsList = new List<S1Items.ItemDefinition>();
+                    foreach (var itemId in data.StartupItems)
                     {
-                        if (inventory.StartupItems != null)
-                        {
-#if (IL2CPPMELON)
-                            var il2cppArray = inventory.StartupItems as Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>;
-                            startupItemsAlreadySet = il2cppArray != null && il2cppArray.Length > 0;
-#else
-                            var array = inventory.StartupItems as S1Items.ItemDefinition[];
-                            startupItemsAlreadySet = array != null && array.Length > 0;
-#endif
-                        }
+                        var def = S1Registry.GetItem(itemId);
+                        if (def != null)
+                            startupItemsList.Add(def);
                     }
-                    catch
-                    {
-                        // If check fails, assume not set and proceed
-                        startupItemsAlreadySet = false;
-                    }
-                    
-                    // Only set if not already set to prevent duplicate insertion
-                    if (!startupItemsAlreadySet)
-                    {
-                        var startupItemsList = new List<S1Items.ItemDefinition>();
-                        foreach (var itemId in data.StartupItems)
-                        {
-                            var def = S1Registry.GetItem(itemId);
-                            if (def != null)
-                                startupItemsList.Add(def);
-                        }
 
-                        if (startupItemsList.Count > 0)
+                    if (startupItemsList.Count > 0)
+                    {
+                        // Check if Awake has already run (slots exist)
+                        bool slotsExist = inventory.ItemSlots != null && inventory.ItemSlots.Count > 0;
+                        
+                        if (slotsExist)
                         {
+                            // Awake has run, insert items directly
+                            foreach (var itemDef in startupItemsList)
+                            {
+                                try
+                                {
+                                    var itemInstance = itemDef.GetDefaultInstance();
+                                    if (itemInstance != null)
+                                        inventory.InsertItem(itemInstance, network: false);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Debug.LogWarning($"[S1API] Failed to insert startup item {itemDef.ID}: {ex.Message}");
+                                }
+                            }
+                            
+                            // Clear StartupItems to prevent Awake from processing them again
 #if (IL2CPPMELON)
-                            inventory.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(startupItemsList.ToArray());
+                            inventory.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(0);
 #else
-                            inventory.StartupItems = startupItemsList.ToArray();
+                            inventory.StartupItems = Array.Empty<S1Items.ItemDefinition>();
 #endif
+                        }
+                        else
+                        {
+                            // Awake hasn't run yet, set StartupItems for Awake to process
+                            // But first check if StartupItems is already set to avoid overwriting
+                            bool startupItemsAlreadySet = false;
+                            try
+                            {
+                                if (inventory.StartupItems != null)
+                                {
+#if (IL2CPPMELON)
+                                    var il2cppArray = inventory.StartupItems as Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>;
+                                    startupItemsAlreadySet = il2cppArray != null && il2cppArray.Length > 0;
+#else
+                                    var array = inventory.StartupItems as S1Items.ItemDefinition[];
+                                    startupItemsAlreadySet = array != null && array.Length > 0;
+#endif
+                                }
+                            }
+                            catch
+                            {
+                                startupItemsAlreadySet = false;
+                            }
+
+                            if (!startupItemsAlreadySet)
+                            {
+#if (IL2CPPMELON)
+                                inventory.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(startupItemsList.ToArray());
+#else
+                                inventory.StartupItems = startupItemsList.ToArray();
+#endif
+                            }
                         }
                     }
                 }
@@ -2452,6 +2479,7 @@ namespace S1API.Entities
         private NPCDealer _dealer;
         private NPCRelationship _relationship;
         private bool _wasLoadedFromSave;
+        private S1Relation.NPCRelationData.EUnlockType? _loadedUnlockType;
 
         private void MarkLoadedFromSave()
         {
@@ -2578,23 +2606,61 @@ namespace S1API.Entities
                 }
 
                 // Apply per-type relationship defaults after base fields are present, unless loaded from save
-                if (!_wasLoadedFromSave)
+                // Also preserve unlock state if NPC is already unlocked (might have been loaded from save)
+                bool relationDataExists = S1NPC.RelationData != null;
+                
+                // Check if relationship data appears to have been loaded from save (unlocked or non-default delta)
+                // This handles the case where load happens after FinalizeNetworkSpawn but before it runs
+                bool appearsLoadedFromSave = false;
+                if (relationDataExists)
+                {
+                    bool isUnlocked = S1NPC.RelationData.Unlocked;
+                    float delta = S1NPC.RelationData.RelationDelta;
+                    
+                    // If NPC is unlocked or delta is not default (2.0), it likely came from save data
+                    // This prevents defaults from overwriting loaded relationship data
+                    appearsLoadedFromSave = isUnlocked || (Math.Abs(delta - S1Relation.NPCRelationData.DEFAULT_RELATION_DELTA) > 0.01f);
+                }
+                
+                if (!_wasLoadedFromSave && !appearsLoadedFromSave)
                 {
                     try
                     {
                         var t = GetType();
-                        if (TypeToRelationshipDefaults.TryGetValue(t, out var relCfg) && relCfg != null)
+                        bool hasDefaults = TypeToRelationshipDefaults.TryGetValue(t, out var relCfg) && relCfg != null;
+                        
+                        if (hasDefaults)
                         {
                             var builder = new NPCRelationshipDataBuilder();
                             relCfg(builder);
                             var rel = S1NPC.RelationData;
                             if (rel != null)
-                                builder.ApplyTo(rel, S1NPC);
+                            {
+                                // Preserve unlock state if NPC is already unlocked (may have been loaded from save)
+                                // This prevents overwriting unlock state if FinalizeNetworkSpawn runs after load
+                                bool alreadyUnlocked = rel.Unlocked;
+                                
+                                builder.ApplyTo(rel, S1NPC, preserveUnlockState: alreadyUnlocked);
+                                
+                                // Verify unlock state wasn't accidentally overwritten
+                                if (alreadyUnlocked && !rel.Unlocked)
+                                {
+                                    Logger.Warning($"[NPC] FinalizeNetworkSpawn: WARNING - Unlock state was lost for NPC '{S1NPC.ID}' after applying defaults. Restoring...");
+                                    // Restore unlock state using stored unlock type, or default to DirectApproach
+                                    var unlockType = _loadedUnlockType ?? S1Relation.NPCRelationData.EUnlockType.DirectApproach;
+                                    rel.Unlock(unlockType, notify: false);
+                                }
+                            }
+                            else
+                            {
+                                Logger.Warning($"[NPC] FinalizeNetworkSpawn: RelationData is null for NPC '{S1NPC.ID}' - cannot apply defaults!");
+                            }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogWarning($"[S1API] Failed to apply relationship defaults: {ex.Message}");
+                        Logger.Error($"[NPC] FinalizeNetworkSpawn: Failed to apply relationship defaults for NPC '{S1NPC.ID}': {ex.Message}");
+                        Logger.Error($"[NPC] FinalizeNetworkSpawn: Stack trace: {ex.StackTrace}");
                     }
                 }
 

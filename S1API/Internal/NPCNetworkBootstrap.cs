@@ -33,7 +33,6 @@ namespace S1API.Internal
         private static bool mainSceneInitialized;
         private static bool networkObserved;
         private static bool clientsReady;
-        private static float lastStateLog;
         private static bool connectionObjectsReady;
         private static bool prefabsWarmupScheduled;
         private static float mainSceneInitTime;
@@ -50,7 +49,6 @@ namespace S1API.Internal
             mainSceneInitialized = false;
             networkObserved = false;
             clientsReady = false;
-            lastStateLog = 0f;
             connectionObjectsReady = false;
             prefabsWarmupScheduled = false;
             mainSceneInitTime = 0f;
@@ -252,16 +250,6 @@ namespace S1API.Internal
             bool clientUpIfHost = !nm.IsServer || nm.IsClient || hasRemoteClients;
 
             clientsReady = inMain && serverUp && clientUpIfHost && remoteConnectionsReady;
-
-            // Log once every few seconds if still not ready (server-only)
-            if (!clientsReady && nm.IsServer)
-            {
-                if (Time.realtimeSinceStartup - lastStateLog > 3f)
-                {
-                    MelonLogger.Msg($"[S1API] Waiting for client readiness: inMain={inMain} serverUp={serverUp} hasRemote={hasRemoteClients} hostClient={nm.IsClient} prefabsConfigured={NPC.PrefabsConfiguredForLocalProcess} remoteFirstObjectReady={remoteConnectionsReady}");
-                    lastStateLog = Time.realtimeSinceStartup;
-                }
-            }
         }
 
         private static bool HasRemoteClients()

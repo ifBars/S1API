@@ -29,6 +29,7 @@ using UnityEngine.UI;
 using MelonLoader;
 using S1API.Economy;
 using S1API.Internal.Abstraction;
+using S1API.Map;
 #if (IL2CPPMELON)
 using Il2CppFishNet;
 using Il2CppFishNet.Managing;
@@ -605,6 +606,70 @@ namespace S1API.Entities
                 Logger.Warning($"Exception in GetAssignedCustomers for {NPC.ID}: {ex.Message}");
             }
             return result;
+        }
+
+        /// <summary>
+        /// Gets or sets the home building for this dealer.
+        /// </summary>
+        public Building? Home
+        {
+            get
+            {
+                EnsureDealer();
+                if (Component == null)
+                    return null;
+
+                try
+                {
+                    var homeBuilding = Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(Component, "Home");
+                    if (homeBuilding == null)
+                        return null;
+
+                    // Get the building name from the NPCEnterableBuilding
+                    var buildingName = Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(homeBuilding, "BuildingName") as string;
+                    if (string.IsNullOrEmpty(buildingName))
+                        return null;
+
+                    // Find the Building wrapper by name
+                    return Building.GetByName(buildingName);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"Exception in Home getter for {NPC.ID}: {ex.Message}");
+                    return null;
+                }
+            }
+            set
+            {
+                EnsureDealer();
+                if (Component == null)
+                {
+                    Logger.Warning($"Cannot set Home for {NPC.ID}: Dealer component not available.");
+                    return;
+                }
+
+                try
+                {
+                    object homeBuilding = null;
+                    if (value != null)
+                    {
+                        // Resolve the underlying game building object
+                        homeBuilding = value.ResolveGameBuilding();
+                        if (homeBuilding == null)
+                        {
+                            Logger.Warning($"Cannot set Home for {NPC.ID}: Building '{value.Name}' could not be resolved.");
+                            return;
+                        }
+                    }
+
+                    // Set the Home field/property on the Dealer component
+                    Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(Component, "Home", homeBuilding);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"Exception in Home setter for {NPC.ID}: {ex.Message}");
+                }
+            }
         }
 
         /// <summary>
