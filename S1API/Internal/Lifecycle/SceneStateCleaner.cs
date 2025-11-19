@@ -81,14 +81,9 @@ namespace S1API.Internal.Lifecycle
 
                     // Clear deferred lookups
                     DeferredMapResolver.Clear();
-
-                    Logger.Msg($"[S1API] Cleaned scene state after unload of '{sceneName}' (NPCs: {npcCount} -> 0, Quests: {questCount} -> 0, Buildings: {buildingCount} -> 0, DeliveryLocations: {deliveryLocationCount} -> 0, Seats: {seatCount} -> 0), Parking Lots: {parkingLotCount}");
                 }
                 else
                 {
-                    // On scene initialization, only log that we're preparing for the scene
-                    Logger.Msg($"[S1API] Preparing for scene '{sceneName}' initialization");
-
                     // Notify NPC bootstrap for readiness and prefab pre-registration
                     try
                     {

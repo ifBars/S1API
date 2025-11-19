@@ -491,7 +491,6 @@ namespace S1API.Entities
                         {
                             moneyManager.ChangeCashBalance(cash, visualizeChange: true, playCashSound: true);
                             ChangeCash(-cash);
-                            Logger.Msg($"Collected {cash} cash from dealer {NPC.ID}");
                         }
                         else
                         {

@@ -49,7 +49,6 @@ namespace S1API.Internal.Map
                 return;
 
             MainSceneLoaded = true;
-            Logger.Msg("Main scene loaded - resolving pending map entity lookups");
 
             List<DeferredLookup> pendingCopy;
             lock (PendingLookups)
@@ -183,7 +182,6 @@ namespace S1API.Internal.Map
                 PendingLookups.Clear();
             }
             MainSceneLoaded = false;
-            Logger.Msg("Cleared deferred lookups");
         }
 
         /// <summary>

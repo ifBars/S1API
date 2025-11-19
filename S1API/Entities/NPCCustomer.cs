@@ -164,11 +164,7 @@ namespace S1API.Entities
                 var newOfferedContract = Component.OfferedContractInfo;
                 bool contractGenerated = newOfferedContract != null && newOfferedContract != originalOfferedContract;
                 
-                if (contractGenerated)
-                {
-                    Logger.Msg($"Successfully generated contract for {NPC.ID}");
-                }
-                else
+                if (!contractGenerated)
                 {
                     Logger.Warning($"Failed to generate contract for {NPC.ID}. Check if products are listed for sale and NPC meets order conditions.");
                 }
@@ -211,7 +207,6 @@ namespace S1API.Entities
             try
             {
                 Component.OfferContract(internalInfo);
-                Logger.Msg($"Successfully offered custom contract to {NPC.ID}");
                 return true;
             }
             catch (Exception ex)
@@ -976,8 +971,6 @@ namespace S1API.Entities
 
             try
             {
-                Logger.Msg($"Customer {NPC.FullName} recommended dealer {dealer.NPC.FullName} to player");
-                
                 // Mark the dealer as recommended
                 dealer.MarkAsRecommended();
                 
