@@ -23,6 +23,7 @@ jobs:
       - name: Checkout S1API
         uses: actions/checkout@v4
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Checkout Game Assemblies
@@ -32,6 +33,7 @@ jobs:
           token: ${{ secrets.GAME_ASSEMBLIES_TOKEN }}
           path: game-assemblies
           fetch-depth: 1
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4

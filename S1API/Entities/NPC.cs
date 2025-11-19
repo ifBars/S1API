@@ -396,7 +396,7 @@ namespace S1API.Entities
                             else
                             {
                                 // If we're using BaseNPC prefab but need dealer functionality, warn
-                                Debug.LogWarning($"[S1API] NPC {npcType.Name} requested dealer functionality but prefab does not have Dealer component. EnsureDealer() was called before prefab creation.");
+                                Logger.Warning($"[S1API] NPC {npcType.Name} requested dealer functionality but prefab does not have Dealer component. EnsureDealer() was called before prefab creation.");
                             }
                         }
                     }
@@ -426,7 +426,7 @@ namespace S1API.Entities
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"[S1API] Failed to register {prefabName} in SpawnablePrefabs: {ex.Message}");
+                    Logger.Warning($"[S1API] Failed to register {prefabName} in SpawnablePrefabs: {ex.Message}");
                 }
 
                 // Organize the prefab in the scene hierarchy to avoid clutter
@@ -714,7 +714,7 @@ namespace S1API.Entities
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[S1API] Failed to pre-register NPC prefab for {npcType?.Name}: {ex.Message}");
+                Logger.Warning($"[S1API] Failed to pre-register NPC prefab for {npcType?.Name}: {ex.Message}");
             }
         }
 
@@ -760,7 +760,7 @@ namespace S1API.Entities
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[S1API] PreRegisterAllNpcPrefabs failed: {ex.Message}");
+                Logger.Warning($"[S1API] PreRegisterAllNpcPrefabs failed: {ex.Message}");
             }
         }
 
@@ -840,6 +840,16 @@ namespace S1API.Entities
                 return false;
             try
             {
+                string dealerId = string.Empty;
+                try
+                {
+                    dealerId = dealerComponent.ID ?? dealerComponent?.name ?? "<unknown-dealer>";
+                }
+                catch
+                {
+                    dealerId = "<unknown-dealer>";
+                }
+
                 dealerComponent.SigningFee = data.SigningFee;
                 dealerComponent.Cut = data.Cut;
 #if MONOMELON
@@ -855,34 +865,35 @@ namespace S1API.Entities
                 dealerComponent.SellInsufficientQualityItems = data.SellInsufficientQualityItems;
                 dealerComponent.SellExcessQualityItems = data.SellExcessQualityItems;
                 
-                // Set Home building if provided
+                // Store Home building reference in NPCPrefabIdentity for resolution in Main scene
+                // This runs in Menu scene where buildings aren't available yet
+                string buildingNameToStore = null;
                 if (data.Home != null)
                 {
-                    var homeBuilding = data.Home.ResolveGameBuilding();
-                    if (homeBuilding != null)
-                    {
-                        Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(dealerComponent, "Home", homeBuilding);
-                    }
+                    buildingNameToStore = data.Home.Name;
                 }
                 else if (!string.IsNullOrEmpty(data.HomeName))
                 {
-                    // Fallback: try to find building by name if Home wasn't set
-                    var building = Map.Building.GetByName(data.HomeName);
-                    if (building != null)
+                    buildingNameToStore = data.HomeName;
+                }
+
+                if (!string.IsNullOrEmpty(buildingNameToStore))
+                {
+                    // Store building name in NPCPrefabIdentity for deferred resolution
+                    var identity = dealerComponent.GetComponent<Internal.Entities.NPCPrefabIdentity>();
+                    if (identity != null)
                     {
-                        var homeBuilding = building.ResolveGameBuilding();
-                        if (homeBuilding != null)
-                        {
-                            Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(dealerComponent, "Home", homeBuilding);
-                        }
+                        identity.DealerHomeBuildingName = buildingNameToStore;
                     }
                 }
                 
                 // Note: CompletedDealsVariable would need to be set via other means
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                Logger.Error($"[NPC] TryApplyDealerDefaults: Exception applying dealer defaults: {ex.Message}");
+                Logger.Error($"[NPC] Stack trace: {ex.StackTrace}");
                 return false;
             }
         }
@@ -2275,7 +2286,8 @@ namespace S1API.Entities
         private void InitializeRelationshipData()
         {
             string npcId = S1NPC?.ID ?? "<null>";
-            
+            bool relationDataExisted = S1NPC.RelationData != null;
+
             if (S1NPC.RelationData == null)
             {
                 S1NPC.RelationData = new S1Relation.NPCRelationData();
@@ -2308,6 +2320,7 @@ namespace S1API.Entities
 
             try
             {
+                string npcId = S1NPC?.ID ?? "<null>";
                 var data = BuildRandomInventoryDefaultsForType(GetType());
                 if (data == null)
                     return;
@@ -2351,17 +2364,21 @@ namespace S1API.Entities
                         if (slotsExist)
                         {
                             // Awake has run, insert items directly
+                            int insertedCount = 0;
                             foreach (var itemDef in startupItemsList)
                             {
                                 try
                                 {
                                     var itemInstance = itemDef.GetDefaultInstance();
                                     if (itemInstance != null)
+                                    {
                                         inventory.InsertItem(itemInstance, network: false);
+                                        insertedCount++;
+                                    }
                                 }
                                 catch (Exception ex)
                                 {
-                                    Debug.LogWarning($"[S1API] Failed to insert startup item {itemDef.ID}: {ex.Message}");
+                                    Logger.Warning($"[NPC] ApplyRandomInventoryDefaults: '{npcId}' failed to insert startup item {itemDef.ID}: {ex.Message}");
                                 }
                             }
                             
@@ -2405,11 +2422,16 @@ namespace S1API.Entities
                             }
                         }
                     }
+                    else
+                    {
+                        Logger.Warning($"[NPC] ApplyRandomInventoryDefaults: '{npcId}' had StartupItems definitions but none resolved from registry.");
+                    }
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[S1API] Failed to apply random inventory defaults for NPC {GetType().Name}: {ex.Message}");
+                Logger.Warning($"[NPC] ApplyRandomInventoryDefaults: '{S1NPC?.ID ?? GetType().Name}' failed with exception: {ex.Message}");
+                Logger.Warning($"[NPC] ApplyRandomInventoryDefaults: Stack trace: {ex.StackTrace}");
             }
         }
 
@@ -2439,7 +2461,7 @@ namespace S1API.Entities
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"[S1API] Failed to initialize network behaviour {behaviour.GetType().Name}: {ex.Message}");
+                    Logger.Warning($"[S1API] Failed to initialize network behaviour {behaviour.GetType().Name}: {ex.Message}");
                 }
             }
         }
@@ -2504,7 +2526,7 @@ namespace S1API.Entities
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[S1API] Failed to queue NPC network spawn: {ex.Message}");
+                Logger.Warning($"[S1API] Failed to queue NPC network spawn: {ex.Message}");
             }
         }
 
@@ -2518,7 +2540,7 @@ namespace S1API.Entities
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[S1API] Failed to prepare customer data before spawn: {ex.Message}");
+                Logger.Warning($"[S1API] Failed to prepare customer data before spawn: {ex.Message}");
             }
         }
 
@@ -2557,7 +2579,7 @@ namespace S1API.Entities
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"[S1API] Failed to ensure Customer on NPC: {ex.Message}");
+                    Logger.Warning($"[S1API] Failed to ensure Customer on NPC: {ex.Message}");
                 }
 
                 // If this NPC type was registered as a dealer, ensure dealer initialization and category badge
@@ -2570,7 +2592,7 @@ namespace S1API.Entities
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"[S1API] Failed to ensure Dealer on NPC: {ex.Message}");
+                    Logger.Warning($"[S1API] Failed to ensure Dealer on NPC: {ex.Message}");
                 }
 
                 // Apply any planned schedule specs for this NPC type now that the instance exists
@@ -2679,12 +2701,12 @@ namespace S1API.Entities
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"[S1API] Failed to apply spawn position: {ex.Message}");
+                    Logger.Warning($"[S1API] Failed to apply spawn position: {ex.Message}");
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[S1API] Failed to finalize NPC after spawn: {ex.Message}");
+                Logger.Warning($"[S1API] Failed to finalize NPC after spawn: {ex.Message}");
             }
         }
 
@@ -2709,7 +2731,7 @@ namespace S1API.Entities
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[S1API] Failed to send visibility RPC for NPC '{S1NPC?.ID}': {ex.Message}");
+                Logger.Warning($"[S1API] Failed to send visibility RPC for NPC '{S1NPC?.ID}': {ex.Message}");
             }
         }
 

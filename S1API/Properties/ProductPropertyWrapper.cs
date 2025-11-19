@@ -1,7 +1,7 @@
 #if (IL2CPPMELON)
-using S1Properties = Il2CppScheduleOne.Properties;
+using S1Properties = Il2CppScheduleOne.Effects;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
-using S1Properties = ScheduleOne.Properties;
+using S1Properties = ScheduleOne.Effects;
 #endif
 
 using S1API.Properties.Interfaces;
@@ -14,12 +14,12 @@ namespace S1API.Properties
     /// </summary>
     public class ProductPropertyWrapper : PropertyBase
     {
-        private readonly S1Properties.Property _innerProperty;
+        private readonly S1Properties.Effect _innerProperty;
 
         /// <summary>
         /// Creates a wrapper around a Schedule One property.
         /// </summary>
-        internal ProductPropertyWrapper(S1Properties.Property property)
+        internal ProductPropertyWrapper(S1Properties.Effect property)
         {
             _innerProperty = property;
         }
@@ -58,6 +58,6 @@ namespace S1API.Properties
         /// <summary>
         /// INTERNAL: Gets the underlying Schedule One property.
         /// </summary>
-        internal S1Properties.Property InnerProperty => _innerProperty;
+        internal S1Properties.Effect InnerProperty => _innerProperty;
     }
 }

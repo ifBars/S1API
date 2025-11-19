@@ -20,6 +20,7 @@ using Il2CppFishNet.Managing.Object;
 using Il2CppFishNet.Object;
 #endif
 using S1API.Entities;
+using S1API.Logging;
 using UnityEngine;
 
 namespace S1API.Internal
@@ -30,6 +31,7 @@ namespace S1API.Internal
     /// </summary>
     internal static class NPCNetworkBootstrap
     {
+        private static readonly Logging.Log Logger = new Logging.Log("NPCNetworkBootstrap");
         private static bool mainSceneInitialized;
         private static bool networkObserved;
         private static bool clientsReady;
@@ -37,6 +39,15 @@ namespace S1API.Internal
         private static bool prefabsWarmupScheduled;
         private static float mainSceneInitTime;
         private static readonly List<PendingSpawn> PendingSpawns = new List<PendingSpawn>();
+        private static bool readinessLogInitialized;
+        private static bool lastLogInMain;
+        private static bool lastLogServerUp;
+        private static bool lastLogClientUp;
+        private static bool lastLogRemoteReady;
+        private static bool lastLogHasRemote;
+        private static bool lastLogClientsReady;
+        private static float lastStateLogTime;
+        private static bool pendingSpawnBlockedLogged;
 
         public static bool ClientsReadyToSpawnNpcs =>
             mainSceneInitialized &&
@@ -53,6 +64,8 @@ namespace S1API.Internal
             prefabsWarmupScheduled = false;
             mainSceneInitTime = 0f;
             PendingSpawns.Clear();
+            readinessLogInitialized = false;
+            pendingSpawnBlockedLogged = false;
         }
 
         public static void EnsurePrefabsWarmup()
@@ -91,6 +104,7 @@ namespace S1API.Internal
                 float activateAt = now + Math.Max(0f, activationDelay);
                 float spawnAt = now + Math.Max(spawnDelay, activationDelay);
                 PendingSpawns.Add(new PendingSpawn(owner, netObject, activateAt, spawnAt));
+                var ownerId = owner?.S1NPC?.ID ?? owner?.gameObject?.name ?? "<unknown>";
 
                 TryProcessPendingSpawns();
             }
@@ -250,6 +264,7 @@ namespace S1API.Internal
             bool clientUpIfHost = !nm.IsServer || nm.IsClient || hasRemoteClients;
 
             clientsReady = inMain && serverUp && clientUpIfHost && remoteConnectionsReady;
+            LogReadinessState(inMain, serverUp, clientUpIfHost, remoteConnectionsReady, hasRemoteClients);
         }
 
         private static bool HasRemoteClients()
@@ -328,14 +343,25 @@ namespace S1API.Internal
         private static void TryProcessPendingSpawns()
         {
             if (PendingSpawns.Count == 0)
+            {
+                pendingSpawnBlockedLogged = false;
                 return;
+            }
 
             var nm = InstanceFinder.NetworkManager;
             if (nm == null || !nm.IsServer)
                 return;
 
             if (!ClientsReadyToSpawnNpcs)
+            {
+                if (!pendingSpawnBlockedLogged)
+                {
+                    pendingSpawnBlockedLogged = true;
+                }
                 return;
+            }
+
+            pendingSpawnBlockedLogged = false;
 
             var serverManager = nm.ServerManager;
             if (serverManager == null)
@@ -354,6 +380,7 @@ namespace S1API.Internal
 
                 var netObject = pending.NetObject;
                 var owner = pending.Owner;
+                var ownerId = owner?.S1NPC?.ID ?? owner?.gameObject?.name ?? "<unknown>";
 
                 if (netObject == null)
                 {
@@ -376,14 +403,20 @@ namespace S1API.Internal
 
                 if (!pending.ActivationApplied && now >= pending.ActivateAt)
                 {
-                    go.SetActive(true);
                     pending.ActivationApplied = true;
                 }
 
                 if (now < pending.SpawnAt)
                     continue;
 
-                try { owner?.PrepareForNetworkSpawn(); } catch { }
+                try
+                {
+                    owner?.PrepareForNetworkSpawn();
+                }
+                catch (Exception prepEx)
+                {
+                    Logger.Warning($"[NPCNetworkBootstrap] PrepareForNetworkSpawn threw for '{ownerId}': {prepEx.Message}");
+                }
 
                 try
                 {
@@ -392,10 +425,18 @@ namespace S1API.Internal
                 catch (Exception ex)
                 {
                     MelonLogger.Warning($"[S1API] Failed to spawn pending NPC '{go.name}': {ex.Message}");
+                    Logger.Warning($"[NPCNetworkBootstrap] Spawn exception stack: {ex.StackTrace}");
                     continue;
                 }
 
-                try { owner?.FinalizeNetworkSpawn(); } catch { }
+                try
+                {
+                    owner?.FinalizeNetworkSpawn();
+                }
+                catch (Exception finalizeEx)
+                {
+                    Logger.Warning($"[NPCNetworkBootstrap] FinalizeNetworkSpawn threw for '{ownerId}': {finalizeEx.Message}");
+                }
 
                 PendingSpawns.RemoveAt(i);
             }
@@ -432,6 +473,30 @@ namespace S1API.Internal
             return null;
         }
 
+        private static void LogReadinessState(bool inMain, bool serverUp, bool clientUpIfHost, bool remoteConnectionsReady, bool hasRemoteClients)
+        {
+            float now = Time.realtimeSinceStartup;
+            bool stateChanged = !readinessLogInitialized ||
+                                lastLogInMain != inMain ||
+                                lastLogServerUp != serverUp ||
+                                lastLogClientUp != clientUpIfHost ||
+                                lastLogRemoteReady != remoteConnectionsReady ||
+                                lastLogHasRemote != hasRemoteClients ||
+                                lastLogClientsReady != clientsReady;
+
+            if (stateChanged || (!clientsReady && (now - lastStateLogTime) >= 5f))
+            {
+                readinessLogInitialized = true;
+                lastLogInMain = inMain;
+                lastLogServerUp = serverUp;
+                lastLogClientUp = clientUpIfHost;
+                lastLogRemoteReady = remoteConnectionsReady;
+                lastLogHasRemote = hasRemoteClients;
+                lastLogClientsReady = clientsReady;
+                lastStateLogTime = now;
+            }
+        }
+
         private sealed class PendingSpawn
         {
             internal readonly NPC Owner;
@@ -451,5 +516,3 @@ namespace S1API.Internal
         }
     }
 }
-
-

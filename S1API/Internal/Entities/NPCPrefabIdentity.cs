@@ -1,15 +1,21 @@
 #if (IL2CPPMELON)
 using S1AvatarFramework = Il2CppScheduleOne.AvatarFramework;
 using S1NPCs = Il2CppScheduleOne.NPCs;
+using S1Economy = Il2CppScheduleOne.Economy;
 using Il2CppInterop.Runtime.Attributes;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1AvatarFramework = ScheduleOne.AvatarFramework;
 using S1NPCs = ScheduleOne.NPCs;
+using S1Economy = ScheduleOne.Economy;
 #endif
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using MelonLoader;
+using S1API.Map;
+using S1API.Internal.Map;
+using S1API.Internal.Utils;
 
 namespace S1API.Internal.Entities
 {
@@ -30,6 +36,7 @@ namespace S1API.Internal.Entities
         public string LastName;
         public Sprite Icon;
         public S1AvatarFramework.AvatarSettings AppearanceDefaults;
+        public string DealerHomeBuildingName;
 
         // Static registry to preserve data across network instantiation on Il2Cpp
         private static readonly Dictionary<string, IdentityData> _registry = new Dictionary<string, IdentityData>();
@@ -43,6 +50,7 @@ namespace S1API.Internal.Entities
             public string LastName;
             public Sprite Icon;
             public AvatarSettingsData AppearanceDefaults;
+            public string DealerHomeBuildingName;
         }
 
         private void Awake()
@@ -83,7 +91,8 @@ namespace S1API.Internal.Entities
                 FirstName = this.FirstName,
                 LastName = this.LastName,
                 Icon = this.Icon,
-                AppearanceDefaults = CloneAvatarSettingsData(avatarData)
+                AppearanceDefaults = CloneAvatarSettingsData(avatarData),
+                DealerHomeBuildingName = this.DealerHomeBuildingName
             };
 
             _registry[prefabName] = identityData;
@@ -107,6 +116,7 @@ namespace S1API.Internal.Entities
                 this.FirstName = data.FirstName;
                 this.LastName = data.LastName;
                 this.Icon = data.Icon;
+                this.DealerHomeBuildingName = data.DealerHomeBuildingName;
                 _cachedAppearanceDefaults = CloneAvatarSettingsData(data.AppearanceDefaults);
                 if (_cachedAppearanceDefaults != null)
                     this.AppearanceDefaults = CreateAvatarSettings(_cachedAppearanceDefaults);
@@ -178,6 +188,45 @@ namespace S1API.Internal.Entities
                 if (avatar != null && AppearanceDefaults != null)
                 {
                     avatar.LoadAvatarSettings(AppearanceDefaults);
+                }
+            }
+            catch { }
+
+            // Apply dealer home building if set (resolve in Main scene)
+            try
+            {
+                if (!string.IsNullOrEmpty(DealerHomeBuildingName))
+                {
+                    ApplyDealerHomeBuilding(npc);
+                }
+            }
+            catch { }
+        }
+
+#if IL2CPPMELON
+        [HideFromIl2Cpp]
+#endif
+        private void ApplyDealerHomeBuilding(S1NPCs.NPC npc)
+        {
+            // Only resolve in Main scene where buildings are available
+            if (DeferredMapResolver.IsMenuScene())
+                return;
+
+            try
+            {
+                var dealerComponent = npc.GetComponent<S1Economy.Dealer>();
+                if (dealerComponent == null)
+                    return;
+
+                // Try to get building wrapper by name
+                var building = Building.GetByName(DealerHomeBuildingName);
+                if (building != null)
+                {
+                    var gameBuilding = building.ResolveGameBuilding();
+                    if (gameBuilding != null)
+                    {
+                        ReflectionUtils.TrySetFieldOrProperty(dealerComponent, "Home", gameBuilding);
+                    }
                 }
             }
             catch { }

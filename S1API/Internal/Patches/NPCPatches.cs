@@ -226,6 +226,17 @@ namespace S1API.Internal.Patches
         [HarmonyPriority(Priority.First)]
         private static void EnsureNPCInventorySafeInit(S1NPCs.NPCInventory __instance)
         {
+            string npcId = "<unknown>";
+            bool isCustomNpc = false;
+            try
+            {
+                var baseNpcCheck = __instance.GetComponent<S1NPCs.NPC>();
+                npcId = baseNpcCheck?.ID ?? __instance.name ?? "<unknown>";
+                var apiNpcCheck = baseNpcCheck != null ? FindWrapperForS1Npc(baseNpcCheck) : null;
+                isCustomNpc = apiNpcCheck != null && apiNpcCheck.IsCustomNPC;
+            }
+            catch { }
+
             // Ensure definition arrays are not null before length/enumeration in Awake_UserLogic
 #if (IL2CPPMELON || IL2CPPBEPINEX)
             if (__instance.TestItems == null)
@@ -535,7 +546,11 @@ namespace S1API.Internal.Patches
 
             var s1BaseNpc = FindBaseNpcById(baseData.ID);
             if (s1BaseNpc == null)
+            {
+                Logger.Warning($"[NPCPatches] NPCLoader_Load_Prefix: Could not find base NPC for '{baseData.ID}'.");
+                Logger.Warning($"The above warning is normal when removing an S1API mod with custom NPCs, because the NPC is saved but doesn't exist anymore.");
                 return true;
+            }
 
             // Skip loader entirely for S1API per-type template prefabs
             try
@@ -556,7 +571,9 @@ namespace S1API.Internal.Patches
 
             var apiNpc = FindWrapperForS1Npc(s1BaseNpc);
             if (apiNpc == null || !apiNpc.IsCustomNPC)
+            {
                 return true; // run original for base NPCs
+            }
 
             // Custom S1API NPC: perform safe subset of loading and skip original
             try
@@ -1173,14 +1190,13 @@ namespace S1API.Internal.Patches
             var s1BaseNpc = FindBaseNpcById(baseData.ID);
             if (s1BaseNpc == null)
             {
+                Logger.Warning($"[NPCPatches] NPCLoader_Load_Postfix: No base NPC found for '{baseData.ID}'.");
                 return;
             }
 
             var apiNpc = FindWrapperForS1Npc(s1BaseNpc);
             if (apiNpc == null)
-            {
                 return;
-            }
 
             apiNpc.LoadFromDynamic(saveData);
 
@@ -1225,7 +1241,9 @@ namespace S1API.Internal.Patches
                     {
                         // Ensure it's in the registry for future lookups
                         if (!S1NPCs.NPCManager.NPCRegistry.Contains(apiNpc.S1NPC))
+                        {
                             S1NPCs.NPCManager.NPCRegistry.Add(apiNpc.S1NPC);
+                        }
                         return apiNpc.S1NPC;
                     }
                 }
@@ -1275,6 +1293,8 @@ namespace S1API.Internal.Patches
                         needsInit = true;
                     }
                 }
+
+                var dealerId = dealer?.ID ?? dealer?.name ?? "<unknown>";
 
                 if (needsInit)
                 {
@@ -1490,6 +1510,7 @@ namespace S1API.Internal.Patches
             // Extract dealer data to check for custom NPC customers
             if (!dynamicData.TryExtractBaseData<S1Datas.DealerData>(out var data))
             {
+                Logger.Warning($"[NPCPatches] Dealer_Load_Prefix: '{dealerId}' missing DealerData. Falling back to original.");
                 return true; // Let original handle if we can't extract data
             }
             
@@ -1923,6 +1944,13 @@ namespace S1API.Internal.Patches
             if (dealer == null || customerIDs == null)
                 yield break;
 
+            string dealerId = "<unknown>";
+            try
+            {
+                dealerId = dealer.ID ?? dealer.name ?? "<unknown>";
+            }
+            catch { }
+
             // Process each customer assignment
             for (int i = 0; i < customerIDs.Length; i++)
             {
@@ -1983,4 +2011,3 @@ namespace S1API.Internal.Patches
         }
     }
 }
-

@@ -1,12 +1,12 @@
 #if (IL2CPPMELON)
 using S1Economy = Il2CppScheduleOne.Economy;
 using S1GameTime = Il2CppScheduleOne.GameTime;
-using S1Props = Il2CppScheduleOne.Properties;
+using S1Props = Il2CppScheduleOne.Effects;
 using S1Product = Il2CppScheduleOne.Product;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Economy = ScheduleOne.Economy;
 using S1GameTime = ScheduleOne.GameTime;
-using S1Props = ScheduleOne.Properties;
+using S1Props = ScheduleOne.Effects;
 using S1Product = ScheduleOne.Product;
 #endif
 
@@ -265,18 +265,18 @@ namespace S1API.Entities.Customer
             if (propertyNames == null || propertyNames.Length == 0)
                 return this;
 
-            var results = new List<S1Props.Property>();
+            var results = new List<S1Props.Effect>();
             string[] searchPaths = { "Properties/Tier1", "Properties/Tier2", "Properties/Tier3", "Properties/Tier4", "Properties/Tier5" };
             foreach (var path in searchPaths)
             {
-                var props = Resources.LoadAll<S1Props.Property>(path);
+                var props = Resources.LoadAll<S1Props.Effect>(path);
                 if (props == null || props.Length == 0)
                     continue;
                 foreach (var name in propertyNames)
                 {
                     if (string.IsNullOrEmpty(name))
                         continue;
-                    S1Props.Property found = null;
+                    S1Props.Effect found = null;
                     foreach (var p in props)
                     {
                         if (p != null && string.Equals(p.name, name, StringComparison.OrdinalIgnoreCase))
@@ -302,18 +302,18 @@ namespace S1API.Entities.Customer
             if (propertyIds == null || propertyIds.Length == 0)
                 return this;
 
-            var results = new List<S1Props.Property>();
+            var results = new List<S1Props.Effect>();
             string[] searchPaths = { "Properties/Tier1", "Properties/Tier2", "Properties/Tier3", "Properties/Tier4", "Properties/Tier5" };
             foreach (var path in searchPaths)
             {
-                var props = Resources.LoadAll<S1Props.Property>(path);
+                var props = Resources.LoadAll<S1Props.Effect>(path);
                 if (props == null || props.Length == 0)
                     continue;
                 foreach (var id in propertyIds)
                 {
                     if (string.IsNullOrEmpty(id))
                         continue;
-                    S1Props.Property found = null;
+                    S1Props.Effect found = null;
                     foreach (var p in props)
                     {
                         if (p != null && string.Equals(p.ID, id, StringComparison.OrdinalIgnoreCase))
@@ -337,7 +337,7 @@ namespace S1API.Entities.Customer
         {
             if (wrappers == null || wrappers.Length == 0)
                 return this;
-            var results = new List<S1Props.Property>();
+            var results = new List<S1Props.Effect>();
             for (int i = 0; i < wrappers.Length; i++)
             {
                 var w = wrappers[i];

@@ -1,7 +1,7 @@
 #if (IL2CPPMELON)
-using S1Properties = Il2CppScheduleOne.Properties;
+using S1Properties = Il2CppScheduleOne.Effects;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
-using S1Properties = ScheduleOne.Properties;
+using S1Properties = ScheduleOne.Effects;
 #endif
 
 using System.Collections.Generic;
@@ -25,9 +25,9 @@ namespace S1API.Properties.Internal
             "Properties/Tier5"
         };
 
-        internal static List<S1Properties.Property> ResolveToGameProperties(IEnumerable<PropertyBase> items)
+        internal static List<S1Properties.Effect> ResolveToGameProperties(IEnumerable<PropertyBase> items)
         {
-            var results = new List<S1Properties.Property>();
+            var results = new List<S1Properties.Effect>();
             if (items == null)
                 return results;
 
@@ -54,14 +54,14 @@ namespace S1API.Properties.Internal
             return results;
         }
 
-        private static S1Properties.Property FindByIdOrName(string id, string unityName)
+        private static S1Properties.Effect FindByIdOrName(string id, string unityName)
         {
             var idNorm = (id ?? string.Empty).Trim();
             var nameNorm = (unityName ?? string.Empty).Trim();
 
             foreach (var path in SearchPaths)
             {
-                var props = Resources.LoadAll<S1Properties.Property>(path);
+                var props = Resources.LoadAll<S1Properties.Effect>(path);
                 if (props == null || props.Length == 0)
                     continue;
 
