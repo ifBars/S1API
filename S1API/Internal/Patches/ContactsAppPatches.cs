@@ -21,6 +21,7 @@ using MelonLoader;
 using S1API.Entities;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
 
@@ -78,6 +79,7 @@ namespace S1API.Internal.Patches
                 var allSceneNPCs = Object.FindObjectsOfType<S1NPCs.NPC>(true);
                 return customNPCs.All(npc => allSceneNPCs.Any(sn => sn.ID == npc.ID));
             }));
+            yield return new WaitForSeconds(10f); // TODO: Replace with a more robust readiness check
 
             AddRelationCircles(contactsApp);
 
@@ -528,7 +530,7 @@ namespace S1API.Internal.Patches
             System.Collections.Generic.List<Vector2> allPositions, float spacing)
         {
             var penalty = 0f;
-            var criticalRadius = spacing * 1.5f;
+            var criticalRadius = spacing * 1.25f;
 
             foreach (var existing in allPositions)
             {
@@ -565,10 +567,10 @@ namespace S1API.Internal.Patches
 
                 // Combined score (lower is better)
                 var score =
-                    crossings * 1000f + // Heavy penalty - line crossings
-                    circleIntersections * 1.5f + // Penalty - lines through circles
-                    avgEdgeLength * 0.5f + // Prefer shorter connections
-                    crowding * 2f; // Penalty - tight clusters
+                    crossings * 50000f + // Heavy penalty - line crossings
+                    circleIntersections * 4.8f + // Penalty - lines through circles
+                    avgEdgeLength * 0.35f + // Prefer shorter connections
+                    crowding * 0.65f; // Penalty - tight clusters
 
                 if (!(score < bestScore)) continue;
                 bestScore = score;
@@ -594,7 +596,7 @@ namespace S1API.Internal.Patches
                 foreach (var otherPos in allPositions)
                 {
                     // skip if line terminates here
-                    if (Vector2.Distance(otherPos, newPos) < 1f || Vector2.Distance(otherPos, anchor) < 1f)
+                    if (Vector2.Distance(otherPos, newPos) < 0.8f || Vector2.Distance(otherPos, anchor) < 0.8f)
                         continue;
 
                     float distToLine = DistanceFromPointToLineSegment(otherPos, newPos, anchor);
@@ -649,6 +651,60 @@ namespace S1API.Internal.Patches
 
             var isDealer = NPC.IsDealerType(npc.GetType());
             indicator.gameObject.SetActive(isDealer);
+        }
+
+        [HarmonyPatch(typeof(S1ContactsApp.ContactsDetailPanel), "Open")]
+        [HarmonyPostfix]
+        private static void ContactsDetailPanel_Open_Postfix(S1ContactsApp.ContactsDetailPanel __instance)
+        {
+            if (__instance == null) return;
+            if (__instance.transform == null) return;
+            if (__instance.TypeLabel.font == null) return;
+            var gameObject = __instance.transform.Find("Connections")?.gameObject;
+            if (gameObject == null)
+            {
+                gameObject = new GameObject("Connections");
+                gameObject.transform.SetParent(__instance.transform, false);
+                var text = gameObject.AddComponent<Text>();
+                text.font = __instance.TypeLabel.font;
+            }
+
+            var textComp = gameObject.GetComponent<Text>();
+            if (textComp == null)
+            {
+                Debug.LogWarning("Connections Text Component not found!");
+                return;
+            }
+
+            var npcConnections = __instance.SelectedNPC?.RelationData?.Connections;
+            if (npcConnections == null || npcConnections.Count == 0)
+            {
+                textComp.text = "Connections: None";
+                return;
+            }
+#if MONOMELON
+            var connsText = string.Join(", ", npcConnections.Where(c => c != null).Select(c =>
+#elif IL2CPPMELON
+            var connsText = string.Join(", ", npcConnections._items.Where(c => c != null).Select(c =>
+#endif
+            {
+                if (c.RelationData == null)
+                    return "???";
+                var isCustomer = NPC.IsCustomerType(c.GetType());
+
+                // Dealers/Suppliers have to be unlocked to see the name
+                if (!isCustomer)
+                {
+                    return c.RelationData.Unlocked
+                        ? c.fullName
+                        : "???";
+                }
+                // Customers can be known via mutual connections
+                return c.RelationData.IsKnown()
+                    ? c.fullName
+                    : "???";
+            }));
+            textComp.text = $"Connections: {connsText}";
         }
     }
 }
