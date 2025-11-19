@@ -294,10 +294,6 @@ namespace S1API.Entities.Schedule
             if (!success)
             {
                 Logger.Error($"Failed to set Building field on StayInBuilding action for '{BuildingName}' at time {StartTime}. Field may not exist or be inaccessible.");
-                
-                // Try to verify if the field exists
-                var buildingValue = ReflectionUtils.TryGetFieldOrProperty(action, "Building");
-                Logger.Msg($"Current Building field value: {(buildingValue == null ? "null" : buildingValue.GetType().Name)}");
             }
             else
             {
@@ -391,7 +387,6 @@ namespace S1API.Entities.Schedule
             {
                 // Register a name-based deferred lookup that will retry when Main scene loads
                 // Note: DeferredMapResolver doesn't handle name-based lookups well, so we'll retry on next resolution attempt
-                Logger.Msg($"Building '{BuildingName}' will be resolved when Main scene loads for StayInBuilding action at time {StartTime}");
             }
         }
 

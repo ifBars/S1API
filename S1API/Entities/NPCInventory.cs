@@ -11,9 +11,11 @@ using S1Registry = ScheduleOne.Registry;
 #endif
 
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.Events;
+using S1API.Logging;
 using S1API.Utils;
 namespace S1API.Entities
 {
@@ -23,6 +25,7 @@ namespace S1API.Entities
     /// </summary>
     public sealed class NPCInventory
     {
+        private static readonly Logging.Log Logger = new Logging.Log("NPCInventory");
         internal readonly NPC NPC;
 
         internal NPCInventory(NPC npc)
@@ -76,9 +79,12 @@ namespace S1API.Entities
         /// <summary>
         /// Ensures the underlying <see cref="S1NPCs.NPCInventory"/> exists and has slots.
         /// Some custom NPCs added at runtime may not have had their slots populated yet.
+        /// This method properly initializes slots without duplication, handling the fact that
+        /// <see cref="S1Items.ItemSlot.SetSlotOwner"/> automatically adds slots to the owner's ItemSlots list.
         /// </summary>
         public void EnsureInitialized()
         {
+            string npcId = NPC?.S1NPC?.ID ?? "<null>";
             var inv = Component;
             if (inv == null)
             {
@@ -87,28 +93,49 @@ namespace S1API.Entities
                 inv = comp;
             }
 
-            // Create slots if none exist, or top-up to SlotCount
+            // Ensure ItemSlots list exists
             if (inv.ItemSlots == null)
             {
-                // Ensure list instance exists
-                ReflectionUtils.TrySetFieldOrProperty(inv, "ItemSlots", new System.Collections.Generic.List<S1Items.ItemSlot>());
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                inv.ItemSlots = new Il2CppSystem.Collections.Generic.List<S1Items.ItemSlot>();
+#else
+                inv.ItemSlots = new System.Collections.Generic.List<S1Items.ItemSlot>();
+#endif
             }
-            if (inv.ItemSlots == null || inv.ItemSlots.Count < inv.SlotCount)
+
+            // Remove duplicate slots (same instance appearing multiple times)
+            int duplicatesRemoved = DeduplicateSlots(inv);
+
+            // Ensure we have the correct number of slots
+            int currentCount = inv.ItemSlots.Count;
+            int targetCount = inv.SlotCount;
+
+            // Remove excess slots if we have too many
+            if (currentCount > targetCount)
             {
-                int existing = inv.ItemSlots?.Count ?? 0;
-                int toCreate = Mathf.Max(0, inv.SlotCount - existing);
-                for (int i = 0; i < toCreate; i++)
+                int trimmed = currentCount - targetCount;
+                for (int i = currentCount - 1; i >= targetCount; i--)
+                {
+                    var slot = inv.ItemSlots[i];
+                    if (slot != null)
+                    {
+                        try { slot.ClearStoredInstance(true); } catch { }
+                    }
+                    inv.ItemSlots.RemoveAt(i);
+                }
+                currentCount = inv.ItemSlots.Count;
+            }
+
+            // Create missing slots if we have too few
+            // Note: SetSlotOwner automatically adds the slot to ItemSlots, so we don't call Add() manually
+            if (currentCount < targetCount)
+            {
+                int slotsToCreate = targetCount - currentCount;
+                for (int i = 0; i < slotsToCreate; i++)
                 {
                     var slot = new S1Items.ItemSlot();
-#if MONOMELON
-                    slot.SetSlotOwner(inv);
-#else
-                    slot.SetSlotOwner(inv.Cast<S1Items.IItemSlotOwner>());
-#endif
-                    try { ReflectionUtils.TrySetFieldOrProperty(slot, "ActiveLock", null); }
-                    catch { }
-                    try { ReflectionUtils.TrySetFieldOrProperty(slot, "IsAddLocked", false); }
-                    catch { }
+                    
+                    // Set up event handler before SetSlotOwner (which adds to list)
 #if (IL2CPPMELON || IL2CPPBEPINEX)
                     System.Action handler = new System.Action(() =>
                     {
@@ -137,30 +164,19 @@ namespace S1API.Entities
                         })
                     );
 #endif
-                    inv.ItemSlots.Add(slot);
-                }
-            }
 
-            // Ensure all slots are unlocked and owned properly
-            try
-            {
-                for (int i = 0; i < inv.ItemSlots.Count; i++)
-                {
-                    var s = inv.ItemSlots[i];
-                    if (s == null)
-                        continue;
+                    // SetSlotOwner automatically adds slot to inv.ItemSlots - DO NOT call Add() manually
 #if MONOMELON
-                    s.SetSlotOwner(inv);
+                    slot.SetSlotOwner(inv);
 #else
-                    s.SetSlotOwner(inv.Cast<S1Items.IItemSlotOwner>());
+                    slot.SetSlotOwner(inv.Cast<S1Items.IItemSlotOwner>());
 #endif
-                    try { ReflectionUtils.TrySetFieldOrProperty(s, "ActiveLock", null); }
-                    catch { }
-                    try { ReflectionUtils.TrySetFieldOrProperty(s, "IsAddLocked", false); }
-                    catch { }
+
+                    // Ensure slot is unlocked
+                    try { ReflectionUtils.TrySetFieldOrProperty(slot, "ActiveLock", null); } catch { }
+                    try { ReflectionUtils.TrySetFieldOrProperty(slot, "IsAddLocked", false); } catch { }
                 }
             }
-            catch { }
 
             if (inv.PickpocketIntObj == null)
             {
@@ -215,7 +231,7 @@ namespace S1API.Entities
             }
             catch { }
 
-            try { inv.NetworkInitializeIfDisabled(); } catch { }
+            try { inv.NetworkInitializeIfDisabled(); } catch (Exception ex) { Logger.Warning($"[NPCInventory] EnsureInitialized: NetworkInitializeIfDisabled threw for '{npcId}': {ex.Message}"); }
         }
 
         internal S1NPCs.NPCInventory Component => NPC.gameObject.GetComponent<S1NPCs.NPCInventory>();
@@ -259,7 +275,59 @@ namespace S1API.Entities
             EnsureInitialized();
             Component?.InsertItem(item, network);
         }
+
+        /// <summary>
+        /// Removes duplicate slot instances from the inventory's ItemSlots list.
+        /// Duplicates can occur if slots are added manually after SetSlotOwner (which already adds them).
+        /// </summary>
+        private int DeduplicateSlots(S1NPCs.NPCInventory inv)
+        {
+            if (inv?.ItemSlots == null)
+                return 0;
+
+            try
+            {
+                // Use a set to track seen slot instances (by reference equality)
+                var seen = new HashSet<object>();
+                var toRemove = new List<int>();
+
+                for (int i = 0; i < inv.ItemSlots.Count; i++)
+                {
+                    var slot = inv.ItemSlots[i];
+                    if (slot == null)
+                    {
+                        toRemove.Add(i);
+                        continue;
+                    }
+
+                    // Check if we've seen this exact slot instance before
+                    if (seen.Contains(slot))
+                    {
+                        // This is a duplicate - clear it and mark for removal
+                        try { slot.ClearStoredInstance(true); } catch { }
+                        toRemove.Add(i);
+                    }
+                    else
+                    {
+                        seen.Add(slot);
+                    }
+                }
+
+                // Remove duplicates from the end to preserve indices
+                for (int i = toRemove.Count - 1; i >= 0; i--)
+                {
+                    inv.ItemSlots.RemoveAt(toRemove[i]);
+                }
+
+                return toRemove.Count;
+            }
+            catch (Exception ex)
+            {
+                // If deduplication fails, continue - better to have duplicates than crash
+                Logger.Warning($"[NPCInventory] DeduplicateSlots: Failed with exception: {ex.Message}");
+                Logger.Warning($"[NPCInventory] DeduplicateSlots: Stack trace: {ex.StackTrace}");
+                return 0;
+            }
+        }
     }
 }
-
-

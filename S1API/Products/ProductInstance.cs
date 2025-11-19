@@ -1,9 +1,9 @@
 #if (IL2CPPMELON )
 using S1Product = Il2CppScheduleOne.Product;
-using S1Properties = Il2CppScheduleOne.Properties;
+using S1Properties = Il2CppScheduleOne.Effects;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Product = ScheduleOne.Product;
-using S1Properties = ScheduleOne.Properties;
+using S1Properties = ScheduleOne.Effects;
 #endif
 using System.Collections.Generic;
 using S1API.Internal.Utils;

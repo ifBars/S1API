@@ -4,6 +4,8 @@
 S1API is an open source collaboration project to help standardize Schedule One modding processes.
 The goal is to provide a standard place for common functionalities so you can focus on making content versus reverse engineering the game.
 
+## MelonLoader 0.7.1+ has issues with the API, please use 0.7.0 to ensure compatibility
+
 > **This GitHub repository is intended for developers.**
 > If you are just looking to mod your game, please refer to the releases / mod repositories such as Thunderstore and Nexus Mods.
 

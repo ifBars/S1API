@@ -54,8 +54,8 @@ namespace S1API.Storages
         /// </summary>
         public event Action OnOpened
         {
-            add => EventHelper.AddListener(value, S1Storage.onOpened);
-            remove => EventHelper.RemoveListener(value, S1Storage.onOpened);
+            add => EventHelper.AddListener(value, h => S1Storage.onOpened += h);
+            remove => EventHelper.RemoveListener(value, h => S1Storage.onOpened -= h);
         }
 
         /// <summary>
@@ -63,8 +63,8 @@ namespace S1API.Storages
         /// </summary>
         public event Action OnClosed
         {
-            add => EventHelper.AddListener(value, S1Storage.onClosed);
-            remove => EventHelper.RemoveListener(value, S1Storage.onClosed);
+            add => EventHelper.AddListener(value, h => S1Storage.onClosed += h);
+            remove => EventHelper.RemoveListener(value, h => S1Storage.onClosed -= h);
         }
     }
 }

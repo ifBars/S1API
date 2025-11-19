@@ -2,11 +2,11 @@
 using Il2CppInterop.Runtime.InteropTypes;
 using S1Product = Il2CppScheduleOne.Product;
 using ItemFramework = Il2CppScheduleOne.ItemFramework;
-using S1Properties = Il2CppScheduleOne.Properties;
+using S1Properties = Il2CppScheduleOne.Effects;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Product = ScheduleOne.Product;
 using ItemFramework = ScheduleOne.ItemFramework;
-using S1Properties = ScheduleOne.Properties;
+using S1Properties = ScheduleOne.Effects;
 #endif
 
 using System.Collections.Generic;

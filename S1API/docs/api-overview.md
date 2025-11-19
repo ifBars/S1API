@@ -225,11 +225,13 @@ Track and respond to cartel relationship status.
 ### Leveling
 **Namespace**: `S1API.Leveling`
 
-Player progression and rank management.
+Player progression and rank management with XP accessors, unlockables, and rank-up events.
 
 **Key Classes**:
-- `LevelManager` - Level management
-- `Rank` - Rank system
+- `LevelManager` - XP/rank access plus OnXPChanged/OnRankUp events
+- `FullRank` - Rank + tier helper struct
+- `Unlockable` - Rank-locked UI entries
+- `Rank` - Rank enumeration
 
 **Documentation**: In development
 
