@@ -1,5 +1,6 @@
 #if (IL2CPPMELON)
 using Il2CppInterop.Runtime;
+using S1Quests = Il2CppScheduleOne.Quests;
 using S1Economy = Il2CppScheduleOne.Economy;
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
@@ -9,6 +10,7 @@ using S1DevUtilities = Il2CppScheduleOne.DevUtilities;
 using S1UIPhoneMessages = Il2CppScheduleOne.UI.Phone.Messages;
 using S1Money = Il2CppScheduleOne.Money;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
+using S1Quests = ScheduleOne.Quests;
 using S1NPCs = ScheduleOne.NPCs;
 using S1Economy = ScheduleOne.Economy;
 using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
@@ -393,6 +395,17 @@ namespace S1API.Entities
             try
             {
                 Component.SendAddCustomer(customer.ID);
+
+                // Best-effort local wiring so both sides have AssignedDealer set immediately
+                try
+                {
+                    var custComponent = customer.gameObject.GetComponent<S1Economy.Customer>();
+                    if (custComponent != null && custComponent.AssignedDealer == null)
+                    {
+                        Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(custComponent, "AssignedDealer", Component);
+                    }
+                }
+                catch { }
             }
             catch (Exception ex)
             {
@@ -741,6 +754,35 @@ namespace S1API.Entities
         {
             try
             {
+                // Ensure contract/assignment lists exist before any contract RPCs run
+                try
+                {
+                    var assignedCustomersObj = Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(dealer, "AssignedCustomers");
+                    if (assignedCustomersObj == null)
+                    {
+                        Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(dealer, "AssignedCustomers",
+#if IL2CPPMELON || IL2CPPBEPINEX
+                            new Il2CppSystem.Collections.Generic.List<S1Economy.Customer>()
+#else
+                            new System.Collections.Generic.List<S1Economy.Customer>()
+#endif
+                        );
+                    }
+
+                    var activeContractsObj = Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(dealer, "ActiveContracts");
+                    if (activeContractsObj == null)
+                    {
+                        Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(dealer, "ActiveContracts",
+#if IL2CPPMELON || IL2CPPBEPINEX
+                            new Il2CppSystem.Collections.Generic.List<S1Quests.Contract>()
+#else
+                            new System.Collections.Generic.List<S1Quests.Contract>()
+#endif
+                        );
+                    }
+                }
+                catch { /* best effort to prevent null lists */ }
+
                 // Initialize overflow slots if not already initialized
 #if MONOMELON
                 var overflowSlotsField = typeof(S1Economy.Dealer).GetField("overflowSlots", BindingFlags.NonPublic | BindingFlags.Instance);

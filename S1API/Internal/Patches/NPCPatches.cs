@@ -58,6 +58,13 @@ namespace S1API.Internal.Patches
     {
         private static readonly Logging.Log Logger = new Logging.Log("NPCPatches");
         private static readonly HashSet<string> _loadingDealers = new HashSet<string>();
+        // Pending custom NPC types to instantiate when using consolidated NPCs.json saves (non-physical/custom contacts).
+        private static readonly List<Type> _pendingCustomNpcTypes = new List<Type>();
+        // Base-game additional save keys. If a DynamicSaveData has anything outside this set, we treat it as custom.
+        private static readonly HashSet<string> BaseNpcAdditionalKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Relationship", "Inventory", "CustomerData", "MessageConversation", "Health"
+        };
 
         /// <summary>
         /// Comparison function for sorting NPCAction by StartTime, with signals coming before non-signals when times are equal.
@@ -78,6 +85,190 @@ namespace S1API.Internal.Patches
             return a.IsSignal ? -1 : 1; // Signal comes before non-signal
         }
 
+        private static bool HasConsolidatedSave(string mainPath)
+        {
+            string parentSaveFolder = Directory.GetParent(mainPath)?.FullName ?? mainPath;
+            string consolidatedPath = Path.Combine(parentSaveFolder, "NPCs.json");
+            return File.Exists(consolidatedPath);
+        }
+
+        /// <summary>
+        /// Queue up custom NPC types so we can instantiate them in save order when using NPCs.json.
+        /// </summary>
+        private static void RebuildPendingCustomNpcTypes(bool useConsolidatedFlow)
+        {
+            _pendingCustomNpcTypes.Clear();
+            if (!useConsolidatedFlow)
+                return;
+
+            var types = ReflectionUtils.GetDerivedClasses<NPC>();
+            // Deterministic ordering to keep static-indexed mods stable (e.g., Empire NPC1..NPC50)
+            types.Sort((a, b) => string.Compare(a?.Name, b?.Name, StringComparison.Ordinal));
+
+            foreach (Type type in types)
+            {
+                if (type == null || type.IsAbstract)
+                    continue;
+                if (type.Assembly == Assembly.GetExecutingAssembly())
+                    continue; // skip S1API internal wrapper types
+
+                _pendingCustomNpcTypes.Add(type);
+            }
+        }
+
+        /// <summary>
+        /// Heuristic to determine if a DynamicSaveData belongs to a custom NPC by looking for non-base additional data keys.
+        /// </summary>
+        private static bool IsLikelyCustomDynamicSaveData(S1Datas.DynamicSaveData saveData)
+        {
+            if (saveData == null)
+                return false;
+
+            try
+            {
+                var extras = saveData.AdditionalDatas;
+                if (extras == null)
+                    return false;
+
+                int count = extras.Count;
+                for (int i = 0; i < count; i++)
+                {
+                    var data = extras[i];
+                    if (data == null)
+                        continue;
+
+                    string name = data.Name;
+                    if (string.IsNullOrEmpty(name))
+                        continue;
+
+                    if (!BaseNpcAdditionalKeys.Contains(name))
+                        return true;
+                }
+            }
+            catch
+            {
+                // Swallow and treat as non-custom
+            }
+
+            return false;
+        }
+
+        private static void RegisterCustomNpcForNetworking(NPC customNPC)
+        {
+            if (customNPC == null || customNPC.gameObject == null)
+                return;
+
+            try
+            {
+                var netObj = customNPC.gameObject.GetComponent<NetworkObject>();
+                if (netObj == null)
+                {
+                    try
+                    {
+                        netObj = customNPC.gameObject.AddComponent<NetworkObject>();
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                if (netObj != null)
+                {
+                    NPCNetworkBootstrap.RegisterPendingNetworkSpawn(customNPC, netObj, 3f, 6f);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        /// <summary>
+        /// Instantiate a pending custom NPC whose default ID matches the save ID (case-insensitive).
+        /// Returns the instance if successful; otherwise null. Non-matching temporary instances
+        /// are cleaned up immediately to avoid registration side effects.
+        /// </summary>
+        private static NPC TryInstantiateCustomNpcForSaveId(string npcId, string reasonTag)
+        {
+            if (_pendingCustomNpcTypes.Count == 0)
+                return null;
+
+            for (int i = 0; i < _pendingCustomNpcTypes.Count; i++)
+            {
+                var type = _pendingCustomNpcTypes[i];
+                NPC? customNPC = null;
+                try
+                {
+                    customNPC = (NPC)Activator.CreateInstance(type, true)!;
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"[S1API] Failed to instantiate custom NPC type '{type?.FullName ?? "<null>"}' for save ID '{npcId}': {ex.Message}");
+                }
+
+                if (customNPC == null)
+                    continue;
+
+                string defaultId = null;
+                try { defaultId = customNPC.S1NPC?.ID; } catch { }
+
+                bool idMatches = !string.IsNullOrEmpty(npcId)
+                                 && !string.IsNullOrEmpty(defaultId)
+                                 && defaultId.Equals(npcId, StringComparison.OrdinalIgnoreCase);
+
+                if (idMatches)
+                {
+                    _pendingCustomNpcTypes.RemoveAt(i);
+                    RegisterCustomNpcForNetworking(customNPC);
+                    return customNPC;
+                }
+
+                // Cleanup non-matching instance to avoid registry pollution
+                try { NPC.All.Remove(customNPC); } catch { }
+                try { UnityEngine.Object.DestroyImmediate(customNPC.gameObject); } catch { }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Instantiate any remaining custom NPC types that were not present in the save (newly added NPCs).
+        /// </summary>
+        private static void InstantiateRemainingCustomNpcs(string mainPath)
+        {
+            if (_pendingCustomNpcTypes.Count == 0)
+                return;
+
+            while (_pendingCustomNpcTypes.Count > 0)
+            {
+                Type type = _pendingCustomNpcTypes[0];
+                _pendingCustomNpcTypes.RemoveAt(0);
+                NPC? customNPC = null;
+                try
+                {
+                    customNPC = (NPC)Activator.CreateInstance(type, true)!;
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"[S1API] Failed to instantiate custom NPC type '{type?.FullName ?? "<null>"}' with default data: {ex.Message}");
+                }
+
+                if (customNPC == null)
+                    continue;
+
+                // Initialize default state from legacy per-NPC folder (if it exists) to give new NPCs sensible defaults.
+                try
+                {
+                    string npcPath = Path.Combine(mainPath, customNPC.S1NPC.SaveFolderName);
+                    customNPC.LoadInternal(npcPath);
+                }
+                catch
+                {
+                }
+
+                RegisterCustomNpcForNetworking(customNPC);
+            }
+        }
+
         /// <summary>
         /// Patching performed for when game NPCs are loaded.
         /// Creates custom NPC instances before the loader runs.
@@ -90,6 +281,10 @@ namespace S1API.Internal.Patches
         [HarmonyPriority(Priority.First)]
         private static void NPCsLoadersLoad(S1Loaders.NPCsLoader __instance, string mainPath)
         {
+            // Build pending list (used later for consolidated flow as a fallback)
+            bool hasConsolidatedSave = HasConsolidatedSave(mainPath);
+            RebuildPendingCustomNpcTypes(hasConsolidatedSave);
+
             // Only allow custom NPC instantiation in the "Main" scene to avoid prologue issues
             if (!IsInMainScene())
                 return;
@@ -151,6 +346,9 @@ namespace S1API.Internal.Patches
                 
                 createdCount++;
             }
+
+            // We instantiated all custom NPCs up front; clear pending list to avoid duplicate fallback instantiation.
+            _pendingCustomNpcTypes.Clear();
         }
 
         /// <summary>
@@ -177,6 +375,8 @@ namespace S1API.Internal.Patches
                     {
                         S1Loaders.NPCLoader nPCLoader = new S1Loaders.NPCLoader();
                         S1Datas.DynamicSaveData[] nPCs = nPCCollectionData.NPCs;
+                        if (_pendingCustomNpcTypes.Count == 0)
+                            RebuildPendingCustomNpcTypes(true);
                         
                         int successCount = 0;
                         int failureCount = 0;
@@ -188,6 +388,17 @@ namespace S1API.Internal.Patches
                                 {
                                     var baseData = dynamicSaveData.ExtractBaseData<S1Datas.NPCData>();
                                     string npcId = baseData?.ID ?? "<unknown>";
+                                    // Ensure a matching custom NPC exists before load; skip if none matches to avoid mis-binding
+                                    var existingNpc = FindBaseNpcById(baseData?.ID ?? string.Empty);
+                                    if (existingNpc == null && _pendingCustomNpcTypes.Count > 0)
+                                    {
+                                        TryInstantiateCustomNpcForSaveId(baseData?.ID, "no-base-npc");
+                                    }
+                                    
+                                    if (existingNpc == null && IsLikelyCustomDynamicSaveData(dynamicSaveData) && _pendingCustomNpcTypes.Count > 0)
+                                    {
+                                        TryInstantiateCustomNpcForSaveId(baseData?.ID, "custom-data");
+                                    }
                                     
                                     nPCLoader.Load(dynamicSaveData);
                                     successCount++;
@@ -202,6 +413,9 @@ namespace S1API.Internal.Patches
                                 }
                             }
                         }
+
+                        // Instantiate any new custom NPCs that don't have save entries yet (e.g., newly added mods)
+                        InstantiateRemainingCustomNpcs(mainPath);
                         return false; // Skip original loader
                     }
                 }
