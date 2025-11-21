@@ -781,6 +781,53 @@ namespace S1API.Internal.Patches
         }
 
         /// <summary>
+        /// Guard GetSaveData to prevent NullReferenceException when GameObject is null or destroyed.
+        /// Also prevents saving template prefabs.
+        /// </summary>
+        /// <param name="__instance">The base NPC instance being saved.</param>
+        /// <param name="__result">The dynamic save data result.</param>
+        [HarmonyPatch(typeof(S1NPCs.NPC), nameof(S1NPCs.NPC.GetSaveData))]
+        [HarmonyPrefix]
+        private static bool NPC_GetSaveData_Prefix(S1NPCs.NPC __instance, ref S1Datas.DynamicSaveData __result)
+        {
+            // Check if instance is null
+            if (__instance == null)
+            {
+                __result = null;
+                return false; // Skip original
+            }
+
+            // Check if GameObject is null or destroyed - this causes NullReferenceException in GetComponent calls
+            if (__instance.gameObject == null)
+            {
+                Logger.Warning($"[S1API] NPC_GetSaveData_Prefix: NPC '{__instance?.ID ?? "<null>"}' has null GameObject - skipping save");
+                __result = null;
+                return false; // Skip original
+            }
+
+            // Check if this is a template prefab (should not be saved)
+            try
+            {
+                string name = __instance.gameObject.name;
+                if (!string.IsNullOrEmpty(name) && name.StartsWith("S1API_", StringComparison.Ordinal))
+                {
+                    // Template prefab - don't save
+                    __result = null;
+                    return false; // Skip original
+                }
+            }
+            catch
+            {
+                // If we can't check the name, skip to be safe
+                __result = null;
+                return false;
+            }
+
+            // Allow original method to run
+            return true;
+        }
+
+        /// <summary>
         /// Append S1API Saveable fields into the new consolidated NPCs.json via DynamicSaveData.
         /// </summary>
         /// <param name="__instance">The base NPC instance being saved.</param>
@@ -789,6 +836,14 @@ namespace S1API.Internal.Patches
         [HarmonyPostfix]
         private static void NPC_GetSaveData(S1NPCs.NPC __instance, ref S1Datas.DynamicSaveData __result)
         {
+            // Skip if result is null (prefix prevented save)
+            if (__result == null)
+                return;
+
+            // Check if instance is still valid
+            if (__instance == null || __instance.gameObject == null)
+                return;
+
             var apiNpc = FindWrapperForS1Npc(__instance);
             if (apiNpc == null)
                 return;
