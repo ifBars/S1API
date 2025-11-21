@@ -192,6 +192,30 @@ namespace S1API.Internal.Patches
             if (_pendingCustomNpcTypes.Count == 0)
                 return null;
 
+            // First check if NPC already exists - don't create duplicates
+            var existingNpc = FindBaseNpcById(npcId);
+            if (existingNpc != null)
+            {
+                // NPC already exists, find the wrapper
+                var wrapper = FindWrapperForS1Npc(existingNpc);
+                if (wrapper != null)
+                {
+                    // Remove the type from pending list since this NPC is already instantiated
+                    // Find the matching type and remove it
+                    for (int i = _pendingCustomNpcTypes.Count - 1; i >= 0; i--)
+                    {
+                        var type = _pendingCustomNpcTypes[i];
+                        if (type != null && wrapper.GetType() == type)
+                        {
+                            _pendingCustomNpcTypes.RemoveAt(i);
+                            break;
+                        }
+                    }
+                    return wrapper;
+                }
+                return null; // NPC exists but no wrapper found - shouldn't happen
+            }
+
             for (int i = 0; i < _pendingCustomNpcTypes.Count; i++)
             {
                 var type = _pendingCustomNpcTypes[i];
@@ -293,6 +317,20 @@ namespace S1API.Internal.Patches
             if (!InstanceFinder.IsServer)
                 return;
 
+            // Check if consolidated save (NPCs.json) exists
+            string parentSaveFolder = Directory.GetParent(mainPath)?.FullName ?? mainPath;
+            string consolidatedPath = Path.Combine(parentSaveFolder, "NPCs.json");
+            bool hasConsolidatedFile = File.Exists(consolidatedPath);
+
+            // If NPCs.json exists, don't create NPCs upfront - let NPCsLoader_Load_Prefix handle instantiation
+            // This prevents duplicate creation when loading from consolidated save
+            if (hasConsolidatedFile)
+            {
+                // Don't clear pending list - NPCsLoader_Load_Prefix will use it to instantiate NPCs as needed
+                return;
+            }
+
+            // Legacy save format: create all NPCs upfront and load from per-NPC folders
             int createdCount = 0;
             foreach (Type type in ReflectionUtils.GetDerivedClasses<NPC>())
             {
@@ -309,17 +347,9 @@ namespace S1API.Internal.Patches
 
                 string npcId = customNPC.S1NPC?.ID ?? "<null>";
 
-                // For old saves (NPCs folder present), load SaveableFields from per-NPC folder.
-                // For new saves (NPCs.json present), let NPCLoader patch hydrate via DynamicSaveData.
-                // NPCs.json is stored in the parent save folder, not in the NPCs subfolder
-                string parentSaveFolder = Directory.GetParent(mainPath)?.FullName ?? mainPath;
-                string consolidatedPath = Path.Combine(parentSaveFolder, "NPCs.json");
-                
-                if (!File.Exists(consolidatedPath))
-                {
-                    string npcPath = Path.Combine(mainPath, customNPC.S1NPC.SaveFolderName);
-                    customNPC.LoadInternal(npcPath);
-                }
+                // Load SaveableFields from per-NPC folder for legacy saves
+                string npcPath = Path.Combine(mainPath, customNPC.S1NPC.SaveFolderName);
+                customNPC.LoadInternal(npcPath);
 
                 try
                 {
@@ -388,20 +418,49 @@ namespace S1API.Internal.Patches
                                 {
                                     var baseData = dynamicSaveData.ExtractBaseData<S1Datas.NPCData>();
                                     string npcId = baseData?.ID ?? "<unknown>";
-                                    // Ensure a matching custom NPC exists before load; skip if none matches to avoid mis-binding
+                                    
+                                    // Check if NPC already exists first - don't create duplicates
                                     var existingNpc = FindBaseNpcById(baseData?.ID ?? string.Empty);
+                                    
+                                    // If NPC doesn't exist yet, try to instantiate it from pending types
+                                    // TryInstantiateCustomNpcForSaveId will check for existing NPCs internally to prevent duplicates
                                     if (existingNpc == null && _pendingCustomNpcTypes.Count > 0)
                                     {
-                                        TryInstantiateCustomNpcForSaveId(baseData?.ID, "no-base-npc");
+                                        var instantiated = TryInstantiateCustomNpcForSaveId(baseData?.ID, "no-base-npc");
+                                        if (instantiated != null)
+                                        {
+                                            // Re-check after instantiation to get the base NPC
+                                            existingNpc = FindBaseNpcById(baseData?.ID ?? string.Empty);
+                                        }
                                     }
                                     
+                                    // If still not found and data looks custom, try again
                                     if (existingNpc == null && IsLikelyCustomDynamicSaveData(dynamicSaveData) && _pendingCustomNpcTypes.Count > 0)
                                     {
-                                        TryInstantiateCustomNpcForSaveId(baseData?.ID, "custom-data");
+                                        var instantiated = TryInstantiateCustomNpcForSaveId(baseData?.ID, "custom-data");
+                                        if (instantiated != null)
+                                        {
+                                            // Re-check after instantiation to get the base NPC
+                                            existingNpc = FindBaseNpcById(baseData?.ID ?? string.Empty);
+                                        }
                                     }
                                     
-                                    nPCLoader.Load(dynamicSaveData);
-                                    successCount++;
+                                    // Only load if NPC exists (either was already there or was just instantiated)
+                                    // If NPC still doesn't exist, it's likely a base game NPC or a missing mod
+                                    if (existingNpc != null)
+                                    {
+                                        nPCLoader.Load(dynamicSaveData);
+                                        successCount++;
+                                    }
+                                    else
+                                    {
+                                        // Don't warn for base game NPCs - they're handled by the base loader
+                                        // Only warn if it looks like a custom NPC that failed to instantiate
+                                        if (IsLikelyCustomDynamicSaveData(dynamicSaveData))
+                                        {
+                                            Logger.Warning($"[S1API] NPCsLoader_Load_Prefix: Could not find or instantiate custom NPC '{npcId}' - skipping load");
+                                        }
+                                    }
                                 }
                                 catch (Exception npcEx)
                                 {

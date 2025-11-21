@@ -162,7 +162,7 @@ namespace S1API.Internal.Utils
         /// <param name="methodName">The name of the method you're searching for.</param>
         /// <param name="bindingFlags">The binding flags to apply during the search.</param>
         /// <returns>The method info if found, otherwise null.</returns>
-        [Obsolete("Use S1API.Utils.ReflectionUtils.GetMethod instead. This method will be removed in a future version.")]
+        [Obsolete("Use S1API.Utils.ReflectionUtils.GetMethod instead. This method will be made internal in a future version.")]
         public static MethodInfo? GetMethod(Type? type, string methodName, BindingFlags bindingFlags)
         {
             while (type != null && type != typeof(object))
@@ -197,7 +197,7 @@ namespace S1API.Internal.Utils
         /// </summary>
         /// <param name="obj">The object type to check</param>
         /// <returns>Whether the type is a ValueTuple or not</returns>
-        [Obsolete("Use S1API.Utils.ReflectionUtils.IsValueTuple instead. This method will be removed in a future version.")]
+        [Obsolete("Use S1API.Utils.ReflectionUtils.IsValueTuple instead. This method will be made internal in a future version.")]
         public static bool IsValueTuple(this object obj)
         {
             if (obj == null)
@@ -216,7 +216,7 @@ namespace S1API.Internal.Utils
         /// </summary>
         /// <param name="obj">The ValueTuple instance</param>
         /// <returns>The items in the ValueTuple instance.</returns>
-        [Obsolete("Use S1API.Utils.ReflectionUtils.GetValueTupleItems instead. This method will be removed in a future version.")]
+        [Obsolete("Use S1API.Utils.ReflectionUtils.GetValueTupleItems instead. This method will be made internal in a future version.")]
         public static object[]? GetValueTupleItems(this object obj)
         {
             if (!obj.IsValueTuple())
