@@ -16,6 +16,8 @@ using MelonLoader;
 using S1API.Map;
 using S1API.Internal.Map;
 using S1API.Internal.Utils;
+using S1API.Entities;
+using S1API.Entities.Relation;
 
 namespace S1API.Internal.Entities
 {
@@ -38,6 +40,12 @@ namespace S1API.Internal.Entities
         public S1AvatarFramework.AvatarSettings AppearanceDefaults;
         public string DealerHomeBuildingName;
 
+        // Relationship data fields for Mono compatibility
+        public float? RelationDelta;
+        public bool? Unlocked;
+        public NPCRelationship.UnlockType? UnlockType;
+        public List<string> ConnectionIDs;
+
         // Static registry to preserve data across network instantiation on Il2Cpp
         private static readonly Dictionary<string, IdentityData> _registry = new Dictionary<string, IdentityData>();
         private bool _applied;
@@ -51,6 +59,10 @@ namespace S1API.Internal.Entities
             public Sprite Icon;
             public AvatarSettingsData AppearanceDefaults;
             public string DealerHomeBuildingName;
+            public float? RelationDelta;
+            public bool? Unlocked;
+            public int? UnlockType; // Stored as int (0=Recommendation, 1=DirectApproach) to avoid enum dependency
+            public List<string> ConnectionIDs;
         }
 
         private void Awake()
@@ -63,10 +75,64 @@ namespace S1API.Internal.Entities
 
         private void Start()
         {
+            // On Il2Cpp, restore fields from registry again in Start() in case they were wiped after Awake()
+#if IL2CPPMELON
+            TryRestoreFromRegistry();
+#endif
             // Best-effort: apply immediately, then retry briefly in case Avatar isn't yet available on clients.
             TryApplyNow();
             if (!_applied)
                 MelonCoroutines.Start(DelayedApply());
+        }
+
+        /// <summary>
+        /// INTERNAL: Called by NPCPrefabBuilder to register relationship data for Il2Cpp.
+        /// Extracts data from the builder and stores it in the static registry.
+        /// </summary>
+#if IL2CPPMELON
+        [HideFromIl2Cpp]
+#endif
+        internal static void RegisterRelationshipDataToStaticCache(string prefabName, NPCRelationshipDataBuilder builder)
+        {
+            if (string.IsNullOrEmpty(prefabName) || builder == null)
+                return;
+
+            try
+            {
+                // Normalize prefab name (remove "(Clone)" suffix) - only register prefabs, not spawned instances
+                string normalizedName = prefabName;
+                if (normalizedName.EndsWith("(Clone)"))
+                    normalizedName = normalizedName.Substring(0, normalizedName.Length - 7);
+
+                // Extract data from builder without reflection for Il2Cpp reliability
+                var snapshot = builder.CaptureData();
+                float? relationDelta = snapshot?.RelationDelta;
+                bool? unlocked = snapshot?.Unlocked;
+                NPCRelationship.UnlockType? unlockType = snapshot?.UnlockType;
+                List<string> connectionIDs = snapshot?.ConnectionIDs != null && snapshot.ConnectionIDs.Count > 0
+                    ? new List<string>(snapshot.ConnectionIDs)
+                    : null;
+
+                // Get or create identity data entry
+                if (!_registry.TryGetValue(normalizedName, out var existingData))
+                {
+                    existingData = new IdentityData();
+                }
+
+                // Update relationship fields (merge with existing data)
+                var updatedData = existingData;
+                if (relationDelta.HasValue)
+                    updatedData.RelationDelta = relationDelta;
+                if (unlocked.HasValue)
+                    updatedData.Unlocked = unlocked;
+                if (unlockType.HasValue)
+                    updatedData.UnlockType = (int?)unlockType.Value;
+                if (connectionIDs != null && connectionIDs.Count > 0)
+                    updatedData.ConnectionIDs = new List<string>(connectionIDs);
+
+                _registry[normalizedName] = updatedData;
+            }
+            catch { }
         }
 
         /// <summary>
@@ -82,8 +148,42 @@ namespace S1API.Internal.Entities
             if (string.IsNullOrEmpty(prefabName))
                 return;
 
+            // Normalize prefab name (remove "(Clone)" suffix) - only register prefabs, not spawned instances
+            string normalizedName = prefabName;
+            if (normalizedName.EndsWith("(Clone)"))
+                normalizedName = normalizedName.Substring(0, normalizedName.Length - 7);
+
+            // Don't register spawned instances - they should only read from registry
+            // Check if this is a spawned instance by checking if gameObject name has "(Clone)"
+            bool isSpawnedInstance = gameObject.name.EndsWith("(Clone)");
+            if (isSpawnedInstance)
+            {
+                // Spawned instances should not create registry entries
+                // They should only read from existing prefab entries
+                return;
+            }
+
             var avatarData = CaptureAvatarSettings(AppearanceDefaults);
             _cachedAppearanceDefaults = CloneAvatarSettingsData(avatarData);
+
+            // Preserve existing relationship data from registry if component fields aren't set
+            var relationDelta = this.RelationDelta;
+            var unlocked = this.Unlocked;
+            var unlockType = this.UnlockType.HasValue ? (int?)this.UnlockType.Value : null;
+            List<string> connectionIDs = this.ConnectionIDs != null ? new List<string>(this.ConnectionIDs) : null;
+            
+            if (_registry.TryGetValue(normalizedName, out var existingData))
+            {
+                // Use component fields if set, otherwise preserve from registry
+                if (!relationDelta.HasValue && existingData.RelationDelta.HasValue)
+                    relationDelta = existingData.RelationDelta;
+                if (!unlocked.HasValue && existingData.Unlocked.HasValue)
+                    unlocked = existingData.Unlocked;
+                if (!unlockType.HasValue && existingData.UnlockType.HasValue)
+                    unlockType = existingData.UnlockType;
+                if ((connectionIDs == null || connectionIDs.Count == 0) && existingData.ConnectionIDs != null && existingData.ConnectionIDs.Count > 0)
+                    connectionIDs = new List<string>(existingData.ConnectionIDs);
+            }
 
             var identityData = new IdentityData
             {
@@ -92,10 +192,14 @@ namespace S1API.Internal.Entities
                 LastName = this.LastName,
                 Icon = this.Icon,
                 AppearanceDefaults = CloneAvatarSettingsData(avatarData),
-                DealerHomeBuildingName = this.DealerHomeBuildingName
+                DealerHomeBuildingName = this.DealerHomeBuildingName,
+                RelationDelta = relationDelta,
+                Unlocked = unlocked,
+                UnlockType = unlockType,
+                ConnectionIDs = connectionIDs
             };
 
-            _registry[prefabName] = identityData;
+            _registry[normalizedName] = identityData;
 
             if (identityData.AppearanceDefaults != null)
                 AppearanceDefaults = CreateAvatarSettings(identityData.AppearanceDefaults);
@@ -112,16 +216,33 @@ namespace S1API.Internal.Entities
 
             if (_registry.TryGetValue(prefabName, out var data))
             {
-                this.Id = data.Id;
-                this.FirstName = data.FirstName;
-                this.LastName = data.LastName;
-                this.Icon = data.Icon;
-                this.DealerHomeBuildingName = data.DealerHomeBuildingName;
-                _cachedAppearanceDefaults = CloneAvatarSettingsData(data.AppearanceDefaults);
-                if (_cachedAppearanceDefaults != null)
-                    this.AppearanceDefaults = CreateAvatarSettings(_cachedAppearanceDefaults);
-                else
-                    this.AppearanceDefaults = null;
+                // Restore identity data (only if missing to avoid overwriting)
+                if (string.IsNullOrEmpty(this.Id) && !string.IsNullOrEmpty(data.Id))
+                    this.Id = data.Id;
+                if (string.IsNullOrEmpty(this.FirstName) && !string.IsNullOrEmpty(data.FirstName))
+                    this.FirstName = data.FirstName;
+                if (string.IsNullOrEmpty(this.LastName) && !string.IsNullOrEmpty(data.LastName))
+                    this.LastName = data.LastName;
+                if (this.Icon == null && data.Icon != null)
+                    this.Icon = data.Icon;
+                if (string.IsNullOrEmpty(this.DealerHomeBuildingName) && !string.IsNullOrEmpty(data.DealerHomeBuildingName))
+                    this.DealerHomeBuildingName = data.DealerHomeBuildingName;
+                
+                // Always restore relationship data from registry (these get wiped on Il2Cpp)
+                this.RelationDelta = data.RelationDelta;
+                this.Unlocked = data.Unlocked;
+                this.UnlockType = data.UnlockType.HasValue ? (NPCRelationship.UnlockType?)data.UnlockType.Value : null;
+                this.ConnectionIDs = data.ConnectionIDs != null ? new List<string>(data.ConnectionIDs) : null;
+                
+                // Restore appearance defaults
+                if (this.AppearanceDefaults == null)
+                {
+                    _cachedAppearanceDefaults = CloneAvatarSettingsData(data.AppearanceDefaults);
+                    if (_cachedAppearanceDefaults != null)
+                        this.AppearanceDefaults = CreateAvatarSettings(_cachedAppearanceDefaults);
+                    else
+                        this.AppearanceDefaults = null;
+                }
             }
         }
         
@@ -142,6 +263,59 @@ namespace S1API.Internal.Entities
         }
 
         /// <summary>
+        /// INTERNAL: Ensures relationship data fields are populated from registry on Il2Cpp.
+        /// </summary>
+#if IL2CPPMELON
+        [HideFromIl2Cpp]
+#endif
+        private void EnsureRelationshipDataFromRegistry()
+        {
+            // Always try to restore on Il2Cpp to ensure fields are populated
+#if IL2CPPMELON
+            TryRestoreFromRegistry();
+#endif
+        }
+
+        /// <summary>
+        /// Apply stored relationship defaults to a base-game NPC's relation data.
+        /// Safe to call on both server and clients.
+        /// </summary>
+        public void ApplyRelationshipDataTo(S1NPCs.NPC npc, bool preserveUnlockState = false)
+        {
+            if (npc == null)
+                return;
+
+            // On Il2Cpp, ensure fields are populated from registry
+#if IL2CPPMELON
+            EnsureRelationshipDataFromRegistry();
+#endif
+
+            var relationData = npc.RelationData;
+            if (relationData == null)
+                return;
+
+            try
+            {
+                var builder = new NPCRelationshipDataBuilder();
+
+                if (RelationDelta.HasValue)
+                    builder.WithDelta(RelationDelta.Value);
+
+                if (Unlocked.HasValue)
+                    builder.SetUnlocked(Unlocked.Value);
+
+                if (UnlockType.HasValue)
+                    builder.SetUnlockType(UnlockType.Value);
+
+                if (ConnectionIDs != null && ConnectionIDs.Count > 0)
+                    builder.WithConnectionsById(ConnectionIDs);
+
+                builder.ApplyTo(relationData, npc, preserveUnlockState);
+            }
+            catch { }
+        }
+
+        /// <summary>
         /// Apply stored defaults to a base-game NPC instance.
         /// Safe to call on both server and clients.
         /// </summary>
@@ -156,6 +330,8 @@ namespace S1API.Internal.Entities
             {
                 TryRestoreFromRegistry();
             }
+            // Also ensure relationship data is restored
+            EnsureRelationshipDataFromRegistry();
 #endif
 
             try {
@@ -305,6 +481,39 @@ namespace S1API.Internal.Entities
                 firstName = data.FirstName;
                 lastName = data.LastName;
                 icon = data.Icon;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// INTERNAL: Retrieves relationship data from the static registry by prefab name.
+        /// Used to read relationship defaults before Awake() is called on Il2Cpp.
+        /// </summary>
+#if IL2CPPMELON
+        [HideFromIl2Cpp]
+#endif
+        internal static bool TryGetRelationshipDataFromRegistry(string prefabName, out float? relationDelta, out bool? unlocked, out NPCRelationship.UnlockType? unlockType, out List<string> connectionIDs)
+        {
+            relationDelta = null;
+            unlocked = null;
+            unlockType = null;
+            connectionIDs = null;
+
+            if (string.IsNullOrEmpty(prefabName))
+                return false;
+
+            // Remove "(Clone)" suffix if present
+            if (prefabName.EndsWith("(Clone)"))
+                prefabName = prefabName.Substring(0, prefabName.Length - 7);
+
+            if (_registry.TryGetValue(prefabName, out var data))
+            {
+                relationDelta = data.RelationDelta;
+                unlocked = data.Unlocked;
+                unlockType = data.UnlockType.HasValue ? (NPCRelationship.UnlockType?)data.UnlockType.Value : null;
+                connectionIDs = data.ConnectionIDs != null ? new List<string>(data.ConnectionIDs) : null;
                 return true;
             }
 

@@ -1,6 +1,7 @@
 #if (IL2CPPMELON)
 using S1Relation = Il2CppScheduleOne.NPCs.Relation;
 using S1NPCs = Il2CppScheduleOne.NPCs;
+using Il2CppInterop.Runtime.Attributes;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Relation = ScheduleOne.NPCs.Relation;
 using S1NPCs = ScheduleOne.NPCs;
@@ -122,6 +123,23 @@ namespace S1API.Entities.Relation
             WithConnections((IEnumerable<NPC>)npcs);
 
         /// <summary>
+        /// INTERNAL: Captures the configured values for Il2Cpp-safe transfer without reflection.
+        /// </summary>
+#if IL2CPPMELON
+        [Il2CppInterop.Runtime.Attributes.HideFromIl2Cpp]
+#endif
+        internal RelationshipDefaultsData CaptureData()
+        {
+            return new RelationshipDefaultsData
+            {
+                RelationDelta = _relationDelta,
+                Unlocked = _unlocked,
+                UnlockType = _unlockType,
+                ConnectionIDs = _connectionIDs.Count > 0 ? new List<string>(_connectionIDs) : null
+            };
+        }
+
+        /// <summary>
         /// INTERNAL: Applies the configured values to a relation data instance.
         /// </summary>
         /// <param name="preserveUnlockState">If true, will not modify unlock state if the NPC is already unlocked (preserves save data).</param>
@@ -202,6 +220,14 @@ namespace S1API.Entities.Relation
             t == NPCRelationship.UnlockType.Recommendation
                 ? S1Relation.NPCRelationData.EUnlockType.Recommendation
                 : S1Relation.NPCRelationData.EUnlockType.DirectApproach;
+
+        internal sealed class RelationshipDefaultsData
+        {
+            public float? RelationDelta;
+            public bool? Unlocked;
+            public NPCRelationship.UnlockType? UnlockType;
+            public List<string> ConnectionIDs;
+        }
     }
 }
 

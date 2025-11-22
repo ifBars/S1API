@@ -449,6 +449,29 @@ namespace S1API.Entities
 #endif
                 }
 
+                // Ensure NPC reference is wired for contract assignment logic
+                try
+                {
+                    if (customer.NPC == null && NPC?.S1NPC != null)
+                    {
+                        Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(customer, "NPC", NPC.S1NPC);
+                    }
+                }
+                catch { /* best effort wiring */ }
+
+                // Ensure static customer registries exist to mirror base Awake
+                try
+                {
+#if IL2CPPMELON || IL2CPPBEPINEX
+                    S1Economy.Customer.UnlockedCustomers ??= new Il2CppSystem.Collections.Generic.List<S1Economy.Customer>();
+                    S1Economy.Customer.LockedCustomers ??= new Il2CppSystem.Collections.Generic.List<S1Economy.Customer>();
+#else
+                    S1Economy.Customer.UnlockedCustomers ??= new System.Collections.Generic.List<S1Economy.Customer>();
+                    S1Economy.Customer.LockedCustomers ??= new System.Collections.Generic.List<S1Economy.Customer>();
+#endif
+                }
+                catch { /* ignore */ }
+
                 // Initialize currentAffinityData - this is critical for AdjustAffinity RPC calls
 #if MONOMELON
                 // Use cached field if available, otherwise get it fresh
