@@ -1,4 +1,5 @@
 ﻿#if (IL2CPPMELON)
+using S1Relation = Il2CppScheduleOne.NPCs.Relation;
 using S1Loaders = Il2CppScheduleOne.Persistence.Loaders;
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
@@ -12,7 +13,7 @@ using S1Quests = Il2CppScheduleOne.Quests;
 using Il2CppFishNet;
 using Il2CppFishNet.Object;
 using Il2CppScheduleOne.DevUtilities;
-using S1Relation = Il2CppScheduleOne.NPCs.Relation;
+using Il2CppSystem.Collections.Generic;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Relation = ScheduleOne.NPCs.Relation;
 using S1Loaders = ScheduleOne.Persistence.Loaders;
@@ -58,8 +59,9 @@ namespace S1API.Internal.Patches
     {
         private static readonly Logging.Log Logger = new Logging.Log("NPCPatches");
         private static readonly HashSet<string> _loadingDealers = new HashSet<string>();
+        internal static bool CustomNpcsReady = false;
         // Pending custom NPC types to instantiate when using consolidated NPCs.json saves (non-physical/custom contacts).
-        private static readonly List<Type> _pendingCustomNpcTypes = new List<Type>();
+        private static readonly System.Collections.Generic.List<Type> _pendingCustomNpcTypes = new System.Collections.Generic.List<Type>();
         // Base-game additional save keys. If a DynamicSaveData has anything outside this set, we treat it as custom.
         private static readonly HashSet<string> BaseNpcAdditionalKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -379,6 +381,7 @@ namespace S1API.Internal.Patches
 
             // We instantiated all custom NPCs up front; clear pending list to avoid duplicate fallback instantiation.
             _pendingCustomNpcTypes.Clear();
+            CustomNpcsReady = true;
         }
 
         /// <summary>
@@ -1533,6 +1536,8 @@ namespace S1API.Internal.Patches
             {
                 Logger.Warning($"[S1API] NPCLoader_Load_Postfix: Exception marking NPC '{baseData.ID}' as loaded: {ex.Message}");
             }
+
+            CustomNpcsReady = true;
         }
 
         /// <summary>
