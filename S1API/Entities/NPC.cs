@@ -1919,6 +1919,12 @@ namespace S1API.Entities
         internal readonly S1NPCs.NPC S1NPC;
 
         /// <summary>
+        /// INTERNAL: Whether relationship data has been applied from prefab.
+        /// Used to determine when NPC initialization is complete.
+        /// </summary>
+        internal bool RelationshipDataAppliedFromPrefab => _relationshipDataAppliedFromPrefab;
+
+        /// <summary>
         /// INTERNAL: Constructor used for base game NPCs.
         /// </summary>
         /// <param name="npc">Reference to a base game NPC.</param>
@@ -2532,6 +2538,7 @@ namespace S1API.Entities
         private NPCRelationship _relationship;
         private bool _wasLoadedFromSave;
         private S1Relation.NPCRelationData.EUnlockType? _loadedUnlockType;
+        private bool _relationshipDataAppliedFromPrefab;
 
         private void MarkLoadedFromSave()
         {
@@ -2689,6 +2696,7 @@ namespace S1API.Entities
                                 bool alreadyUnlocked = rel.Unlocked;
                                 identity.ApplyRelationshipDataTo(S1NPC, preserveUnlockState: alreadyUnlocked);
                                 appliedFromPrefab = true;
+                                _relationshipDataAppliedFromPrefab = true;
                                 
                                 // Verify unlock state wasn't accidentally overwritten
                                 if (alreadyUnlocked && !rel.Unlocked)
@@ -2718,6 +2726,7 @@ namespace S1API.Entities
                                     bool alreadyUnlocked = rel.Unlocked;
                                     
                                     builder.ApplyTo(rel, S1NPC, preserveUnlockState: alreadyUnlocked);
+                                    _relationshipDataAppliedFromPrefab = true; // Mark as applied even if from type defaults
                                     
                                     // Verify unlock state wasn't accidentally overwritten
                                     if (alreadyUnlocked && !rel.Unlocked)
@@ -2733,6 +2742,11 @@ namespace S1API.Entities
                                     Logger.Warning($"[NPC] FinalizeNetworkSpawn: RelationData is null for NPC '{S1NPC.ID}' - cannot apply defaults!");
                                 }
                             }
+                            else
+                            {
+                                // No relationship defaults to apply, mark as complete
+                                _relationshipDataAppliedFromPrefab = true;
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -2740,6 +2754,11 @@ namespace S1API.Entities
                         Logger.Error($"[NPC] FinalizeNetworkSpawn: Failed to apply relationship defaults for NPC '{S1NPC.ID}': {ex.Message}");
                         Logger.Error($"[NPC] FinalizeNetworkSpawn: Stack trace: {ex.StackTrace}");
                     }
+                }
+                else
+                {
+                    // NPC was loaded from save, relationship data is already initialized, mark as complete
+                    _relationshipDataAppliedFromPrefab = true;
                 }
 
                 // Note: Random inventory defaults are applied in InitializeInventoryComponent, not here

@@ -79,7 +79,12 @@ namespace S1API.Internal.Patches
                 var allSceneNPCs = Object.FindObjectsOfType<S1NPCs.NPC>(true);
                 return customNPCs.All(npc => allSceneNPCs.Any(sn => sn.ID == npc.ID));
             }));
-            yield return new WaitForSeconds(10f); // TODO: Replace with a more robust readiness check
+            
+            // Wait until relationship data has been applied from prefab for all custom NPCs
+            yield return new WaitUntil((Func<bool>)(() =>
+            {
+                return customNPCs.All(npc => npc.RelationshipDataAppliedFromPrefab);
+            }));
 
             AddRelationCircles(contactsApp);
 

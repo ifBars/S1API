@@ -61,7 +61,7 @@ namespace S1API.Internal.Patches
         private static readonly HashSet<string> _loadingDealers = new HashSet<string>();
         internal static bool CustomNpcsReady = false;
         // Pending custom NPC types to instantiate when using consolidated NPCs.json saves (non-physical/custom contacts).
-        private static readonly List<Type> _pendingCustomNpcTypes = new List<Type>();
+        private static readonly System.Collections.Generic.List<Type> _pendingCustomNpcTypes = new System.Collections.Generic.List<Type>();
         // Base-game additional save keys. If a DynamicSaveData has anything outside this set, we treat it as custom.
         private static readonly HashSet<string> BaseNpcAdditionalKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
