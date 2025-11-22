@@ -1875,7 +1875,37 @@ namespace S1API.Entities
         /// <typeparam name="T">The NPC class to get the instance of.</typeparam>
         /// <returns></returns>
         public static NPC? Get<T>() where T : NPC =>
-            All.FirstOrDefault(npc => npc.GetType() == typeof(T));
+            All.FirstOrDefault(npc => npc.GetType() == typeof(T)) ?? TryCreateBuiltInWrapper(typeof(T));
+
+        /// <summary>
+        /// INTERNAL: Lazily creates built-in NPC wrappers (base-game NPCs) when they haven't been materialized yet.
+        /// Avoids instantiating custom mod NPCs to prevent unintended prefab creation during ConfigurePrefab.
+        /// </summary>
+        /// <param name="npcType">Target NPC wrapper type.</param>
+        /// <returns>The wrapper instance if created; otherwise, null.</returns>
+        private static NPC? TryCreateBuiltInWrapper(System.Type npcType)
+        {
+            if (npcType == null || npcType.Assembly != typeof(NPC).Assembly || npcType.IsAbstract)
+                return null;
+
+            try
+            {
+#if (IL2CPPBEPINEX || IL2CPPMELON)
+                // Allow non-public constructors on Il2Cpp
+                return (NPC?)System.Activator.CreateInstance(npcType, true);
+#else
+                var ctor = npcType.GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, System.Type.EmptyTypes, null);
+                if (ctor != null)
+                    return (NPC?)ctor.Invoke(null);
+#endif
+            }
+            catch
+            {
+                // Swallow exceptions to avoid breaking prefab configuration when base NPCs are not yet available.
+            }
+
+            return null;
+        }
 
         #endregion
 
@@ -2648,34 +2678,60 @@ namespace S1API.Entities
                 {
                     try
                     {
-                        var t = GetType();
-                        bool hasDefaults = TypeToRelationshipDefaults.TryGetValue(t, out var relCfg) && relCfg != null;
-                        
-                        if (hasDefaults)
+                        // First, try to apply relationship data from NPCPrefabIdentity (prefab-level, takes precedence)
+                        var identity = gameObject.GetComponent<NPCPrefabIdentity>();
+                        bool appliedFromPrefab = false;
+                        if (identity != null)
                         {
-                            var builder = new NPCRelationshipDataBuilder();
-                            relCfg(builder);
                             var rel = S1NPC.RelationData;
                             if (rel != null)
                             {
-                                // Preserve unlock state if NPC is already unlocked (may have been loaded from save)
-                                // This prevents overwriting unlock state if FinalizeNetworkSpawn runs after load
                                 bool alreadyUnlocked = rel.Unlocked;
-                                
-                                builder.ApplyTo(rel, S1NPC, preserveUnlockState: alreadyUnlocked);
+                                identity.ApplyRelationshipDataTo(S1NPC, preserveUnlockState: alreadyUnlocked);
+                                appliedFromPrefab = true;
                                 
                                 // Verify unlock state wasn't accidentally overwritten
                                 if (alreadyUnlocked && !rel.Unlocked)
                                 {
-                                    Logger.Warning($"[NPC] FinalizeNetworkSpawn: WARNING - Unlock state was lost for NPC '{S1NPC.ID}' after applying defaults. Restoring...");
-                                    // Restore unlock state using stored unlock type, or default to DirectApproach
+                                    Logger.Warning($"[NPC] FinalizeNetworkSpawn: WARNING - Unlock state was lost for NPC '{S1NPC.ID}' after applying prefab defaults. Restoring...");
                                     var unlockType = _loadedUnlockType ?? S1Relation.NPCRelationData.EUnlockType.DirectApproach;
                                     rel.Unlock(unlockType, notify: false);
                                 }
                             }
-                            else
+                        }
+                        
+                        // If no prefab-level data was applied, fall back to type-based defaults
+                        if (!appliedFromPrefab)
+                        {
+                            var t = GetType();
+                            bool hasDefaults = TypeToRelationshipDefaults.TryGetValue(t, out var relCfg) && relCfg != null;
+                            
+                            if (hasDefaults)
                             {
-                                Logger.Warning($"[NPC] FinalizeNetworkSpawn: RelationData is null for NPC '{S1NPC.ID}' - cannot apply defaults!");
+                                var builder = new NPCRelationshipDataBuilder();
+                                relCfg(builder);
+                                var rel = S1NPC.RelationData;
+                                if (rel != null)
+                                {
+                                    // Preserve unlock state if NPC is already unlocked (may have been loaded from save)
+                                    // This prevents overwriting unlock state if FinalizeNetworkSpawn runs after load
+                                    bool alreadyUnlocked = rel.Unlocked;
+                                    
+                                    builder.ApplyTo(rel, S1NPC, preserveUnlockState: alreadyUnlocked);
+                                    
+                                    // Verify unlock state wasn't accidentally overwritten
+                                    if (alreadyUnlocked && !rel.Unlocked)
+                                    {
+                                        Logger.Warning($"[NPC] FinalizeNetworkSpawn: WARNING - Unlock state was lost for NPC '{S1NPC.ID}' after applying defaults. Restoring...");
+                                        // Restore unlock state using stored unlock type, or default to DirectApproach
+                                        var unlockType = _loadedUnlockType ?? S1Relation.NPCRelationData.EUnlockType.DirectApproach;
+                                        rel.Unlock(unlockType, notify: false);
+                                    }
+                                }
+                                else
+                                {
+                                    Logger.Warning($"[NPC] FinalizeNetworkSpawn: RelationData is null for NPC '{S1NPC.ID}' - cannot apply defaults!");
+                                }
                             }
                         }
                     }

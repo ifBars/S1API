@@ -384,7 +384,18 @@ namespace S1API.Entities
         public NPCPrefabBuilder WithRelationshipDefaults(Action<NPCRelationshipDataBuilder> configure)
         {
             if (configure != null)
+            {
                 NPC.RegisterRelationshipDefaultsForType(ownerType, configure);
+                
+                // Register relationship data to NPCPrefabIdentity for Il2Cpp compatibility
+                try
+                {
+                    var builder = new NPCRelationshipDataBuilder();
+                    configure(builder);
+                    NPCPrefabIdentity.RegisterRelationshipDataToStaticCache(prefabRoot.name, builder);
+                }
+                catch { }
+            }
             return this;
         }
 
@@ -529,7 +540,26 @@ namespace S1API.Entities
             }
 
             if (dealSignal > 0)
+            {
                 EnsurePrefabAction<S1NPCsSchedules.NPCSignal_WaitForDelivery>(count: 1, namePrefix: "DealSignal");
+
+                // Wire the deal signal to the Customer component so runtime deal handling works without relying on OnValidate
+                try
+                {
+                    var scheduleManager = EnsureScheduleManager();
+                    var signal = scheduleManager.GetComponentInChildren<S1NPCsSchedules.NPCSignal_WaitForDelivery>(true);
+                    var customer = prefabRoot.GetComponent<S1Economy.Customer>();
+                    if (signal != null && customer != null)
+                    {
+                        customer.DealSignal = signal;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    var npcTypeName = ownerType?.Name ?? "Unknown";
+                    Logger.Warning($"Failed to wire DealSignal on prefab for NPC type {npcTypeName}: {ex.Message}");
+                }
+            }
             EnsurePrefabAction<S1NPCsSchedules.NPCSignal_WalkToLocation>(walkTo, "WalkTo");
             EnsurePrefabAction<S1NPCsSchedules.NPCEvent_StayInBuilding>(stayInBuilding, "StayInBuilding");
             EnsurePrefabAction<S1NPCsSchedules.NPCEvent_LocationDialogue>(locationDialogue, "LocationDialogue");

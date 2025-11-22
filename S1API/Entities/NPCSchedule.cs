@@ -181,15 +181,22 @@ namespace S1API.Entities
         /// </remarks>
         public void EnsureDealSignal()
         {
-            if (Manager == null)
-                return;
+            var manager = Manager;
+            if (manager == null)
+            {
+                EnsureManager();
+                manager = Manager;
+                if (manager == null)
+                    return;
+            }
 
-            var existing = Manager.GetComponentInChildren<S1NPCsSchedules.NPCSignal_WaitForDelivery>(true);
+            var existing = manager.GetComponentInChildren<S1NPCsSchedules.NPCSignal_WaitForDelivery>(true);
             if (existing != null)
             {
                 TryNetworkInitialize(existing);
                 // Also reflect into Customer so base game logic can reference it consistently
                 TryWireCustomerDealSignal(existing);
+                TryAssignDealSignalField(existing);
                 return;
             }
             // Do not create new network behaviours at runtime; require prefab declaration
@@ -204,6 +211,19 @@ namespace S1API.Entities
                 if (customer == null) return;
                 var field = typeof(S1Economy.Customer).GetField("DealSignal", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
                 field?.SetValue(customer, signal);
+            }
+            catch { /* ignore */ }
+        }
+
+        private void TryAssignDealSignalField(S1NPCsSchedules.NPCSignal_WaitForDelivery signal)
+        {
+            try
+            {
+                var customer = NPC.gameObject.GetComponent<S1Economy.Customer>();
+                if (customer == null || signal == null)
+                    return;
+
+                customer.DealSignal = signal;
             }
             catch { /* ignore */ }
         }

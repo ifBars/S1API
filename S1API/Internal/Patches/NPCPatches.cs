@@ -1057,9 +1057,7 @@ namespace S1API.Internal.Patches
                     // Mark that this instance was hydrated from save data FIRST to prevent defaults overwrite
                     typeof(NPC).GetMethod("MarkLoadedFromSave", BindingFlags.NonPublic | BindingFlags.Instance)
                         ?.Invoke(wrap, null);
-
-                    // Apply relationship defaults for connections even after load (connections aren't saved by base game)
-                    // But preserve unlock state since it was loaded from save data
+                    
                     var npcType = wrap.GetType();
                     bool hasDefaults = NPC.TypeToRelationshipDefaults.TryGetValue(npcType, out var relCfg) && relCfg != null;
                     
@@ -1071,9 +1069,6 @@ namespace S1API.Internal.Patches
                         if (rel != null)
                         {
                             bool beforeApplyDefaults = rel.Unlocked;
-                            
-                            // Always preserve unlock state since it was loaded from save
-                            // Only apply connections (connections aren't persisted by base game)
                             builder.ApplyTo(rel, s1BaseNpc, preserveUnlockState: true);
                             
                             bool afterApplyDefaults = rel.Unlocked;
