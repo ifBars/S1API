@@ -19,6 +19,7 @@ using System.Reflection;
 using HarmonyLib;
 using MelonLoader;
 using S1API.Entities;
+using S1API.Internal.Utils;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -34,6 +35,36 @@ namespace S1API.Internal.Patches
     internal class ContactsAppPatches
     {
         private static bool _contactsReady;
+        private static bool? _hasCustomNpcTypesCache;
+
+        /// <summary>
+        /// Checks if any custom NPC types exist (excluding S1API internal types).
+        /// Caches the result to avoid repeated reflection calls.
+        /// </summary>
+        private static bool HasCustomNpcTypes()
+        {
+            if (_hasCustomNpcTypesCache.HasValue)
+                return _hasCustomNpcTypesCache.Value;
+
+            try
+            {
+                var baseType = typeof(NPC);
+                var baseAssembly = baseType.Assembly;
+                var customTypes = ReflectionUtils.GetDerivedClasses<NPC>();
+
+                // Filter out S1API internal types - only count mod-defined NPC types
+                bool hasCustom = customTypes.Any(t => t != null && t.Assembly != baseAssembly && !t.IsAbstract);
+
+                _hasCustomNpcTypesCache = hasCustom;
+                return hasCustom;
+            }
+            catch
+            {
+                // On error, assume no custom NPCs to avoid breaking phone apps
+                _hasCustomNpcTypesCache = false;
+                return false;
+            }
+        }
 
         /// <summary>
         /// Intercepts ContactsApp.Start to wait for custom NPCs before initialization.
@@ -44,6 +75,11 @@ namespace S1API.Internal.Patches
         {
             // skip patch if in the tutorial
             if (SceneManager.GetActiveScene().name == "Tutorial") return true;
+            
+            // If no custom NPCs exist, allow original Start to run normally
+            if (!HasCustomNpcTypes())
+                return true;
+            
             if (!_contactsReady)
             {
                 MelonCoroutines.Start(WaitForNPCs(__instance));
@@ -63,6 +99,11 @@ namespace S1API.Internal.Patches
         {
             // skip patch if in the tutorial
             if (SceneManager.GetActiveScene().name == "Tutorial") return true;
+            
+            // If no custom NPCs exist, allow original Update to run normally
+            if (!HasCustomNpcTypes())
+                return true;
+            
             return _contactsReady;
         }
 
@@ -74,6 +115,24 @@ namespace S1API.Internal.Patches
             yield return new WaitWhile((Func<bool>)(() => NPCPatches.CustomNpcsReady == false));
 
             var customNPCs = NPC.All.Where(n => n.IsCustomNPC).ToList();
+            
+            // Get the original Start method once for reuse
+            var originalStart = typeof(S1ContactsApp.ContactsApp)
+                .GetMethod("Start", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (originalStart == null)
+            {
+                Debug.LogError("[ContactsPatches] Couldn't find Start");
+                yield break;
+            }
+            
+            // Safety check: if no custom NPCs exist after waiting, skip relation circles logic
+            if (customNPCs.Count == 0)
+            {
+                _contactsReady = true;
+                originalStart.Invoke(contactsApp, null);
+                yield break;
+            }
+            
             yield return new WaitUntil((Func<bool>)(() =>
             {
                 var allSceneNPCs = Object.FindObjectsOfType<S1NPCs.NPC>(true);
@@ -88,13 +147,6 @@ namespace S1API.Internal.Patches
 
             AddRelationCircles(contactsApp);
 
-            var originalStart = typeof(S1ContactsApp.ContactsApp)
-                .GetMethod("Start", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            if (originalStart == null)
-            {
-                Debug.LogError("[ContactsPatches] Couldn't find Start");
-                yield break;
-            }
             _contactsReady = true;
             originalStart.Invoke(contactsApp, null);
         }
