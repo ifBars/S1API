@@ -64,5 +64,51 @@ namespace S1API.Items
 
             S1Registry.Instance.AddToRegistry(definition.S1ItemDefinition);
         }
+
+        /// <summary>
+        /// Gets all item definitions registered in the game's registry.
+        /// </summary>
+        /// <returns>A list of all registered item definitions, wrapped with S1API types.</returns>
+        public static System.Collections.Generic.List<ItemDefinition> GetAllItemDefinitions()
+        {
+            if (S1Registry.Instance == null)
+                return new System.Collections.Generic.List<ItemDefinition>();
+
+            var nativeItems = S1Registry.Instance.GetAllItems();
+            if (nativeItems == null)
+                return new System.Collections.Generic.List<ItemDefinition>();
+
+            var wrappedItems = new System.Collections.Generic.List<ItemDefinition>();
+
+            foreach (var nativeItem in nativeItems)
+            {
+                if (nativeItem == null)
+                    continue;
+
+                // Get the item ID directly from the native item
+                string itemId = null;
+                try
+                {
+                    itemId = nativeItem.ID;
+                }
+                catch
+                {
+                    // Skip items where we can't get the ID
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(itemId))
+                    continue;
+
+                // Use GetItemDefinition to properly wrap the item with the correct type
+                var wrappedItem = GetItemDefinition(itemId);
+                if (wrappedItem != null)
+                {
+                    wrappedItems.Add(wrappedItem);
+                }
+            }
+
+            return wrappedItems;
+        }
     }
 }
