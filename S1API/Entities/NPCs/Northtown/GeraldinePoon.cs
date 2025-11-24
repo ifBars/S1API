@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Northtown
     /// </summary>
     public class GeraldinePoon : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Geraldine Poon. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "geraldine_poon";
+        
         internal GeraldinePoon() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "geraldine_poon")) { }
     }
 }

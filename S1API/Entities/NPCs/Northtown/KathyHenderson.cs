@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Northtown
     /// </summary>
     public class KathyHenderson : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Kathy Henderson. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "kathy_henderson";
+        
         internal KathyHenderson() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "kathy_henderson")) { }
     }
 }

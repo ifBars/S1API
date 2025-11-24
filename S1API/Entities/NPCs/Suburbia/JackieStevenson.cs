@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Suburbia
     /// </summary>
     public class JackieStevenson : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Jackie Stevenson. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "jackie_stevenson";
+        
         internal JackieStevenson() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "jackie_stevenson")) { }
     }
 }

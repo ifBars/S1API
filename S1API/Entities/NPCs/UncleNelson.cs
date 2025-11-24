@@ -13,6 +13,11 @@ namespace S1API.Entities.NPCs
     /// </summary>
     public class UncleNelson : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Uncle Nelson. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "uncle_nelson";
+        
         internal UncleNelson() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "uncle_nelson")) { }
     }
 }

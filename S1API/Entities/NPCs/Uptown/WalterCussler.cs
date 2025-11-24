@@ -15,6 +15,11 @@ namespace S1API.Entities.NPCs.Uptown
     /// </summary>
     public class WalterCussler : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Walter Cussler. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "walter_cussler";
+        
         internal WalterCussler() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "walter_cussler")) { }
     }
 }

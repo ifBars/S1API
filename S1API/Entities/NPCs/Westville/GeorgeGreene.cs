@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Westville
     /// </summary>
     public class GeorgeGreene : NPC
     {
+        /// <summary>
+        /// Static NPC ID for George Greene. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "george_greene";
+        
         internal GeorgeGreene() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "george_greene")) { }
     }
 }

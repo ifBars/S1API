@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Westville
     /// </summary>
     public class DorisLubbin : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Doris Lubbin. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "doris_lubbin";
+        
         internal DorisLubbin() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "doris_lubbin")) { }
     }
 }

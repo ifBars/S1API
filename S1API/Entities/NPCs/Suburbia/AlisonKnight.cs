@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Suburbia
     /// </summary>
     public class AlisonKnight : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Alison Knight. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "alison_knight";
+        
         internal AlisonKnight() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "alison_knight")) { }
     }
 }

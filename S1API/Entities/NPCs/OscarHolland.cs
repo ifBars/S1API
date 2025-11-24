@@ -13,6 +13,11 @@ namespace S1API.Entities.NPCs
     /// </summary>
     public class OscarHolland : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Oscar Holland. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "oscar_holland";
+        
         internal OscarHolland() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "oscar_holland")) { }
     }
 }

@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Docks
     /// </summary>
     public class AnnaChesterfield : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Anna Chesterfield. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "anna_chesterfield";
+        
         internal AnnaChesterfield() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "anna_chesterfield")) { }
     }
 }

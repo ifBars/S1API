@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Westville
     /// </summary>
     public class KeithWagner : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Keith Wagner. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "keith_wagner";
+        
         internal KeithWagner() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "keith_wagner")) { }
     }
 }

@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Westville
     /// </summary>
     public class KimDelaney : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Kim Delaney. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "kim_delaney";
+        
         internal KimDelaney() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "kim_delaney")) { }
     }
 }

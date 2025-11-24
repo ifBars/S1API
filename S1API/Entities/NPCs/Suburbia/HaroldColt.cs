@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Suburbia
     /// </summary>
     public class HaroldColt : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Harold Colt. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "harold_colt";
+        
         internal HaroldColt() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "harold_colt")) { }
     }
 }

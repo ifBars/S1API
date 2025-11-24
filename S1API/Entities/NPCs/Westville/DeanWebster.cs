@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Westville
     /// </summary>
     public class DeanWebster : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Dean Webster. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "dean_webster";
+        
         internal DeanWebster() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "dean_webster")) { }
     }
 }

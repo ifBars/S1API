@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Northtown
     /// </summary>
     public class BethPenn : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Beth Penn. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "beth_penn";
+        
         internal BethPenn() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "beth_penn")) { }
     }
 }

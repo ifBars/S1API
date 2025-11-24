@@ -15,6 +15,11 @@ namespace S1API.Entities.NPCs.Uptown
     /// </summary>
     public class PearlMoore : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Pearl Moore. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "pearl_moore";
+        
         internal PearlMoore() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "pearl_moore")) { }
     }
 }

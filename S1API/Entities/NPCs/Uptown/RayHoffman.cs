@@ -15,6 +15,11 @@ namespace S1API.Entities.NPCs.Uptown
     /// </summary>
     public class RayHoffman : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Ray Hoffman. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "ray_hoffman";
+        
         internal RayHoffman() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "ray_hoffman")) { }
     }
 }

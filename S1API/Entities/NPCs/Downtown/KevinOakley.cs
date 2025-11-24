@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Downtown
     /// </summary>
     public class KevinOakley : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Kevin Oakley. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "kevin_oakley";
+        
         internal KevinOakley() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "kevin_oakley")) { }
     }
 }

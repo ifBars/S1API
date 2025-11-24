@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Docks
     /// </summary>
     public class JavierPerez : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Javier Perez. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "javier_perez";
+        
         internal JavierPerez() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "javier_perez")) { }
     }
 }

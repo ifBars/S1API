@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Downtown
     /// </summary>
     public class PhilipWentworth : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Philip Wentworth. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "philip_wentworth";
+        
         internal PhilipWentworth() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "philip_wentworth")) { }
     }
 }

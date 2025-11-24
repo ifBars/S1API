@@ -8,6 +8,7 @@ using S1AvatarFramework = ScheduleOne.AvatarFramework;
 using S1NPCs = ScheduleOne.NPCs;
 using S1Economy = ScheduleOne.Economy;
 #endif
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -18,6 +19,7 @@ using S1API.Internal.Map;
 using S1API.Internal.Utils;
 using S1API.Entities;
 using S1API.Entities.Relation;
+using S1API.Logging;
 
 namespace S1API.Internal.Entities
 {
@@ -32,6 +34,8 @@ namespace S1API.Internal.Entities
 #endif
     public sealed class NPCPrefabIdentity : MonoBehaviour
     {
+        private static readonly Log Logger = new Log("NPCPrefabIdentity");
+        
         // Public fields for Mono compatibility (auto-serialized there)
         public string Id;
         public string FirstName;
@@ -39,6 +43,7 @@ namespace S1API.Internal.Entities
         public Sprite Icon;
         public S1AvatarFramework.AvatarSettings AppearanceDefaults;
         public string DealerHomeBuildingName;
+        public string PrefabName;
 
         // Relationship data fields for Mono compatibility
         public float? RelationDelta;
@@ -63,6 +68,7 @@ namespace S1API.Internal.Entities
             public bool? Unlocked;
             public int? UnlockType; // Stored as int (0=Recommendation, 1=DirectApproach) to avoid enum dependency
             public List<string> ConnectionIDs;
+            public string PrefabName;
         }
 
         private void Awake()
@@ -128,11 +134,17 @@ namespace S1API.Internal.Entities
                 if (unlockType.HasValue)
                     updatedData.UnlockType = (int?)unlockType.Value;
                 if (connectionIDs != null && connectionIDs.Count > 0)
+                {
                     updatedData.ConnectionIDs = new List<string>(connectionIDs);
+                    Logger.Msg($"[Relationship Data] RegisterRelationshipDataToStaticCache: Stored {connectionIDs.Count} connection ID(s) for prefab '{normalizedName}'");
+                }
 
                 _registry[normalizedName] = updatedData;
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.Error($"[Relationship Data] RegisterRelationshipDataToStaticCache: Exception storing relationship data for prefab '{prefabName}': {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -147,6 +159,12 @@ namespace S1API.Internal.Entities
         {
             if (string.IsNullOrEmpty(prefabName))
                 return;
+
+            // Only register prefab data during Menu scene configuration; runtime instances in Main should not alter the registry.
+            if (!DeferredMapResolver.IsMenuScene())
+            {
+                return;
+            }
 
             // Normalize prefab name (remove "(Clone)" suffix) - only register prefabs, not spawned instances
             string normalizedName = prefabName;
@@ -170,7 +188,12 @@ namespace S1API.Internal.Entities
             var relationDelta = this.RelationDelta;
             var unlocked = this.Unlocked;
             var unlockType = this.UnlockType.HasValue ? (int?)this.UnlockType.Value : null;
-            List<string> connectionIDs = this.ConnectionIDs != null ? new List<string>(this.ConnectionIDs) : null;
+            PrefabName = normalizedName;
+            
+            // CRITICAL: Always check registry FIRST for connection IDs since they're set via RegisterRelationshipDataToStaticCache
+            // Component field (this.ConnectionIDs) is never set during prefab configuration in Menu scene
+            // Connection IDs are only stored via RegisterRelationshipDataToStaticCache, so we must preserve them from registry
+            List<string> connectionIDs = null;
             
             if (_registry.TryGetValue(normalizedName, out var existingData))
             {
@@ -181,8 +204,19 @@ namespace S1API.Internal.Entities
                     unlocked = existingData.Unlocked;
                 if (!unlockType.HasValue && existingData.UnlockType.HasValue)
                     unlockType = existingData.UnlockType;
-                if ((connectionIDs == null || connectionIDs.Count == 0) && existingData.ConnectionIDs != null && existingData.ConnectionIDs.Count > 0)
+                
+                // ALWAYS preserve connection IDs from registry if they exist (they come from RegisterRelationshipDataToStaticCache)
+                if (existingData.ConnectionIDs != null && existingData.ConnectionIDs.Count > 0)
+                {
                     connectionIDs = new List<string>(existingData.ConnectionIDs);
+                }
+            }
+            
+            // Only use component field if registry doesn't have connection IDs
+            // (Component field is typically empty during prefab configuration, but check it as fallback)
+            if ((connectionIDs == null || connectionIDs.Count == 0) && this.ConnectionIDs != null && this.ConnectionIDs.Count > 0)
+            {
+                connectionIDs = new List<string>(this.ConnectionIDs);
             }
 
             var identityData = new IdentityData
@@ -196,8 +230,14 @@ namespace S1API.Internal.Entities
                 RelationDelta = relationDelta,
                 Unlocked = unlocked,
                 UnlockType = unlockType,
-                ConnectionIDs = connectionIDs
+                ConnectionIDs = connectionIDs,
+                PrefabName = normalizedName
             };
+
+            if (connectionIDs != null && connectionIDs.Count > 0)
+            {
+                Logger.Msg($"[Relationship Data] RegisterToStaticCache: Storing {connectionIDs.Count} connection ID(s) for prefab '{normalizedName}'");
+            }
 
             _registry[normalizedName] = identityData;
 
@@ -214,30 +254,61 @@ namespace S1API.Internal.Entities
             if (prefabName.EndsWith("(Clone)"))
                 prefabName = prefabName.Substring(0, prefabName.Length - 7);
 
+            // Prefer explicitly stored prefab name if available (set during prefab registration)
+            if (!string.IsNullOrEmpty(PrefabName))
+                prefabName = PrefabName;
+
+            IdentityData? resolved = null;
+
+            // Primary lookup by key
             if (_registry.TryGetValue(prefabName, out var data))
             {
+                resolved = data;
+            }
+            else
+            {
+                // Fallback: attempt to match by stored PrefabName inside registry entries when the instance name was changed (e.g., to first name)
+                foreach (var kvp in _registry)
+                {
+                    var entry = kvp.Value;
+                    if (!string.IsNullOrEmpty(entry.PrefabName) && string.Equals(entry.PrefabName, prefabName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        resolved = entry;
+                        PrefabName = entry.PrefabName;
+                        break;
+                    }
+                }
+            }
+
+            if (resolved.HasValue)
+            {
+                var dataRef = resolved.Value;
                 // Restore identity data (only if missing to avoid overwriting)
-                if (string.IsNullOrEmpty(this.Id) && !string.IsNullOrEmpty(data.Id))
-                    this.Id = data.Id;
-                if (string.IsNullOrEmpty(this.FirstName) && !string.IsNullOrEmpty(data.FirstName))
-                    this.FirstName = data.FirstName;
-                if (string.IsNullOrEmpty(this.LastName) && !string.IsNullOrEmpty(data.LastName))
-                    this.LastName = data.LastName;
-                if (this.Icon == null && data.Icon != null)
-                    this.Icon = data.Icon;
-                if (string.IsNullOrEmpty(this.DealerHomeBuildingName) && !string.IsNullOrEmpty(data.DealerHomeBuildingName))
-                    this.DealerHomeBuildingName = data.DealerHomeBuildingName;
+                if (string.IsNullOrEmpty(this.Id) && !string.IsNullOrEmpty(dataRef.Id))
+                    this.Id = dataRef.Id;
+                if (string.IsNullOrEmpty(this.FirstName) && !string.IsNullOrEmpty(dataRef.FirstName))
+                    this.FirstName = dataRef.FirstName;
+                if (string.IsNullOrEmpty(this.LastName) && !string.IsNullOrEmpty(dataRef.LastName))
+                    this.LastName = dataRef.LastName;
+                if (this.Icon == null && dataRef.Icon != null)
+                    this.Icon = dataRef.Icon;
+                if (string.IsNullOrEmpty(this.DealerHomeBuildingName) && !string.IsNullOrEmpty(dataRef.DealerHomeBuildingName))
+                    this.DealerHomeBuildingName = dataRef.DealerHomeBuildingName;
                 
                 // Always restore relationship data from registry (these get wiped on Il2Cpp)
-                this.RelationDelta = data.RelationDelta;
-                this.Unlocked = data.Unlocked;
-                this.UnlockType = data.UnlockType.HasValue ? (NPCRelationship.UnlockType?)data.UnlockType.Value : null;
-                this.ConnectionIDs = data.ConnectionIDs != null ? new List<string>(data.ConnectionIDs) : null;
+                this.RelationDelta = dataRef.RelationDelta;
+                this.Unlocked = dataRef.Unlocked;
+                this.UnlockType = dataRef.UnlockType.HasValue ? (NPCRelationship.UnlockType?)dataRef.UnlockType.Value : null;
+                this.ConnectionIDs = dataRef.ConnectionIDs != null ? new List<string>(dataRef.ConnectionIDs) : null;
+                PrefabName = dataRef.PrefabName ?? PrefabName;
+                
+                // Debug log for connection restoration
+                // Silent when restored; applied logs happen later during Apply
                 
                 // Restore appearance defaults
                 if (this.AppearanceDefaults == null)
                 {
-                    _cachedAppearanceDefaults = CloneAvatarSettingsData(data.AppearanceDefaults);
+                    _cachedAppearanceDefaults = CloneAvatarSettingsData(dataRef.AppearanceDefaults);
                     if (_cachedAppearanceDefaults != null)
                         this.AppearanceDefaults = CreateAvatarSettings(_cachedAppearanceDefaults);
                     else
@@ -270,10 +341,11 @@ namespace S1API.Internal.Entities
 #endif
         private void EnsureRelationshipDataFromRegistry()
         {
-            // Always try to restore on Il2Cpp to ensure fields are populated
-#if IL2CPPMELON
-            TryRestoreFromRegistry();
-#endif
+            // Always try to restore to ensure fields are populated (Il2Cpp wipes component fields).
+            if (ConnectionIDs == null || ConnectionIDs.Count == 0 || !Unlocked.HasValue || !RelationDelta.HasValue || !UnlockType.HasValue)
+            {
+                TryRestoreFromRegistry();
+            }
         }
 
         /// <summary>
@@ -285,10 +357,8 @@ namespace S1API.Internal.Entities
             if (npc == null)
                 return;
 
-            // On Il2Cpp, ensure fields are populated from registry
-#if IL2CPPMELON
+            // Ensure fields are populated from registry before applying
             EnsureRelationshipDataFromRegistry();
-#endif
 
             var relationData = npc.RelationData;
             if (relationData == null)
@@ -308,11 +378,16 @@ namespace S1API.Internal.Entities
                     builder.SetUnlockType(UnlockType.Value);
 
                 if (ConnectionIDs != null && ConnectionIDs.Count > 0)
+                {
                     builder.WithConnectionsById(ConnectionIDs);
+                }
 
                 builder.ApplyTo(relationData, npc, preserveUnlockState);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.Error($"[Relationship Data] ApplyRelationshipDataTo: Exception applying relationship data to NPC '{npc?.ID ?? "<null>"}': {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -324,15 +399,12 @@ namespace S1API.Internal.Entities
             if (npc == null)
                 return;
 
-            // On Il2Cpp, ensure fields are populated from registry if they're empty
-#if IL2CPPMELON
+            // Ensure identity and relationship data are populated from registry if missing
             if (string.IsNullOrEmpty(Id) && string.IsNullOrEmpty(FirstName))
             {
                 TryRestoreFromRegistry();
             }
-            // Also ensure relationship data is restored
             EnsureRelationshipDataFromRegistry();
-#endif
 
             try {
                 if (!string.IsNullOrEmpty(FirstName))

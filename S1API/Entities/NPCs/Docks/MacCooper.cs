@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Docks
     /// </summary>
     public class MacCooper : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Mac Cooper. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "mac_cooper";
+        
         internal MacCooper() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "mac_cooper")) { }
     }
 }

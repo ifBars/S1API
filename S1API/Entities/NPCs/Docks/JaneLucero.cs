@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Docks
     /// </summary>
     public class JaneLucero : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Jane Lucero. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "jane_lucero";
+        
         internal JaneLucero() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "jane_lucero")) { }
     }
 }

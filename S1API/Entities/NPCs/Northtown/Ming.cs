@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Northtown
     /// </summary>
     public class Ming : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Ming. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "ming";
+        
         internal Ming() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "ming")) { }
     }
 }

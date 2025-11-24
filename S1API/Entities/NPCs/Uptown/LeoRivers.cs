@@ -15,6 +15,11 @@ namespace S1API.Entities.NPCs.Uptown
     /// </summary>
     public class LeoRivers : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Leo Rivers. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "leo_rivers";
+        
         internal LeoRivers() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "leo_rivers")) { }
     }
 }

@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Downtown
     /// </summary>
     public class JeffGilmore : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Jeff Gilmore. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "jeff_gilmore";
+        
         internal JeffGilmore() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "jeff_gilmore")) { }
     }
 }

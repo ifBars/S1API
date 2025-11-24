@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Northtown
     /// </summary>
     public class DonnaMartin : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Donna Martin. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "donna_martin";
+        
         internal DonnaMartin() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "donna_martin")) { }
     }
 }

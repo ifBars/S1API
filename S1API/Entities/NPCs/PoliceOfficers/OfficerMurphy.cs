@@ -13,6 +13,11 @@ namespace S1API.Entities.NPCs.PoliceOfficers
     /// </summary>
     public class OfficerMurphy : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Officer Murphy. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "officermurphy";
+        
         internal OfficerMurphy() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "officermurphy")) { }
     }
 }

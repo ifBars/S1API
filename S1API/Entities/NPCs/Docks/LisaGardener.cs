@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Docks
     /// </summary>
     public class LisaGardener : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Lisa Gardener. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "lisa_gardener";
+        
         internal LisaGardener() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "lisa_gardener")) { }
     }
 }

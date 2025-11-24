@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Suburbia
     /// </summary>
     public class JeremyWilkinson : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Jeremy Wilkinson. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "jeremy_wilkinson";
+        
         internal JeremyWilkinson() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "jeremy_wilkinson")) { }
     }
 }

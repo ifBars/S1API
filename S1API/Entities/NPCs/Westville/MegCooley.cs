@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Westville
     /// </summary>
     public class MegCooley : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Meg Cooley. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "meg_cooley";
+        
         internal MegCooley() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "meg_cooley")) { }
     }
 }

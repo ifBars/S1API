@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Suburbia
     /// </summary>
     public class JackKnight : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Jack Knight. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "jack_knight";
+        
         internal JackKnight() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "jack_knight")) { }
     }
 }

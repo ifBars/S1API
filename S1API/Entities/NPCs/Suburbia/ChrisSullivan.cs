@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Suburbia
     /// </summary>
     public class ChrisSullivan : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Chris Sullivan. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "chris_sullivan";
+        
         internal ChrisSullivan() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "chris_sullivan")) { }
     }
 }

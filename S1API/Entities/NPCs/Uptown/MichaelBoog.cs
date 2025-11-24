@@ -15,6 +15,11 @@ namespace S1API.Entities.NPCs.Uptown
     /// </summary>
     public class MichaelBoog : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Michael Boog. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "michael_boog";
+        
         internal MichaelBoog() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "michael_boog")) { }
     }
 }

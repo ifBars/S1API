@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Northtown
     /// </summary>
     public class AustinSteiner : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Austin Steiner. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "austin_steiner";
+        
         internal AustinSteiner() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "austin_steiner")) { }
     }
 }

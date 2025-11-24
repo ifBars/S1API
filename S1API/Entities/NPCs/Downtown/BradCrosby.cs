@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Downtown
     /// </summary>
     public class BradCrosby : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Brad Crosby. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "brad_crosby";
+        
         internal BradCrosby() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "brad_crosby")) { }
     }
 }

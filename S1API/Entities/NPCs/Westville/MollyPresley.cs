@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Westville
     /// </summary>
     public class MollyPresley : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Molly Presley. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "molly_presley";
+        
         internal MollyPresley() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "molly_presley")) { }
     }
 }

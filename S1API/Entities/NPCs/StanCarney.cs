@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs
     /// </summary>
     public class StanCarney : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Stan Carney. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "stan_carney";
+        
         internal StanCarney() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "stan_carney")) { }
     }
 }

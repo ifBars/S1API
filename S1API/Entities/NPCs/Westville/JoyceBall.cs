@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Westville
     /// </summary>
     public class JoyceBall : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Joyce Ball. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "joyce_ball";
+        
         internal JoyceBall() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "joyce_ball")) { }
     }
 }

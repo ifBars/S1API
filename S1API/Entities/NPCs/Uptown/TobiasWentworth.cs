@@ -15,6 +15,11 @@ namespace S1API.Entities.NPCs.Uptown
     /// </summary>
     public class TobiasWentworth : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Tobias Wentworth. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "tobias_wentworth";
+        
         internal TobiasWentworth() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "tobias_wentworth")) { }
     }
 }

@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Downtown
     /// </summary>
     public class EugeneBuckley : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Eugene Buckley. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "eugene_buckley";
+        
         internal EugeneBuckley() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "eugene_buckley")) { }
     }
 }

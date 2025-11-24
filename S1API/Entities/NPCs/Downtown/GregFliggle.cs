@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Downtown
     /// </summary>
     public class GregFliggle : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Greg Fliggle. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "greg_fliggle";
+        
         internal GregFliggle() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "greg_fliggle")) { }
     }
 }

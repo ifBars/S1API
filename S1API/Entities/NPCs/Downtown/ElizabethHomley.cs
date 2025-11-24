@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Downtown
     /// </summary>
     public class ElizabethHomley : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Elizabeth Homley. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "elizabeth_homley";
+        
         internal ElizabethHomley() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "elizabeth_homley")) { }
     }
 }

@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Northtown
     /// </summary>
     public class ChloeBowers : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Chloe Bowers. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "chloe_bowers";
+        
         internal ChloeBowers() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "chloe_bowers")) { }
     }
 }

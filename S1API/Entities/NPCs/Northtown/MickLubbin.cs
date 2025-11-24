@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Northtown
     /// </summary>
     public class MickLubbin : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Mick Lubbin. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "mick_lubbin";
+        
         internal MickLubbin() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "mick_lubbin")) { }
     }
 }

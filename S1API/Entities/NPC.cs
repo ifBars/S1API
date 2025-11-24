@@ -1300,6 +1300,17 @@ namespace S1API.Entities
         }
 
         /// <summary>
+        /// Static NPC ID for this NPC type. Used to resolve connections during prefab configuration
+        /// when NPC instances are not yet available. Override this in derived classes to provide
+        /// the NPC ID string (e.g., "kyle_cooley", "ludwig_meyer").
+        /// </summary>
+        /// <remarks>
+        /// For built-in NPC wrappers, this should return the ID string that matches the base game NPC.
+        /// For custom NPCs, this should return the ID configured via <see cref="NPCPrefabBuilder.WithIdentity"/>.
+        /// </remarks>
+        public static string? NPCId => null;
+
+        /// <summary>
         /// The icon assigned to this NPC.
         /// </summary>
         public Sprite Icon
@@ -2694,9 +2705,21 @@ namespace S1API.Entities
                             if (rel != null)
                             {
                                 bool alreadyUnlocked = rel.Unlocked;
+                                int previousConnectionCount = rel.Connections?.Count ?? 0;
+                                
+                                Logger.Msg($"[Relationship Data] FinalizeNetworkSpawn: Applying relationship data from prefab for NPC '{S1NPC.ID}' (scene: {gameObject.scene.name}, alreadyUnlocked: {alreadyUnlocked}, previousConnections: {previousConnectionCount})");
+                                
+                                if (identity.ConnectionIDs != null && identity.ConnectionIDs.Count > 0)
+                                {
+                                    Logger.Msg($"[Relationship Data] FinalizeNetworkSpawn: Prefab has {identity.ConnectionIDs.Count} connection IDs configured: [{string.Join(", ", identity.ConnectionIDs)}]");
+                                }
+                                
                                 identity.ApplyRelationshipDataTo(S1NPC, preserveUnlockState: alreadyUnlocked);
                                 appliedFromPrefab = true;
                                 _relationshipDataAppliedFromPrefab = true;
+                                
+                                int newConnectionCount = rel.Connections?.Count ?? 0;
+                                Logger.Msg($"[Relationship Data] FinalizeNetworkSpawn: Relationship data applied from prefab for NPC '{S1NPC.ID}': {previousConnectionCount} -> {newConnectionCount} connections");
                                 
                                 // Verify unlock state wasn't accidentally overwritten
                                 if (alreadyUnlocked && !rel.Unlocked)
@@ -2706,6 +2729,14 @@ namespace S1API.Entities
                                     rel.Unlock(unlockType, notify: false);
                                 }
                             }
+                            else
+                            {
+                                Logger.Warning($"[Relationship Data] FinalizeNetworkSpawn: RelationData is null for NPC '{S1NPC.ID}'");
+                            }
+                        }
+                        else
+                        {
+                            Logger.Msg($"[Relationship Data] FinalizeNetworkSpawn: No NPCPrefabIdentity component found for NPC '{S1NPC.ID}', will try type-based defaults");
                         }
                         
                         // If no prefab-level data was applied, fall back to type-based defaults
@@ -2716,6 +2747,8 @@ namespace S1API.Entities
                             
                             if (hasDefaults)
                             {
+                                Logger.Msg($"[Relationship Data] FinalizeNetworkSpawn: Applying type-based relationship defaults for NPC '{S1NPC.ID}' (type: {t.Name}, scene: {gameObject.scene.name})");
+                                
                                 var builder = new NPCRelationshipDataBuilder();
                                 relCfg(builder);
                                 var rel = S1NPC.RelationData;
@@ -2724,9 +2757,13 @@ namespace S1API.Entities
                                     // Preserve unlock state if NPC is already unlocked (may have been loaded from save)
                                     // This prevents overwriting unlock state if FinalizeNetworkSpawn runs after load
                                     bool alreadyUnlocked = rel.Unlocked;
+                                    int previousConnectionCount = rel.Connections?.Count ?? 0;
                                     
                                     builder.ApplyTo(rel, S1NPC, preserveUnlockState: alreadyUnlocked);
                                     _relationshipDataAppliedFromPrefab = true; // Mark as applied even if from type defaults
+                                    
+                                    int newConnectionCount = rel.Connections?.Count ?? 0;
+                                    Logger.Msg($"[Relationship Data] FinalizeNetworkSpawn: Type-based relationship defaults applied for NPC '{S1NPC.ID}': {previousConnectionCount} -> {newConnectionCount} connections");
                                     
                                     // Verify unlock state wasn't accidentally overwritten
                                     if (alreadyUnlocked && !rel.Unlocked)

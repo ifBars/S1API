@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Docks
     /// </summary>
     public class GenghisBarn : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Genghis Barn. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "genghis_barn";
+        
         internal GenghisBarn() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "genghis_barn")) { }
     }
 }

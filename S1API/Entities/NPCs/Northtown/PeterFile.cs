@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Northtown
     /// </summary>
     public class PeterFile : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Peter File. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "peter_file";
+        
         internal PeterFile() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "peter_file")) { }
     }
 }

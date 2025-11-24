@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Downtown
     /// </summary>
     public class LouisFourier : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Louis Fourier. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "louis_fourier";
+        
         internal LouisFourier() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "louis_fourier")) { }
     }
 }

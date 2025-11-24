@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Suburbia
     /// </summary>
     public class DennisKennedy : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Dennis Kennedy. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "dennis_kennedy";
+        
         internal DennisKennedy() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "dennis_kennedy")) { }
     }
 }

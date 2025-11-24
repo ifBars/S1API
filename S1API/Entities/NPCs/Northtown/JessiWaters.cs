@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Northtown
     /// </summary>
     public class JessiWaters : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Jessi Waters. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "jessi_waters";
+        
         internal JessiWaters() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "jessi_waters")) { }
     }
 }

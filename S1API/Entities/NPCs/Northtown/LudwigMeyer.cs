@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Northtown
     /// </summary>
     public class LudwigMeyer : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Ludwig Meyer. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "ludwig_meyer";
+        
         internal LudwigMeyer() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "ludwig_meyer")) { }
     }
 }

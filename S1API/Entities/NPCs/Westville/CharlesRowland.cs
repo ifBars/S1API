@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Westville
     /// </summary>
     public class CharlesRowland : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Charles Rowland. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "charles_rowland";
+        
         internal CharlesRowland() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "charles_rowland")) { }
     }
 }

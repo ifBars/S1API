@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Northtown
     /// </summary>
     public class PeggyMyers : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Peggy Myers. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "peggy_myers";
+        
         internal PeggyMyers() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "peggy_myers")) { }
     }
 }

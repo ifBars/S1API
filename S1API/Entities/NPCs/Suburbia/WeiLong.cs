@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Suburbia
     /// </summary>
     public class WeiLong : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Wei Long. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "wei_long";
+        
         internal WeiLong() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "wei_long")) { }
     }
 }

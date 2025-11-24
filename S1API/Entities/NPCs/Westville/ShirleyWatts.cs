@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Westville
     /// </summary>
     public class ShirleyWatts : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Shirley Watts. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "shirley_watts";
+        
         internal ShirleyWatts() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "shirley_watts")) { }
     }
 }

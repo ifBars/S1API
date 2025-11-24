@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Docks
     /// </summary>
     public class MelissaWood : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Melissa Wood. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "melissa_wood";
+        
         internal MelissaWood() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "melissa_wood")) { }
     }
 }

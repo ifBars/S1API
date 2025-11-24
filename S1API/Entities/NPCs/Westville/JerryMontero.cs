@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Westville
     /// </summary>
     public class JerryMontero : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Jerry Montero. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "jerry_montero";
+        
         internal JerryMontero() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "jerry_montero")) { }
     }
 }

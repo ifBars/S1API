@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Downtown
     /// </summary>
     public class LucyPennington : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Lucy Pennington. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "lucy_pennington";
+        
         internal LucyPennington() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "lucy_pennington")) { }
     }
 }

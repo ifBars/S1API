@@ -15,6 +15,11 @@ namespace S1API.Entities.NPCs.Suburbia
     /// </summary>
     public class KarenKennedy : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Karen Kennedy. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "karen_kennedy";
+        
         internal KarenKennedy() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "karen_kennedy")) { }
     }
 }

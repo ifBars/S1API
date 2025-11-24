@@ -15,6 +15,11 @@ namespace S1API.Entities.NPCs.Uptown
     /// </summary>
     public class LilyTurner : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Lily Turner. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "lily_turner";
+        
         internal LilyTurner() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "lily_turner")) { }
     }
 }

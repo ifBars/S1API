@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Northtown
     /// </summary>
     public class KyleCooley : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Kyle Cooley. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "kyle_cooley";
+        
         internal KyleCooley() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "kyle_cooley")) { }
     }
 }

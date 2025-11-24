@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs.Westville
     /// </summary>
     public class TrentSherman : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Trent Sherman. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "trent_sherman";
+        
         internal TrentSherman() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "trent_sherman")) { }
     }
 }

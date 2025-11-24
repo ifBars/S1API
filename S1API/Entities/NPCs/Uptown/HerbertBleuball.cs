@@ -15,6 +15,11 @@ namespace S1API.Entities.NPCs.Uptown
     /// </summary>
     public class HerbertBleuball : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Herbert Bleuball. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "herbert_bleuball";
+        
         internal HerbertBleuball() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "herbert_bleuball")) { }
     }
 }

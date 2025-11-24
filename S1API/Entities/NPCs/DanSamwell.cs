@@ -14,6 +14,11 @@ namespace S1API.Entities.NPCs
     /// </summary>
     public class DanSamwell : NPC
     {
+        /// <summary>
+        /// Static NPC ID for Dan Samwell. Used to resolve connections during prefab configuration.
+        /// </summary>
+        public new static string NPCId => "dan_samwell";
+        
         internal DanSamwell() : base(NPCManager.NPCRegistry.ToArray().First(n => n.ID == "dan_samwell")) { }
     }
 }
