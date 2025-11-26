@@ -83,7 +83,6 @@ namespace S1API.Entities.Relation
             _connectionIDs.Clear();
             if (ids == null)
             {
-                Logger.Msg("[Relationship Data] WithConnectionsById: Received null IDs enumerable, clearing connections");
                 return this;
             }
             
@@ -99,8 +98,6 @@ namespace S1API.Entities.Relation
                 }
             }
             
-            if (addedCount > 0)
-                Logger.Msg($"[Relationship Data] WithConnectionsById: Configured {addedCount} connection ID(s)");
             return this;
         }
 
@@ -190,7 +187,6 @@ namespace S1API.Entities.Relation
                         {
                             if (baseNpc != null && string.Equals(baseNpc.ID, candidateId, StringComparison.OrdinalIgnoreCase))
                             {
-                                Logger.Msg($"[Relationship Data] TryResolveNPCIdFromType: Found ID '{candidateId}' for NPC type '{typeName}' in base game registry");
                                 return candidateId;
                             }
                         }
@@ -240,7 +236,6 @@ namespace S1API.Entities.Relation
             _connectionIDs.Clear();
             if (npcTypes == null || npcTypes.Length == 0)
             {
-                Logger.Msg("[Relationship Data] WithConnections: Received null or empty NPC types, clearing connections");
                 return this;
             }
 
@@ -288,10 +283,7 @@ namespace S1API.Entities.Relation
                     addedCount++;
                 }
             }
-
-            if (addedCount > 0)
-                Logger.Msg($"[Relationship Data] WithConnections: Configured {addedCount} connection ID(s) from types (skipped {nullCount} null types, {emptyIdCount} unresolved IDs)");
-
+            
             return this;
         }
 
@@ -332,8 +324,6 @@ namespace S1API.Entities.Relation
             {
                 if (_connectionIDs.Count > 0)
                 {
-                    Logger.Msg($"[Relationship Data] ApplyTo: Applying {_connectionIDs.Count} connection ID(s) to NPC '{owner?.ID ?? "<null>"}'");
-                    
                     var registry = S1NPCs.NPCManager.NPCRegistry;
                     var targetList = relationData.Connections;
                     if (targetList != null)
@@ -376,8 +366,6 @@ namespace S1API.Entities.Relation
                                 Logger.Warning($"[Relationship Data] ApplyTo: Connection ID '{id}' not found in NPC registry for NPC '{owner?.ID ?? "<null>"}'");
                             }
                         }
-                        
-                        Logger.Msg($"[Relationship Data] ApplyTo: Connections updated for NPC '{owner?.ID ?? "<null>"}': {foundCount} found, {notFoundCount} missing, {targetList.Count} total");
                     }
                     else
                     {

@@ -176,7 +176,6 @@ namespace S1API.Items
                 }
 
                 _isPatched = true;
-                _logger.Msg("Patched Resources.Load to support registered AvatarEquippable prefabs");
             }
             catch (System.Exception ex)
             {

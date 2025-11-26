@@ -385,8 +385,6 @@ namespace S1API.Entities
         {
             if (configure != null)
             {
-                Logger.Msg($"[Relationship Data] WithRelationshipDefaults: Configuring relationship defaults for NPC type '{ownerType.Name}' on prefab '{prefabRoot.name}'");
-                
                 NPC.RegisterRelationshipDefaultsForType(ownerType, configure);
                 
                 // Register relationship data to NPCPrefabIdentity for Il2Cpp compatibility
@@ -394,17 +392,6 @@ namespace S1API.Entities
                 {
                     var builder = new NPCRelationshipDataBuilder();
                     configure(builder);
-                    
-                    // Capture connection IDs before registering
-                    var snapshot = builder.CaptureData();
-                    if (snapshot?.ConnectionIDs != null && snapshot.ConnectionIDs.Count > 0)
-                    {
-                        Logger.Msg($"[Relationship Data] WithRelationshipDefaults: Prefab '{prefabRoot.name}' configured with {snapshot.ConnectionIDs.Count} connection IDs: [{string.Join(", ", snapshot.ConnectionIDs)}]");
-                    }
-                    else
-                    {
-                        Logger.Msg($"[Relationship Data] WithRelationshipDefaults: Prefab '{prefabRoot.name}' configured with no connection IDs");
-                    }
                     
                     NPCPrefabIdentity.RegisterRelationshipDataToStaticCache(prefabRoot.name, builder);
                 }

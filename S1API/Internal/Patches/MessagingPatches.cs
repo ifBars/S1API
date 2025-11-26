@@ -56,11 +56,7 @@ namespace S1API.Internal.Patches
                         }
                         
                         if (needsUpdate)
-                        {
-                            // Re-sync categories from NPC
                             __instance.SetCategories(npcCategories);
-                            Logger.Msg($"Synced conversation categories for '{__instance.sender.ID}' from NPC before UI creation");
-                        }
                     }
                 }
             }

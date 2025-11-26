@@ -2705,22 +2705,9 @@ namespace S1API.Entities
                             if (rel != null)
                             {
                                 bool alreadyUnlocked = rel.Unlocked;
-                                int previousConnectionCount = rel.Connections?.Count ?? 0;
-                                
-                                Logger.Msg($"[Relationship Data] FinalizeNetworkSpawn: Applying relationship data from prefab for NPC '{S1NPC.ID}' (scene: {gameObject.scene.name}, alreadyUnlocked: {alreadyUnlocked}, previousConnections: {previousConnectionCount})");
-                                
-                                if (identity.ConnectionIDs != null && identity.ConnectionIDs.Count > 0)
-                                {
-                                    Logger.Msg($"[Relationship Data] FinalizeNetworkSpawn: Prefab has {identity.ConnectionIDs.Count} connection IDs configured: [{string.Join(", ", identity.ConnectionIDs)}]");
-                                }
-                                
                                 identity.ApplyRelationshipDataTo(S1NPC, preserveUnlockState: alreadyUnlocked);
                                 appliedFromPrefab = true;
                                 _relationshipDataAppliedFromPrefab = true;
-                                
-                                int newConnectionCount = rel.Connections?.Count ?? 0;
-                                Logger.Msg($"[Relationship Data] FinalizeNetworkSpawn: Relationship data applied from prefab for NPC '{S1NPC.ID}': {previousConnectionCount} -> {newConnectionCount} connections");
-                                
                                 // Verify unlock state wasn't accidentally overwritten
                                 if (alreadyUnlocked && !rel.Unlocked)
                                 {
@@ -2734,10 +2721,6 @@ namespace S1API.Entities
                                 Logger.Warning($"[Relationship Data] FinalizeNetworkSpawn: RelationData is null for NPC '{S1NPC.ID}'");
                             }
                         }
-                        else
-                        {
-                            Logger.Msg($"[Relationship Data] FinalizeNetworkSpawn: No NPCPrefabIdentity component found for NPC '{S1NPC.ID}', will try type-based defaults");
-                        }
                         
                         // If no prefab-level data was applied, fall back to type-based defaults
                         if (!appliedFromPrefab)
@@ -2747,8 +2730,6 @@ namespace S1API.Entities
                             
                             if (hasDefaults)
                             {
-                                Logger.Msg($"[Relationship Data] FinalizeNetworkSpawn: Applying type-based relationship defaults for NPC '{S1NPC.ID}' (type: {t.Name}, scene: {gameObject.scene.name})");
-                                
                                 var builder = new NPCRelationshipDataBuilder();
                                 relCfg(builder);
                                 var rel = S1NPC.RelationData;
@@ -2757,14 +2738,8 @@ namespace S1API.Entities
                                     // Preserve unlock state if NPC is already unlocked (may have been loaded from save)
                                     // This prevents overwriting unlock state if FinalizeNetworkSpawn runs after load
                                     bool alreadyUnlocked = rel.Unlocked;
-                                    int previousConnectionCount = rel.Connections?.Count ?? 0;
-                                    
                                     builder.ApplyTo(rel, S1NPC, preserveUnlockState: alreadyUnlocked);
                                     _relationshipDataAppliedFromPrefab = true; // Mark as applied even if from type defaults
-                                    
-                                    int newConnectionCount = rel.Connections?.Count ?? 0;
-                                    Logger.Msg($"[Relationship Data] FinalizeNetworkSpawn: Type-based relationship defaults applied for NPC '{S1NPC.ID}': {previousConnectionCount} -> {newConnectionCount} connections");
-                                    
                                     // Verify unlock state wasn't accidentally overwritten
                                     if (alreadyUnlocked && !rel.Unlocked)
                                     {
@@ -2815,10 +2790,52 @@ namespace S1API.Entities
                 {
                     Logger.Warning($"[S1API] Failed to apply spawn position: {ex.Message}");
                 }
+
+                // Check if all custom NPCs are now ready (finalized)
+                // This sets the CustomNpcsReady flag once all custom NPCs have been spawned and finalized
+                CheckAndSetCustomNpcsReady();
             }
             catch (Exception ex)
             {
                 Logger.Warning($"[S1API] Failed to finalize NPC after spawn: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Checks if all custom NPCs have been finalized and sets the CustomNpcsReady flag.
+        /// This is called from FinalizeNetworkSpawn to signal when all custom NPCs are ready.
+        /// </summary>
+        private static void CheckAndSetCustomNpcsReady()
+        {
+            // If already ready, no need to check again
+            if (Internal.Patches.NPCPatches.CustomNpcsReady)
+                return;
+
+            try
+            {
+                // Check if all custom NPC types have been instantiated
+                var allCustomNpcs = All.Where(n => n.IsCustomNPC).ToList();
+
+                // If there are no custom NPCs, nothing to wait for
+                if (allCustomNpcs.Count == 0)
+                    return;
+
+                // Get all custom NPC types that should exist
+                var customNpcTypes = Internal.Utils.ReflectionUtils.GetDerivedClasses<NPC>()
+                    .Where(t => t != null && !t.IsAbstract && t.Assembly != typeof(NPC).Assembly)
+                    .ToList();
+
+                // Check if all custom NPC types have at least one instance
+                bool allTypesInstantiated = customNpcTypes.All(type =>
+                    allCustomNpcs.Any(npc => npc.GetType() == type)
+                );
+
+                if (allTypesInstantiated)
+                    Internal.Patches.NPCPatches.CustomNpcsReady = true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[NPC] Failed to check CustomNpcsReady status: {ex.Message}");
             }
         }
 

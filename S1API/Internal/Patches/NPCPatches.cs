@@ -420,8 +420,6 @@ namespace S1API.Internal.Patches
                                 try
                                 {
                                     var baseData = dynamicSaveData.ExtractBaseData<S1Datas.NPCData>();
-                                    string npcId = baseData?.ID ?? "<unknown>";
-                                    
                                     // Check if NPC already exists first - don't create duplicates
                                     var existingNpc = FindBaseNpcById(baseData?.ID ?? string.Empty);
                                     
@@ -454,15 +452,6 @@ namespace S1API.Internal.Patches
                                     {
                                         nPCLoader.Load(dynamicSaveData);
                                         successCount++;
-                                    }
-                                    else
-                                    {
-                                        // Don't warn for base game NPCs - they're handled by the base loader
-                                        // Only warn if it looks like a custom NPC that failed to instantiate
-                                        if (IsLikelyCustomDynamicSaveData(dynamicSaveData))
-                                        {
-                                            Logger.Warning($"[S1API] NPCsLoader_Load_Prefix: Could not find or instantiate custom NPC '{npcId}' - skipping load");
-                                        }
                                     }
                                 }
                                 catch (Exception npcEx)

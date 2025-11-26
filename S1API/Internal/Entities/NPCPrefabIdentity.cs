@@ -134,10 +134,7 @@ namespace S1API.Internal.Entities
                 if (unlockType.HasValue)
                     updatedData.UnlockType = (int?)unlockType.Value;
                 if (connectionIDs != null && connectionIDs.Count > 0)
-                {
                     updatedData.ConnectionIDs = new List<string>(connectionIDs);
-                    Logger.Msg($"[Relationship Data] RegisterRelationshipDataToStaticCache: Stored {connectionIDs.Count} connection ID(s) for prefab '{normalizedName}'");
-                }
 
                 _registry[normalizedName] = updatedData;
             }
@@ -233,11 +230,6 @@ namespace S1API.Internal.Entities
                 ConnectionIDs = connectionIDs,
                 PrefabName = normalizedName
             };
-
-            if (connectionIDs != null && connectionIDs.Count > 0)
-            {
-                Logger.Msg($"[Relationship Data] RegisterToStaticCache: Storing {connectionIDs.Count} connection ID(s) for prefab '{normalizedName}'");
-            }
 
             _registry[normalizedName] = identityData;
 
