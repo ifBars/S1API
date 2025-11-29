@@ -523,4 +523,4 @@ var allQuests = QuestManager.GetAllQuests();
 - [S1NotesApp Example](https://github.com/ifBars/S1NotesApp) - Contains `StarredNoteQuest`
 - [Save System](save-system.md) - For persisting quest data
 - [Custom NPCs](custom-npcs.md) - For quest-giving NPCs
-- [Quests API Reference](../api/S1API.Quests.html)
+- <xref:S1API.Quests> - Quests API Reference

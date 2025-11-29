@@ -418,5 +418,5 @@ Without `EnsureDealSignal()`, the dealer won't be able to accept or complete con
 - [CustomNPCTest Example](https://github.com/ifBars/S1APINPCExample) - Contains `ExamplePhysicalDealerNPC`
 - [Custom NPCs](custom-npcs.md) - Core NPC creation guide
 - [Customer Behavior](customer-behavior.md) - For creating customer NPCs
-- [Economy API Reference](../api/S1API.Economy.html)
-- [Dealer API Reference](../api/S1API.Entities.Dealer.html)
+- <xref:S1API.Economy> - Economy API Reference
+- <xref:S1API.Entities.Dealer> - Dealer API Reference

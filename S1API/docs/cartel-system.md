@@ -276,4 +276,4 @@ public class CartelReactiveNPC : NPC
 
 - [More-NPCs Example](https://github.com/ifBars/S1API/tree/main/More-NPCs) - Contains a working `CartelStatusWatcher`
 - [Custom NPCs](custom-npcs.md) - For creating NPCs that react to cartel status
-- [Cartel API Reference](../api/S1API.Cartel.html)
+- <xref:S1API.Cartel> - Cartel API Reference

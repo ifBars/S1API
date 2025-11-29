@@ -407,5 +407,5 @@ foreach (var field in properties)
 - [Dealer System](dealer-system.md) - Creating dealers who distribute products
 - [Custom NPCs](custom-npcs.md) - Core NPC creation
 - [CustomNPCTest Example](https://github.com/ifBars/S1API/tree/main/CustomNPCTest)
-- [Products API Reference](../api/S1API.Products.html)
-- [Properties API Reference](../api/S1API.Properties.html)
+- <xref:S1API.Products> - Products API Reference
+- <xref:S1API.Property> - Properties API Reference

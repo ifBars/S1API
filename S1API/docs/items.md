@@ -903,8 +903,8 @@ For items with custom state (like the ScratcherTicket with `IsScratched`, `Prize
 
 ## See Also
 
-- [ItemDefinition API Reference](../api/S1API.Items.ItemDefinition.html)
-- [ItemCreator API Reference](../api/S1API.Items.ItemCreator.html)
-- [StorableItemDefinitionBuilder API Reference](../api/S1API.Items.StorableItemDefinitionBuilder.html)
-- [AvatarEquippableRegistry API Reference](../api/S1API.Items.AvatarEquippableRegistry.html) - For registering AvatarEquippable prefabs from AssetBundles
-- [AvatarEquippablePaths API Reference](../api/S1API.Items.AvatarEquippablePaths.html) - Constants for base game AvatarEquippable prefab paths
+- <xref:S1API.Items.ItemDefinition> - ItemDefinition API Reference
+- <xref:S1API.Items.ItemCreator> - ItemCreator API Reference
+- <xref:S1API.Items.StorableItemDefinitionBuilder> - StorableItemDefinitionBuilder API Reference
+- <xref:S1API.Items.AvatarEquippableRegistry> - For registering AvatarEquippable prefabs from AssetBundles
+- <xref:S1API.Items.AvatarEquippablePaths> - Constants for base game AvatarEquippable prefab paths
