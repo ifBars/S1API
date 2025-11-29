@@ -11,9 +11,7 @@ using ScheduleOne.Money;
 namespace S1API.Property
 {
     /// <summary>
-    /// Represents a wrapper class for handling properties derived from the
-    /// Il2CppScheduleOne.Property.Property class. Provides an abstraction for
-    /// interacting with property details and operations in Unity.
+    /// Provides an abstraction for interacting with in game player properties.
     /// </summary>
     public class PropertyWrapper : BaseProperty
     {
@@ -32,7 +30,7 @@ namespace S1API.Property
         /// <summary>
         /// A wrapper class that extends the functionality of <see cref="BaseProperty"/>
         /// and acts as a bridge to interact with an inner property implementation
-        /// from the Il2CppScheduleOne.Property namespace.
+        /// from the ScheduleOne.Property namespace.
         /// </summary>
 #if IL2CPPMELON
         public PropertyWrapper(Il2CppScheduleOne.Property.Property property)
@@ -98,7 +96,7 @@ namespace S1API.Property
         /// <summary>
         /// Marks the property as owned within the PropertyWrapper implementation.
         /// Updates the ownership status by delegating the operation to the underlying
-        /// Il2CppScheduleOne.Property.Property instance.
+        /// ScheduleOne.Property.Property instance.
         /// This is typically used to signify that the property has been acquired or purchased.
         /// </summary>
         public override void SetOwned()
@@ -115,6 +113,97 @@ namespace S1API.Property
         {
             return InnerProperty.DoBoundsContainPoint(point);
         }
+
+        /// <summary>
+        /// Gets the exterior spawn point position of the property.
+        /// This is typically used for spawning outside the property.
+        /// </summary>
+        public Vector3 ExteriorSpawnPosition =>
+            InnerProperty.SpawnPoint.position;
+
+        /// <summary>
+        /// Gets the interior spawn point position of the property.
+        /// This is typically used for spawning inside the property.
+        /// </summary>
+        public Vector3 InteriorSpawnPosition =>
+            InnerProperty.InteriorSpawnPoint.position;
+
+        /// <summary>
+        /// Gets the number of loading docks available at this property.
+        /// </summary>
+        public int LoadingDockCount =>
+            InnerProperty.LoadingDockCount;
+
+        /// <summary>
+        /// Gets the default rotation value for the property.
+        /// </summary>
+        public float DefaultRotation =>
+            InnerProperty.DefaultRotation;
+
+        /// <summary>
+        /// Gets a value indicating whether the property is available in the demo version of the game.
+        /// </summary>
+        public bool AvailableInDemo =>
+            InnerProperty.AvailableInDemo;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the property's content is currently culled.
+        /// Content culling is used to optimize performance by hiding property contents when far away.
+        /// </summary>
+        public bool IsContentCulled
+        {
+            get => InnerProperty.IsContentCulled;
+            set => InnerProperty.SetContentCulled(value);
+        }
+
+        /// <summary>
+        /// Gets the number of employees currently assigned to this property.
+        /// </summary>
+        public int EmployeeCount =>
+            InnerProperty.Employees.Count;
+
+        /// <summary>
+        /// Gets the number of buildable items currently placed in this property.
+        /// </summary>
+        public int BuildableItemCount =>
+            InnerProperty.BuildableItems.Count;
+
+        /// <summary>
+        /// Gets the position of the NPC spawn point for this property.
+        /// Returns Vector3.zero if no NPC spawn point is configured.
+        /// </summary>
+        public Vector3 NPCSpawnPosition =>
+            InnerProperty.NPCSpawnPoint != null ? InnerProperty.NPCSpawnPoint.position : Vector3.zero;
+
+        /// <summary>
+        /// Gets the number of employee idle points configured for this property.
+        /// </summary>
+        public int EmployeeIdlePointCount =>
+            InnerProperty.EmployeeIdlePoints?.Length ?? 0;
+
+        /// <summary>
+        /// Gets the position of a specific employee idle point by index.
+        /// </summary>
+        /// <param name="index">The zero-based index of the idle point.</param>
+        /// <returns>The position of the idle point, or Vector3.zero if the index is invalid.</returns>
+        public Vector3 GetEmployeeIdlePointPosition(int index)
+        {
+            if (InnerProperty.EmployeeIdlePoints != null &&
+                index >= 0 &&
+                index < InnerProperty.EmployeeIdlePoints.Length &&
+                InnerProperty.EmployeeIdlePoints[index] != null)
+            {
+                return InnerProperty.EmployeeIdlePoints[index].position;
+            }
+            return Vector3.zero;
+        }
+
+        /// <summary>
+        /// Gets the number of unassigned beds currently available in this property.
+        /// </summary>
+        /// <returns>The count of beds that do not have an assigned employee.</returns>
+        public int GetUnassignedBedCount() =>
+            InnerProperty.GetUnassignedBeds().Count;
 
         /// <summary>
         /// INTERNAL: Prefix used for locating property signs in the scene hierarchy.

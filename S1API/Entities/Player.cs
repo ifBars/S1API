@@ -13,6 +13,7 @@ using System.Reflection;
 using HarmonyLib;
 using S1API.Entities.Interfaces;
 using S1API.Internal.Abstraction;
+using S1API.Law;
 using UnityEngine;
 
 namespace S1API.Entities
@@ -118,6 +119,12 @@ namespace S1API.Entities
             get => S1Player.Scale;
             set => S1Player.SetScale(value);
         }
+
+        /// <summary>
+        /// The player's crime data, including wanted level, crimes committed, and pursuit state.
+        /// </summary>
+        public PlayerCrimeData CrimeData =>
+            new PlayerCrimeData(S1Player.CrimeData);
 
         /// <summary>
         /// The current health of the player.

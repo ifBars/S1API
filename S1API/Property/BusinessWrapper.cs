@@ -93,6 +93,25 @@ namespace S1API.Property
         public float AppliedLaunderLimit => InnerBusiness.appliedLaunderLimit;
 
         /// <summary>
+        /// Gets the number of active laundering operations currently in progress.
+        /// </summary>
+        public int LaunderingOperationCount =>
+            InnerBusiness.LaunderingOperations.Count;
+
+        /// <summary>
+        /// Gets a value indicating whether the business has reached its laundering capacity.
+        /// </summary>
+        public bool IsAtLaunderingCapacity =>
+            AppliedLaunderLimit <= 0;
+
+        /// <summary>
+        /// Gets the percentage of laundering capacity currently in use.
+        /// Returns a value between 0 and 1, where 1 represents 100% capacity.
+        /// </summary>
+        public float LaunderingCapacityUsagePercent =>
+            LaunderCapacity > 0 ? CurrentLaunderTotal / LaunderCapacity : 0f;
+
+        /// <summary>
         /// INTERNAL: Prefix used for locating business property signs in the scene hierarchy.
         /// </summary>
         internal override string SignPrefix => "@Businesses/";
