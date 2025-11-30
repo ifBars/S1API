@@ -71,21 +71,13 @@ namespace S1API.Internal.Entities
             public string PrefabName;
         }
 
-        private void Awake()
-        {
-            // On Il2Cpp, restore fields from registry if this is a spawned instance
-            #if IL2CPPMELON
-            TryRestoreFromRegistry();
-            #endif
-        }
-
         private void Start()
         {
             // On Il2Cpp, restore fields from registry again in Start() in case they were wiped after Awake()
 #if IL2CPPMELON
             TryRestoreFromRegistry();
 #endif
-            // Best-effort: apply immediately, then retry briefly in case Avatar isn't yet available on clients.
+            // apply immediately, then retry briefly in case Avatar isn't yet available on clients.
             TryApplyNow();
             if (!_applied)
                 MelonCoroutines.Start(DelayedApply());
