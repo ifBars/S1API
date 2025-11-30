@@ -11,6 +11,7 @@
         }
       ],
       "dest": "api",
+      "namespaceLayout": "Nested",
       "disableGitFeatures": false,
       "disableDefaultFilter": false,
       "shouldSkipMarkup": false,
