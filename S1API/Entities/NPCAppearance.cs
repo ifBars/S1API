@@ -11,6 +11,7 @@ using System.Linq;
 using System.Reflection;
 using System.Collections;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 using S1API.Entities.Appearances.AccessoryFields;
 using S1API.Entities.Appearances.Base;
@@ -121,6 +122,7 @@ namespace S1API.Entities
 
                 var generator = S1AvatarFramework.MugshotGenerator.Instance;
                 var mugshotRig = generator != null ? generator.MugshotRig : null;
+                var iconGenerator = generator != null ? generator.Generator : null;
                 if (mugshotRig == null)
                 {
                     // Nothing we can do this frame; try again next frame
@@ -131,6 +133,8 @@ namespace S1API.Entities
                     continue;
                 }
 
+                CacheAndResetMugshotRigTransform(mugshotRig.transform);
+
                 // Phase 1: setup without yielding
                 S1AvatarFramework.Avatar previousAvatar = next.NPC.S1NPC.Avatar;
                 next.NPC.S1NPC.Avatar = mugshotRig;
@@ -138,7 +142,20 @@ namespace S1API.Entities
                 if (mugshotParent != null)
                     mugshotParent.gameObject.SetActive(true);
 
-                next.NPC.S1NPC.Avatar.LoadAvatarSettings(next._customAvatarSettings);
+                // Use a per-capture clone so subsequent appearance edits don't mutate the in-flight mugshot
+                var mugshotSettings = ScriptableObject.Instantiate(next._customAvatarSettings);
+                next.NPC.S1NPC.Avatar.LoadAvatarSettings(mugshotSettings);
+
+                // Capture current lighting state so the ambient flip from the generator doesn't leak
+                var previousAmbientMode = RenderSettings.ambientMode;
+                var previousAmbientLight = RenderSettings.ambientLight;
+                var previousAmbientIntensity = RenderSettings.ambientIntensity;
+                bool? previousModifyLighting = iconGenerator != null ? iconGenerator.ModifyLighting : null;
+                if (iconGenerator != null)
+                    iconGenerator.ModifyLighting = false;
+
+                // Give the rig a frame to update meshes/bounds with the new settings before capture
+                yield return new WaitForEndOfFrame();
 
                 bool completed = false;
                 // Trigger capture (callback will flip flag)
@@ -165,9 +182,17 @@ namespace S1API.Entities
                 while (!completed)
                     yield return null;
 
+                // Restore scene/global state
+                if (iconGenerator != null && previousModifyLighting.HasValue)
+                    iconGenerator.ModifyLighting = previousModifyLighting.Value;
+                RenderSettings.ambientMode = previousAmbientMode;
+                RenderSettings.ambientLight = previousAmbientLight;
+                RenderSettings.ambientIntensity = previousAmbientIntensity;
+
                 // Phase 3: restore without yielding
                 next.NPC.S1NPC.Avatar = previousAvatar ?? next._runtimeAvatar;
                 next.ApplyToAvatar(next._runtimeAvatar);
+                ResetMugshotRigTransform(mugshotRig.transform);
 
                 // Small yield between jobs to keep frame time healthy
                 yield return null;
@@ -542,6 +567,36 @@ namespace S1API.Entities
         private static readonly object _mugshotQueueLock = new object();
         private static readonly Queue<NPCAppearance> _mugshotQueue = new Queue<NPCAppearance>();
         private static bool _isProcessingMugshots = false;
+        private static bool _cachedRigDefaults = false;
+        private static Vector3 _mugshotRigDefaultLocalPosition;
+        private static Quaternion _mugshotRigDefaultLocalRotation;
+        private static Vector3 _mugshotRigDefaultLocalScale;
+
+        private static void CacheAndResetMugshotRigTransform(Transform rigTransform)
+        {
+            if (rigTransform == null)
+                return;
+
+            if (!_cachedRigDefaults)
+            {
+                _mugshotRigDefaultLocalPosition = rigTransform.localPosition;
+                _mugshotRigDefaultLocalRotation = rigTransform.localRotation;
+                _mugshotRigDefaultLocalScale = rigTransform.localScale;
+                _cachedRigDefaults = true;
+            }
+
+            ResetMugshotRigTransform(rigTransform);
+        }
+
+        private static void ResetMugshotRigTransform(Transform rigTransform)
+        {
+            if (rigTransform == null || !_cachedRigDefaults)
+                return;
+
+            rigTransform.localPosition = _mugshotRigDefaultLocalPosition;
+            rigTransform.localRotation = _mugshotRigDefaultLocalRotation;
+            rigTransform.localScale = _mugshotRigDefaultLocalScale;
+        }
 
         #endregion
 
