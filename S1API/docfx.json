@@ -15,7 +15,12 @@
       "disableGitFeatures": false,
       "disableDefaultFilter": false,
       "shouldSkipMarkup": false,
-      "force": true
+      "force": true,
+      "repo": {
+        "remote": "https://github.com/ifBars/S1API.git",
+        "branch": "stable",
+        "path": "S1API"
+      }
     }
   ],
   "build": {
