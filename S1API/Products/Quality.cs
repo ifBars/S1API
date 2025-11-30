@@ -41,17 +41,17 @@ namespace S1API.Products
     }
 
     /// <summary>
-    /// Provides extension methods for converting between <see cref="Il2CppScheduleOne.ItemFramework.EQuality"/> and
-    /// <see cref="S1API.Products.Quality"/> enumerations.
+    /// Provides extension methods for converting between <see cref="InternalQuality"/> and
+    /// <see cref="Quality"/> enumerations.
     /// </summary>
     internal static class QualityExtensions
     {
         /// <summary>
-        /// Converts an instance of <see cref="Il2CppScheduleOne.ItemFramework.EQuality"/> to its corresponding
-        /// <see cref="S1API.Products.Quality"/> representation.
+        /// Converts an instance of <see cref="InternalQuality"/> to its corresponding
+        /// <see cref="Quality"/> representation.
         /// </summary>
-        /// <param name="quality">The <see cref="Il2CppScheduleOne.ItemFramework.EQuality"/> instance to convert.</param>
-        /// <returns>A <see cref="S1API.Products.Quality"/> value that represents the converted quality.</returns>
+        /// <param name="quality">The <see cref="InternalQuality"/> instance to convert.</param>
+        /// <returns>A <see cref="Quality"/> value that represents the converted quality.</returns>
         internal static Quality ToAPI(this InternalQuality quality)
         {
             return quality switch
