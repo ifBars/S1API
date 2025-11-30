@@ -1,7 +1,9 @@
 #if (IL2CPPMELON)
 using S1Law = Il2CppScheduleOne.Law;
+using S1Police = Il2CppScheduleOne.Police;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Law = ScheduleOne.Law;
+using S1Police = ScheduleOne.Police;
 #endif
 
 namespace S1API.Law
@@ -44,7 +46,7 @@ namespace S1API.Law
             if (Internal == null) return false;
             var checkpoint = Internal.GetCheckpoint((S1Law.CheckpointManager.ECheckpointLocation)location);
             if (checkpoint == null) return false;
-            return checkpoint.ActivationState == ScheduleOne.Police.RoadCheckpoint.ECheckpointState.Enabled;
+            return checkpoint.ActivationState == S1Police.RoadCheckpoint.ECheckpointState.Enabled;
         }
 
         /// <summary>
