@@ -297,7 +297,6 @@ namespace S1API.Internal.Entities
                                 {
                                     resolved = entry;
                                     PrefabName = entry.PrefabName ?? kvp.Key; // Use PrefabName from entry or fallback to registry key
-                                    Logger.Msg($"[NPCPrefabIdentity] Found registry entry by ID '{npc.ID}' -> prefab '{PrefabName}'");
                                     break;
                                 }
                             }
@@ -457,7 +456,6 @@ namespace S1API.Internal.Entities
                 if (resolved.HasValue && !string.IsNullOrEmpty(resolved.Value.DealerHomeBuildingName))
                 {
                     DealerHomeBuildingName = resolved.Value.DealerHomeBuildingName;
-                    Logger.Msg($"[Dealer Home] Restored DealerHomeBuildingName '{DealerHomeBuildingName}' from registry (prefab: '{PrefabName ?? prefabName}')");
                 }
             }
         }
@@ -603,7 +601,6 @@ namespace S1API.Internal.Entities
                     {
                         buildingName = resolved.Value.DealerHomeBuildingName;
                         DealerHomeBuildingName = buildingName; // Update component field for future use
-                        Logger.Msg($"[Dealer Home] Found building name '{buildingName}' in registry for NPC {npc?.ID ?? "<null>"} (prefab: '{PrefabName ?? prefabName}')");
                     }
                 }
                 
@@ -627,7 +624,6 @@ namespace S1API.Internal.Entities
             // Only resolve in Main scene where buildings are available
             if (DeferredMapResolver.IsMenuScene())
             {
-                Logger.Msg($"[Dealer Home] Skipping application for {npc?.ID ?? "<null>"} - still in Menu scene");
                 return;
             }
 
@@ -662,11 +658,7 @@ namespace S1API.Internal.Entities
                 }
 
                 bool success = ReflectionUtils.TrySetFieldOrProperty(dealerComponent, "Home", gameBuilding);
-                if (success)
-                {
-                    Logger.Msg($"[Dealer Home] Successfully set home building '{buildingName}' for dealer {npc?.ID ?? "<null>"}");
-                }
-                else
+                if (!success)
                 {
                     Logger.Warning($"[Dealer Home] Failed to set Home property on Dealer component for NPC {npc?.ID ?? "<null>"}");
                 }
