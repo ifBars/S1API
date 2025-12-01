@@ -870,6 +870,7 @@ namespace S1API.Entities
                 string buildingNameToStore = null;
                 if (data.Home != null)
                 {
+                    // Try to get name from Building wrapper (works even for deferred wrappers)
                     buildingNameToStore = data.Home.Name;
                 }
                 else if (!string.IsNullOrEmpty(data.HomeName))
@@ -880,11 +881,32 @@ namespace S1API.Entities
                 if (!string.IsNullOrEmpty(buildingNameToStore))
                 {
                     // Store building name in NPCPrefabIdentity for deferred resolution
-                    var identity = dealerComponent.GetComponent<Internal.Entities.NPCPrefabIdentity>();
+                    // Get identity from the NPC GameObject (Dealer inherits from NPC, so dealerComponent IS the NPC)
+                    // Use gameObject.GetComponent to ensure we get the component from the root GameObject
+                    var identity = dealerComponent.gameObject.GetComponent<Internal.Entities.NPCPrefabIdentity>();
                     if (identity != null)
                     {
+                        // Set component field (works on Mono, may be null on Il2Cpp)
                         identity.DealerHomeBuildingName = buildingNameToStore;
+                        
+                        // Get prefab name - normalize to match RegisterToStaticCache behavior
+                        string prefabName = dealerComponent.gameObject.name;
+                        if (prefabName.EndsWith("(Clone)"))
+                            prefabName = prefabName.Substring(0, prefabName.Length - 7);
+                        
+                        // Register to static cache for Il2Cpp support (this stores in registry)
+                        identity.RegisterToStaticCache(prefabName);
+                        
+                        Logger.Msg($"[NPC] TryApplyDealerDefaults: Stored building name '{buildingNameToStore}' for dealer {dealerId} (prefab: '{prefabName}')");
                     }
+                    else
+                    {
+                        Logger.Warning($"[NPC] TryApplyDealerDefaults: NPCPrefabIdentity component not found on {dealerComponent.gameObject.name} for dealer {dealerId}. Building name '{buildingNameToStore}' will not be stored.");
+                    }
+                }
+                else
+                {
+                    Logger.Warning($"[NPC] TryApplyDealerDefaults: No building name to store for dealer {dealerId}. Home={data.Home != null}, HomeName={data.HomeName ?? "null"}");
                 }
                 
                 // Note: CompletedDealsVariable would need to be set via other means

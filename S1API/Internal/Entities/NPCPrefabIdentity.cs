@@ -71,11 +71,21 @@ namespace S1API.Internal.Entities
             public string PrefabName;
         }
 
+        private void Awake()
+        {
+            // Try to restore from registry early, before GameObject name might be changed
+            // This helps when the GameObject name changes from prefab name to first name
+            TryRestoreFromRegistry();
+        }
+
         private void Start()
         {
             // On Il2Cpp, restore fields from registry again in Start() in case they were wiped after Awake()
 #if IL2CPPMELON
             TryRestoreFromRegistry();
+#else
+            // On Mono, also ensure dealer home building name is restored from registry
+            EnsureDealerHomeBuildingNameFromRegistry();
 #endif
             // apply immediately, then retry briefly in case Avatar isn't yet available on clients.
             TryApplyNow();
@@ -183,6 +193,7 @@ namespace S1API.Internal.Entities
             // Component field (this.ConnectionIDs) is never set during prefab configuration in Menu scene
             // Connection IDs are only stored via RegisterRelationshipDataToStaticCache, so we must preserve them from registry
             List<string> connectionIDs = null;
+            string dealerHomeBuildingName = this.DealerHomeBuildingName;
             
             if (_registry.TryGetValue(normalizedName, out var existingData))
             {
@@ -193,6 +204,12 @@ namespace S1API.Internal.Entities
                     unlocked = existingData.Unlocked;
                 if (!unlockType.HasValue && existingData.UnlockType.HasValue)
                     unlockType = existingData.UnlockType;
+                
+                // Preserve DealerHomeBuildingName from registry if component field is empty
+                if (string.IsNullOrEmpty(dealerHomeBuildingName) && !string.IsNullOrEmpty(existingData.DealerHomeBuildingName))
+                {
+                    dealerHomeBuildingName = existingData.DealerHomeBuildingName;
+                }
                 
                 // ALWAYS preserve connection IDs from registry if they exist (they come from RegisterRelationshipDataToStaticCache)
                 if (existingData.ConnectionIDs != null && existingData.ConnectionIDs.Count > 0)
@@ -215,7 +232,7 @@ namespace S1API.Internal.Entities
                 LastName = this.LastName,
                 Icon = this.Icon,
                 AppearanceDefaults = CloneAvatarSettingsData(avatarData),
-                DealerHomeBuildingName = this.DealerHomeBuildingName,
+                DealerHomeBuildingName = dealerHomeBuildingName,
                 RelationDelta = relationDelta,
                 Unlocked = unlocked,
                 UnlockType = unlockType,
@@ -251,7 +268,7 @@ namespace S1API.Internal.Entities
             }
             else
             {
-                // Fallback: attempt to match by stored PrefabName inside registry entries when the instance name was changed (e.g., to first name)
+                // Fallback 1: attempt to match by stored PrefabName inside registry entries when the instance name was changed (e.g., to first name)
                 foreach (var kvp in _registry)
                 {
                     var entry = kvp.Value;
@@ -260,6 +277,46 @@ namespace S1API.Internal.Entities
                         resolved = entry;
                         PrefabName = entry.PrefabName;
                         break;
+                    }
+                }
+                
+                // Fallback 2: If GameObject name was changed to first name, try to find registry entry by NPC ID
+                // This handles the case where GameObject.name was changed from "S1API_ExamplePhysicalDealerNPC" to "Dealer"
+                if (!resolved.HasValue)
+                {
+                    try
+                    {
+                        var npc = GetComponent<S1NPCs.NPC>();
+                        if (npc != null && !string.IsNullOrEmpty(npc.ID))
+                        {
+                            foreach (var kvp in _registry)
+                            {
+                                var entry = kvp.Value;
+                                // Match by ID - registry entry should have the same ID as the NPC
+                                if (!string.IsNullOrEmpty(entry.Id) && string.Equals(entry.Id, npc.ID, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    resolved = entry;
+                                    PrefabName = entry.PrefabName ?? kvp.Key; // Use PrefabName from entry or fallback to registry key
+                                    Logger.Msg($"[NPCPrefabIdentity] Found registry entry by ID '{npc.ID}' -> prefab '{PrefabName}'");
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warning($"[NPCPrefabIdentity] Exception during ID-based registry lookup: {ex.Message}");
+                    }
+                }
+                
+                // Fallback 3: If still not found and GameObject name starts with "S1API_", try direct lookup with that
+                // This handles edge cases where the name wasn't changed yet
+                if (!resolved.HasValue && prefabName.StartsWith("S1API_", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (_registry.TryGetValue(prefabName, out var directData))
+                    {
+                        resolved = directData;
+                        PrefabName = prefabName;
                     }
                 }
             }
@@ -276,6 +333,7 @@ namespace S1API.Internal.Entities
                     this.LastName = dataRef.LastName;
                 if (this.Icon == null && dataRef.Icon != null)
                     this.Icon = dataRef.Icon;
+                // Always restore DealerHomeBuildingName from registry if component field is empty (similar to relationship data)
                 if (string.IsNullOrEmpty(this.DealerHomeBuildingName) && !string.IsNullOrEmpty(dataRef.DealerHomeBuildingName))
                     this.DealerHomeBuildingName = dataRef.DealerHomeBuildingName;
                 
@@ -329,6 +387,78 @@ namespace S1API.Internal.Entities
             if (ConnectionIDs == null || ConnectionIDs.Count == 0 || !Unlocked.HasValue || !RelationDelta.HasValue || !UnlockType.HasValue)
             {
                 TryRestoreFromRegistry();
+            }
+        }
+
+        /// <summary>
+        /// INTERNAL: Ensures DealerHomeBuildingName is populated from registry on Il2Cpp.
+        /// Uses the same prefab name lookup logic as TryRestoreFromRegistry for consistency.
+        /// </summary>
+#if IL2CPPMELON
+        [HideFromIl2Cpp]
+#endif
+        private void EnsureDealerHomeBuildingNameFromRegistry()
+        {
+            // Always try to restore to ensure field is populated (Il2Cpp wipes component fields).
+            if (string.IsNullOrEmpty(DealerHomeBuildingName))
+            {
+                // Get prefab name using same logic as TryRestoreFromRegistry
+                string prefabName = gameObject.name;
+                if (prefabName.EndsWith("(Clone)"))
+                    prefabName = prefabName.Substring(0, prefabName.Length - 7);
+                if (!string.IsNullOrEmpty(PrefabName))
+                    prefabName = PrefabName;
+                
+                IdentityData? resolved = null;
+                
+                // Primary lookup by key
+                if (_registry.TryGetValue(prefabName, out var data))
+                {
+                    resolved = data;
+                }
+                else
+                {
+                    // Fallback 1: attempt to match by stored PrefabName inside registry entries
+                    foreach (var kvp in _registry)
+                    {
+                        var entry = kvp.Value;
+                        if (!string.IsNullOrEmpty(entry.PrefabName) && string.Equals(entry.PrefabName, prefabName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            resolved = entry;
+                            PrefabName = entry.PrefabName;
+                            break;
+                        }
+                    }
+                    
+                    // Fallback 2: Try to find by NPC ID (handles case where GameObject name was changed to first name)
+                    if (!resolved.HasValue)
+                    {
+                        try
+                        {
+                            var npc = GetComponent<S1NPCs.NPC>();
+                            if (npc != null && !string.IsNullOrEmpty(npc.ID))
+                            {
+                                foreach (var kvp in _registry)
+                                {
+                                    var entry = kvp.Value;
+                                    if (!string.IsNullOrEmpty(entry.Id) && string.Equals(entry.Id, npc.ID, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        resolved = entry;
+                                        PrefabName = entry.PrefabName ?? kvp.Key;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                
+                if (resolved.HasValue && !string.IsNullOrEmpty(resolved.Value.DealerHomeBuildingName))
+                {
+                    DealerHomeBuildingName = resolved.Value.DealerHomeBuildingName;
+                    Logger.Msg($"[Dealer Home] Restored DealerHomeBuildingName '{DealerHomeBuildingName}' from registry (prefab: '{PrefabName ?? prefabName}')");
+                }
             }
         }
 
@@ -389,6 +519,7 @@ namespace S1API.Internal.Entities
                 TryRestoreFromRegistry();
             }
             EnsureRelationshipDataFromRegistry();
+            EnsureDealerHomeBuildingNameFromRegistry();
 
             try {
                 if (!string.IsNullOrEmpty(FirstName))
@@ -425,11 +556,60 @@ namespace S1API.Internal.Entities
             catch { }
 
             // Apply dealer home building if set (resolve in Main scene)
+            // Always check registry in case component field is null on Il2Cpp
             try
             {
-                if (!string.IsNullOrEmpty(DealerHomeBuildingName))
+                string buildingName = DealerHomeBuildingName;
+                
+                // If component field is empty, try to get from registry using multiple fallback strategies
+                if (string.IsNullOrEmpty(buildingName))
                 {
-                    ApplyDealerHomeBuilding(npc);
+                    string prefabName = gameObject.name;
+                    if (prefabName.EndsWith("(Clone)"))
+                        prefabName = prefabName.Substring(0, prefabName.Length - 7);
+                    if (!string.IsNullOrEmpty(PrefabName))
+                        prefabName = PrefabName;
+                    
+                    IdentityData? resolved = null;
+                    
+                    // Try direct lookup
+                    if (_registry.TryGetValue(prefabName, out var data))
+                    {
+                        resolved = data;
+                    }
+                    else
+                    {
+                        // Fallback: Try to find by NPC ID
+                        try
+                        {
+                            if (npc != null && !string.IsNullOrEmpty(npc.ID))
+                            {
+                                foreach (var kvp in _registry)
+                                {
+                                    var entry = kvp.Value;
+                                    if (!string.IsNullOrEmpty(entry.Id) && string.Equals(entry.Id, npc.ID, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        resolved = entry;
+                                        PrefabName = entry.PrefabName ?? kvp.Key;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+                    
+                    if (resolved.HasValue && !string.IsNullOrEmpty(resolved.Value.DealerHomeBuildingName))
+                    {
+                        buildingName = resolved.Value.DealerHomeBuildingName;
+                        DealerHomeBuildingName = buildingName; // Update component field for future use
+                        Logger.Msg($"[Dealer Home] Found building name '{buildingName}' in registry for NPC {npc?.ID ?? "<null>"} (prefab: '{PrefabName ?? prefabName}')");
+                    }
+                }
+                
+                if (!string.IsNullOrEmpty(buildingName))
+                {
+                    ApplyDealerHomeBuilding(npc, buildingName);
                 }
             }
             catch { }
@@ -438,30 +618,64 @@ namespace S1API.Internal.Entities
 #if IL2CPPMELON
         [HideFromIl2Cpp]
 #endif
-        private void ApplyDealerHomeBuilding(S1NPCs.NPC npc)
+        private void ApplyDealerHomeBuilding(S1NPCs.NPC npc, string buildingName = null)
         {
+            // Use provided building name or fall back to component field
+            if (string.IsNullOrEmpty(buildingName))
+                buildingName = DealerHomeBuildingName;
+            
             // Only resolve in Main scene where buildings are available
             if (DeferredMapResolver.IsMenuScene())
+            {
+                Logger.Msg($"[Dealer Home] Skipping application for {npc?.ID ?? "<null>"} - still in Menu scene");
                 return;
+            }
 
             try
             {
+                if (string.IsNullOrEmpty(buildingName))
+                {
+                    Logger.Warning($"[Dealer Home] Building name is empty for NPC {npc?.ID ?? "<null>"}");
+                    return;
+                }
+
                 var dealerComponent = npc.GetComponent<S1Economy.Dealer>();
                 if (dealerComponent == null)
+                {
+                    Logger.Warning($"[Dealer Home] Dealer component not found for NPC {npc?.ID ?? "<null>"}");
                     return;
+                }
 
                 // Try to get building wrapper by name
-                var building = Building.GetByName(DealerHomeBuildingName);
-                if (building != null)
+                var building = Building.GetByName(buildingName);
+                if (building == null)
                 {
-                    var gameBuilding = building.ResolveGameBuilding();
-                    if (gameBuilding != null)
-                    {
-                        ReflectionUtils.TrySetFieldOrProperty(dealerComponent, "Home", gameBuilding);
-                    }
+                    Logger.Warning($"[Dealer Home] Building '{buildingName}' not found in registry for NPC {npc?.ID ?? "<null>"}");
+                    return;
+                }
+
+                var gameBuilding = building.ResolveGameBuilding();
+                if (gameBuilding == null)
+                {
+                    Logger.Warning($"[Dealer Home] Building '{buildingName}' wrapper found but game building is null for NPC {npc?.ID ?? "<null>"}");
+                    return;
+                }
+
+                bool success = ReflectionUtils.TrySetFieldOrProperty(dealerComponent, "Home", gameBuilding);
+                if (success)
+                {
+                    Logger.Msg($"[Dealer Home] Successfully set home building '{buildingName}' for dealer {npc?.ID ?? "<null>"}");
+                }
+                else
+                {
+                    Logger.Warning($"[Dealer Home] Failed to set Home property on Dealer component for NPC {npc?.ID ?? "<null>"}");
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.Error($"[Dealer Home] Exception applying dealer home building for NPC {npc?.ID ?? "<null>"}: {ex.Message}");
+                Logger.Error($"[Dealer Home] Stack trace: {ex.StackTrace}");
+            }
         }
 
         private void TryApplyNow()
