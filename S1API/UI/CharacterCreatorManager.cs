@@ -1,16 +1,23 @@
 #if (IL2CPPMELON)
 using S1Customization = Il2CppScheduleOne.AvatarFramework.Customization;
-using S1Clothing = Il2CppScheduleOne.Clothing;
-using Il2CppCollectionsGeneric = Il2CppSystem.Collections.Generic;
+using S1DevUtilities = Il2CppScheduleOne.DevUtilities;
+using S1PlayerScripts = Il2CppScheduleOne.PlayerScripts;
+using S1UI = Il2CppScheduleOne.UI;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Customization = ScheduleOne.AvatarFramework.Customization;
-using S1Clothing = ScheduleOne.Clothing;
+using S1DevUtilities = ScheduleOne.DevUtilities;
+using S1PlayerScripts = ScheduleOne.PlayerScripts;
+using S1UI = ScheduleOne.UI;
 #endif
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using MelonLoader;
 using S1API.Avatar;
+using S1API.Entities;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace S1API.UI
 {
@@ -84,7 +91,7 @@ namespace S1API.UI
         /// <summary>
         /// Opens the character creator with the specified initial settings.
         /// </summary>
-        /// <param name="initialSettings">Optional initial avatar settings. If null, default settings are used.</param>
+        /// <param name="initialSettings">Optional initial avatar settings. If null, player's current avatar settings are loaded, or default settings if player has none.</param>
         /// <param name="showUI">Whether to display the UI. Set to false to customize programmatically without showing UI.</param>
         public static void Open(BasicAvatarSettings initialSettings = null, bool showUI = true)
         {
@@ -103,6 +110,18 @@ namespace S1API.UI
             }
 
             RegisterEvents();
+
+            // If no initial settings provided, try to load player's current settings
+            if (initialSettings == null)
+            {
+                initialSettings = GetPlayerAvatarSettings();
+            }
+
+            // Register as active UI element BEFORE opening to prevent dialogue from restoring camera
+            if (showUI && S1DevUtilities.PlayerSingleton<S1PlayerScripts.PlayerCamera>.InstanceExists)
+            {
+                S1DevUtilities.PlayerSingleton<S1PlayerScripts.PlayerCamera>.Instance.AddActiveUIElement(_s1Creator.name);
+            }
 
             var s1Settings = initialSettings?.S1BasicAvatarSettings;
             _s1Creator.Open(s1Settings, showUI);
@@ -138,6 +157,10 @@ namespace S1API.UI
 
             _s1Creator.Close();
 
+            // Restore camera transform and FOV if no other UI elements are active
+            // Use coroutine to wait for base game's Close() coroutine to finish
+            MelonCoroutines.Start(RestoreAfterClose());
+
             try
             {
                 OnClosed?.Invoke();
@@ -151,6 +174,7 @@ namespace S1API.UI
         /// <summary>
         /// Completes the character customization and closes the creator.
         /// Fires the OnCompleted event with the final settings.
+        /// Camera restoration is handled in the OnCreatorCompleted callback.
         /// </summary>
         public static void Complete()
         {
@@ -247,6 +271,26 @@ namespace S1API.UI
             _s1Creator.SliderChanged(Mathf.Clamp01(normalizedValue));
         }
 
+        /// <summary>
+        /// Pre-registers the character creator as an active UI element to prevent other systems (like dialogue) from restoring the camera.
+        /// Call this before ending dialogue or other UI systems to ensure smooth camera transitions.
+        /// </summary>
+        public static void PreRegisterAsActiveUI()
+        {
+            EnsureInitialized();
+
+            if (_s1Creator == null)
+            {
+                Logger.Warning("CharacterCreator singleton is not available for pre-registration");
+                return;
+            }
+
+            if (S1DevUtilities.PlayerSingleton<S1PlayerScripts.PlayerCamera>.InstanceExists)
+            {
+                S1DevUtilities.PlayerSingleton<S1PlayerScripts.PlayerCamera>.Instance.AddActiveUIElement(_s1Creator.name);
+            }
+        }
+
         #endregion
 
         #region Private Members
@@ -310,11 +354,104 @@ namespace S1API.UI
                 }
 
                 var wrappedSettings = new BasicAvatarSettings(s1Settings);
+                
+                // Restore camera after a delay to let the base game's Close() coroutine finish
+                // The base game's Done() calls Close() which starts a coroutine that removes UI element
+                MelonCoroutines.Start(RestoreGameState());
+                
                 OnCompleted?.Invoke(wrappedSettings);
             }
             catch (Exception ex)
             {
                 Logger.Error($"Error in OnCompleted event handler: {ex}");
+            }
+        }
+
+        /// <summary>
+        /// Coroutine to restore camera and game state after character creator closes.
+        /// Waits for the base game's Close() coroutine to finish before restoring.
+        /// </summary>
+        private static IEnumerator RestoreAfterClose()
+        {
+            yield return RestoreGameState();
+        }
+
+        /// <summary>
+        /// Shared coroutine logic to restore camera, HUD, player movement, and inventory.
+        /// </summary>
+        private static IEnumerator RestoreGameState()
+        {
+            // Wait a frame for the base game's Close() coroutine to finish
+            yield return null;
+            
+            // Additional small delay to ensure everything is cleaned up
+            yield return new WaitForSeconds(0.1f);
+
+            if (S1DevUtilities.PlayerSingleton<S1PlayerScripts.PlayerCamera>.InstanceExists)
+            {
+                var camera = S1DevUtilities.PlayerSingleton<S1PlayerScripts.PlayerCamera>.Instance;
+                
+                // Remove UI element if it's still registered (should already be removed by base game, but be safe)
+                camera.RemoveActiveUIElement(_s1Creator?.name ?? "CharacterCreator");
+                
+                // Only restore camera if no other UI elements are active
+                if (camera.activeUIElementCount == 0)
+                {
+                    camera.StopTransformOverride(0f, reenableCameraLook: true, returnToOriginalRotation: false);
+                    camera.StopFOVOverride(0f);
+                    camera.SetCanLook(c: true);
+                    camera.LockMouse();
+                }
+            }
+
+            // Restore HUD, player movement, and inventory (base game's Close() doesn't restore these)
+            if (S1DevUtilities.PlayerSingleton<S1PlayerScripts.PlayerMovement>.InstanceExists)
+            {
+                S1DevUtilities.PlayerSingleton<S1PlayerScripts.PlayerMovement>.Instance.CanMove = true;
+            }
+
+            if (S1DevUtilities.PlayerSingleton<S1PlayerScripts.PlayerInventory>.InstanceExists)
+            {
+                S1DevUtilities.PlayerSingleton<S1PlayerScripts.PlayerInventory>.Instance.SetInventoryEnabled(enabled: true);
+            }
+
+            if (S1DevUtilities.Singleton<S1UI.HUD>.InstanceExists)
+            {
+                S1DevUtilities.Singleton<S1UI.HUD>.Instance.canvas.enabled = true;
+            }
+        }
+
+        /// <summary>
+        /// Gets the player's current avatar settings, wrapped in BasicAvatarSettings.
+        /// Returns null if player has no avatar settings yet.
+        /// </summary>
+        /// <returns>Player's current avatar settings, or null if not available.</returns>
+        private static BasicAvatarSettings GetPlayerAvatarSettings()
+        {
+            try
+            {
+                var localPlayer = Player.Local;
+                if (localPlayer == null || localPlayer.S1Player == null)
+                {
+                    Logger.Warning("Local player not available");
+                    return null;
+                }
+
+                var playerSettings = localPlayer.S1Player.CurrentAvatarSettings;
+                if (playerSettings == null)
+                {
+                    Logger.Msg("Player has no current avatar settings, using default");
+                    return null;
+                }
+
+                // Create a copy to avoid modifying the original
+                var copy = Object.Instantiate(playerSettings);
+                return new BasicAvatarSettings(copy);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Failed to get player avatar settings: {ex}");
+                return null;
             }
         }
 
