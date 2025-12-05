@@ -534,12 +534,30 @@ namespace S1API.Entities
                 }
 #endif
 
-                // Set starting addiction from data.BaseAddiction
+                // Set starting addiction from data.BaseAddiction ONLY if not already loaded from save
+                // If CurrentAddiction has already been set (from save loading), don't overwrite it
+                var baseAddictionValue = (float)(data?.BaseAddiction ?? 0f);
+
 #if MONOMELON
                 var currentAddictionField = typeof(S1Economy.Customer).GetField("CurrentAddiction", BindingFlags.Public | BindingFlags.Instance);
-                currentAddictionField?.SetValue(customer, (float)(data?.BaseAddiction ?? 0f));
+                var existingAddiction = currentAddictionField?.GetValue(customer);
+                float existingValue = (existingAddiction != null && existingAddiction is float) ? (float)existingAddiction : 0f;
+
+                // Only set BaseAddiction if CurrentAddiction is exactly 0 (not yet loaded from save)
+                // If it's non-zero, it was already loaded from save data
+                if (existingValue == 0f && baseAddictionValue != 0f)
+                {
+                    currentAddictionField?.SetValue(customer, baseAddictionValue);
+                }
 #else
-                customer.CurrentAddiction = (float)(data?.BaseAddiction ?? 0f);
+                var existingValue = customer.CurrentAddiction;
+
+                // Only set BaseAddiction if CurrentAddiction is exactly 0 (not yet loaded from save)
+                // If it's non-zero, it was already loaded from save data
+                if (existingValue == 0f && baseAddictionValue != 0f)
+                {
+                    customer.CurrentAddiction = baseAddictionValue;
+                }
 #endif
 
                 // Ensure a valid default delivery location to avoid nulls during contract creation

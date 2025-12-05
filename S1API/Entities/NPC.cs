@@ -896,8 +896,6 @@ namespace S1API.Entities
                         
                         // Register to static cache for Il2Cpp support (this stores in registry)
                         identity.RegisterToStaticCache(prefabName);
-                        
-                        Logger.Msg($"[NPC] TryApplyDealerDefaults: Stored building name '{buildingNameToStore}' for dealer {dealerId} (prefab: '{prefabName}')");
                     }
                     else
                     {
@@ -2606,7 +2604,9 @@ namespace S1API.Entities
             {
                 var customer = gameObject.GetComponent<S1Economy.Customer>();
                 if (customer != null)
+                {
                     Customer.EnsureCustomer();
+                }
             }
             catch (Exception ex)
             {

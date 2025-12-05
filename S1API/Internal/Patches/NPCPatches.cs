@@ -68,6 +68,10 @@ namespace S1API.Internal.Patches
             "Relationship", "Inventory", "CustomerData", "MessageConversation", "Health"
         };
 
+        // Dictionary to track Customer instances with saved CurrentAddiction values that should not be reset by Awake
+        private static readonly System.Collections.Generic.Dictionary<S1Economy.Customer, float> _savedCurrentAddiction
+            = new System.Collections.Generic.Dictionary<S1Economy.Customer, float>();
+
         /// <summary>
         /// Comparison function for sorting NPCAction by StartTime, with signals coming before non-signals when times are equal.
         /// </summary>
@@ -978,6 +982,7 @@ namespace S1API.Internal.Patches
                         try
                         {
                             apiNpc.Customer.EnsureCustomer();
+
                             var npcType = apiNpc.GetType();
                             bool hasDefaults = NPC.HasCustomerDefaultsForType(npcType);
                             if (hasDefaults)
@@ -1003,6 +1008,7 @@ namespace S1API.Internal.Patches
                             }
 
                             customerComponent.enabled = true;
+
                             ApplyCustomerDataSafely(customerComponent, cust);
                         }
                         catch (Exception ex)
@@ -1060,8 +1066,22 @@ namespace S1API.Internal.Patches
                         var rel = s1BaseNpc.RelationData;
                         if (rel != null)
                         {
+                            // Preserve relationship delta if it was loaded from save (non-default value)
+                            // Default relationship delta is 2.0, so if it's different, it came from save
+                            float currentDelta = rel.RelationDelta;
+                            bool deltaWasLoadedFromSave = Math.Abs(currentDelta - S1Relation.NPCRelationData.DEFAULT_RELATION_DELTA) > 0.01f;
+                            
+                            // Store the loaded delta before applying defaults
+                            float savedDelta = currentDelta;
+                            
                             bool beforeApplyDefaults = rel.Unlocked;
                             builder.ApplyTo(rel, s1BaseNpc, preserveUnlockState: true);
+                            
+                            // Restore relationship delta if it was loaded from save
+                            if (deltaWasLoadedFromSave)
+                            {
+                                rel.SetRelationship(savedDelta);
+                            }
                             
                             bool afterApplyDefaults = rel.Unlocked;
                             
@@ -1097,7 +1117,9 @@ namespace S1API.Internal.Patches
         private static void ApplyCustomerDataSafely(S1Economy.Customer customerComponent, S1Datas.CustomerData cust)
         {
             if (customerComponent == null || cust == null)
+            {
                 return;
+            }
 
             try
             {
@@ -1219,6 +1241,31 @@ namespace S1API.Internal.Patches
 
                 try
                 {
+                    // Restore Dependence (CurrentAddiction) from save data
+                    float currentAddiction = 0f;
+                    var currentValue = Utils.ReflectionUtils.TryGetFieldOrProperty(customerComponent, "CurrentAddiction");
+                    if (currentValue != null && currentValue is float)
+                    {
+                        currentAddiction = (float)currentValue;
+                    }
+
+                    float targetAddiction = cust.Dependence;
+                    float delta = targetAddiction - currentAddiction;
+
+                    // During load, ChangeAddiction doesn't work due to network sync issues
+                    // Always use direct assignment during save loading
+                    if (Math.Abs(delta) > 0.0001f)
+                    {
+                        Utils.ReflectionUtils.TrySetFieldOrProperty(customerComponent, "CurrentAddiction", targetAddiction);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"ApplyCustomerDataSafely dependence: {ex.Message}");
+                }
+
+                try
+                {
                     // Basic counters - use reflection for inaccessible setters
                     var timeSinceLastDealCompletedProp = customerType.GetProperty("TimeSinceLastDealCompleted",
                         BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
@@ -1253,7 +1300,7 @@ namespace S1API.Internal.Patches
             }
             catch (Exception ex)
             {
-                Logger.Warning($"ApplyCustomerDataSafely failed: {ex.Message}");
+                Logger.Warning($"ApplyCustomerDataSafely error: {ex.Message}");
             }
         }
 
@@ -1800,6 +1847,67 @@ namespace S1API.Internal.Patches
 #endif
             __instance.NetworkInitialize__Late();
             return false;
+        }
+
+        /// <summary>
+        /// Preserves CurrentAddiction values loaded from save data by storing them before Customer.Awake runs.
+        /// Customer.Awake resets CurrentAddiction to BaseAddiction, which would overwrite saved values during network spawn.
+        /// </summary>
+        [HarmonyPatch(typeof(S1Economy.Customer), "Awake")]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static void Customer_Awake_Prefix(S1Economy.Customer __instance)
+        {
+            try
+            {
+                // Check if this customer has a saved CurrentAddiction value that we need to preserve
+                var currentAddiction = Utils.ReflectionUtils.TryGetFieldOrProperty(__instance, "CurrentAddiction");
+                if (currentAddiction != null && currentAddiction is float currentValue)
+                {
+                    // Store the value so we can restore it in Postfix
+                    if (_savedCurrentAddiction.ContainsKey(__instance))
+                        _savedCurrentAddiction[__instance] = currentValue;
+                    else
+                        _savedCurrentAddiction.Add(__instance, currentValue);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[NPCPatches] Customer_Awake_Prefix exception: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Restores CurrentAddiction values that were loaded from save data after Customer.Awake has run.
+        /// This prevents the Awake method from overwriting saved values with BaseAddiction during network spawn.
+        /// </summary>
+        [HarmonyPatch(typeof(S1Economy.Customer), "Awake")]
+        [HarmonyPostfix]
+        [HarmonyPriority(Priority.Last)]
+        private static void Customer_Awake_Postfix(S1Economy.Customer __instance)
+        {
+            try
+            {
+                // Check if we stored a saved CurrentAddiction value for this customer
+                if (_savedCurrentAddiction.TryGetValue(__instance, out float savedValue))
+                {
+                    // Get the current value (which Awake just reset to BaseAddiction)
+                    var currentAddiction = Utils.ReflectionUtils.TryGetFieldOrProperty(__instance, "CurrentAddiction");
+
+                    // Only restore if the value actually changed (Awake reset it)
+                    if (currentAddiction is float currentValue && Math.Abs(currentValue - savedValue) > 0.0001f)
+                    {
+                        Utils.ReflectionUtils.TrySetFieldOrProperty(__instance, "CurrentAddiction", savedValue);
+                    }
+
+                    // Clean up - remove from dictionary after processing
+                    _savedCurrentAddiction.Remove(__instance);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[NPCPatches] Customer_Awake_Postfix exception: {ex.Message}");
+            }
         }
 
         /// <summary>
