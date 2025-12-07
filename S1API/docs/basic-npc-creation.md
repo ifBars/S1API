@@ -1,49 +1,79 @@
-# Basic NPC Creation
+## Basic NPC Creation
 
-This guide covers the fundamental concepts and basic setup for creating custom NPCs in S1API.
+This guide covers the fundamental concepts and basic setup for creating custom NPCs in S1API. The S1API Entity System provides a robust framework, leveraging an abstraction layer and the Builder Pattern to streamline NPC creation.
+
+### Core Steps for NPC Creation:
+1.  **Inherit from `S1API.Entities.NPC`**: All custom NPCs must extend this base class.
+2.  **Configure Prefab**: Override the `ConfigurePrefab` method to define the NPC's identity, initial spawn position, and core schedule logic using an `NPCPrefabBuilder`.
+    ```csharp
+    protected override void ConfigurePrefab(NPCPrefabBuilder builder) {
+        builder.WithIdentity("my_unique_npc_id", "John", "Doe")
+               .WithSpawnPosition(new Vector3(0,0,0))
+               .WithSchedule(plan => plan.WalkTo(someDestination, 900));
+    }
+    ```
+3.  **Initialize on Creation**: Override the `OnCreated` method to set up appearance (e.g., gender, clothing), subscribe to events, or perform other initializations after the NPC object has been instantiated in the game world.
+    ```csharp
+    protected override void OnCreated() {
+        base.OnCreated();
+        Appearance.Set<CustomizationFields.Gender>(0f).Build();
+        // Additional setup like event subscriptions
+    }
+    ```
+
+NPCs can be either physical (visible in the world) or non-physical (e.g., contact-only characters). The `S1API.Entities` module provides modular access to various components such as `Appearance`, `Schedule`, `Dialogue`, and `Customer` behaviors to build complex characters.
 
 ## Table of Contents
 
-1. [Creating Your First NPC](#creating-your-first-npc)
-2. [NPC Class Structure](#npc-class-structure)
-3. [Physical vs Non-Physical NPCs](#physical-vs-non-physical-npcs)
-4. [Required Methods](#required-methods)
-5. [Constructor Parameters](#constructor-parameters)
-6. [Lifecycle Methods](#lifecycle-methods)
-7. [Basic Example](#basic-example)
+1. [Introduction to NPC Creation](#introduction-to-npc-creation)
+2. [The Base `NPC` Class Structure](#the-base-npc-class-structure)
+3. [Configuring Core Properties with `NPCPrefabBuilder`](#configuring-core-properties-with-npcrefabbuilder)
+    *   `WithIdentity`
+    *   `WithSpawnPosition`
+    *   `WithSchedule`
+4. [NPC Lifecycle Methods & Event Hooks](#npc-lifecycle-methods-and-event-hooks)
+    *   `OnCreated`
+    *   `OnLoaded`
+5. [Differentiating Physical vs. Non-Physical NPCs](#differentiating-physical-vs-non-physical-npcs)
+6. [Accessing and Modifying NPC Components (Appearance, Schedule, Dialogue)](#accessing-and-modifying-npc-components)
+7. [Complete Basic NPC Example](#complete-basic-npc-example)
 
 ## Creating Your First NPC
 
-To create a custom NPC, inherit from the `NPC` base class and implement the required methods:
+To create a custom NPC, inherit from the `NPC` base class. You'll primarily override `ConfigurePrefab` for defining the NPC's identity, spawn, and basic schedule, and `OnCreated` for runtime initialization like appearance.
 
 ```csharp
 using S1API.Entities;
-using UnityEngine;
+using S1API.Entities.Customization; // Required for CustomizationFields
+using UnityEngine; // Required for Vector3
 
 public sealed class MyCustomNPC : NPC
 {
-    protected override bool IsPhysical => true; // Make NPC visible in world
-    
+    // Determines if the NPC has a physical presence in the world.
+    // Set to 'false' for purely contact-based or background characters.
+    protected override bool IsPhysical => true; 
+
     protected override void ConfigurePrefab(NPCPrefabBuilder builder)
     {
-        // Configure NPC identity
-        builder.WithIdentity(
-            id: "my_custom_npc",
-            firstName: "John",
-            lastName: "Doe")
-            .WithIcon(null); // Optional icon sprite
+        // Configure NPC identity, spawn position, and initial schedule
+        builder.WithIdentity("my_custom_npc", "John", "Doe")
+               .WithSpawnPosition(new Vector3(0f, 0f, 0f)) // Example: Spawn at world origin
+               .WithSchedule(plan => {
+                   // Example schedule: Make the NPC walk to a specific destination.
+                   // Replace 'Vector3.zero' with an actual target position in your scene.
+                   plan.WalkTo(Vector3.zero, 900); // Walk towards (0,0,0) for 900 seconds
+               });
         
-        // Configure NPC components and behavior
-    }
-    
-    public MyCustomNPC() : base()
-    {
+        // Additional configuration for behaviors, dialogue, etc.
     }
     
     protected override void OnCreated()
     {
         base.OnCreated();
-        // Initialize NPC after creation
+        // Initialize NPC appearance (e.g., set gender or other customization fields)
+        Appearance.Set<CustomizationFields.Gender>(0f).Build();
+        
+        // Subscribe to events, set initial states, etc.
     }
 }
 ```
@@ -115,31 +145,35 @@ protected override bool IsPhysical => false;
 
 ### ConfigurePrefab Method
 
-**Purpose**: Set up NPC components and default behavior before the NPC is spawned.
+**Purpose**: Set up NPC components and default behavior before the NPC is spawned. This includes essential properties like identity and spawn position, as well as optional behaviors such as customer traits, relationship defaults, and scheduling.
 
-**Important**: Customer, relationship, and schedule configuration must be done here for proper save/load behavior.
+**Important**: Configuration of identity, customer, relationship, and schedule *must* be done here for proper save/load behavior.
 
 ```csharp
 protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 {
-    // Set spawn position
+    // Essential: Set the NPC's unique ID, first name, and last name.
+    // This ID is used for saving and referencing the NPC.
+    builder.WithIdentity("my_custom_npc_id", "John", "Doe");
+
+    // Essential: Set the NPC's initial spawn position in the game world.
     builder.WithSpawnPosition(new Vector3(0, 0, 0));
     
-    // Add customer behavior
+    // Optional: Add customer behavior, making the NPC able to place orders.
     builder.EnsureCustomer()
            .WithCustomerDefaults(cd => {
                cd.WithSpending(100f, 500f)
                  .WithOrdersPerWeek(1, 3);
            });
     
-    // Set relationship defaults
+    // Optional: Set default relationship parameters for the NPC.
     builder.WithRelationshipDefaults(r => {
         r.WithDelta(2.0f)
          .SetUnlocked(false)
          .SetUnlockType(NPCRelationship.UnlockType.DirectApproach);
     });
     
-    // Define schedule
+    // Optional: Define the NPC's daily schedule using a fluent API.
     builder.WithSchedule(plan => {
         plan.WalkTo(new Vector3(10, 0, 10), 900)
             .StayInBuilding(building, 1000, 60);
@@ -149,7 +183,7 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 
 ### Constructor
 
-**Purpose**: Create the NPC instance. Identity is configured via `ConfigurePrefab` using `WithIdentity` and `WithIcon`.
+**Purpose**: Create the NPC instance. Identity is configured via `ConfigurePrefab` using `WithIdentity`.
 
 ```csharp
 public MyCustomNPC() : base()
@@ -157,7 +191,7 @@ public MyCustomNPC() : base()
 }
 ```
 
-**Note**: For new code, use the parameterless constructor and configure identity in `ConfigurePrefab`. The old constructor pattern with identity parameters is obsolete and provided only for backwards compatibility with non-physical NPCs.
+**Note**: For new code, always use the parameterless constructor and configure identity in `ConfigurePrefab`. The old constructor pattern with identity parameters is obsolete and provided only for backwards compatibility with non-physical NPCs.
 
 ## Identity Configuration
 
@@ -408,7 +442,9 @@ public sealed class BasicShopkeeper : NPC
 
 Now that you understand the basics of NPC creation, you can explore:
 
-- **[Prefab Configuration](prefab-configuration.md)** - Detailed component setup
-- **[Appearance Customization](appearance-customization.md)** - Visual customization
-- **[Scheduling System](scheduling-system.md)** - Movement and activities
-- **[Dialogue System](dialogue-system.md)** - Interactive conversations
+- **[Prefab Configuration](prefab-configuration.md)** - Detailed setup of identity, spawn, and initial schedule
+- **[Appearance Customization](appearance-customization.md)** - Visual customization and dynamic appearance changes
+- **[Scheduling System](scheduling-system.md)** - Defining complex movement patterns and activities
+- **[Dialogue System](dialogue-system.md)** - Crafting interactive conversations and branching narratives
+- **[Customer Behaviors](customer-behaviors.md)** - Integrating NPCs into the game's economy as customers or vendors
+- **[NPC Lifecycle Hooks](npc-lifecycle-hooks.md)** - Understanding 'OnCreated' and 'OnLoaded' for advanced runtime logic and event handling
