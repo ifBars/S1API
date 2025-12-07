@@ -1,20 +1,145 @@
-# Quests System
+## Quests System
 
 S1API provides a quest system that allows you to create custom quests with objectives, progress tracking, POI markers, and integration with the game's quest UI.
 
 ## Overview
 
-The Quest system allows you to:
-- Create custom quests with multiple objectives
-- Track quest progress and state
-- Display quest markers on the map
-- Integrate with the game's quest overlay UI
-- Persist quest data with save/load system
-- Trigger events on quest state changes
+The S1API Quest system empowers mod developers to integrate rich narrative elements and dynamic objectives into their mods. It provides high-level APIs to:
+- Define custom quests with distinct objectives and progression logic.
+- Accurately track quest progress and manage various quest states.
+- Display Point-of-Interest (POI) markers on the in-game map, guiding players to objectives.
+- Seamlessly integrate with and update the game's native quest overlay UI.
+- Automatically persist all custom quest data with the game's save/load system, leveraging S1API's `Saveable` architecture.
+- Trigger custom events or logic in response to significant quest state changes or objective completion.
 
 ## Creating a Quest
 
-To create a quest, inherit from the `Quest` base class and configure its properties:
+To create a quest, define a class that inherits from the `Quest` base class. S1API automatically discovers and registers these classes via reflection, integrating them into the game's quest system. You can configure core quest properties and define objectives:
+
+```csharp
+using S1API.Quests;
+using S1API.Quests.Objectives; // Namespace for advanced objective types, if applicable
+using UnityEngine; // Potentially needed for scene interaction in objectives
+
+public class MyFirstQuest : Quest
+{
+    protected override string Title => "My First Quest";
+    protected override string Description => "Complete this quest to learn the basics of quest creation.";
+    protected override bool AutoBegin => true; // Set to true to automatically start the quest when conditions are met
+
+    // Store references to objectives if you need to manipulate or complete them programmatically
+    private QuestEntry _findLocationObjective;
+    private QuestEntry _talkToNpcObjective;
+
+    protected override void OnCreated()
+    {
+        base.OnCreated();
+
+        // Add quest objectives. AddEntry(string) creates a basic text objective.
+        // This method returns an QuestEntry object, allowing for further manipulation.
+        // More advanced objectives (e.g., requiring player interaction, item collection, or visiting a POI)
+        // can be created using specific QuestEntry implementations or builder methods (e.g., AddLocationObjective).
+        _findLocationObjective = AddEntry("Find the secret location");
+        _talkToNpcObjective = AddEntry("Talk to the mysterious NPC"); // This might integrate with dialogue system
+        AddEntry("Return to base"); // This might be completed by entering a specific building
+    }
+
+    // Override OnCompleted to define logic that runs when the quest finishes successfully
+    protected override void OnCompleted()
+    {
+        base.OnCompleted();
+        Debug.Log($"Quest '{Title}' completed!");
+        // Grant rewards, unlock new content, trigger follow-up quests, etc.
+    }
+
+    // Override OnFailed to define logic if the quest is failed (e.g., time limit expires)
+    protected override void OnFailed()
+    {
+        base.OnFailed();
+        Debug.Log($"Quest '{Title}' failed.");
+        // Clean up quest-related elements or penalize the player
+    }
+
+    // You can also add public methods to your Quest class to trigger objective completion
+    // from other parts of your mod, such as an interaction script or a custom event handler.
+    public void PlayerFoundSecretLocation()
+    {
+        if (_findLocationObjective != null && !_findLocationObjective.IsCompleted)
+        {
+            _findLocationObjective.Complete();
+            Debug.Log($"Objective '{_findLocationObjective.Text}' completed.");
+            // Request a game save if this is critical data change, if not automatically handled
+            // S1API.Saveables.Saveable.RequestGameSave();
+        }
+    }
+}
+```
+
+**Key Considerations:**
+*   **Objective Types:** While `AddEntry(string)` creates simple text objectives, the `S1API.Quests` module likely provides or integrates with more complex `QuestEntry` implementations for specific tasks like visiting Point-of-Interest (POI) markers, interacting with NPCs, or collecting items. These advanced objective types would be designed to integrate seamlessly with the game's internal systems (e.g., mapping, dialogue). Consult specific `S1API.Quests.Objectives` documentation for available types.
+*   **Progression Logic:** Quest objectives are fundamentally driven by in-game events. You will need to subscribe to relevant S1API events (e.g., player movement, dialogue choices, item usage, interaction triggers) and call the `.Complete()` method on the corresponding `QuestEntry` when its conditions are met.
+*   **State Persistence:** Quest progress and completion status for `Quest` subclasses are automatically managed and saved by S1API as part of the game's save data. You generally do not need to manually handle serialization for quest state.
+
+## Quest Configuration
+
+### Defining a Custom Quest
+
+Custom quests are defined by inheriting from the `Quest` base class and overriding specific properties to configure their title, description, and behavior.
+
+```csharp
+public class MyQuest : Quest
+{
+    // Quest title shown in UI
+    protected override string Title => "My First Custom Quest";
+
+    // Quest description/summary visible to players
+    protected override string Description => "Embark on an exciting journey to explore the new areas and complete a series of challenges.";
+
+    // Determines if the quest automatically begins upon creation.
+    // Set to 'true' for immediate start, 'false' for manual activation via Quest.Begin().
+    protected override bool AutoBegin => true;
+
+    // Optional: Provide a custom icon for the quest. 
+    // This method should load or create a Unity Sprite.
+    protected override Sprite? QuestIcon => LoadCustomIcon(); // Example: ResourceManager.LoadSprite("MyQuestIcon");
+}
+```
+
+### Quest AutoBegin Behavior
+
+- `AutoBegin = true`: The quest automatically transitions to the 'active' state immediately upon being instantiated and registered.
+- `AutoBegin = false`: The quest must be manually started by invoking the `Begin()` method on the quest instance. This is useful for quests that require specific triggers or player interaction to start.
+
+### Integration and Registration
+
+Custom quest classes, like `MyQuest` above, are instantiated and registered with the S1API runtime using the `CreateQuest<T>(string? guid = null)` method. This method handles both the creation of an instance of your quest class and its registration with the QuestManager for discovery and activation.
+
+You typically call `CreateQuest<T>` during your mod's initialization phase, for example, within a MelonMod's `OnApplicationStart` lifecycle hook.
+
+```csharp
+// Example of how to register MyQuest
+public class MyMod : MelonMod
+{
+    public override void OnApplicationStart()
+    {
+        // Instantiate and register MyQuest.
+        // The GUID is optional; if not provided, a unique GUID will be generated.
+        S1API.Quests.QuestManager.CreateQuest<MyQuest>();
+
+        // Alternatively, provide a custom GUID for specific referencing:
+        // S1API.Quests.QuestManager.CreateQuest<AnotherQuestType>("my_mod_unique_quest_id");
+    }
+}
+```
+
+The `guid` parameter allows you to assign a stable, unique identifier to your quest, which can be useful for referencing it programmatically or ensuring consistent quest state across game sessions. If left `null`, a GUID will be automatically generated upon creation.
+
+## Quest Entries (Objectives)
+
+Quest entries represent individual objectives that players must complete as part of a custom quest.
+
+### Defining a Custom Quest
+To create a custom quest, define a class that inherits from `S1API.Quests.Quest`. You must override `QuestId` for a unique identifier and `QuestName` for the display name. Initial entries are typically defined in the `OnCreated()` lifecycle method.
 
 ```csharp
 using S1API.Quests;
@@ -22,106 +147,109 @@ using UnityEngine;
 
 public class MyFirstQuest : Quest
 {
-    protected override string Title => "My First Quest";
-    protected override string Description => "Complete this quest to learn the basics.";
-    protected override bool AutoBegin => true;
+    // Unique identifier for your quest
+    public override string QuestId => "MY_FIRST_QUEST";
+    // Display name for the quest
+    public override string QuestName => "A Simple Delivery Quest";
 
     protected override void OnCreated()
     {
         base.OnCreated();
 
-        // Add quest objectives
-        AddEntry("Find the secret location");
-        AddEntry("Talk to the mysterious NPC");
-        AddEntry("Return to base");
+        // Add initial quest entries when the quest object is first created
+        AddEntry("Find the hideout");
+
+        AddEntry(
+            text: "Meet at the docks",
+            poi: new Vector3(100f, 0f, 50f),  // Map marker position
+            poiObjectName: "Docks Meeting Point" // Name shown on map
+        );
+
+        // Entry with a custom icon. Ensure customIconSprite is a loaded UnityEngine.Sprite.
+        // Example: Sprite customIconSprite = S1API.Assets.AssetLoader.LoadSprite("Assets/Icons/package_icon.png");
+        Sprite customIconSprite = null; // Placeholder: Replace with actual sprite loading logic
+        AddEntry(
+            text: "Collect the package",
+            poi: new Vector3(50f, 0f, 100f),
+            poiIcon: customIconSprite
+        );
+    }
+
+    protected override void OnStarted()
+    {
+        base.OnStarted();
+        // Logic to execute when the quest officially begins (e.g., player accepts it)
+    }
+
+    protected override void OnCompleted()
+    {
+        base.OnCompleted();
+        // Logic to execute when the quest is fully completed
     }
 }
 ```
 
-## Quest Configuration
-
-### Required Properties
+### Adding Quest Entries Dynamically
+While initial entries are often added in `OnCreated()`, new entries can be added dynamically at any point during the quest's lifecycle.
 
 ```csharp
-public class MyQuest : Quest
-{
-    // Quest title shown in UI
-    protected override string Title => "Quest Title";
+// Add a simple text entry
+AddEntry("Investigate the strange noise");
 
-    // Quest description/summary
-    protected override string Description => "Quest description text.";
+// Add an entry with a Point-of-Interest (POI) marker
+AddEntry(
+    text: "Report back to HQ",
+    poi: new Vector3(25f, 0f, 75f),
+    poiObjectName: "Headquarters"
+);
 
-    // Auto-start the quest when created
-    protected override bool AutoBegin => true;
-
-    // Optional: Custom quest icon
-    protected override Sprite? QuestIcon => LoadCustomIcon();
-}
+// Add an entry with a custom icon and POI
+// (Ensure 'customIconSprite' is a loaded UnityEngine.Sprite instance)
+AddEntry(
+    text: "Find the lost artifact",
+    poi: new Vector3(-10f, 0f, -20f),
+    poiIcon: customIconSprite
+);
 ```
 
-### AutoBegin Behavior
+**`AddEntry` Parameters Explained:**
+- `text`: A `string` that describes the current objective to the player. This is displayed in the quest log and HUD.
+- `poi`: (Optional) A `UnityEngine.Vector3` indicating the world coordinates where the POI marker should appear on the game map. If omitted, no map marker will be shown for this objective.
+- `poiObjectName`: (Optional) A `string` label that is displayed alongside the POI marker on the map, providing additional context (e.g., "North Apartments").
+- `poiIcon`: (Optional) A `UnityEngine.Sprite` object. If provided, this sprite will be used as the custom icon for the POI on the map. If not provided, a default quest marker icon will be used by the system.
 
-- `AutoBegin = true`: Quest automatically starts when created
-- `AutoBegin = false`: Quest must be manually started with `Begin()`
-
-## Quest Entries (Objectives)
-
-Quest entries represent individual objectives that players must complete:
-
-### Adding Entries
+### Completing Quest Entries
+Entries can be marked as complete by their index, or all remaining entries can be completed at once. By default, a quest will automatically complete once all its entries are finished.
 
 ```csharp
-protected override void OnCreated()
-{
-    base.OnCreated();
+// Complete a specific entry by its zero-based index
+CompleteEntry(0);  // Marks the first entry as completed
 
-    // Simple text entry
-    AddEntry("Find the hideout");
-
-    // Entry with POI marker
-    AddEntry(
-        text: "Meet at the docks",
-        poi: new Vector3(100f, 0f, 50f),  // Map marker position
-        poiObjectName: "Docks Meeting Point"
-    );
-
-    // Entry with custom icon
-    AddEntry(
-        text: "Collect the package",
-        poi: new Vector3(50f, 0f, 100f),
-        poiIcon: customIconSprite
-    );
-}
-```
-
-### Completing Entries
-
-```csharp
-// Complete a specific entry by index
-CompleteEntry(0);  // Complete first entry
-
-// Complete all entries
+// Complete all remaining entries for this quest
 CompleteAllEntries();
 
-// Quest automatically completes when all entries are done
-// (if you don't override this behavior)
+// The quest automatically transitions to 'Completed' state
+// once all its entries are marked as done, unless overridden.
 ```
 
 ### Entry Management
+Access and manage quest entries dynamically using the `QuestEntries` property, which returns a collection of `QuestEntry` objects.
 
 ```csharp
-// Access quest entries
+// Iterate through all current quest entries
 foreach (var entry in QuestEntries)
 {
     bool isComplete = entry.IsCompleted;
     string text = entry.Text;
-    Vector3? position = entry.POIPosition;
+    Vector3? position = entry.POIPosition; // Null if no POI is set
+    Sprite icon = entry.POIIcon;          // Null if no custom icon is set
+    // ... other properties like entry.POIObject
 }
 
-// Clear all entries
+// Clear all entries from the quest. Use with caution, as this removes all objectives.
 QuestEntries.Clear();
 
-// Add new entry dynamically
+// Add a new entry dynamically during quest runtime (e.g., based on player action)
 AddEntry("New objective discovered!");
 ```
 
@@ -164,80 +292,121 @@ if (State == QuestState.Complete)
 
 ## Quest Events
 
-Override lifecycle methods to respond to quest events:
+Override lifecycle methods to respond to quest events. For a quest's custom state to persist across game saves, ensure relevant fields are marked with `[SaveableField("key")]` if your quest class inherits from `S1API.Internal.Abstraction.Saveable`, or if the `Quest` base class handles `Saveable` integration internally.
 
 ```csharp
-public class MyQuest : Quest
+using S1API.Internal.Abstraction; // For [SaveableField]
+using S1API.Quests; // Assuming Quest is here
+using MelonLoader; // For MelonLogger.Msg
+
+public class MyPersistentQuest : Quest
 {
+    // Example of a field that needs to persist with the quest
+    [SaveableField("myQuestProgress")]
+    private int currentObjectiveIndex = 0;
+
     protected override void OnStarted()
     {
         base.OnStarted();
-        MelonLogger.Msg("Quest started!");
+        MelonLogger.Msg("MyPersistentQuest started! Current Objective: " + currentObjectiveIndex);
+        // Example: Display initial quest objective in UI or trigger an introductory dialogue.
     }
 
     protected override void OnCompleted()
     {
         base.OnCompleted();
-        MelonLogger.Msg("Quest completed!");
-        // Give rewards, trigger events, etc.
+        MelonLogger.Msg("MyPersistentQuest completed! Awarding player...");
+        // Example: Award items, money, or unlock new content.
+        // PlayerInventory.AddItem(new S1API.Items.ExampleItem());
+        
+        // If completing the quest changes critical game state that needs saving immediately,
+        // you can request a game save.
+        // Saveable.RequestGameSave();
     }
 
     protected override void OnFailed()
     {
         base.OnFailed();
-        MelonLogger.Msg("Quest failed!");
+        MelonLogger.Msg("MyPersistentQuest failed. Resetting state or penalizing player.");
+        // Example: Revert changes, apply penalties, or restart the quest.
     }
 
     protected override void OnCancelled()
     {
         base.OnCancelled();
-        MelonLogger.Msg("Quest cancelled!");
+        MelonLogger.Msg("MyPersistentQuest cancelled. Cleaning up resources.");
+        // Example: Remove any temporary UI elements, quest markers, or stop active NPCs related to the quest.
     }
 
     protected override void OnLoaded()
     {
         base.OnLoaded();
-        MelonLogger.Msg("Quest loaded from save!");
+        MelonLogger.Msg("MyPersistentQuest loaded from save! Resuming at objective: " + currentObjectiveIndex);
+        // Example: Apply the loaded 'currentObjectiveIndex' to the game world (e.g., set the active objective in UI).
     }
-
-    protected override void OnSaved()
-    {
-        base.OnSaved();
-        MelonLogger.Msg("Quest saved!");
-    }
+    
+    // Note: To save critical changes to your quest's state, call `Saveable.RequestGameSave()`
+    // when a significant event occurs (e.g., objective completion, progress update).
+    // There is no `OnSaved()` override for individual `Saveable` components; saving is managed by the system.
 }
 ```
 
 ## POI Markers
 
-Point of Interest (POI) markers show up on the game map to guide players:
+Point of Interest (POI) markers are essential for guiding players to objectives on the game map within your custom quests. To utilize them, you'll define a new quest class by inheriting from `S1API.Quests.Quest` and add your objectives and POI markers within its `OnCreated()` method.
+
+First, define your custom quest class:
 
 ```csharp
-protected override void OnCreated()
-{
-    base.OnCreated();
+using UnityEngine; // For Vector3 and Sprite
+using MelonLoader; // For MelonMod
+using S1API.Quests;
 
-    // Quest entry with POI marker
-    AddEntry(
-        text: "Go to North Apartments",
-        poi: new Vector3(-28f, 1.065f, 62f),  // World position
-        poiObjectName: "North Apartments",     // Optional name
-        poiIcon: customSprite                  // Optional custom icon
-    );
+public class GoToNorthApartmentsQuest : Quest
+{
+    // A unique ID for your quest. This is essential for the QuestSystem to identify, save, and load quest progress.
+    public GoToNorthApartmentsQuest() : base("go_to_north_apartments_quest_id") { }
+
+    // The OnCreated method is called once when the quest is first instantiated.
+    // Use this to define your initial objectives and POI markers.
+    protected override void OnCreated()
+    {
+        base.OnCreated(); // Always call the base method of the parent class.
+
+        // Add an entry (objective) to the quest, optionally with a POI marker.
+        // Players will see the 'text' as their current goal, and the POI will guide them.
+        AddEntry(
+            text: "Go to North Apartments", // The text displayed for this objective.
+            poi: new Vector3(-28f, 1.065f, 62f),  // World position for the POI marker.
+            poiObjectName: "North Apartments",     // Optional name displayed on the map next to the POI.
+            poiIcon: customSprite                  // Optional custom icon (UnityEngine.Sprite) for the POI.
+        );
+
+        // You can add additional entries/objectives here if your quest has multiple steps.
+        // AddEntry("Find the hidden key in the apartments");
+    }
+
+    // Optional: Override other lifecycle methods like OnStarted(), OnCompleted(), or OnFailed()
+    // to implement quest-specific logic at different stages.
+    // protected override void OnCompleted() { /* Grant rewards, unlock new content, etc. */ }
 }
 ```
 
 ## Saving Quest Data
 
-Use the `SaveableField` attribute to persist custom quest data:
+Custom quests, inheriting from `S1API.Quests.Quest`, automatically gain access to the S1API persistence system because `Quest` itself inherits from `S1API.Internal.Abstraction.Saveable`. This allows you to easily persist custom quest data using the `SaveableField` attribute on private fields within your quest class.
+
+Here's an example demonstrating how to save and load quest-specific progress, such as collected items:
 
 ```csharp
 using S1API.Quests;
 using S1API.Saveables;
 using System;
+using System.Collections.Generic;
 
 public class MyQuest : Quest
 {
+    // Define a serializable data structure for your quest's state
     [Serializable]
     private class QuestData
     {
@@ -246,26 +415,32 @@ public class MyQuest : Quest
         public List<string> CollectedItems = new List<string>();
     }
 
+    // Use SaveableField to persist an instance of your QuestData class
+    // The string "my_quest_data" acts as a unique key for this field in the save file.
     [SaveableField("my_quest_data")]
     private QuestData _data = new QuestData();
 
+    // Define quest title and description, potentially dynamic based on saved data
     protected override string Title => "Collection Quest";
     protected override string Description =>
         $"Collected: {_data.CollectedItems.Count}/5 items";
 
+    // OnCreated is called when the quest is first initialized
     protected override void OnCreated()
     {
         base.OnCreated();
         UpdateQuestDisplay();
     }
 
+    // OnLoaded is called when the quest data is deserialized from a save file
     protected override void OnLoaded()
     {
         base.OnLoaded();
-        // Restore quest state from loaded data
+        // Restore quest state from loaded data and update UI/game elements
         UpdateQuestDisplay();
     }
 
+    // Example method to modify quest data and request a game save
     public void CollectItem(string itemId)
     {
         if (!_data.CollectedItems.Contains(itemId))
@@ -275,231 +450,45 @@ public class MyQuest : Quest
 
             if (_data.CollectedItems.Count >= 5)
             {
-                Complete();
+                Complete(); // Mark quest as complete
             }
 
-            // Request save
+            // Request a game save whenever critical quest data changes
             Saveable.RequestGameSave();
         }
     }
 
+    // Helper to update the quest's display entries
     private void UpdateQuestDisplay()
     {
-        QuestEntries.Clear();
+        QuestEntries.Clear(); // Clear existing entries
         AddEntry($"Items collected: {_data.CollectedItems.Count}/5");
     }
 }
 ```
 
-## Complete Quest Example
+## Quest Access
 
-Here's a comprehensive quest example with multiple features:
+Access and manage quests through `QuestManager` after defining your custom quest types.
 
-```csharp
-using S1API.Quests;
-using S1API.Saveables;
-using System;
-using UnityEngine;
+## Defining a Custom Quest
+1.  **Class Definition**: Create a class inheriting from `S1API.Quests.Quest`.
+2.  **Registration**: Custom quest classes are instantiated and registered with the S1API runtime using the `CreateQuest<T>(string? guid = null)` method. This method handles both the creation of an instance of your quest class and its registration with the QuestManager for discovery and activation.
 
-public class DeliveryQuest : Quest
-{
-    [Serializable]
-    private class DeliveryData
-    {
-        public bool PackagePickedUp = false;
-        public bool PackageDelivered = false;
-        public int DeliveryTime = 0;
-    }
-
-    [SaveableField("delivery_quest_data")]
-    private DeliveryData _data = new DeliveryData();
-
-    protected override string Title => "Special Delivery";
-
-    protected override string Description =>
-        "Pick up a package and deliver it to the docks.";
-
-    protected override bool AutoBegin => true;
-
-    private Vector3 _pickupLocation = new Vector3(-28f, 1.065f, 62f);
-    private Vector3 _deliveryLocation = new Vector3(100f, 0f, 50f);
-
-    protected override void OnCreated()
-    {
-        base.OnCreated();
-        SetupQuestObjectives();
-    }
-
-    protected override void OnLoaded()
-    {
-        base.OnLoaded();
-        SetupQuestObjectives();
-    }
-
-    private void SetupQuestObjectives()
-    {
-        QuestEntries.Clear();
-
-        if (!_data.PackagePickedUp)
-        {
-            AddEntry(
-                "Pick up the package at North Apartments",
-                poi: _pickupLocation,
-                poiObjectName: "Pickup Location"
-            );
-        }
-        else if (!_data.PackageDelivered)
-        {
-            AddEntry(
-                "Deliver the package to the docks",
-                poi: _deliveryLocation,
-                poiObjectName: "Delivery Location"
-            );
-        }
-        else
-        {
-            AddEntry("Package delivered successfully!");
-        }
-    }
-
-    public void OnPackagePickedUp()
-    {
-        if (!_data.PackagePickedUp)
-        {
-            _data.PackagePickedUp = true;
-            _data.DeliveryTime = GetCurrentGameTime();
-
-            CompleteEntry(0);
-            SetupQuestObjectives();
-
-            Saveable.RequestGameSave();
-        }
-    }
-
-    public void OnPackageDelivered()
-    {
-        if (_data.PackagePickedUp && !_data.PackageDelivered)
-        {
-            _data.PackageDelivered = true;
-
-            CompleteEntry(0);
-            Complete();
-
-            Saveable.RequestGameSave();
-        }
-    }
-
-    protected override void OnCompleted()
-    {
-        base.OnCompleted();
-
-        int timeElapsed = GetCurrentGameTime() - _data.DeliveryTime;
-        MelonLogger.Msg($"Delivery completed in {timeElapsed} minutes!");
-
-        // Award rewards based on delivery time
-        if (timeElapsed < 30)
-        {
-            MelonLogger.Msg("Fast delivery bonus!");
-        }
-    }
-
-    private int GetCurrentGameTime()
-    {
-        // Use S1API.GameTime.TimeManager to get current time
-        return 0;  // Placeholder
-    }
-}
-```
-
-## Dynamic Quest Tracking Example
-
-Here's an example quest that tracks progress dynamically:
-
-```csharp
-using S1API.Quests;
-using S1API.Saveables;
-using System;
-
-public class SalesQuest : Quest
-{
-    [Serializable]
-    private class SalesData
-    {
-        public int TotalSales = 0;
-        public int TargetSales = 10;
-    }
-
-    [SaveableField("sales_quest_data")]
-    private SalesData _data = new SalesData();
-
-    protected override string Title => "Sales Target";
-
-    protected override string Description =>
-        $"Make {_data.TargetSales} sales to complete this quest.";
-
-    protected override bool AutoBegin => true;
-
-    protected override void OnCreated()
-    {
-        base.OnCreated();
-        UpdateProgressDisplay();
-    }
-
-    protected override void OnLoaded()
-    {
-        base.OnLoaded();
-        UpdateProgressDisplay();
-    }
-
-    public void OnSaleMade()
-    {
-        _data.TotalSales++;
-        UpdateProgressDisplay();
-
-        if (_data.TotalSales >= _data.TargetSales)
-        {
-            Complete();
-        }
-
-        Saveable.RequestGameSave();
-    }
-
-    private void UpdateProgressDisplay()
-    {
-        QuestEntries.Clear();
-
-        string progressText = $"Sales: {_data.TotalSales}/{_data.TargetSales}";
-        AddEntry(progressText);
-
-        if (_data.TotalSales >= _data.TargetSales)
-        {
-            CompleteEntry(0);
-        }
-    }
-
-    protected override void OnCompleted()
-    {
-        base.OnCompleted();
-        MelonLogger.Msg("Sales target reached!");
-        // Award rewards
-    }
-}
-```
-
-## Quest Registry
-
-Access and manage quests through `QuestManager`:
+## Accessing Registered Quests
+Once defined and registered, quests can be retrieved from the `QuestManager`:
 
 ```csharp
 using S1API.Quests;
 
-// Get quest by name
-var quest = QuestManager.GetQuestByName("My Quest");
+// Get quest by unique ID
+var questById = QuestManager.GetQuestByGuid("MY_QUEST_001");
 
-// Get all quests
-var allQuests = QuestManager.GetAllQuests();
+// Get quest by DisplayName
+var questByName = QuestManager.GetQuestByName("The Grand Adventure");
 
-// Quests are automatically registered when created
+// Get a quest by type (useful for base game quests)
+var allQuests = QuestManager.Get<CleanCash>();
 ```
 
 ## Best Practices
@@ -508,19 +497,17 @@ var allQuests = QuestManager.GetAllQuests();
 
 2. **Update on Load**: Override `OnLoaded()` to restore quest UI state
 
-3. **Request Saves**: Call `Saveable.RequestGameSave()` after important changes
+3. **Request Saves**: Call `RequestGameSave()` after important changes
 
 4. **Clear Before Rebuild**: Clear `QuestEntries` before rebuilding to avoid duplicates
 
 5. **AutoBegin Carefully**: Only use `AutoBegin = true` for quests that should start immediately
 
-6. **POI Cleanup**: Remember that POI markers are cleared when entries are completed
-
-7. **State Management**: Check quest state before making changes to prevent invalid operations
+6. **State Management**: Check quest state before making changes to prevent invalid operations
 
 ## See Also
 
-- [S1NotesApp Example](https://github.com/ifBars/S1NotesApp) - Contains `StarredNoteQuest`
+- [S1NotesApp Example](https://github.com/ifBars/S1NotesApp) - Uses `StarredNoteQuest` with `NotesManager` and `NotesApp`
 - [Save System](save-system.md) - For persisting quest data
 - [Custom NPCs](custom-npcs.md) - For quest-giving NPCs
 - <xref:S1API.Quests> - Quests API Reference
