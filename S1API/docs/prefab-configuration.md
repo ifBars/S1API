@@ -27,6 +27,44 @@ The `ConfigurePrefab` method is called during NPC prefab creation and allows you
 
 ## NPCPrefabBuilder Methods
 
+### WithIdentity
+
+Sets the NPC's unique identifier and display name. This must be called in `ConfigurePrefab` for proper network spawn support.
+
+```csharp
+builder.WithIdentity(
+    id: "my_custom_npc",           // Unique identifier
+    firstName: "John",             // Display name
+    lastName: "Doe");              // Optional last name
+```
+
+**Parameters:**
+- `id`: Unique identifier used for save/load and game systems (required)
+- `firstName`: Display name shown in UI elements (required)
+- `lastName`: Optional last name (can be null)
+
+**Notes:**
+- Must be unique across all NPCs
+- Used for save/load persistence
+- Should be descriptive and consistent
+- Examples: `"shopkeeper_alex"`, `"informant_mike"`
+
+### WithIcon
+
+Sets the icon sprite for UI elements such as messages, contacts, and relationships.
+
+```csharp
+builder.WithIcon(iconSprite); // Optional, can be null
+```
+
+**Parameters:**
+- `icon`: Optional sprite for UI elements (can be null to use default)
+
+**Notes:**
+- Used in messages, contacts, relationships
+- Should be a 64x64 or 128x128 sprite
+- Uses default icon if not set
+
 ### WithSpawnPosition
 
 Sets the spawn position and rotation for the NPC.
@@ -368,11 +406,13 @@ plan.Add(new DriveToCarParkSpec {
 
 ### Step-by-Step Process
 
-1. **Set spawn position**
-2. **Add customer component** (if needed)
-3. **Configure customer defaults** (if customer)
-4. **Set relationship defaults**
-5. **Define schedule** (if physical NPC)
+1. **Set identity** (id, firstName, lastName)
+2. **Set icon** (optional)
+3. **Set spawn position**
+4. **Add customer component** (if needed)
+5. **Configure customer defaults** (if customer)
+6. **Set relationship defaults**
+7. **Define schedule** (if physical NPC)
 
 ### Complete Example
 
@@ -382,35 +422,40 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
     Vector3 shopPosition = new Vector3(-28.060f, 1.065f, 62.070f);
     Vector3 spawnPosition = new Vector3(-53.5701f, 1.065f, 67.7955f);
     
-    builder.WithSpawnPosition(spawnPosition)
-           .EnsureCustomer()
-           .WithCustomerDefaults(cd => {
-               cd.WithSpending(200f, 800f)
-                 .WithOrdersPerWeek(2, 5)
-                 .WithPreferredOrderDay(Day.Friday)
-                 .WithOrderTime(1400)
-                 .WithStandards(CustomerStandard.Low)
-                 .AllowDirectApproach(true)
-                 .WithAffinities(new[] {
-                     (DrugType.Marijuana, 0.6f),
-                     (DrugType.Cocaine, 0.3f)
-                 });
-           })
-           .WithRelationshipDefaults(r => {
-               r.WithDelta(2.0f)
-                .SetUnlocked(true)
-                .SetUnlockType(NPCRelationship.UnlockType.DirectApproach);
-           })
-           .WithSchedule(plan => {
-               plan.EnsureDealSignal();
-               plan.WalkTo(shopPosition, 800);
-               plan.Add(new StayInBuildingSpec { 
-                   BuildingName = "North apartments", 
-                   StartTime = 900, 
-                   DurationMinutes = 480 
-               });
-               plan.WalkTo(spawnPosition, 1800);
-           });
+    builder.WithIdentity(
+            id: "basic_shopkeeper",
+            firstName: "Alex",
+            lastName: "Shopkeeper")
+            .WithIcon(null)
+            .WithSpawnPosition(spawnPosition)
+            .EnsureCustomer()
+            .WithCustomerDefaults(cd => {
+                cd.WithSpending(200f, 800f)
+                  .WithOrdersPerWeek(2, 5)
+                  .WithPreferredOrderDay(Day.Friday)
+                  .WithOrderTime(1400)
+                  .WithStandards(CustomerStandard.Low)
+                  .AllowDirectApproach(true)
+                  .WithAffinities(new[] {
+                      (DrugType.Marijuana, 0.6f),
+                      (DrugType.Cocaine, 0.3f)
+                  });
+            })
+            .WithRelationshipDefaults(r => {
+                r.WithDelta(2.0f)
+                 .SetUnlocked(true)
+                 .SetUnlockType(NPCRelationship.UnlockType.DirectApproach);
+            })
+            .WithSchedule(plan => {
+                plan.EnsureDealSignal();
+                plan.WalkTo(shopPosition, 800);
+                plan.Add(new StayInBuildingSpec { 
+                    BuildingName = "North apartments", 
+                    StartTime = 900, 
+                    DurationMinutes = 480 
+                });
+                plan.WalkTo(spawnPosition, 1800);
+            });
 }
 ```
 

@@ -43,18 +43,19 @@ public sealed class MyFirstNPC : NPC
     
     protected override void ConfigurePrefab(NPCPrefabBuilder builder)
     {
-        builder.WithSpawnPosition(new Vector3(0, 0, 0))
-               .EnsureCustomer()
-               .WithCustomerDefaults(cd => {
-                   cd.WithSpending(100f, 500f)
-                     .WithOrdersPerWeek(1, 3);
-               });
+        builder.WithIdentity(
+                id: "my_first_npc",
+                firstName: "John",
+                lastName: "Doe")
+                .WithSpawnPosition(new Vector3(0, 0, 0))
+                .EnsureCustomer()
+                .WithCustomerDefaults(cd => {
+                    cd.WithSpending(100f, 500f)
+                      .WithOrdersPerWeek(1, 3);
+                });
     }
     
-    public MyFirstNPC() : base(
-        id: "my_first_npc",
-        firstName: "John",
-        lastName: "Doe")
+    public MyFirstNPC() : base()
     {
     }
     

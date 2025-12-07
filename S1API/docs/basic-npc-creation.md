@@ -26,14 +26,17 @@ public sealed class MyCustomNPC : NPC
     
     protected override void ConfigurePrefab(NPCPrefabBuilder builder)
     {
+        // Configure NPC identity
+        builder.WithIdentity(
+            id: "my_custom_npc",
+            firstName: "John",
+            lastName: "Doe")
+            .WithIcon(null); // Optional icon sprite
+        
         // Configure NPC components and behavior
     }
     
-    public MyCustomNPC() : base(
-        id: "my_custom_npc",
-        firstName: "John",
-        lastName: "Doe",
-        icon: null) // Optional icon sprite
+    public MyCustomNPC() : base()
     {
     }
     
@@ -52,8 +55,7 @@ public sealed class MyCustomNPC : NPC
 Every custom NPC must override these methods:
 
 - **`IsPhysical`**: Determines if the NPC is visible in the world
-- **`ConfigurePrefab`**: Sets up NPC components and default behavior
-- **Constructor**: Defines the NPC's basic identity
+- **`ConfigurePrefab`**: Sets up NPC identity, components, and default behavior
 
 ### Optional Overrides
 
@@ -147,21 +149,32 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 
 ### Constructor
 
-**Purpose**: Define the NPC's basic identity and unique identifier.
+**Purpose**: Create the NPC instance. Identity is configured via `ConfigurePrefab` using `WithIdentity` and `WithIcon`.
 
 ```csharp
-public MyCustomNPC() : base(
-    id: "my_custom_npc",           // Unique identifier
-    firstName: "John",             // Display name
-    lastName: "Doe",               // Optional last name
-    icon: null)                    // Optional icon sprite
+public MyCustomNPC() : base()
 {
 }
 ```
 
-## Constructor Parameters
+**Note**: For new code, use the parameterless constructor and configure identity in `ConfigurePrefab`. The old constructor pattern with identity parameters is obsolete and provided only for backwards compatibility with non-physical NPCs.
 
-### Required Parameters
+## Identity Configuration
+
+NPC identity is configured in `ConfigurePrefab` using the builder methods `WithIdentity` and `WithIcon`.
+
+### WithIdentity Method
+
+**Purpose**: Set the NPC's unique identifier and display name.
+
+```csharp
+builder.WithIdentity(
+    id: "my_custom_npc",           // Unique identifier
+    firstName: "John",             // Display name
+    lastName: "Doe");              // Optional last name
+```
+
+**Parameters:**
 
 - **`id`**: Unique identifier used for save/load and game systems
   - Must be unique across all NPCs
@@ -172,14 +185,22 @@ public MyCustomNPC() : base(
 - **`firstName`**: Display name for the NPC
   - Shown in UI elements
   - Used in dialogue and messages
-  - Can be null for anonymous NPCs
-
-### Optional Parameters
+  - Required
 
 - **`lastName`**: Optional last name
   - Combined with firstName for full name
   - Can be null
   - Examples: `"Smith"`, `"Johnson"`
+
+### WithIcon Method
+
+**Purpose**: Set the icon sprite for UI elements.
+
+```csharp
+builder.WithIcon(iconSprite); // Optional, can be null
+```
+
+**Parameters:**
 
 - **`icon`**: Optional sprite for UI elements
   - Used in messages, contacts, relationships
@@ -289,42 +310,43 @@ public sealed class BasicShopkeeper : NPC
         Vector3 shopPosition = new Vector3(-28.060f, 1.065f, 62.070f);
         Vector3 spawnPosition = new Vector3(-53.5701f, 1.065f, 67.7955f);
         
-        builder.WithSpawnPosition(spawnPosition)
-               .EnsureCustomer()
-               .WithCustomerDefaults(cd => {
-                   cd.WithSpending(200f, 800f)
-                     .WithOrdersPerWeek(2, 5)
-                     .WithPreferredOrderDay(Day.Friday)
-                     .WithOrderTime(1400)
-                     .WithStandards(CustomerStandard.Low)
-                     .AllowDirectApproach(true)
-                     .WithAffinities(new[] {
-                         (DrugType.Marijuana, 0.6f),
-                         (DrugType.Cocaine, 0.3f)
-                     });
-               })
-               .WithRelationshipDefaults(r => {
-                   r.WithDelta(2.0f)
-                    .SetUnlocked(true)
-                    .SetUnlockType(NPCRelationship.UnlockType.DirectApproach);
-               })
-               .WithSchedule(plan => {
-                   plan.EnsureDealSignal();
-                   plan.WalkTo(shopPosition, 800);
-                   plan.Add(new StayInBuildingSpec { 
-                       BuildingName = "North apartments", 
-                       StartTime = 900, 
-                       DurationMinutes = 480 
-                   });
-                   plan.WalkTo(spawnPosition, 1800);
-               });
+        builder.WithIdentity(
+                id: "basic_shopkeeper",
+                firstName: "Alex",
+                lastName: "Shopkeeper")
+                .WithIcon(null)
+                .WithSpawnPosition(spawnPosition)
+                .EnsureCustomer()
+                .WithCustomerDefaults(cd => {
+                    cd.WithSpending(200f, 800f)
+                      .WithOrdersPerWeek(2, 5)
+                      .WithPreferredOrderDay(Day.Friday)
+                      .WithOrderTime(1400)
+                      .WithStandards(CustomerStandard.Low)
+                      .AllowDirectApproach(true)
+                      .WithAffinities(new[] {
+                          (DrugType.Marijuana, 0.6f),
+                          (DrugType.Cocaine, 0.3f)
+                      });
+                })
+                .WithRelationshipDefaults(r => {
+                    r.WithDelta(2.0f)
+                     .SetUnlocked(true)
+                     .SetUnlockType(NPCRelationship.UnlockType.DirectApproach);
+                })
+                .WithSchedule(plan => {
+                    plan.EnsureDealSignal();
+                    plan.WalkTo(shopPosition, 800);
+                    plan.Add(new StayInBuildingSpec { 
+                        BuildingName = "North apartments", 
+                        StartTime = 900, 
+                        DurationMinutes = 480 
+                    });
+                    plan.WalkTo(spawnPosition, 1800);
+                });
     }
     
-    public BasicShopkeeper() : base(
-        id: "basic_shopkeeper",
-        firstName: "Alex",
-        lastName: "Shopkeeper",
-        icon: null)
+    public BasicShopkeeper() : base()
     {
     }
     
