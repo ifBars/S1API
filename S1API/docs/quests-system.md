@@ -112,13 +112,18 @@ public class MyQuest : Quest
 
 Custom quest classes, like `MyQuest` above, are instantiated and registered with the S1API runtime using the `CreateQuest<T>(string? guid = null)` method. This method handles both the creation of an instance of your quest class and its registration with the QuestManager for discovery and activation.
 
-You typically call `CreateQuest<T>` during your mod's initialization phase, for example, within a MelonMod's `OnApplicationStart` lifecycle hook.
+To avoid null-reference issues during early startup, subscribe to `Player.LocalPlayerSpawned` in `OnLateInitializeMelon` and create quests inside the event handler after the player is ready:
 
 ```csharp
-// Example of how to register MyQuest
+// Example of how to register MyQuest after the player spawns
 public class MyMod : MelonMod
 {
-    public override void OnApplicationStart()
+    public override void OnLateInitializeMelon()
+    {
+        S1API.Entities.Player.LocalPlayerSpawned += OnLocalPlayerSpawned;
+    }
+
+    private void OnLocalPlayerSpawned(S1API.Entities.Player player)
     {
         // Instantiate and register MyQuest.
         // The GUID is optional; if not provided, a unique GUID will be generated.
