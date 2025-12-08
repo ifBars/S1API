@@ -1,4 +1,4 @@
-# Phone Apps
+## Phone Apps
 
 S1API provides a robust framework for building in-game phone apps via `S1API.PhoneApp.PhoneApp`.
 Apps integrate with the native Home Screen, spawn icons, and manage open/close state.
@@ -20,22 +20,34 @@ using S1API.UI;
 
 public class HelloWorldApp : PhoneApp
 {
-    public static HelloWorldApp Instance;
+    // Define app metadata. These properties are used by S1API to register and display your app.
     protected override string AppName => "HelloWorld";
     protected override string AppTitle => "Hello World";
     protected override string IconLabel => "Hello";
-    protected override string IconFileName => "hello.png"; // put this image next to your mod dll
 
+    // OnCreated is called once when the app is initialized.
     protected override void OnCreated()
     {
         base.OnCreated();
-        Instance = this;
+        // Any one-time setup or initialization logic for your app.
     }
 
+    // OnCreatedUI is called when the app's UI panel is created and needs content.
+    // S1API clones a template app panel (e.g., "ProductManagerApp") and provides it as the 'container'.
+    // An internal PhoneAppButtonHandler component is automatically added to the app panel to manage button interactions.
     protected override void OnCreatedUI(GameObject container)
     {
+        // Use UIFactory to create and layout UI elements within the provided container.
         var panel = UIFactory.Panel("MainPanel", container.transform, new Color(0.1f, 0.1f, 0.1f), fullAnchor: true);
         UIFactory.Text("Title", "📱 Hello, S1API!", panel.transform, 22, TextAnchor.MiddleCenter);
+        
+        // Example: Add a button
+        var button = UIFactory.Button("MyButton", "Click Me", panel.transform);
+        button.GetComponent<Button>().onClick.AddListener(() => 
+        {
+            LoggerInstance.Msg("Button Clicked!");
+            // Your button logic here
+        });
     }
 }
 ```
@@ -43,7 +55,7 @@ public class HelloWorldApp : PhoneApp
 Registration is automatic:
 
 - Ensure your app type is `public`.
-- S1API will instantiate it, register it, and spawn its UI/icon at runtime.
+- S1API will discover, instantiate, register, and spawn its UI/icon at runtime. No explicit registration code is needed from the modder.
 
 ## Orientation
 
