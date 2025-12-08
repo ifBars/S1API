@@ -103,7 +103,18 @@ namespace S1API.Storages
         public ItemInstance[] GetItems()
         {
             var items = S1Storage.GetAllItems();
-            return items.Select(item => new ItemInstance(item)).ToArray();
+            if (items == null || items.Count == 0)
+            {
+                return Array.Empty<ItemInstance>();
+            }
+
+            var wrapped = new ItemInstance[items.Count];
+            for (int i = 0; i < items.Count; i++)
+            {
+                wrapped[i] = new ItemInstance(items[i]);
+            }
+
+            return wrapped;
         }
 
         /// <summary>
