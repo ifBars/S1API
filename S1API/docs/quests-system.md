@@ -44,18 +44,16 @@ public class MyFirstQuest : Quest
         AddEntry("Return to base"); // This might be completed by entering a specific building
     }
 
-    // Override OnCompleted to define logic that runs when the quest finishes successfully
-    protected override void OnCompleted()
+    // Override OnComplete to define logic that runs when the quest finishes successfully
+    protected override void OnComplete()
     {
-        base.OnCompleted();
         Debug.Log($"Quest '{Title}' completed!");
         // Grant rewards, unlock new content, trigger follow-up quests, etc.
     }
 
-    // Override OnFailed to define logic if the quest is failed (e.g., time limit expires)
-    protected override void OnFailed()
+    // Override OnFail to define logic if the quest is failed (e.g., time limit expires)
+    protected override void OnFail()
     {
-        base.OnFailed();
         Debug.Log($"Quest '{Title}' failed.");
         // Clean up quest-related elements or penalize the player
     }
@@ -154,8 +152,6 @@ public class MyFirstQuest : Quest
 
     protected override void OnCreated()
     {
-        base.OnCreated();
-
         // Add initial quest entries when the quest object is first created
         AddEntry("Find the hideout");
 
@@ -175,15 +171,8 @@ public class MyFirstQuest : Quest
         );
     }
 
-    protected override void OnStarted()
+    protected override void OnComplete()
     {
-        base.OnStarted();
-        // Logic to execute when the quest officially begins (e.g., player accepts it)
-    }
-
-    protected override void OnCompleted()
-    {
-        base.OnCompleted();
         // Logic to execute when the quest is fully completed
     }
 }
@@ -305,16 +294,14 @@ public class MyPersistentQuest : Quest
     [SaveableField("myQuestProgress")]
     private int currentObjectiveIndex = 0;
 
-    protected override void OnStarted()
+    protected override void OnCreated()
     {
-        base.OnStarted();
-        MelonLogger.Msg("MyPersistentQuest started! Current Objective: " + currentObjectiveIndex);
+        MelonLogger.Msg("MyPersistentQuest created! Current Objective: " + currentObjectiveIndex);
         // Example: Display initial quest objective in UI or trigger an introductory dialogue.
     }
 
-    protected override void OnCompleted()
+    protected override void OnComplete()
     {
-        base.OnCompleted();
         MelonLogger.Msg("MyPersistentQuest completed! Awarding player...");
         // Example: Award items, money, or unlock new content.
         // PlayerInventory.AddItem(new S1API.Items.ExampleItem());
@@ -324,28 +311,19 @@ public class MyPersistentQuest : Quest
         // Saveable.RequestGameSave();
     }
 
-    protected override void OnFailed()
+    protected override void OnFail()
     {
-        base.OnFailed();
         MelonLogger.Msg("MyPersistentQuest failed. Resetting state or penalizing player.");
         // Example: Revert changes, apply penalties, or restart the quest.
     }
 
-    protected override void OnCancelled()
-    {
-        base.OnCancelled();
-        MelonLogger.Msg("MyPersistentQuest cancelled. Cleaning up resources.");
-        // Example: Remove any temporary UI elements, quest markers, or stop active NPCs related to the quest.
-    }
-
     protected override void OnLoaded()
     {
-        base.OnLoaded();
         MelonLogger.Msg("MyPersistentQuest loaded from save! Resuming at objective: " + currentObjectiveIndex);
         // Example: Apply the loaded 'currentObjectiveIndex' to the game world (e.g., set the active objective in UI).
     }
     
-    // Note: To save critical changes to your quest's state, call `Saveable.RequestGameSave()`
+    // Note: To save critical changes to your quest's state, call `RequestGameSave()`
     // when a significant event occurs (e.g., objective completion, progress update).
     // There is no `OnSaved()` override for individual `Saveable` components; saving is managed by the system.
 }
@@ -371,8 +349,6 @@ public class GoToNorthApartmentsQuest : Quest
     // Use this to define your initial objectives and POI markers.
     protected override void OnCreated()
     {
-        base.OnCreated(); // Always call the base method of the parent class.
-
         // Add an entry (objective) to the quest, optionally with a POI marker.
         // Players will see the 'text' as their current goal, and the POI will guide them.
         AddEntry(
@@ -386,9 +362,9 @@ public class GoToNorthApartmentsQuest : Quest
         // AddEntry("Find the hidden key in the apartments");
     }
 
-    // Optional: Override other lifecycle methods like OnStarted(), OnCompleted(), or OnFailed()
+    // Optional: Override other lifecycle methods like OnStarted(), OnComplete(), or OnFailed()
     // to implement quest-specific logic at different stages.
-    // protected override void OnCompleted() { /* Grant rewards, unlock new content, etc. */ }
+    // protected override void OnComplete() { /* Grant rewards, unlock new content, etc. */ }
 }
 ```
 
@@ -428,14 +404,12 @@ public class MyQuest : Quest
     // OnCreated is called when the quest is first initialized
     protected override void OnCreated()
     {
-        base.OnCreated();
         UpdateQuestDisplay();
     }
 
     // OnLoaded is called when the quest data is deserialized from a save file
     protected override void OnLoaded()
     {
-        base.OnLoaded();
         // Restore quest state from loaded data and update UI/game elements
         UpdateQuestDisplay();
     }
