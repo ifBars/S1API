@@ -3,7 +3,7 @@ using S1API.Internal;
 using S1API.Internal.Lifecycle;
 using S1API.Map;
 
-[assembly: MelonInfo(typeof(S1API.S1API), "S1API (Forked by Bars)", "2.7.7", "KaBooMa")]
+[assembly: MelonInfo(typeof(S1API.S1API), "S1API (Forked by Bars)", "2.7.8", "KaBooMa")]
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 namespace S1API
 {
