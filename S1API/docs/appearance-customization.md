@@ -1,4 +1,4 @@
-# Appearance Customization
+## Appearance Customization
 
 The `NPCAppearance` system allows you to customize your NPC's visual appearance, including physical features, clothing, and accessories.
 
@@ -358,24 +358,26 @@ protected override void OnCreated()
 
 ## Best Practices
 
+### Best Practices for Appearance Customization
+
+Appearance configuration is a dynamic process and must be handled during the runtime initialization phase of the NPC.
+
 ### Do's
 
-- **Always call `Build()`** at the end of appearance configuration
-- **Use appropriate color types** (Color32 for skin, Color for others)
-- **Test appearance in-game** to ensure it looks correct
-- **Use meaningful color values** that make sense for the NPC's role
-- **Consider the NPC's personality** when choosing appearance
+-   **Configure Appearance in `OnCreated()`**: Always apply appearance changes (using the `Appearance` property) within the `protected override void OnCreated()` method of your custom NPC class.
+-   **Finalize Configuration with `Build()`**: The `Build()` method is mandatory to apply all pending changes to the NPC's visual state. Always call it once after defining all customization fields.
+-   **Provide Error Fallbacks**: Use `GenerateRandomAppearance()` within a `catch` block to ensure the NPC is visually stable even if customization parameters fail to apply.
+-   **Use Appropriate Value Types**: Ensure you pass float or Color types for customization values, as required by the specific `CustomizationFields` enum.
 
 ### Don'ts
 
-- **Don't forget to call `Build()`** - appearance won't be applied
-- **Don't use invalid asset paths** - check that paths exist
-- **Don't use extreme color values** unless intentional
-- **Don't mix incompatible clothing items** (e.g., formal with casual)
+-   **Don't Configure in `ConfigurePrefab()`**: Never attempt to set appearance or dynamic visual properties within the static `ConfigurePrefab()` method. This method is reserved for identity, schedule, and static defaults.
+-   **Don't Omit `Build()`**: Appearance changes will not take effect unless `Build()` is explicitly called.
+-   **Don't Use Invalid Assets/Paths**: Ensure all asset bundle paths or direct asset references are validated before deployment.
 
 ### Error Handling
 
-Wrap appearance configuration in try-catch blocks:
+Wrapping appearance configuration ensures robustness. If your custom configuration fails (e.g., due to bad parameters or missing assets), the NPC will fall back to a safe, random appearance.
 
 ```csharp
 protected override void OnCreated()
@@ -384,6 +386,7 @@ protected override void OnCreated()
     
     try
     {
+        // Define dynamic appearance here
         Appearance
             .Set<CustomizationFields.Gender>(0.0f)
             .Set<CustomizationFields.Height>(1.0f)
@@ -391,20 +394,16 @@ protected override void OnCreated()
     }
     catch (Exception ex)
     {
+        // Use MelonLogger to report failure
         MelonLogger.Error($"Failed to set appearance for {FullName}: {ex.Message}");
-        // Fallback to random appearance
+        
+        // Fallback: Generate a random, safe appearance
         Appearance.GenerateRandomAppearance();
         Appearance.Build();
     }
 }
 ```
 
-### Performance Considerations
-
-- **Set appearance once** in `OnCreated` - don't change it frequently
-- **Use `GenerateRandomAppearance()`** for quick testing
-- **Avoid complex appearance changes** at runtime
-- **Test appearance performance** with multiple NPCs
 
 ## Next Steps
 
