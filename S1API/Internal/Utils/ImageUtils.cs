@@ -1,5 +1,6 @@
 using S1API.Logging;
 using System.IO;
+using System.Reflection;
 using UnityEngine;
 
 namespace S1API.Internal.Utils
@@ -43,11 +44,11 @@ namespace S1API.Internal.Utils
         
         /// <summary>
         /// Loads an image from a byte array and converts it into a Sprite object.
+        /// </summary>
         /// <param name="data">The byte array containing the image data to load.</param>
         /// <returns>
         /// A Sprite object representing the loaded image, or null if the image could not be loaded.
         /// </returns>
-        /// </summary>
         public static Sprite? LoadImageRaw(byte[] data)
         {
             try
@@ -62,6 +63,58 @@ namespace S1API.Internal.Utils
             {
                 _loggerInstance.Error("❌ Failed to load sprite: " + ex);
             }
+            return null;
+        }
+
+        /// <summary>
+        /// Loads an image from an embedded resource stream and converts it into a Sprite object.
+        /// </summary>
+        /// <param name="assembly">The assembly containing the embedded resource.</param>
+        /// <param name="resourceName">The fully qualified name of the embedded resource (e.g., "Namespace.Assets.Icon.png").</param>
+        /// <param name="pixelsPerUnit">The pixels per unit for the sprite. Defaults to 100f.</param>
+        /// <param name="filterMode">The filter mode for the texture. Defaults to FilterMode.Bilinear.</param>
+        /// <returns>
+        /// A Sprite object representing the loaded image, or null if the resource could not be found or loaded.
+        /// </returns>
+        public static Sprite? LoadImageFromResource(Assembly assembly, string resourceName, float pixelsPerUnit = 100f, FilterMode filterMode = FilterMode.Bilinear)
+        {
+            if (assembly == null)
+            {
+                _loggerInstance.Error($"❌ Assembly is null when loading resource: {resourceName}");
+                return null;
+            }
+
+            try
+            {
+                using (var stream = assembly.GetManifestResourceStream(resourceName))
+                {
+                    if (stream == null)
+                    {
+                        _loggerInstance.Error($"❌ Resource not found: {resourceName}");
+                        return null;
+                    }
+
+                    byte[] imageData = new byte[stream.Length];
+                    stream.Read(imageData, 0, imageData.Length);
+
+                    Texture2D texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                    if (UnityEngine.ImageConversion.LoadImage(texture, imageData, markNonReadable: false))
+                    {
+                        texture.filterMode = filterMode;
+                        return Sprite.Create(
+                            texture,
+                            new Rect(0, 0, texture.width, texture.height),
+                            new Vector2(0.5f, 0.5f),
+                            pixelsPerUnit
+                        );
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                _loggerInstance.Error($"❌ Failed to load sprite from resource '{resourceName}': {ex}");
+            }
+
             return null;
         }
     }

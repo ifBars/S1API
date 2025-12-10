@@ -133,12 +133,12 @@ namespace S1API.Entities.Schedule
 
             // Resolve building using S1API.Map name-based registry
             object gameBuilding = null;
-            Building wrapper = null;
+            Map.Building wrapper = null;
             
             if (!string.IsNullOrEmpty(BuildingName))
             {
                 // Try to get building wrapper
-                wrapper = Building.GetByName(BuildingName);
+                wrapper = Map.Building.GetByName(BuildingName);
                 if (wrapper == null)
                 {
                     Logger.Warning($"Building '{BuildingName}' not found in registry for StayInBuilding action at time {StartTime}. Will register deferred lookup.");
@@ -238,7 +238,7 @@ namespace S1API.Entities.Schedule
                         continue;
                     }
 
-                    var wrapper = Building.GetByName(pending.BuildingName);
+                    var wrapper = Map.Building.GetByName(pending.BuildingName);
                     if (wrapper != null)
                     {
                         var gameBuilding = wrapper.ResolveGameBuilding();
@@ -330,14 +330,14 @@ namespace S1API.Entities.Schedule
             }
         }
 
-        private void RegisterDeferredBuildingResolution(S1NPCsSchedules.NPCEvent_StayInBuilding action, NPCSchedule schedule, Building existingWrapper = null)
+        private void RegisterDeferredBuildingResolution(S1NPCsSchedules.NPCEvent_StayInBuilding action, NPCSchedule schedule, Map.Building existingWrapper = null)
         {
             // If we have an identifier type, use typed lookup
             if (BuildingIdentifierType != null)
             {
                 DeferredMapResolver.RegisterDeferredLookup(new DeferredLookup(BuildingIdentifierType, (resolved) =>
                 {
-                    if (resolved is Building building && building != null)
+                    if (resolved is Map.Building building && building != null)
                     {
                         var gameBuilding = building.ResolveGameBuilding();
                         if (gameBuilding != null && action != null)
@@ -362,7 +362,7 @@ namespace S1API.Entities.Schedule
             {
                 DeferredMapResolver.RegisterDeferredLookup(new DeferredLookup(existingWrapper.DeferredIdentifierType, (resolved) =>
                 {
-                    if (resolved is Building building && building != null)
+                    if (resolved is Map.Building building && building != null)
                     {
                         var gameBuilding = building.ResolveGameBuilding();
                         if (gameBuilding != null && action != null)

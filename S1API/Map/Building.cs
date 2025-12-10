@@ -16,7 +16,7 @@ namespace S1API.Map
     public sealed class Building
     {
         // Registry (name-based)
-        internal static readonly List<Building> All = new List<Building>();
+        public static readonly System.Collections.Generic.List<Building> All = new System.Collections.Generic.List<Building>();
 
         private string _name;
         internal object _gameBuilding;

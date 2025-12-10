@@ -144,12 +144,12 @@ namespace S1API.Internal.Map
                 }
                 
                 // Try Building.Get<T>()
-                var buildingGetMethod = typeof(Building).GetMethod("Get", BindingFlags.Public | BindingFlags.Static);
+                var buildingGetMethod = typeof(global::S1API.Map.Building).GetMethod("Get", BindingFlags.Public | BindingFlags.Static);
                 if (buildingGetMethod != null)
                 {
                     var genericMethod = buildingGetMethod.MakeGenericMethod(identifierType);
                     var result = genericMethod.Invoke(null, null);
-                    if (result is Building building && building != null)
+                    if (result is global::S1API.Map.Building building && building != null)
                     {
                         return building;
                     }

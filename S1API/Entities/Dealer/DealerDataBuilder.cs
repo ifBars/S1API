@@ -23,7 +23,7 @@ namespace S1API.Entities.Dealer
             public float Cut { get; set; } = 0.2f;
             public DealerType DealerType { get; set; } = DealerType.PlayerDealer;
             public string HomeName { get; set; } = "Home";
-            public Building? Home { get; set; } = null;
+            public Map.Building? Home { get; set; } = null;
             public bool SellInsufficientQualityItems { get; set; } = false;
             public bool SellExcessQualityItems { get; set; } = true;
             public string CompletedDealsVariable { get; set; } = string.Empty;
@@ -77,7 +77,7 @@ namespace S1API.Entities.Dealer
         /// Sets the home building for this dealer using a Building wrapper.
         /// </summary>
         /// <param name="building">The Building wrapper for the dealer's home.</param>
-        public DealerDataBuilder WithHome(Building building)
+        public DealerDataBuilder WithHome(Map.Building building)
         {
             _data.Home = building;
             if (building != null)

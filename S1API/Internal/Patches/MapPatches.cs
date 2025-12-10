@@ -27,7 +27,7 @@ namespace S1API.Internal.Patches
         [HarmonyPatch(typeof(S1Map.NPCEnterableBuilding), "Awake")]
         [HarmonyPostfix]
         private static void NPCEnterableBuildingAwake(S1Map.NPCEnterableBuilding __instance) =>
-            Building.Register(__instance);
+            global::S1API.Map.Building.Register(__instance);
 
         /// <summary>
         /// INTERNAL: Registers delivery locations when they are created.

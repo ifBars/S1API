@@ -1318,7 +1318,7 @@ namespace S1API.Internal.Patches
                 var building = __instance.GetComponentInParent<S1Map.NPCEnterableBuilding>(true);
                 if (building != null)
                 {
-                    Building.Unregister(building);
+                    global::S1API.Map.Building.Unregister(building);
                 }
             }
             catch

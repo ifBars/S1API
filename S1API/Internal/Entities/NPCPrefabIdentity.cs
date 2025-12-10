@@ -643,7 +643,7 @@ namespace S1API.Internal.Entities
                 }
 
                 // Try to get building wrapper by name
-                var building = Building.GetByName(buildingName);
+                var building = global::S1API.Map.Building.GetByName(buildingName);
                 if (building == null)
                 {
                     Logger.Warning($"[Dealer Home] Building '{buildingName}' not found in registry for NPC {npc?.ID ?? "<null>"}");

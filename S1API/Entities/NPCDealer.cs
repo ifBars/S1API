@@ -623,7 +623,7 @@ namespace S1API.Entities
         /// <summary>
         /// Gets or sets the home building for this dealer.
         /// </summary>
-        public Building? Home
+        public Map.Building? Home
         {
             get
             {
@@ -643,7 +643,7 @@ namespace S1API.Entities
                         return null;
 
                     // Find the Building wrapper by name
-                    return Building.GetByName(buildingName);
+                    return Map.Building.GetByName(buildingName);
                 }
                 catch (Exception ex)
                 {

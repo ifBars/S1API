@@ -4,6 +4,7 @@ using S1API.Avatar;
 using S1API.Logging;
 using S1API.Map;
 using S1API.Quests;
+using S1API.Shops;
 using S1API.Internal.Map;
 using S1API.Internal.Patches;
 using UnityEngine;
@@ -66,8 +67,8 @@ namespace S1API.Internal.Lifecycle
                     QuestManager.Quests.Clear();
 
                     // Buildings: clear S1API building registry. Objects are destroyed by scene unload.
-                    int buildingCount = Building.All.Count;
-                    Building.All.Clear();
+                    int buildingCount = global::S1API.Map.Building.All.Count;
+                    global::S1API.Map.Building.All.Clear();
 
                     // Delivery Locations: clear S1API delivery location registry. Objects are destroyed by scene unload.
                     int deliveryLocationCount = DeliveryLocation.All.Count;
@@ -80,6 +81,9 @@ namespace S1API.Internal.Lifecycle
                     // Parking Lots: clear S1API parking lot registry.
                     int parkingLotCount = ParkingLotRegistry.All.Count;
                     ParkingLotRegistry.All.Clear();
+
+                    // Shops: invalidate the shop cache
+                    ShopManager.InvalidateCache();
 
                     // Clear deferred lookups
                     DeferredMapResolver.Clear();

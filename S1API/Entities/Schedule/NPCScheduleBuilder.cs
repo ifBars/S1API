@@ -223,7 +223,7 @@ namespace S1API.Entities.Schedule
         ///
         /// If the building is <c>null</c>, this method does nothing and returns the builder unchanged.
         /// </remarks>
-        public PrefabScheduleBuilder StayInBuilding(Building building, int startTime, int durationMinutes = 60, int? doorIndex = null, string name = null)
+        public PrefabScheduleBuilder StayInBuilding(Map.Building building, int startTime, int durationMinutes = 60, int? doorIndex = null, string name = null)
         {
             if (building == null)
             {

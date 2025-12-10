@@ -43,6 +43,10 @@ namespace S1API.Items
                 return new CashDefinition(cashDefinition);
 
             if (CrossType.Is(itemDefinition,
+                    out S1ItemFramework.BuildableItemDefinition buildableItemDefinition))
+                return new BuildableItemDefinition(buildableItemDefinition);
+
+            if (CrossType.Is(itemDefinition,
                     out S1ItemFramework.StorableItemDefinition storableItemDefinition))
                 return new StorableItemDefinition(storableItemDefinition);
 
