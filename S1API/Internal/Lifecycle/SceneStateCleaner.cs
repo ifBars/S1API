@@ -5,6 +5,7 @@ using S1API.Logging;
 using S1API.Map;
 using S1API.Quests;
 using S1API.Shops;
+using S1API.GameTime;
 using S1API.Internal.Map;
 using S1API.Internal.Patches;
 using UnityEngine;
@@ -87,6 +88,9 @@ namespace S1API.Internal.Lifecycle
 
                     // Clear deferred lookups
                     DeferredMapResolver.Clear();
+
+                    // Drop bindings to the previous TimeManager so the next scene can rebind cleanly.
+                    TimeManager.ResetBindings();
                 }
                 else
                 {
@@ -121,6 +125,9 @@ namespace S1API.Internal.Lifecycle
                         }
                     }
                     catch { }
+
+                    // Attempt to bind S1API events to the fresh TimeManager instance for the new scene.
+                    try { TimeManager.TryBindToCurrentInstance(); } catch { }
                 }
             }
             catch (Exception ex)

@@ -19,6 +19,12 @@ using S1API.Storage;
 using S1API.Logging;
 using System;
 using System.Collections.Generic;
+using UnityEngine;
+#if (IL2CPPMELON)
+using S1PersistenceLoaders = Il2CppScheduleOne.Persistence.Loaders;
+#elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
+using S1PersistenceLoaders = ScheduleOne.Persistence.Loaders;
+#endif
 
 namespace S1API.Internal.Patches
 {
@@ -31,6 +37,15 @@ namespace S1API.Internal.Patches
     {
         private static readonly Log Logger = new Log("StoragePatches");
         private static readonly HashSet<int> _processedStorages = new HashSet<int>();
+        private const string ExtraSlotMetaKey = "S1API_Storage_SlotMeta";
+
+        [Serializable]
+        private class StorageSlotMeta : S1Persistence.SaveData
+        {
+            public int SlotCount;
+            public int DisplayRowCount;
+            public string ItemId;
+        }
 
         /// <summary>
         /// Patch for PlaceableStorageEntity.Start - raises OnStorageCreated event.
@@ -110,11 +125,118 @@ namespace S1API.Internal.Patches
                 var storageWrapper = new StorageEntity(storageEntity, placeableStorage);
                 var args = new StorageLoadingEventArgs(storageWrapper, __instance.Items.Length);
                 StorageEvents.RaiseStorageLoading(args);
+
+                // Sync the provided slot list with any new slots added by handlers so LoadTo can populate them
+                int actualSlotCount = storageEntity.ItemSlots.Count;
+                if (slots.Count < actualSlotCount)
+                {
+                    for (int i = slots.Count; i < actualSlotCount; i++)
+                    {
+                        slots.Add(storageEntity.ItemSlots[i]);
+                    }
+                }
             }
             catch (Exception ex)
             {
                 Logger.Error($"Error in ItemSet_LoadTo_Prefix: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Persist slot topology for placeable storage so expanded slots reload correctly.
+        /// Patch at BuildableItem level to cover IL2CPP/Mono generated subclasses.
+        /// </summary>
+        [HarmonyPatch(typeof(S1EntityFramework.BuildableItem), nameof(S1EntityFramework.BuildableItem.GetSaveData))]
+        [HarmonyPostfix]
+        private static void BuildableItem_GetSaveData_Postfix(S1EntityFramework.BuildableItem __instance, ref S1Persistence.DynamicSaveData __result)
+        {
+            var placeable = __instance as S1ObjectScripts.PlaceableStorageEntity;
+            if (__result == null || placeable?.StorageEntity == null)
+                return;
+
+            try
+            {
+                var meta = new StorageSlotMeta
+                {
+                    SlotCount = placeable.StorageEntity.ItemSlots != null ? placeable.StorageEntity.ItemSlots.Count : placeable.StorageEntity.SlotCount,
+                    DisplayRowCount = placeable.StorageEntity.DisplayRowCount,
+                    ItemId = placeable.ItemInstance?.Definition?.ID
+                };
+
+                __result.AddData(ExtraSlotMetaKey, meta);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Error adding storage slot metadata: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Hydrate expanded slots before loading contents so extra slots are restored from saves.
+        /// </summary>
+        [HarmonyPatch(typeof(S1PersistenceLoaders.StorageRackLoader), "Load", new Type[] { typeof(S1Persistence.DynamicSaveData) })]
+        [HarmonyPrefix]
+        private static bool StorageRackLoader_Load_Prefix(S1PersistenceLoaders.StorageRackLoader __instance, S1Persistence.DynamicSaveData data)
+        {
+            try
+            {
+                if (data == null)
+                    return false;
+
+                S1Persistence.GridItemData gridItemData;
+                if (!data.TryExtractBaseData<S1Persistence.GridItemData>(out gridItemData) || gridItemData == null)
+                    return false;
+
+                // Use reflection to call protected LoadAndCreate(GridItemData data)
+                var loadAndCreate = AccessTools.Method(__instance.GetType(), "LoadAndCreate", new Type[] { typeof(S1Persistence.GridItemData) });
+                var gridItem = loadAndCreate?.Invoke(__instance, new object[] { gridItemData }) as S1EntityFramework.GridItem;
+                if (gridItem == null)
+                    return false;
+
+                var placeableStorage = gridItem as S1ObjectScripts.PlaceableStorageEntity;
+                if (placeableStorage == null)
+                    return false;
+
+                S1Persistence.PlaceableStorageData storageData;
+                if (!data.TryExtractBaseData<S1Persistence.PlaceableStorageData>(out storageData) || storageData == null)
+                    return false;
+
+                int targetSlots = storageData.Contents?.Items?.Length ?? placeableStorage.StorageEntity.ItemSlots.Count;
+
+                // Use non-generic TryGetData to avoid IL2CPP reflection issues
+                if (data.TryGetData(ExtraSlotMetaKey, out string metaJson) && !string.IsNullOrEmpty(metaJson))
+                {
+                    try
+                    {
+                        var meta = JsonUtility.FromJson<StorageSlotMeta>(metaJson);
+                        if (meta != null)
+                        {
+                            targetSlots = Math.Max(targetSlots, meta.SlotCount);
+                            if (meta.DisplayRowCount > placeableStorage.StorageEntity.DisplayRowCount)
+                            {
+                                placeableStorage.StorageEntity.DisplayRowCount = meta.DisplayRowCount;
+                            }
+                        }
+                    }
+                    catch (Exception metaEx)
+                    {
+                        Logger.Warning($"Failed to deserialize storage slot metadata: {metaEx.Message}");
+                    }
+                }
+
+                // Expand slots before hydrating contents
+                var wrapper = new StorageEntity(placeableStorage.StorageEntity, placeableStorage);
+                wrapper.SetSlotCount(targetSlots);
+
+                storageData.Contents.LoadTo(placeableStorage.StorageEntity.ItemSlots);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Error in StorageRackLoader_Load_Prefix: {ex.Message}");
+            }
+
+            // Skip original loader to avoid double-loading
+            return false;
         }
     }
 }
