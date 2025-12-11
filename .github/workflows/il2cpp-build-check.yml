@@ -31,10 +31,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ secrets.IL2CPP_ASSEMBLIES_REPO }}
-          token: ${{ secrets.GAME_ASSEMBLIES_TOKEN }}
+          token: ${{ secrets.IL2CPP_ASSEMBLIES_TOKEN }}
           path: il2cpp-assemblies
           fetch-depth: 1
         continue-on-error: false
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
       - name: Debug IL2CPP Assemblies Structure
         run: |
