@@ -27,6 +27,17 @@ jobs:
           mkdir -p S1API/ScheduleOneAssemblies/Il2CppAssemblies
           mkdir -p S1API/ScheduleOneAssemblies/MelonLoader
 
+      # Try to restore assemblies from cache first (for external PRs)
+      - name: Cache IL2CPP Game Assemblies
+        id: cache-il2cpp-assemblies
+        uses: actions/cache@v4
+        with:
+          path: S1API/ScheduleOneAssemblies
+          key: il2cpp-game-assemblies-${{ hashFiles('S1API/S1API.csproj') }}
+          restore-keys: |
+            il2cpp-game-assemblies-
+
+      # Only checkout IL2CPP assemblies if cache miss AND we have access to secrets
       - name: Checkout IL2CPP Game Assemblies
         uses: actions/checkout@v4
         with:
@@ -34,6 +45,7 @@ jobs:
           token: ${{ secrets.IL2CPP_ASSEMBLIES_TOKEN }}
           path: il2cpp-assemblies
           fetch-depth: 1
+        if: steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         continue-on-error: false
 
       - name: Debug IL2CPP Assemblies Structure
@@ -46,6 +58,7 @@ jobs:
           echo ""
           echo "=== Looking for MelonLoader assemblies in net6 ==="
           find il2cpp-assemblies -path "*/net6/*.dll" -type f | head -10
+        if: steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
 
       - name: Copy IL2CPP Game Assemblies
         run: |
@@ -78,6 +91,7 @@ jobs:
               echo "This may cause build failures for files that use TMPro"
             fi
           fi
+        if: steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
 
       - name: Verify IL2CPP Assembly Copies
         run: |
@@ -149,9 +163,15 @@ jobs:
             echo "ERROR: Critical assemblies are missing!"
             echo "Please ensure:"
             echo "1. IL2CPP_ASSEMBLIES_REPO secret is set correctly"
-            echo "2. GAME_ASSEMBLIES_TOKEN has access to the IL2CPP assemblies repo"
+            echo "2. IL2CPP_ASSEMBLIES_TOKEN has access to the IL2CPP assemblies repo"
             echo "3. The IL2CPP assemblies repo contains MelonLoader/Il2CppAssemblies/ and MelonLoader/net6/ directories"
             exit 1
+          fi
+          echo ""
+          if [ "${{ steps.cache-il2cpp-assemblies.outputs.cache-hit }}" == "true" ]; then
+            echo "✓ Using cached IL2CPP assemblies for build"
+          else
+            echo "✓ Using fresh IL2CPP assemblies from repository"
           fi
 
       - name: Create CI Build Properties
