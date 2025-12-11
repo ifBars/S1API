@@ -18,6 +18,7 @@ yt-series/
 
 nuget-upload.txt
 AGENTS.md
+.claude/
 
 # DocFX
 **/S1API/_site/
