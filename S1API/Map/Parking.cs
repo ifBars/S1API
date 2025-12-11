@@ -177,6 +177,22 @@ namespace S1API.Map
     }
 
     /// <summary>
+    /// Defines where to park
+    /// </summary>
+    public class ParkingData(string _lotId, int _index, ParkingAlignment _align)
+    {
+
+        public string LotId => _lotId;
+        public int Index => _index;
+        public ParkingAlignment Alignment => _align;
+
+        internal ParkingData(ParkData data) : this(data.lotGUID.ToString(), data.spotIndex, (ParkingAlignment)data.alignment)
+        {
+        }
+    }
+    
+
+    /// <summary>
     /// Registry and utilities for parking-related queries.
     /// </summary>
     public static class ParkingLotRegistry
@@ -394,6 +410,7 @@ namespace S1API.Map
             return null;
         }
     }
+
 }
 
 

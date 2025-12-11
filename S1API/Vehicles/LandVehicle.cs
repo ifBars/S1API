@@ -3,10 +3,12 @@ using S1Vehicles = Il2CppScheduleOne.Vehicles;
 using Il2Cpp;
 using Il2CppFishNet;
 using Il2CppFishNet.Connection;
+using Guid = Il2CppSystem.Guid;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Vehicles = ScheduleOne.Vehicles;
 using FishNet;
 using FishNet.Connection;
+using Guid = System.Guid;
 #endif
 using System;
 using System.Reflection;
@@ -75,6 +77,45 @@ namespace S1API.Vehicles
         }
 
         /// <summary>
+        /// If this vehicle has any occupants
+        /// </summary>
+        public bool IsOccupied {
+            get => S1LandVehicle.IsOccupied;
+            set => S1LandVehicle.IsOccupied = value;
+        }
+
+        /// <summary>
+        /// When this vehicle has started
+        /// </summary>
+        public event Action OnVehicleStart {
+            add => S1LandVehicle.onVehicleStart += value;
+            remove => S1LandVehicle.onVehicleStart -= value;
+        }
+        /// <summary>
+        /// When this vehicle has stopped
+        /// </summary>
+        public event Action OnVehicleStop {
+            add => S1LandVehicle.onVehicleStop += value;
+            remove => S1LandVehicle.onVehicleStop -= value;
+        }
+
+        /// <summary>
+        /// When the handbrake has been applied
+        /// </summary>
+        public event Action OnHandbrakeApplied {
+            add => S1LandVehicle.onHandbrakeApplied += value;
+            remove => S1LandVehicle.onHandbrakeApplied -= value;
+        }
+
+        /// <summary>
+        /// When this vehicle has collided with something
+        /// </summary>
+        public event Action<Collision> OnCollision {
+            add => S1LandVehicle.onCollision += value;
+            remove => S1LandVehicle.onCollision -= value;
+        }
+
+        /// <summary>
         /// Vehicle's color.
         /// </summary>
         public VehicleColor Color
@@ -108,6 +149,54 @@ namespace S1API.Vehicles
             S1LandVehicle.transform.rotation = rotation;
             S1Vehicles.VehicleManager.Instance.Spawn(S1LandVehicle.gameObject);
         }
+
+        /// <summary>
+        /// Aligns car to parking spot <see cref="Map.ParkingSpotWrapper">
+        /// </summary>
+        /// <param name="target"></param>
+        /// <param name="type"></param>
+        /// <param name="network"></param>
+        /// <exception cref="Exception"></exception>
+        public void AlignTo(Transform target, ParkingAlignment type, bool network = false) {
+            if (S1LandVehicle == null)
+                throw new Exception("Unable to align to position, S1LandVehicle is null!");
+            S1LandVehicle.AlignTo(target, (S1Vehicles.EParkingAlignment)type, network);
+
+        }
+
+        /// <summary>
+        /// Exit parking spot, and optionally, the parking lot
+        /// </summary>
+        /// <param name="moveToExitPoint"></param>
+        public void ExitPark(bool moveToExitPoint = true) => S1LandVehicle.ExitPark(moveToExitPoint);
+
+        /// <summary>
+        /// Set this vehicle as visible or not
+        /// </summary>
+        /// <param name="vis"></param>
+        public void SetVisible(bool vis) => S1LandVehicle.SetVisible(vis);
+
+        /// <summary>
+        /// Deletes the land vehicle
+        /// </summary>
+        public void DestroyVehichle() => S1LandVehicle.DestroyVehicle();
+
+        /// <summary>
+        /// Parks the vehicle in the specified slot <seealso cref="Map.ParkingData"></seealso>
+        /// </summary>
+        /// <param name="parkData"></param>
+        /// <param name="network"></param>
+        public void Park(Map.ParkingData parkData, bool network) {
+
+            var vanillaData = new S1Vehicles.ParkData() {
+                lotGUID = Guid.Parse(parkData.LotId),
+                spotIndex = parkData.Index,
+                alignment = (S1Vehicles.EParkingAlignment)parkData.Alignment
+            };
+
+            S1LandVehicle.Park(_conn, vanillaData, network);
+        }
+
 
         /// <summary>
         /// Trunk space
