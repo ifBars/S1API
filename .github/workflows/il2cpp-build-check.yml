@@ -27,57 +27,119 @@ jobs:
           mkdir -p S1API/ScheduleOneAssemblies/Il2CppAssemblies
           mkdir -p S1API/ScheduleOneAssemblies/MelonLoader
 
+      # Try to restore assemblies from cache first (for external PRs)
+      - name: Cache IL2CPP Game Assemblies
+        id: cache-il2cpp-assemblies
+        uses: actions/cache@v4
+        with:
+          path: S1API/ScheduleOneAssemblies
+          key: il2cpp-game-assemblies-${{ hashFiles('S1API/S1API.csproj') }}
+          restore-keys: |
+            il2cpp-game-assemblies-
+
+      # Only checkout IL2CPP assemblies if cache miss AND we have access to secrets
       - name: Checkout IL2CPP Game Assemblies
         uses: actions/checkout@v4
         with:
           repository: ${{ secrets.IL2CPP_ASSEMBLIES_REPO }}
           token: ${{ secrets.IL2CPP_ASSEMBLIES_TOKEN }}
-          path: il2cpp-assemblies
+          path: il2cpp-scheduleone-assemblies
           fetch-depth: 1
+        if: steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         continue-on-error: false
 
       - name: Debug IL2CPP Assemblies Structure
         run: |
           echo "=== IL2CPP Assemblies Repository Structure ==="
-          find il2cpp-assemblies -type f -name "*.dll" | head -30
+          find il2cpp-scheduleone-assemblies -type f -name "*.dll" | head -30
           echo ""
           echo "=== Looking for Assembly-CSharp.dll in Il2CppAssemblies ==="
-          find il2cpp-assemblies -path "*/Il2CppAssemblies/Assembly-CSharp.dll" -type f
+          find il2cpp-scheduleone-assemblies -path "*/Il2CppAssemblies/Assembly-CSharp.dll" -type f
           echo ""
           echo "=== Looking for MelonLoader assemblies in net6 ==="
-          find il2cpp-assemblies -path "*/net6/*.dll" -type f | head -10
+          find il2cpp-scheduleone-assemblies -path "*/net6/*.dll" -type f | head -10
+        if: steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
 
       - name: Copy IL2CPP Game Assemblies
         run: |
           # Copy IL2CPP generated assemblies (from MelonLoader/Il2CppAssemblies)
-          if [ -d "il2cpp-assemblies/MelonLoader/Il2CppAssemblies" ]; then
-            cp -r il2cpp-assemblies/MelonLoader/Il2CppAssemblies/* S1API/ScheduleOneAssemblies/Il2CppAssemblies/ || echo "Failed to copy IL2CPP generated assemblies"
-            echo "Copied IL2CPP generated assemblies from il2cpp-assemblies/MelonLoader/Il2CppAssemblies/"
+          if [ -d "il2cpp-scheduleone-assemblies/MelonLoader/Il2CppAssemblies" ]; then
+            cp -r il2cpp-scheduleone-assemblies/MelonLoader/Il2CppAssemblies/* S1API/ScheduleOneAssemblies/Il2CppAssemblies/ || echo "Failed to copy IL2CPP generated assemblies"
+            echo "Copied IL2CPP generated assemblies from il2cpp-scheduleone-assemblies/MelonLoader/Il2CppAssemblies/"
           else
-            echo "No il2cpp-assemblies/MelonLoader/Il2CppAssemblies directory found"
+            echo "No il2cpp-scheduleone-assemblies/MelonLoader/Il2CppAssemblies directory found"
           fi
 
           # Copy MelonLoader assemblies (from MelonLoader/net6)
-          if [ -d "il2cpp-assemblies/MelonLoader/net6" ]; then
-            cp -r il2cpp-assemblies/MelonLoader/net6/* S1API/ScheduleOneAssemblies/MelonLoader/ || echo "Failed to copy MelonLoader assemblies"
-            echo "Copied MelonLoader assemblies from il2cpp-assemblies/MelonLoader/net6/"
+          if [ -d "il2cpp-scheduleone-assemblies/MelonLoader/net6" ]; then
+            cp -r il2cpp-scheduleone-assemblies/MelonLoader/net6/* S1API/ScheduleOneAssemblies/MelonLoader/ || echo "Failed to copy MelonLoader assemblies"
+            echo "Copied MelonLoader assemblies from il2cpp-scheduleone-assemblies/MelonLoader/net6/"
           else
-            echo "No il2cpp-assemblies/MelonLoader/net6 directory found"
+            echo "No il2cpp-scheduleone-assemblies/MelonLoader/net6 directory found"
           fi
 
-          # Ensure Unity.TextMeshPro.dll is available in Il2CppAssemblies
-          if [ ! -f "S1API/ScheduleOneAssemblies/Il2CppAssemblies/Unity.TextMeshPro.dll" ]; then
-            echo "Unity.TextMeshPro.dll not found in Il2CppAssemblies folder, searching for it..."
-            TMPRO_PATH=$(find il2cpp-assemblies -name "Unity.TextMeshPro.dll" -type f | head -1)
-            if [ -n "$TMPRO_PATH" ]; then
-              echo "Found Unity.TextMeshPro.dll at: $TMPRO_PATH"
-              cp "$TMPRO_PATH" S1API/ScheduleOneAssemblies/Il2CppAssemblies/ || echo "Failed to copy Unity.TextMeshPro.dll"
-              echo "Copied Unity.TextMeshPro.dll to Il2CppAssemblies folder"
-            else
-              echo "Warning: Unity.TextMeshPro.dll not found in il2cpp-assemblies repository"
-              echo "This may cause build failures for files that use TMPro"
+          # Ensure all required Il2CppInterop assemblies are available
+          REQUIRED_IL2CPP_INTEROP_ASSEMBLIES=(
+            "Il2CppInterop.Runtime.dll"
+            "Il2CppInterop.Common.dll"
+            "Il2CppInterop.HarmonySupport.dll"
+            "Il2CppInterop.Generator.dll"
+            "UnityEngine.Il2CppAssetBundleManager.dll"
+          )
+
+          for ASSEMBLY in "${REQUIRED_IL2CPP_INTEROP_ASSEMBLIES[@]}"; do
+            if [ ! -f "S1API/ScheduleOneAssemblies/MelonLoader/$ASSEMBLY" ]; then
+              echo "Il2CppInterop assembly $ASSEMBLY not found in MelonLoader folder, searching for it..."
+              ASSEMBLY_PATH=$(find il2cpp-scheduleone-assemblies -name "$ASSEMBLY" -type f | head -1)
+              if [ -n "$ASSEMBLY_PATH" ]; then
+                echo "Found $ASSEMBLY at: $ASSEMBLY_PATH"
+                cp "$ASSEMBLY_PATH" S1API/ScheduleOneAssemblies/MelonLoader/ || echo "Failed to copy $ASSEMBLY"
+                echo "Copied $ASSEMBLY to MelonLoader folder"
+              else
+                echo "Warning: $ASSEMBLY not found in il2cpp-scheduleone-assemblies repository"
+              fi
             fi
+          done
+
+          # Ensure all required Unity assemblies are available in Il2CppAssemblies
+          # List of required Unity assemblies for IL2CPP builds
+          REQUIRED_UNITY_ASSEMBLIES=(
+            "Assembly-CSharp.dll"
+            "Il2Cppmscorlib.dll"
+            "UnityEngine.dll"
+            "UnityEngine.CoreModule.dll"
+            "UnityEngine.UI.dll"
+            "UnityEngine.InputLegacyModule.dll"
+            "UnityEngine.UIModule.dll"
+            "UnityEngine.JSONSerializeModule.dll"
+            "UnityEngine.TextRenderingModule.dll"
+            "UnityEngine.ImageConversionModule.dll"
+            "UnityEngine.PhysicsModule.dll"
+            "Unity.TextMeshPro.dll"
+            "Il2CppFishNet.Runtime.dll"
+          )
+
+          MISSING_ASSEMBLIES=0
+          for ASSEMBLY in "${REQUIRED_UNITY_ASSEMBLIES[@]}"; do
+            if [ ! -f "S1API/ScheduleOneAssemblies/Il2CppAssemblies/$ASSEMBLY" ]; then
+              echo "Unity assembly $ASSEMBLY not found in Il2CppAssemblies folder, searching for it..."
+              ASSEMBLY_PATH=$(find il2cpp-scheduleone-assemblies -name "$ASSEMBLY" -type f | head -1)
+              if [ -n "$ASSEMBLY_PATH" ]; then
+                echo "Found $ASSEMBLY at: $ASSEMBLY_PATH"
+                cp "$ASSEMBLY_PATH" S1API/ScheduleOneAssemblies/Il2CppAssemblies/ || echo "Failed to copy $ASSEMBLY"
+                echo "Copied $ASSEMBLY to Il2CppAssemblies folder"
+              else
+                echo "Warning: $ASSEMBLY not found in il2cpp-scheduleone-assemblies repository"
+                MISSING_ASSEMBLIES=1
+              fi
+            fi
+          done
+
+          if [ $MISSING_ASSEMBLIES -eq 1 ]; then
+            echo "Warning: Some Unity assemblies are missing. This may cause build failures."
+            echo "Please ensure all required Unity assemblies are available in the IL2CPP assemblies repository."
           fi
+        if: steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
 
       - name: Verify IL2CPP Assembly Copies
         run: |
@@ -90,33 +152,41 @@ jobs:
           echo "=== MelonLoader Assemblies (net6) ==="
           ls -la S1API/ScheduleOneAssemblies/MelonLoader/ | head -10
           echo ""
-          echo "=== Critical Assembly Check ==="
+          echo "=== Critical Unity Assembly Check ==="
 
           MISSING_ASSEMBLIES=0
 
-          if [ -f S1API/ScheduleOneAssemblies/Il2CppAssemblies/Assembly-CSharp.dll ]; then
-            echo "✓ Found Assembly-CSharp.dll (IL2CPP)"
-            ls -l S1API/ScheduleOneAssemblies/Il2CppAssemblies/Assembly-CSharp.dll
-          else
-            echo "✗ Missing Assembly-CSharp.dll in Il2CppAssemblies"
-            MISSING_ASSEMBLIES=1
-            if [ -d "il2cpp-assemblies" ]; then
-              echo "Attempting auto-discovery..."
-              find il2cpp-assemblies -name "Assembly-CSharp.dll" -type f -exec ls -l {} \;
+          # List of required Unity assemblies for IL2CPP builds
+          REQUIRED_UNITY_ASSEMBLIES=(
+            "Assembly-CSharp.dll"
+            "Il2Cppmscorlib.dll"
+            "UnityEngine.dll"
+            "UnityEngine.CoreModule.dll"
+            "UnityEngine.UI.dll"
+            "UnityEngine.InputLegacyModule.dll"
+            "UnityEngine.UIModule.dll"
+            "UnityEngine.JSONSerializeModule.dll"
+            "UnityEngine.TextRenderingModule.dll"
+            "UnityEngine.ImageConversionModule.dll"
+            "UnityEngine.PhysicsModule.dll"
+            "Unity.TextMeshPro.dll"
+            "Il2CppFishNet.Runtime.dll"
+          )
+
+          for ASSEMBLY in "${REQUIRED_UNITY_ASSEMBLIES[@]}"; do
+            if [ -f "S1API/ScheduleOneAssemblies/Il2CppAssemblies/$ASSEMBLY" ]; then
+              echo "✓ Found $ASSEMBLY"
+              ls -l "S1API/ScheduleOneAssemblies/Il2CppAssemblies/$ASSEMBLY" | awk '{print "  " $9 " (" $5 " bytes)"}'
+            else
+              echo "✗ Missing $ASSEMBLY in Il2CppAssemblies"
+              MISSING_ASSEMBLIES=1
+              if [ -d "il2cpp-scheduleone-assemblies" ]; then
+                echo "  Attempting auto-discovery..."
+                find il2cpp-scheduleone-assemblies -name "$ASSEMBLY" -type f -exec ls -l {} \; | head -1 || echo "  Not found in il2cpp-scheduleone-assemblies repository"
+              fi
             fi
-          fi
+          done
           echo ""
-          echo "=== TextMeshPro Assembly Check ==="
-          if [ -f S1API/ScheduleOneAssemblies/Il2CppAssemblies/Unity.TextMeshPro.dll ]; then
-            echo "✓ Found Unity.TextMeshPro.dll (IL2CPP)"
-            ls -l S1API/ScheduleOneAssemblies/Il2CppAssemblies/Unity.TextMeshPro.dll
-          else
-            echo "✗ Missing Unity.TextMeshPro.dll in Il2CppAssemblies"
-            if [ -d "il2cpp-assemblies" ]; then
-              echo "Attempting auto-discovery..."
-              find il2cpp-assemblies -name "Unity.TextMeshPro.dll" -type f -exec ls -l {} \;
-            fi
-          fi
           echo ""
           echo "=== MelonLoader Assembly Check ==="
           if [ -f S1API/ScheduleOneAssemblies/MelonLoader/0Harmony.dll ]; then
@@ -125,50 +195,65 @@ jobs:
           else
             echo "✗ Missing 0Harmony.dll in MelonLoader"
             MISSING_ASSEMBLIES=1
-            if [ -d "il2cpp-assemblies" ]; then
+            if [ -d "il2cpp-scheduleone-assemblies" ]; then
               echo "Looking for MelonLoader assemblies..."
-              find il2cpp-assemblies -name "0Harmony.dll" -type f -exec ls -l {} \;
+              find il2cpp-scheduleone-assemblies -name "0Harmony.dll" -type f -exec ls -l {} \;
             fi
           fi
           echo ""
-          echo "=== Il2CppInterop Check ==="
-          if [ -f S1API/ScheduleOneAssemblies/MelonLoader/Il2CppInterop.Runtime.dll ]; then
-            echo "✓ Found Il2CppInterop.Runtime.dll"
-            ls -l S1API/ScheduleOneAssemblies/MelonLoader/Il2CppInterop.Runtime.dll
-          else
-            echo "✗ Missing Il2CppInterop.Runtime.dll in MelonLoader"
-            MISSING_ASSEMBLIES=1
-            if [ -d "il2cpp-assemblies" ]; then
-              echo "Looking for Il2CppInterop assemblies..."
-              find il2cpp-assemblies -name "Il2CppInterop*.dll" -type f -exec ls -l {} \;
+          echo "=== Il2CppInterop Assembly Check ==="
+          REQUIRED_IL2CPP_INTEROP_ASSEMBLIES=(
+            "Il2CppInterop.Runtime.dll"
+            "Il2CppInterop.Common.dll"
+            "Il2CppInterop.HarmonySupport.dll"
+            "Il2CppInterop.Generator.dll"
+            "UnityEngine.Il2CppAssetBundleManager.dll"
+          )
+
+          for ASSEMBLY in "${REQUIRED_IL2CPP_INTEROP_ASSEMBLIES[@]}"; do
+            if [ -f "S1API/ScheduleOneAssemblies/MelonLoader/$ASSEMBLY" ]; then
+              echo "✓ Found $ASSEMBLY"
+              ls -l "S1API/ScheduleOneAssemblies/MelonLoader/$ASSEMBLY" | awk '{print "  " $9 " (" $5 " bytes)"}'
+            else
+              echo "✗ Missing $ASSEMBLY in MelonLoader"
+              MISSING_ASSEMBLIES=1
+              if [ -d "il2cpp-scheduleone-assemblies" ]; then
+                echo "  Attempting auto-discovery..."
+                find il2cpp-scheduleone-assemblies -name "$ASSEMBLY" -type f -exec ls -l {} \; | head -1 || echo "  Not found in il2cpp-scheduleone-assemblies repository"
+              fi
             fi
-          fi
+          done
           echo ""
 
           if [ $MISSING_ASSEMBLIES -eq 1 ]; then
             echo "ERROR: Critical assemblies are missing!"
             echo "Please ensure:"
             echo "1. IL2CPP_ASSEMBLIES_REPO secret is set correctly"
-            echo "2. GAME_ASSEMBLIES_TOKEN has access to the IL2CPP assemblies repo"
+            echo "2. IL2CPP_ASSEMBLIES_TOKEN has access to the IL2CPP assemblies repo"
             echo "3. The IL2CPP assemblies repo contains MelonLoader/Il2CppAssemblies/ and MelonLoader/net6/ directories"
             exit 1
+          fi
+          echo ""
+          if [ "${{ steps.cache-il2cpp-assemblies.outputs.cache-hit }}" == "true" ]; then
+            echo "✓ Using cached IL2CPP assemblies for build"
+          else
+            echo "✓ Using fresh IL2CPP assemblies from repository"
           fi
 
       - name: Create CI Build Properties
         run: |
-          cat > S1API/ci.build.props << 'EOF'
+          cat > ci.build.props << 'EOF'
           <Project>
               <PropertyGroup>
                   <AutomateLocalDeployment>false</AutomateLocalDeployment>
 
                   <!-- CI Assembly Paths (relative to S1API/S1API.csproj) -->
-                  <!-- IL2CPP MelonLoader assemblies (net6) -->
-                  <MelonLoaderAssembliesPath>../ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
+                  <MelonLoaderAssembliesPath>$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
 
                   <!-- IL2CPP Configuration -->
                   <LocalIl2CppDeploymentPath>null</LocalIl2CppDeploymentPath>
-                  <!-- IL2CPP generated assemblies -->
-                  <Il2CppAssembliesPath>../ScheduleOneAssemblies/Il2CppAssemblies</Il2CppAssembliesPath>
+                  <Il2CppAssembliesPath Condition="'$(Configuration)' == 'Il2CppMelon'">$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/Il2CppAssemblies</Il2CppAssembliesPath>
+                  <Il2CppAssembliesPath Condition="'$(Configuration)' == 'Il2CppBepInEx'">$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/Il2CppAssemblies</Il2CppAssembliesPath>
               </PropertyGroup>
           </Project>
           EOF
@@ -176,41 +261,98 @@ jobs:
       - name: Verify Build Properties
         run: |
           echo "=== CI Build Properties ==="
-          cat S1API/ci.build.props
+          cat ci.build.props
           echo ""
           echo "=== MSBuild Property Resolution Test ==="
           cd S1API
+          echo "Current directory: $(pwd)"
+          echo ""
           echo "Testing Il2CppAssembliesPath resolution (expect ./ScheduleOneAssemblies/Il2CppAssemblies from project dir)..."
           if [ -f "./ScheduleOneAssemblies/Il2CppAssemblies/Assembly-CSharp.dll" ]; then
             echo "✓ Assembly-CSharp.dll accessible from build context"
             ls -l ./ScheduleOneAssemblies/Il2CppAssemblies/Assembly-CSharp.dll
           else
             echo "✗ Assembly-CSharp.dll NOT accessible from build context"
-            echo "Current directory: $(pwd)"
             echo "Looking for: ./ScheduleOneAssemblies/Il2CppAssemblies/Assembly-CSharp.dll"
             ls -la ./ScheduleOneAssemblies/Il2CppAssemblies/ || echo "Directory doesn't exist"
           fi
           echo ""
-          echo "Testing MelonLoaderAssembliesPath resolution..."
+          echo "Testing MelonLoaderAssembliesPath resolution (expect ./ScheduleOneAssemblies/MelonLoader from project dir)..."
           if [ -f "./ScheduleOneAssemblies/MelonLoader/0Harmony.dll" ]; then
             echo "✓ 0Harmony.dll accessible from build context"
             ls -l ./ScheduleOneAssemblies/MelonLoader/0Harmony.dll
           else
             echo "✗ 0Harmony.dll NOT accessible from build context"
-            echo "Current directory: $(pwd)"
             echo "Looking for: ./ScheduleOneAssemblies/MelonLoader/0Harmony.dll"
             ls -la ./ScheduleOneAssemblies/MelonLoader/ || echo "Directory doesn't exist"
           fi
           echo ""
-          echo "Testing Il2CppInterop availability..."
-          if [ -f "./ScheduleOneAssemblies/MelonLoader/Il2CppInterop.Runtime.dll" ]; then
-            echo "✓ Il2CppInterop.Runtime.dll accessible from build context"
-            ls -l ./ScheduleOneAssemblies/MelonLoader/Il2CppInterop.Runtime.dll
-          else
-            echo "✗ Il2CppInterop.Runtime.dll NOT accessible from build context"
-            echo "Current directory: $(pwd)"
-            echo "Looking for: ./ScheduleOneAssemblies/MelonLoader/Il2CppInterop.Runtime.dll"
+          echo "Testing Il2CppInterop assemblies availability (required for Il2CppMelon)..."
+          REQUIRED_IL2CPP_INTEROP_ASSEMBLIES=(
+            "Il2CppInterop.Runtime.dll"
+            "Il2CppInterop.Common.dll"
+            "Il2CppInterop.HarmonySupport.dll"
+            "Il2CppInterop.Generator.dll"
+            "UnityEngine.Il2CppAssetBundleManager.dll"
+          )
+          MISSING_INTEROP=0
+          for ASSEMBLY in "${REQUIRED_IL2CPP_INTEROP_ASSEMBLIES[@]}"; do
+            if [ -f "./ScheduleOneAssemblies/MelonLoader/$ASSEMBLY" ]; then
+              echo "✓ $ASSEMBLY accessible from build context"
+              ls -l "./ScheduleOneAssemblies/MelonLoader/$ASSEMBLY" | awk '{print "  " $9 " (" $5 " bytes)"}'
+            else
+              echo "✗ $ASSEMBLY NOT accessible from build context"
+              echo "  Looking for: ./ScheduleOneAssemblies/MelonLoader/$ASSEMBLY"
+              MISSING_INTEROP=1
+            fi
+          done
+          if [ $MISSING_INTEROP -eq 1 ]; then
+            echo ""
+            echo "Listing contents of MelonLoader directory:"
             ls -la ./ScheduleOneAssemblies/MelonLoader/ || echo "Directory doesn't exist"
+          fi
+
+      - name: Verify MSBuild Property Resolution
+        run: |
+          ls -la
+          echo "Attempting to enter S1API directory..."
+          if [ -d "S1API" ]; then
+            cd S1API
+            echo "Successfully entered S1API. Current directory: $(pwd)"
+          else
+            echo "ERROR: S1API directory not found in $(pwd)"
+            exit 1
+          fi
+          
+          echo "=== Testing MSBuild Property Evaluation ==="
+          echo "Evaluating MelonLoaderAssembliesPath..."
+          # Note: We just check if the property resolves to SOMETHING containing ScheduleOneAssemblies now, as absolute paths might vary in env
+          dotnet msbuild S1API.csproj -t:ResolveAssemblyReferences -p:Configuration=Il2CppMelon -v:minimal 2>&1 | grep -i "ScheduleOneAssemblies" | head -5 || echo "Property evaluation test output captured"
+          
+          echo ""
+          echo "Checking if assemblies are accessible via expected paths..."
+          # Since we used $(MSBuildThisFileDirectory), the path ends up being AbsoluteROOT/S1API/ScheduleOneAssemblies/...
+          # We are currently in AbsoluteROOT/S1API
+          
+          echo "Checking for MelonLoader assemblies in: ./ScheduleOneAssemblies/MelonLoader"
+          if [ -d "ScheduleOneAssemblies/MelonLoader" ]; then
+            echo "✓ MelonLoaderAssembliesPath directory exists"
+            echo "  Contents:"
+            ls -1 ScheduleOneAssemblies/MelonLoader/*.dll 2>/dev/null | head -10 || echo "  No DLLs found"
+          else
+            echo "✗ MelonLoaderAssembliesPath directory does not exist at ./ScheduleOneAssemblies/MelonLoader"
+            echo "  Current Directory Contents:"
+            ls -la
+          fi
+          
+          echo ""
+          echo "Checking for Il2CppAssemblies in: ./ScheduleOneAssemblies/Il2CppAssemblies"
+          if [ -d "ScheduleOneAssemblies/Il2CppAssemblies" ]; then
+            echo "✓ Il2CppAssembliesPath directory exists"
+            echo "  Sample contents:"
+            ls -1 ScheduleOneAssemblies/Il2CppAssemblies/*.dll 2>/dev/null | head -5 || echo "  No DLLs found"
+          else
+            echo "✗ Il2CppAssembliesPath directory does not exist at ./ScheduleOneAssemblies/Il2CppAssemblies"
           fi
 
       - name: Restore dependencies
