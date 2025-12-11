@@ -46,6 +46,7 @@ jobs:
           path: il2cpp-assemblies
           fetch-depth: 1
         if: steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        continue-on-error: false
 
       - name: Debug IL2CPP Assemblies Structure
         run: |
@@ -104,11 +105,15 @@ jobs:
           ls -la S1API/ScheduleOneAssemblies/MelonLoader/ | head -10
           echo ""
           echo "=== Critical Assembly Check ==="
+
+          MISSING_ASSEMBLIES=0
+
           if [ -f S1API/ScheduleOneAssemblies/Il2CppAssemblies/Assembly-CSharp.dll ]; then
             echo "✓ Found Assembly-CSharp.dll (IL2CPP)"
             ls -l S1API/ScheduleOneAssemblies/Il2CppAssemblies/Assembly-CSharp.dll
           else
             echo "✗ Missing Assembly-CSharp.dll in Il2CppAssemblies"
+            MISSING_ASSEMBLIES=1
             if [ -d "il2cpp-assemblies" ]; then
               echo "Attempting auto-discovery..."
               find il2cpp-assemblies -name "Assembly-CSharp.dll" -type f -exec ls -l {} \;
@@ -133,6 +138,7 @@ jobs:
             ls -l S1API/ScheduleOneAssemblies/MelonLoader/0Harmony.dll
           else
             echo "✗ Missing 0Harmony.dll in MelonLoader"
+            MISSING_ASSEMBLIES=1
             if [ -d "il2cpp-assemblies" ]; then
               echo "Looking for MelonLoader assemblies..."
               find il2cpp-assemblies -name "0Harmony.dll" -type f -exec ls -l {} \;
@@ -145,6 +151,7 @@ jobs:
             ls -l S1API/ScheduleOneAssemblies/MelonLoader/Il2CppInterop.Runtime.dll
           else
             echo "✗ Missing Il2CppInterop.Runtime.dll in MelonLoader"
+            MISSING_ASSEMBLIES=1
             if [ -d "il2cpp-assemblies" ]; then
               echo "Looking for Il2CppInterop assemblies..."
               find il2cpp-assemblies -name "Il2CppInterop*.dll" -type f -exec ls -l {} \;
@@ -155,6 +162,16 @@ jobs:
             echo "✓ Using cached IL2CPP assemblies for build"
           else
             echo "✓ Using fresh IL2CPP assemblies from repository"
+          fi
+          echo ""
+
+          if [ $MISSING_ASSEMBLIES -eq 1 ]; then
+            echo "ERROR: Critical assemblies are missing!"
+            echo "Please ensure:"
+            echo "1. IL2CPP_ASSEMBLIES_REPO secret is set correctly"
+            echo "2. GAME_ASSEMBLIES_TOKEN has access to the IL2CPP assemblies repo"
+            echo "3. The IL2CPP assemblies repo contains MelonLoader/Il2CppAssemblies/ and MelonLoader/net6/ directories"
+            exit 1
           fi
 
       - name: Create CI Build Properties
@@ -217,7 +234,7 @@ jobs:
           fi
 
       - name: Restore dependencies
-        run: dotnet restore S1API/S1API.csproj -c Il2CppMelon
+        run: dotnet restore S1API/S1API.csproj /p:Configuration=Il2CppMelon
 
       - name: Build S1API (IL2CPP)
         run: dotnet build S1API/S1API.csproj --no-restore -c Il2CppMelon -v normal
