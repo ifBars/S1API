@@ -217,7 +217,7 @@ jobs:
           fi
 
       - name: Restore dependencies
-        run: dotnet restore S1API.sln
+        run: dotnet restore S1API/S1API.csproj -c Il2CppMelon
 
       - name: Build S1API (IL2CPP)
         run: dotnet build S1API/S1API.csproj --no-restore -c Il2CppMelon -v normal
