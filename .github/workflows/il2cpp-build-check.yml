@@ -215,12 +215,10 @@ jobs:
                   <AutomateLocalDeployment>false</AutomateLocalDeployment>
 
                   <!-- CI Assembly Paths (relative to S1API/S1API.csproj) -->
-                  <!-- IL2CPP MelonLoader assemblies (net6) -->
                   <MelonLoaderAssembliesPath>../ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
 
                   <!-- IL2CPP Configuration -->
                   <LocalIl2CppDeploymentPath>null</LocalIl2CppDeploymentPath>
-                  <!-- IL2CPP generated assemblies -->
                   <Il2CppAssembliesPath>../ScheduleOneAssemblies/Il2CppAssemblies</Il2CppAssembliesPath>
               </PropertyGroup>
           </Project>
@@ -255,7 +253,7 @@ jobs:
             ls -la ./ScheduleOneAssemblies/MelonLoader/ || echo "Directory doesn't exist"
           fi
           echo ""
-          echo "Testing Il2CppInterop availability..."
+          echo "Testing Il2CppInterop.Runtime.dll availability (required for Il2CppMelon)..."
           if [ -f "./ScheduleOneAssemblies/MelonLoader/Il2CppInterop.Runtime.dll" ]; then
             echo "✓ Il2CppInterop.Runtime.dll accessible from build context"
             ls -l ./ScheduleOneAssemblies/MelonLoader/Il2CppInterop.Runtime.dll
