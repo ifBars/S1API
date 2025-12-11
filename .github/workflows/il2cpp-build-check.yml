@@ -248,12 +248,12 @@ jobs:
                   <AutomateLocalDeployment>false</AutomateLocalDeployment>
 
                   <!-- CI Assembly Paths (relative to S1API/S1API.csproj) -->
-                  <MelonLoaderAssembliesPath>../ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
+                  <MelonLoaderAssembliesPath>$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
 
                   <!-- IL2CPP Configuration -->
                   <LocalIl2CppDeploymentPath>null</LocalIl2CppDeploymentPath>
-                  <Il2CppAssembliesPath Condition="'$(Configuration)' == 'Il2CppMelon'">../ScheduleOneAssemblies/Il2CppAssemblies</Il2CppAssembliesPath>
-                  <Il2CppAssembliesPath Condition="'$(Configuration)' == 'Il2CppBepInEx'">../ScheduleOneAssemblies/Il2CppAssemblies</Il2CppAssembliesPath>
+                  <Il2CppAssembliesPath Condition="'$(Configuration)' == 'Il2CppMelon'">$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/Il2CppAssemblies</Il2CppAssembliesPath>
+                  <Il2CppAssembliesPath Condition="'$(Configuration)' == 'Il2CppBepInEx'">$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/Il2CppAssemblies</Il2CppAssembliesPath>
               </PropertyGroup>
           </Project>
           EOF
@@ -314,28 +314,45 @@ jobs:
 
       - name: Verify MSBuild Property Resolution
         run: |
-          cd S1API
+          ls -la
+          echo "Attempting to enter S1API directory..."
+          if [ -d "S1API" ]; then
+            cd S1API
+            echo "Successfully entered S1API. Current directory: $(pwd)"
+          else
+            echo "ERROR: S1API directory not found in $(pwd)"
+            exit 1
+          fi
+          
           echo "=== Testing MSBuild Property Evaluation ==="
           echo "Evaluating MelonLoaderAssembliesPath..."
-          dotnet msbuild S1API.csproj -t:ResolveAssemblyReferences -p:Configuration=Il2CppMelon -p:MelonLoaderAssembliesPath="../ScheduleOneAssemblies/MelonLoader" -p:Il2CppAssembliesPath="../ScheduleOneAssemblies/Il2CppAssemblies" -v:minimal 2>&1 | grep -i "MelonLoaderAssembliesPath\|Il2CppAssembliesPath" | head -5 || echo "Property evaluation test completed"
+          # Note: We just check if the property resolves to SOMETHING containing ScheduleOneAssemblies now, as absolute paths might vary in env
+          dotnet msbuild S1API.csproj -t:ResolveAssemblyReferences -p:Configuration=Il2CppMelon -v:minimal 2>&1 | grep -i "ScheduleOneAssemblies" | head -5 || echo "Property evaluation test output captured"
+          
           echo ""
-          echo "Checking if assemblies are accessible via MSBuild property paths..."
-          echo "MelonLoaderAssembliesPath should resolve to: $(cd .. && pwd)/ScheduleOneAssemblies/MelonLoader"
-          if [ -d "../ScheduleOneAssemblies/MelonLoader" ]; then
+          echo "Checking if assemblies are accessible via expected paths..."
+          # Since we used $(MSBuildThisFileDirectory), the path ends up being AbsoluteROOT/S1API/ScheduleOneAssemblies/...
+          # We are currently in AbsoluteROOT/S1API
+          
+          echo "Checking for MelonLoader assemblies in: ./ScheduleOneAssemblies/MelonLoader"
+          if [ -d "ScheduleOneAssemblies/MelonLoader" ]; then
             echo "✓ MelonLoaderAssembliesPath directory exists"
             echo "  Contents:"
-            ls -1 ../ScheduleOneAssemblies/MelonLoader/*.dll 2>/dev/null | head -10 || echo "  No DLLs found"
+            ls -1 ScheduleOneAssemblies/MelonLoader/*.dll 2>/dev/null | head -10 || echo "  No DLLs found"
           else
-            echo "✗ MelonLoaderAssembliesPath directory does not exist"
+            echo "✗ MelonLoaderAssembliesPath directory does not exist at ./ScheduleOneAssemblies/MelonLoader"
+            echo "  Current Directory Contents:"
+            ls -la
           fi
+          
           echo ""
-          echo "Il2CppAssembliesPath should resolve to: $(cd .. && pwd)/ScheduleOneAssemblies/Il2CppAssemblies"
-          if [ -d "../ScheduleOneAssemblies/Il2CppAssemblies" ]; then
+          echo "Checking for Il2CppAssemblies in: ./ScheduleOneAssemblies/Il2CppAssemblies"
+          if [ -d "ScheduleOneAssemblies/Il2CppAssemblies" ]; then
             echo "✓ Il2CppAssembliesPath directory exists"
             echo "  Sample contents:"
-            ls -1 ../ScheduleOneAssemblies/Il2CppAssemblies/*.dll 2>/dev/null | head -5 || echo "  No DLLs found"
+            ls -1 ScheduleOneAssemblies/Il2CppAssemblies/*.dll 2>/dev/null | head -5 || echo "  No DLLs found"
           else
-            echo "✗ Il2CppAssembliesPath directory does not exist"
+            echo "✗ Il2CppAssembliesPath directory does not exist at ./ScheduleOneAssemblies/Il2CppAssemblies"
           fi
 
       - name: Restore dependencies
