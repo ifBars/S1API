@@ -242,7 +242,7 @@ jobs:
 
       - name: Create CI Build Properties
         run: |
-          cat > S1API/ci.build.props << 'EOF'
+          cat > ci.build.props << 'EOF'
           <Project>
               <PropertyGroup>
                   <AutomateLocalDeployment>false</AutomateLocalDeployment>
@@ -252,7 +252,8 @@ jobs:
 
                   <!-- IL2CPP Configuration -->
                   <LocalIl2CppDeploymentPath>null</LocalIl2CppDeploymentPath>
-                  <Il2CppAssembliesPath>../ScheduleOneAssemblies/Il2CppAssemblies</Il2CppAssembliesPath>
+                  <Il2CppAssembliesPath Condition="'$(Configuration)' == 'Il2CppMelon'">../ScheduleOneAssemblies/Il2CppAssemblies</Il2CppAssembliesPath>
+                  <Il2CppAssembliesPath Condition="'$(Configuration)' == 'Il2CppBepInEx'">../ScheduleOneAssemblies/Il2CppAssemblies</Il2CppAssembliesPath>
               </PropertyGroup>
           </Project>
           EOF
@@ -260,7 +261,7 @@ jobs:
       - name: Verify Build Properties
         run: |
           echo "=== CI Build Properties ==="
-          cat S1API/ci.build.props
+          cat ci.build.props
           echo ""
           echo "=== MSBuild Property Resolution Test ==="
           cd S1API

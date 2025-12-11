@@ -155,7 +155,7 @@ jobs:
 
       - name: Create CI Build Properties
         run: |
-          cat > S1API/ci.build.props << 'EOF'
+          cat > ci.build.props << 'EOF'
           <Project>
               <PropertyGroup>
                   <AutomateLocalDeployment>false</AutomateLocalDeployment>
@@ -173,7 +173,7 @@ jobs:
       - name: Verify Build Properties
         run: |
           echo "=== CI Build Properties ==="
-          cat S1API/ci.build.props
+          cat ci.build.props
           echo ""
           echo "=== MSBuild Property Resolution Test ==="
           cd S1API
