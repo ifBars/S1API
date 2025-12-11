@@ -43,7 +43,7 @@ jobs:
         with:
           repository: ${{ secrets.IL2CPP_ASSEMBLIES_REPO }}
           token: ${{ secrets.IL2CPP_ASSEMBLIES_TOKEN }}
-          path: il2cpp-assemblies
+          path: il2cpp-scheduleone-assemblies
           fetch-depth: 1
         if: steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         continue-on-error: false
@@ -51,31 +51,31 @@ jobs:
       - name: Debug IL2CPP Assemblies Structure
         run: |
           echo "=== IL2CPP Assemblies Repository Structure ==="
-          find il2cpp-assemblies -type f -name "*.dll" | head -30
+          find il2cpp-scheduleone-assemblies -type f -name "*.dll" | head -30
           echo ""
           echo "=== Looking for Assembly-CSharp.dll in Il2CppAssemblies ==="
-          find il2cpp-assemblies -path "*/Il2CppAssemblies/Assembly-CSharp.dll" -type f
+          find il2cpp-scheduleone-assemblies -path "*/Il2CppAssemblies/Assembly-CSharp.dll" -type f
           echo ""
           echo "=== Looking for MelonLoader assemblies in net6 ==="
-          find il2cpp-assemblies -path "*/net6/*.dll" -type f | head -10
+          find il2cpp-scheduleone-assemblies -path "*/net6/*.dll" -type f | head -10
         if: steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
 
       - name: Copy IL2CPP Game Assemblies
         run: |
           # Copy IL2CPP generated assemblies (from MelonLoader/Il2CppAssemblies)
-          if [ -d "il2cpp-assemblies/MelonLoader/Il2CppAssemblies" ]; then
-            cp -r il2cpp-assemblies/MelonLoader/Il2CppAssemblies/* S1API/ScheduleOneAssemblies/Il2CppAssemblies/ || echo "Failed to copy IL2CPP generated assemblies"
-            echo "Copied IL2CPP generated assemblies from il2cpp-assemblies/MelonLoader/Il2CppAssemblies/"
+          if [ -d "il2cpp-scheduleone-assemblies/MelonLoader/Il2CppAssemblies" ]; then
+            cp -r il2cpp-scheduleone-assemblies/MelonLoader/Il2CppAssemblies/* S1API/ScheduleOneAssemblies/Il2CppAssemblies/ || echo "Failed to copy IL2CPP generated assemblies"
+            echo "Copied IL2CPP generated assemblies from il2cpp-scheduleone-assemblies/MelonLoader/Il2CppAssemblies/"
           else
-            echo "No il2cpp-assemblies/MelonLoader/Il2CppAssemblies directory found"
+            echo "No il2cpp-scheduleone-assemblies/MelonLoader/Il2CppAssemblies directory found"
           fi
 
           # Copy MelonLoader assemblies (from MelonLoader/net6)
-          if [ -d "il2cpp-assemblies/MelonLoader/net6" ]; then
-            cp -r il2cpp-assemblies/MelonLoader/net6/* S1API/ScheduleOneAssemblies/MelonLoader/ || echo "Failed to copy MelonLoader assemblies"
-            echo "Copied MelonLoader assemblies from il2cpp-assemblies/MelonLoader/net6/"
+          if [ -d "il2cpp-scheduleone-assemblies/MelonLoader/net6" ]; then
+            cp -r il2cpp-scheduleone-assemblies/MelonLoader/net6/* S1API/ScheduleOneAssemblies/MelonLoader/ || echo "Failed to copy MelonLoader assemblies"
+            echo "Copied MelonLoader assemblies from il2cpp-scheduleone-assemblies/MelonLoader/net6/"
           else
-            echo "No il2cpp-assemblies/MelonLoader/net6 directory found"
+            echo "No il2cpp-scheduleone-assemblies/MelonLoader/net6 directory found"
           fi
 
           # Ensure all required Il2CppInterop assemblies are available
@@ -90,13 +90,13 @@ jobs:
           for ASSEMBLY in "${REQUIRED_IL2CPP_INTEROP_ASSEMBLIES[@]}"; do
             if [ ! -f "S1API/ScheduleOneAssemblies/MelonLoader/$ASSEMBLY" ]; then
               echo "Il2CppInterop assembly $ASSEMBLY not found in MelonLoader folder, searching for it..."
-              ASSEMBLY_PATH=$(find il2cpp-assemblies -name "$ASSEMBLY" -type f | head -1)
+              ASSEMBLY_PATH=$(find il2cpp-scheduleone-assemblies -name "$ASSEMBLY" -type f | head -1)
               if [ -n "$ASSEMBLY_PATH" ]; then
                 echo "Found $ASSEMBLY at: $ASSEMBLY_PATH"
                 cp "$ASSEMBLY_PATH" S1API/ScheduleOneAssemblies/MelonLoader/ || echo "Failed to copy $ASSEMBLY"
                 echo "Copied $ASSEMBLY to MelonLoader folder"
               else
-                echo "Warning: $ASSEMBLY not found in il2cpp-assemblies repository"
+                echo "Warning: $ASSEMBLY not found in il2cpp-scheduleone-assemblies repository"
               fi
             fi
           done
@@ -123,13 +123,13 @@ jobs:
           for ASSEMBLY in "${REQUIRED_UNITY_ASSEMBLIES[@]}"; do
             if [ ! -f "S1API/ScheduleOneAssemblies/Il2CppAssemblies/$ASSEMBLY" ]; then
               echo "Unity assembly $ASSEMBLY not found in Il2CppAssemblies folder, searching for it..."
-              ASSEMBLY_PATH=$(find il2cpp-assemblies -name "$ASSEMBLY" -type f | head -1)
+              ASSEMBLY_PATH=$(find il2cpp-scheduleone-assemblies -name "$ASSEMBLY" -type f | head -1)
               if [ -n "$ASSEMBLY_PATH" ]; then
                 echo "Found $ASSEMBLY at: $ASSEMBLY_PATH"
                 cp "$ASSEMBLY_PATH" S1API/ScheduleOneAssemblies/Il2CppAssemblies/ || echo "Failed to copy $ASSEMBLY"
                 echo "Copied $ASSEMBLY to Il2CppAssemblies folder"
               else
-                echo "Warning: $ASSEMBLY not found in il2cpp-assemblies repository"
+                echo "Warning: $ASSEMBLY not found in il2cpp-scheduleone-assemblies repository"
                 MISSING_ASSEMBLIES=1
               fi
             fi
@@ -180,9 +180,9 @@ jobs:
             else
               echo "✗ Missing $ASSEMBLY in Il2CppAssemblies"
               MISSING_ASSEMBLIES=1
-              if [ -d "il2cpp-assemblies" ]; then
+              if [ -d "il2cpp-scheduleone-assemblies" ]; then
                 echo "  Attempting auto-discovery..."
-                find il2cpp-assemblies -name "$ASSEMBLY" -type f -exec ls -l {} \; | head -1 || echo "  Not found in il2cpp-assemblies repository"
+                find il2cpp-scheduleone-assemblies -name "$ASSEMBLY" -type f -exec ls -l {} \; | head -1 || echo "  Not found in il2cpp-scheduleone-assemblies repository"
               fi
             fi
           done
@@ -195,9 +195,9 @@ jobs:
           else
             echo "✗ Missing 0Harmony.dll in MelonLoader"
             MISSING_ASSEMBLIES=1
-            if [ -d "il2cpp-assemblies" ]; then
+            if [ -d "il2cpp-scheduleone-assemblies" ]; then
               echo "Looking for MelonLoader assemblies..."
-              find il2cpp-assemblies -name "0Harmony.dll" -type f -exec ls -l {} \;
+              find il2cpp-scheduleone-assemblies -name "0Harmony.dll" -type f -exec ls -l {} \;
             fi
           fi
           echo ""
@@ -217,9 +217,9 @@ jobs:
             else
               echo "✗ Missing $ASSEMBLY in MelonLoader"
               MISSING_ASSEMBLIES=1
-              if [ -d "il2cpp-assemblies" ]; then
+              if [ -d "il2cpp-scheduleone-assemblies" ]; then
                 echo "  Attempting auto-discovery..."
-                find il2cpp-assemblies -name "$ASSEMBLY" -type f -exec ls -l {} \; | head -1 || echo "  Not found in il2cpp-assemblies repository"
+                find il2cpp-scheduleone-assemblies -name "$ASSEMBLY" -type f -exec ls -l {} \; | head -1 || echo "  Not found in il2cpp-scheduleone-assemblies repository"
               fi
             fi
           done
