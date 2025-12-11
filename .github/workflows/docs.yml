@@ -26,15 +26,6 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Checkout Game Assemblies
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ secrets.GAME_ASSEMBLIES_REPO }}
-          token: ${{ secrets.GAME_ASSEMBLIES_TOKEN }}
-          path: game-assemblies
-          fetch-depth: 1
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -45,6 +36,26 @@ jobs:
           mkdir -p S1API/ScheduleOneAssemblies/Managed
           mkdir -p S1API/ScheduleOneAssemblies/MelonLoader
 
+      # Try to restore assemblies from cache first (for external PRs)
+      - name: Cache Game Assemblies
+        id: cache-assemblies
+        uses: actions/cache@v4
+        with:
+          path: S1API/ScheduleOneAssemblies
+          key: game-assemblies-${{ hashFiles('S1API/S1API.csproj') }}
+          restore-keys: |
+            game-assemblies-
+
+      # Only checkout game assemblies if cache miss AND we have access to secrets
+      - name: Checkout Game Assemblies
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.GAME_ASSEMBLIES_REPO }}
+          token: ${{ secrets.GAME_ASSEMBLIES_TOKEN }}
+          path: game-assemblies
+          fetch-depth: 1
+        if: steps.cache-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+
       - name: Debug Game Assemblies Structure
         run: |
           echo "=== Game Assemblies Repository Structure ==="
@@ -52,6 +63,7 @@ jobs:
           echo ""
           echo "=== Looking for Assembly-CSharp.dll ==="
           find game-assemblies -name "Assembly-CSharp.dll" -type f
+        if: steps.cache-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
 
       - name: Copy Game Assemblies
         run: |
@@ -62,7 +74,7 @@ jobs:
           else
             echo "No game-assemblies/Managed directory found"
           fi
-          
+
           # Copy mod loader assemblies
           if [ -d "game-assemblies/MelonLoader" ]; then
             cp -r game-assemblies/MelonLoader/* S1API/ScheduleOneAssemblies/MelonLoader/ || echo "Failed to copy MelonLoader assemblies"
@@ -70,7 +82,7 @@ jobs:
           else
             echo "No game-assemblies/MelonLoader directory found"
           fi
-          
+
           # Ensure Unity.TextMeshPro.dll is available
           if [ ! -f "S1API/ScheduleOneAssemblies/Managed/Unity.TextMeshPro.dll" ]; then
             echo "Unity.TextMeshPro.dll not found in Managed folder, searching for it..."
@@ -84,6 +96,7 @@ jobs:
               echo "This may cause build failures for files that use TMPro"
             fi
           fi
+        if: steps.cache-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
 
       - name: Verify Assembly Copies
         run: |
@@ -102,8 +115,10 @@ jobs:
             ls -l S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll
           else
             echo "✗ Missing Assembly-CSharp.dll"
-            echo "Attempting auto-discovery..."
-            find game-assemblies -name "Assembly-CSharp.dll" -type f -exec ls -l {} \;
+            if [ -d "game-assemblies" ]; then
+              echo "Attempting auto-discovery..."
+              find game-assemblies -name "Assembly-CSharp.dll" -type f -exec ls -l {} \;
+            fi
           fi
           echo ""
           echo "=== TextMeshPro Assembly Check ==="
@@ -112,10 +127,12 @@ jobs:
             ls -l S1API/ScheduleOneAssemblies/Managed/Unity.TextMeshPro.dll
           else
             echo "✗ Missing Unity.TextMeshPro.dll"
-            echo "Attempting auto-discovery..."
-            find game-assemblies -name "Unity.TextMeshPro.dll" -type f -exec ls -l {} \;
-            echo "Searching for TextMeshPro assemblies..."
-            find game-assemblies -name "*TextMeshPro*" -type f -exec ls -l {} \;
+            if [ -d "game-assemblies" ]; then
+              echo "Attempting auto-discovery..."
+              find game-assemblies -name "Unity.TextMeshPro.dll" -type f -exec ls -l {} \;
+              echo "Searching for TextMeshPro assemblies..."
+              find game-assemblies -name "*TextMeshPro*" -type f -exec ls -l {} \;
+            fi
           fi
           echo ""
           echo "=== MelonLoader Assembly Check ==="
@@ -124,8 +141,16 @@ jobs:
             ls -l S1API/ScheduleOneAssemblies/MelonLoader/0Harmony.dll
           else
             echo "✗ Missing 0Harmony.dll"
-            echo "Looking for MelonLoader assemblies..."
-            find game-assemblies -name "0Harmony.dll" -type f -exec ls -l {} \;
+            if [ -d "game-assemblies" ]; then
+              echo "Looking for MelonLoader assemblies..."
+              find game-assemblies -name "0Harmony.dll" -type f -exec ls -l {} \;
+            fi
+          fi
+          echo ""
+          if [ "${{ steps.cache-assemblies.outputs.cache-hit }}" == "true" ]; then
+            echo "✓ Using cached assemblies for build"
+          else
+            echo "✓ Using fresh assemblies from repository"
           fi
 
       - name: Create CI Build Properties
@@ -134,10 +159,10 @@ jobs:
           <Project>
               <PropertyGroup>
                   <AutomateLocalDeployment>false</AutomateLocalDeployment>
-                  
+
                   <!-- CI Assembly Paths (relative to S1API/S1API.csproj) -->
                   <MelonLoaderAssembliesPath>../ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
-                  
+
                   <!-- Mono Configuration -->
                   <LocalMonoDeploymentPath>null</LocalMonoDeploymentPath>
                   <MonoAssembliesPath>../ScheduleOneAssemblies/Managed</MonoAssembliesPath>
@@ -192,6 +217,7 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./S1API/_site
+        if: github.event_name != 'pull_request'
 
   deploy:
     environment:
