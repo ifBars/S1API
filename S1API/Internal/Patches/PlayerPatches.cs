@@ -35,8 +35,7 @@ namespace S1API.Internal.Patches
 
                 // onLocalPlayerSpawned (no parameters)
 #if IL2CPPMELON
-                SubscribeToIL2CPPEvent(playerType, "onLocalPlayerSpawned",
-                    nameof(HandleLocalPlayerSpawned), null);
+                S1PlayerScripts.Player.onLocalPlayerSpawned += new Action(HandleLocalPlayerSpawned);
 #else
                 SubscribeToStandardEvent(playerType, "onLocalPlayerSpawned", 
                     new Action(HandleLocalPlayerSpawned));
@@ -44,8 +43,7 @@ namespace S1API.Internal.Patches
 
                 // onPlayerSpawned (Action<Player>)
 #if IL2CPPMELON
-                SubscribeToIL2CPPEvent(playerType, "onPlayerSpawned",
-                    nameof(HandlePlayerSpawned), playerType);
+                S1PlayerScripts.Player.onPlayerSpawned += new Action<S1PlayerScripts.Player>(HandlePlayerSpawned);
 #else
                 SubscribeToStandardEvent(playerType, "onPlayerSpawned", 
                     new Action<S1PlayerScripts.Player>(HandlePlayerSpawned));
@@ -53,8 +51,7 @@ namespace S1API.Internal.Patches
 
                 // onPlayerDespawned (Action<Player>)
 #if IL2CPPMELON
-                SubscribeToIL2CPPEvent(playerType, "onPlayerDespawned",
-                    nameof(HandlePlayerDespawned), playerType);
+                S1PlayerScripts.Player.onPlayerDespawned += new Action<S1PlayerScripts.Player>(HandlePlayerDespawned);
 #else
                 SubscribeToStandardEvent(playerType, "onPlayerDespawned", 
                     new Action<S1PlayerScripts.Player>(HandlePlayerDespawned));
@@ -84,7 +81,7 @@ namespace S1API.Internal.Patches
         /// </summary>
         private static void SubscribeToIL2CPPEvent(Type targetType, string eventName, string methodName, Type? parameterType)
         {
-            var methodInfo = typeof(PlayerPatches).GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Static);
+            var methodInfo = typeof(PlayerPatches).GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Public);
             var existing = ReflectionUtils.TryGetStaticFieldOrProperty(targetType, eventName);
     
             object il2cppDelegate;
