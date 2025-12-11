@@ -7,14 +7,15 @@ using Il2CppScheduleOne.Map;
 using Il2CppScheduleOne.Vehicles;
 #endif
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using S1API.Internal.Map;
+using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 using GameObject = UnityEngine.GameObject;
 using Object = UnityEngine.Object;
 using S1API.Vehicles;
 using UnityEngine;
+
 
 namespace S1API.Map
 {
@@ -35,6 +36,7 @@ namespace S1API.Map
             _guid = lot.GUID.ToString();
             _gameObjectName = lot.gameObject.name;
             _isDeferred = false;
+
         }
 
         /// <summary>
@@ -63,6 +65,17 @@ namespace S1API.Map
         /// Optional entry point world position, if configured.
         /// </summary>
         public UnityEngine.Vector3? EntryPointPosition => _lot?.EntryPoint != null ? _lot.EntryPoint.position : (UnityEngine.Vector3?)null;
+
+        /// <summary>
+        /// Total amount of parking spots are in this lot, available or otherwise
+        /// </summary>
+        public int ParkingSpotsCount => _lot == null ? 0 : _lot.ParkingSpots.Count;
+        /// <summary>
+        /// Gets the parking spot at the specified index, does not validate the index
+        /// </summary>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public ParkingSpotWrapper GetSpot(int index) => new ParkingSpotWrapper(_lot.ParkingSpots[index]);
 
         internal ParkingLot ResolveGameLot()
         {

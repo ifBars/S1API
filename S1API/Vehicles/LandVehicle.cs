@@ -12,6 +12,7 @@ using System;
 using System.Reflection;
 using UnityEngine;
 using S1API.Logging;
+using S1API.Storages;
 
 namespace S1API.Vehicles
 {
@@ -43,6 +44,7 @@ namespace S1API.Vehicles
             S1LandVehicle = component;
             SetConnection();
             UpdateGuidFromGame();
+            _storage = new StorageInstance(component.Storage);
         }
 
         /// <summary>
@@ -106,7 +108,12 @@ namespace S1API.Vehicles
             S1LandVehicle.transform.rotation = rotation;
             S1Vehicles.VehicleManager.Instance.Spawn(S1LandVehicle.gameObject);
         }
-        
+
+        /// <summary>
+        /// Trunk space
+        /// </summary>
+        public StorageInstance Storage { get { return _storage; } }
+
         #endregion
         
         // Internal members used by S1API
@@ -117,6 +124,7 @@ namespace S1API.Vehicles
         /// </summary>
         internal S1Vehicles.LandVehicle S1LandVehicle = null!;
         internal bool _isDeferredByName = false;
+        internal StorageInstance _storage;
 
         /// <summary>
         /// INTERNAL: Creates a LandVehicle instance from an in-game land vehicle instance.
@@ -127,6 +135,7 @@ namespace S1API.Vehicles
             S1LandVehicle = landVehicle;
             SetConnection();
             UpdateGuidFromGame();
+            _storage = new StorageInstance(landVehicle.Storage);
             _isDeferredByName = false;
         }
 

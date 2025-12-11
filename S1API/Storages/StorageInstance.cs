@@ -1,7 +1,9 @@
 ﻿#if (IL2CPPMELON)
 using S1Storage = Il2CppScheduleOne.Storage;
+using S1AccessSettings = Il2CppScheduleOne.Storage.StorageEntity.EAccessSettings;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Storage = ScheduleOne.Storage;
+using S1AccessSettings = ScheduleOne.Storage.StorageEntity.EAccessSettings;
 #endif
 
 using System;
@@ -85,8 +87,14 @@ namespace S1API.Storages
         /// <summary>
         /// The access settings for this storage container.
         /// </summary>
-        public StorageAccessSettings AccessSettings =>
-            (StorageAccessSettings)S1Storage.AccessSettings;
+        public StorageAccessSettings AccessSettings {
+            get {
+                return (StorageAccessSettings)S1Storage.AccessSettings;
+            }
+            set {
+                S1Storage.AccessSettings = (S1AccessSettings)value;
+            }
+        }
 
         /// <summary>
         /// Whether this storage container is currently opened by a player.
