@@ -40,21 +40,63 @@ namespace S1API.GameTime
         public static Action OnTick = delegate { };
 
         private static int _lastSleepSkippedMinutes;
+        private static S1GameTime.TimeManager _boundInstance;
+
+        private static readonly Action DayPassHandler = () => OnDayPass();
+        private static readonly Action WeekPassHandler = () => OnWeekPass();
+        private static readonly Action TickHandler = () => OnTick();
+        private static readonly Action SleepStartHandler = () => OnSleepStart();
+        private static readonly Action<int> TimeSkipHandler = minutes => _lastSleepSkippedMinutes = minutes;
+        private static readonly Action SleepEndHandler = () => OnSleepEnd(_lastSleepSkippedMinutes);
 
         static TimeManager()
         {
-            if (S1GameTime.TimeManager.Instance != null)
-            {
-                S1GameTime.TimeManager.Instance.onDayPass += (Action)(() => OnDayPass());
-                S1GameTime.TimeManager.Instance.onWeekPass += (Action)(() => OnWeekPass());
-                S1GameTime.TimeManager.Instance.onTick += (Action)(() => OnTick());
-
-                S1GameTime.TimeManager.Instance.onSleepStart += (Action)(() => OnSleepStart());
-                S1GameTime.TimeManager.Instance.onTimeSkip += (Action<int>)(minutes => _lastSleepSkippedMinutes = minutes);
-                S1GameTime.TimeManager.Instance.onSleepEnd += (Action)(() => OnSleepEnd(_lastSleepSkippedMinutes));
-            }
+            TryBindToCurrentInstance();
         }
 
+        /// <summary>
+        /// INTERNAL: Rebinds S1API time events to the current game TimeManager instance.
+        /// Safe to call multiple times; no-op if already bound to the current instance.
+        /// </summary>
+        internal static void TryBindToCurrentInstance()
+        {
+            var instance = S1GameTime.TimeManager.Instance;
+            if (instance == null || ReferenceEquals(instance, _boundInstance))
+                return;
+
+            UnbindFromInstance(_boundInstance);
+            _boundInstance = instance;
+
+            instance.onDayPass += DayPassHandler;
+            instance.onWeekPass += WeekPassHandler;
+            instance.onTick += TickHandler;
+            instance.onSleepStart += SleepStartHandler;
+            instance.onTimeSkip += TimeSkipHandler;
+            instance.onSleepEnd += SleepEndHandler;
+        }
+
+        /// <summary>
+        /// INTERNAL: Clears bindings so the next scene load can attach to a fresh instance.
+        /// </summary>
+        internal static void ResetBindings()
+        {
+            UnbindFromInstance(_boundInstance);
+            _boundInstance = null;
+            _lastSleepSkippedMinutes = 0;
+        }
+
+        private static void UnbindFromInstance(S1GameTime.TimeManager instance)
+        {
+            if (instance == null)
+                return;
+
+            instance.onDayPass -= DayPassHandler;
+            instance.onWeekPass -= WeekPassHandler;
+            instance.onTick -= TickHandler;
+            instance.onSleepStart -= SleepStartHandler;
+            instance.onTimeSkip -= TimeSkipHandler;
+            instance.onSleepEnd -= SleepEndHandler;
+        }
 
         /// <summary>
         /// The current in-game day (Monday, Tuesday, etc.).

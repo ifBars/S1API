@@ -38,6 +38,13 @@ namespace S1API.Storages
     /// <summary>
     /// Represents a storage container in-game.
     /// </summary>
+    /// <remarks>
+    /// This is the user-facing layer for interacting with an existing storage instance:
+    /// reading metadata (name, subtitle, slots/items), checking fit, adding/removing items,
+    /// and subscribing to open/close/content-change events. It intentionally does not mutate
+    /// slot topology or placeable wiring; use <see cref="Storage.StorageEntity"/> for capacity
+    /// and structural changes.
+    /// </remarks>
     public class StorageInstance
     {
         /// <summary>

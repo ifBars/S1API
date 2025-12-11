@@ -22,8 +22,11 @@ namespace S1API.Storage
     /// Provides cross-runtime safe manipulation of storage slots and properties.
     /// </summary>
     /// <remarks>
-    /// Use this wrapper to modify storage containers without dealing with Il2Cpp/Mono differences.
-    /// All slot manipulation is handled safely with automatic UI updates.
+    /// This is the structural layer: it owns slot topology changes (add/remove/set count),
+    /// display row adjustments, and placeable storage IO-slot wiring while handling Il2Cpp/Mono
+    /// differences. Use this when modifying capacity or layout. For runtime interaction with
+    /// an existing storage instance (metadata, item add/remove, events), prefer
+    /// <see cref="Storages.StorageInstance"/>.
     /// </remarks>
     public sealed class StorageEntity
     {
