@@ -34,7 +34,6 @@ jobs:
           token: ${{ secrets.GAME_ASSEMBLIES_TOKEN }}
           path: il2cpp-assemblies
           fetch-depth: 1
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: false
 
       - name: Debug IL2CPP Assemblies Structure
@@ -47,7 +46,6 @@ jobs:
           echo ""
           echo "=== Looking for MelonLoader assemblies in net6 ==="
           find il2cpp-assemblies -path "*/net6/*.dll" -type f | head -10
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
       - name: Copy IL2CPP Game Assemblies
         run: |
@@ -80,7 +78,6 @@ jobs:
               echo "This may cause build failures for files that use TMPro"
             fi
           fi
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
       - name: Verify IL2CPP Assembly Copies
         run: |
