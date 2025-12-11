@@ -94,7 +94,6 @@ jobs:
             "UnityEngine.PhysicsModule.dll"
             "Unity.TextMeshPro.dll"
             "Il2CppFishNet.Runtime.dll"
-            "FishNet.Runtime.dll"
           )
 
           MISSING_ASSEMBLIES=0
@@ -149,7 +148,6 @@ jobs:
             "UnityEngine.PhysicsModule.dll"
             "Unity.TextMeshPro.dll"
             "Il2CppFishNet.Runtime.dll"
-            "FishNet.Runtime.dll"
           )
 
           for ASSEMBLY in "${REQUIRED_UNITY_ASSEMBLIES[@]}"; do
