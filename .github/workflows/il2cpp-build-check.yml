@@ -35,7 +35,6 @@ jobs:
           path: il2cpp-assemblies
           fetch-depth: 1
         continue-on-error: false
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
       - name: Debug IL2CPP Assemblies Structure
         run: |
