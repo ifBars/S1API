@@ -54,6 +54,15 @@ namespace S1API.Storage
         // ====== Properties ======
 
         /// <summary>
+        /// The display name of this storage container shown in the UI.
+        /// </summary>
+        public string Name
+        {
+            get => S1StorageEntity.StorageEntityName;
+            set => S1StorageEntity.StorageEntityName = value;
+        }
+
+        /// <summary>
         /// Current number of slots in this storage container.
         /// Setting this value will add or remove slots as needed.
         /// </summary>
