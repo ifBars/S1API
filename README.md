@@ -1,5 +1,6 @@
 # S1API - A Schedule One Mono / Il2Cpp Cross Compatibility Layer
 
+[![IL2CPP Build Check](https://github.com/ifBars/S1API/actions/workflows/il2cpp-build-check.yml/badge.svg?branch=stable)](https://github.com/ifBars/S1API/actions/workflows/il2cpp-build-check.yml)
 [![Build and Deploy Documentation](https://github.com/ifBars/S1API/actions/workflows/docs.yml/badge.svg)](https://github.com/ifBars/S1API/actions/workflows/docs.yml)
 [![GitHub release](https://img.shields.io/github/v/release/ifBars/S1API?include_prereleases&sort=semver)](https://github.com/ifBars/S1API/releases)
 [![GitHub stars](https://img.shields.io/github/stars/ifBars/S1API)](https://github.com/ifBars/S1API/stargazers)
