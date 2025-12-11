@@ -13,6 +13,8 @@ using S1API.Internal.Map;
 using UnityEngine.SceneManagement;
 using GameObject = UnityEngine.GameObject;
 using Object = UnityEngine.Object;
+using S1API.Vehicles;
+using UnityEngine;
 
 namespace S1API.Map
 {
@@ -142,6 +144,23 @@ namespace S1API.Map
         /// Alignment enum for this spot.
         /// </summary>
         public Vehicles.ParkingAlignment Alignment => (Vehicles.ParkingAlignment)_spot.Alignment;
+
+        ///<summary>
+        /// Alignment Point for Occupant Vehicle
+        ///</summary>
+        public Transform AlignmentPoint => _spot.AlignmentPoint;
+
+        internal Vehicles.LandVehicle? _OccupantVehicle => new Vehicles.LandVehicle(_spot.OccupantVehicle);
+        /// <summary>
+        /// LandVehicle currently occupying this spot
+        /// </summary>
+        public Vehicles.LandVehicle? OccupantVehicle { get { return _OccupantVehicle; } }
+
+        /// <summary>
+        /// Sets the vehicle currently occupying this spot
+        /// </summary>
+        /// <param name="vehicle"></param>
+        public void SetOccupant(Vehicles.LandVehicle vehicle) => _spot.SetOccupant(vehicle.S1LandVehicle); 
     }
 
     /// <summary>
