@@ -78,18 +78,44 @@ jobs:
             echo "No il2cpp-assemblies/MelonLoader/net6 directory found"
           fi
 
-          # Ensure Unity.TextMeshPro.dll is available in Il2CppAssemblies
-          if [ ! -f "S1API/ScheduleOneAssemblies/Il2CppAssemblies/Unity.TextMeshPro.dll" ]; then
-            echo "Unity.TextMeshPro.dll not found in Il2CppAssemblies folder, searching for it..."
-            TMPRO_PATH=$(find il2cpp-assemblies -name "Unity.TextMeshPro.dll" -type f | head -1)
-            if [ -n "$TMPRO_PATH" ]; then
-              echo "Found Unity.TextMeshPro.dll at: $TMPRO_PATH"
-              cp "$TMPRO_PATH" S1API/ScheduleOneAssemblies/Il2CppAssemblies/ || echo "Failed to copy Unity.TextMeshPro.dll"
-              echo "Copied Unity.TextMeshPro.dll to Il2CppAssemblies folder"
-            else
-              echo "Warning: Unity.TextMeshPro.dll not found in il2cpp-assemblies repository"
-              echo "This may cause build failures for files that use TMPro"
+          # Ensure all required Unity assemblies are available in Il2CppAssemblies
+          # List of required Unity assemblies for IL2CPP builds
+          REQUIRED_UNITY_ASSEMBLIES=(
+            "Assembly-CSharp.dll"
+            "Il2Cppmscorlib.dll"
+            "UnityEngine.dll"
+            "UnityEngine.CoreModule.dll"
+            "UnityEngine.UI.dll"
+            "UnityEngine.InputLegacyModule.dll"
+            "UnityEngine.UIModule.dll"
+            "UnityEngine.JSONSerializeModule.dll"
+            "UnityEngine.TextRenderingModule.dll"
+            "UnityEngine.ImageConversionModule.dll"
+            "UnityEngine.PhysicsModule.dll"
+            "Unity.TextMeshPro.dll"
+            "Il2CppFishNet.Runtime.dll"
+            "FishNet.Runtime.dll"
+          )
+
+          MISSING_ASSEMBLIES=0
+          for ASSEMBLY in "${REQUIRED_UNITY_ASSEMBLIES[@]}"; do
+            if [ ! -f "S1API/ScheduleOneAssemblies/Il2CppAssemblies/$ASSEMBLY" ]; then
+              echo "Unity assembly $ASSEMBLY not found in Il2CppAssemblies folder, searching for it..."
+              ASSEMBLY_PATH=$(find il2cpp-assemblies -name "$ASSEMBLY" -type f | head -1)
+              if [ -n "$ASSEMBLY_PATH" ]; then
+                echo "Found $ASSEMBLY at: $ASSEMBLY_PATH"
+                cp "$ASSEMBLY_PATH" S1API/ScheduleOneAssemblies/Il2CppAssemblies/ || echo "Failed to copy $ASSEMBLY"
+                echo "Copied $ASSEMBLY to Il2CppAssemblies folder"
+              else
+                echo "Warning: $ASSEMBLY not found in il2cpp-assemblies repository"
+                MISSING_ASSEMBLIES=1
+              fi
             fi
+          done
+
+          if [ $MISSING_ASSEMBLIES -eq 1 ]; then
+            echo "Warning: Some Unity assemblies are missing. This may cause build failures."
+            echo "Please ensure all required Unity assemblies are available in the IL2CPP assemblies repository."
           fi
         if: steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
 
@@ -104,33 +130,42 @@ jobs:
           echo "=== MelonLoader Assemblies (net6) ==="
           ls -la S1API/ScheduleOneAssemblies/MelonLoader/ | head -10
           echo ""
-          echo "=== Critical Assembly Check ==="
+          echo "=== Critical Unity Assembly Check ==="
 
           MISSING_ASSEMBLIES=0
 
-          if [ -f S1API/ScheduleOneAssemblies/Il2CppAssemblies/Assembly-CSharp.dll ]; then
-            echo "✓ Found Assembly-CSharp.dll (IL2CPP)"
-            ls -l S1API/ScheduleOneAssemblies/Il2CppAssemblies/Assembly-CSharp.dll
-          else
-            echo "✗ Missing Assembly-CSharp.dll in Il2CppAssemblies"
-            MISSING_ASSEMBLIES=1
-            if [ -d "il2cpp-assemblies" ]; then
-              echo "Attempting auto-discovery..."
-              find il2cpp-assemblies -name "Assembly-CSharp.dll" -type f -exec ls -l {} \;
+          # List of required Unity assemblies for IL2CPP builds
+          REQUIRED_UNITY_ASSEMBLIES=(
+            "Assembly-CSharp.dll"
+            "Il2Cppmscorlib.dll"
+            "UnityEngine.dll"
+            "UnityEngine.CoreModule.dll"
+            "UnityEngine.UI.dll"
+            "UnityEngine.InputLegacyModule.dll"
+            "UnityEngine.UIModule.dll"
+            "UnityEngine.JSONSerializeModule.dll"
+            "UnityEngine.TextRenderingModule.dll"
+            "UnityEngine.ImageConversionModule.dll"
+            "UnityEngine.PhysicsModule.dll"
+            "Unity.TextMeshPro.dll"
+            "Il2CppFishNet.Runtime.dll"
+            "FishNet.Runtime.dll"
+          )
+
+          for ASSEMBLY in "${REQUIRED_UNITY_ASSEMBLIES[@]}"; do
+            if [ -f "S1API/ScheduleOneAssemblies/Il2CppAssemblies/$ASSEMBLY" ]; then
+              echo "✓ Found $ASSEMBLY"
+              ls -l "S1API/ScheduleOneAssemblies/Il2CppAssemblies/$ASSEMBLY" | awk '{print "  " $9 " (" $5 " bytes)"}'
+            else
+              echo "✗ Missing $ASSEMBLY in Il2CppAssemblies"
+              MISSING_ASSEMBLIES=1
+              if [ -d "il2cpp-assemblies" ]; then
+                echo "  Attempting auto-discovery..."
+                find il2cpp-assemblies -name "$ASSEMBLY" -type f -exec ls -l {} \; | head -1 || echo "  Not found in il2cpp-assemblies repository"
+              fi
             fi
-          fi
+          done
           echo ""
-          echo "=== TextMeshPro Assembly Check ==="
-          if [ -f S1API/ScheduleOneAssemblies/Il2CppAssemblies/Unity.TextMeshPro.dll ]; then
-            echo "✓ Found Unity.TextMeshPro.dll (IL2CPP)"
-            ls -l S1API/ScheduleOneAssemblies/Il2CppAssemblies/Unity.TextMeshPro.dll
-          else
-            echo "✗ Missing Unity.TextMeshPro.dll in Il2CppAssemblies"
-            if [ -d "il2cpp-assemblies" ]; then
-              echo "Attempting auto-discovery..."
-              find il2cpp-assemblies -name "Unity.TextMeshPro.dll" -type f -exec ls -l {} \;
-            fi
-          fi
           echo ""
           echo "=== MelonLoader Assembly Check ==="
           if [ -f S1API/ScheduleOneAssemblies/MelonLoader/0Harmony.dll ]; then
