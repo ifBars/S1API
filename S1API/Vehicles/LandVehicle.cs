@@ -182,6 +182,12 @@ namespace S1API.Vehicles
         public void DestroyVehichle() => S1LandVehicle.DestroyVehicle();
 
         /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="col"></param>
+        public void ApplyColor(VehicleColor col) => S1LandVehicle.ApplyColor((S1Vehicles.Modification.EVehicleColor)col);
+
+        /// <summary>
         /// Parks the vehicle in the specified slot <seealso cref="Map.ParkingData"></seealso>
         /// </summary>
         /// <param name="parkData"></param>
