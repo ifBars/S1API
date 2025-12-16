@@ -176,9 +176,7 @@ namespace S1API.Internal.Patches
 
             // Wait for mugshots to be generated before creating circles
             // This ensures HeadshotImg.sprite gets the correct mugshot, not the default icon
-            Logger.Msg("Waiting for mugshots to be processed...");
             yield return new WaitUntil((Func<bool>)(() => NPCAppearance.MugshotsProcessingComplete));
-            Logger.Msg("Mugshots processing complete.");
 
             // Run Start() FIRST so it doesn't call LoadNPCData() on our custom circles
             try
@@ -204,8 +202,6 @@ namespace S1API.Internal.Patches
                             (NPC.IsCustomerType(n.GetType()) || NPC.IsDealerType(n.GetType())))
                 .ToList();
 
-            Logger.Msg($"AddRelationCircles: Found {customNPCs.Count} custom NPCs to add");
-
             var regionUIs = contactsApp.RegionUIs.ToDictionary(r => r.Region, r => r);
             var placeholders = new System.Collections.Generic.Dictionary<NPC, S1Relations.RelationCircle>();
 
@@ -215,16 +211,12 @@ namespace S1API.Internal.Patches
             // create circle game objects for all custom NPCs
             foreach (var npc in customNPCs)
             {
-                Logger.Msg($"Processing NPC: {npc.ID}, S1NPC null? {npc.S1NPC == null}");
-
                 // Validate NPC is fully initialized
                 if (npc.S1NPC == null || npc.S1NPC.RelationData == null)
                 {
                     Logger.Warning($"Skipping NPC {npc.ID} - S1NPC={npc.S1NPC != null}, RelationData={npc.S1NPC?.RelationData != null}");
                     continue;
                 }
-
-                Logger.Msg($"NPC {npc.ID}: Region={npc.S1NPC.Region}, S1NPC.ID={npc.S1NPC.ID}");
 
                 if (!regionUIs.TryGetValue(npc.S1NPC.Region, out var regionUI) || regionUI?.Container == null)
                 {
@@ -235,39 +227,26 @@ namespace S1API.Internal.Patches
                 var existing = regionUI.Container.GetComponentsInChildren<S1Relations.RelationCircle>(true)
                     .FirstOrDefault(c => c.AssignedNPC_ID == npc.S1NPC.ID);
                 if (existing != null)
-                {
-                    Logger.Msg($"Skipping NPC {npc.ID} - circle already exists");
                     continue;
-                }
 
                 // Find a base game template - exclude circles we've already created
                 var allCirclesInRegion = regionUI.Container.GetComponentsInChildren<S1Relations.RelationCircle>(true);
-                Logger.Msg($"NPC {npc.ID}: Found {allCirclesInRegion.Length} circles in region container");
 
                 var template = allCirclesInRegion
                     .FirstOrDefault(c => !createdCircleIds.Contains(c.AssignedNPC_ID))
                     ?? contactsApp.CirclesContainer.GetComponentInChildren<S1Relations.RelationCircle>(true);
 
                 if (template == null)
-                {
-                    Logger.Warning($"Skipping NPC {npc.ID} - no template found");
                     continue;
-                }
-
-                Logger.Msg($"NPC {npc.ID}: Using template with ID '{template.AssignedNPC_ID}'");
 
                 var go = Object.Instantiate(template.gameObject, regionUI.Container);
                 go.name = npc.ID;
                 var circle = go.GetComponent<S1Relations.RelationCircle>();
 
-                Logger.Msg($"NPC {npc.ID}: Before AssignNPC - circle.AssignedNPC_ID='{circle.AssignedNPC_ID}', circle.AssignedNPC={circle.AssignedNPC?.ID ?? "null"}");
-
                 // Set ID first, then call AssignNPC to properly set up everything
                 // AssignNPC handles: UnassignNPC (cleanup), event handlers, HeadshotImg, display refresh
                 circle.AssignedNPC_ID = npc.S1NPC.ID;
                 circle.AssignNPC(npc.S1NPC);
-
-                Logger.Msg($"NPC {npc.ID}: After AssignNPC - circle.AssignedNPC_ID='{circle.AssignedNPC_ID}', circle.AssignedNPC={circle.AssignedNPC?.ID ?? "null"}");
 
                 // Track this circle so we don't use it as a template
                 createdCircleIds.Add(npc.S1NPC.ID);
@@ -280,37 +259,18 @@ namespace S1API.Internal.Patches
                 var cachedNPC = npc.S1NPC; // Cache the NPC reference directly
                 circle.onClicked = (Action)delegate
                 {
-                    Logger.Msg($"=== Custom Circle Clicked ===");
-                    Logger.Msg($"GameObject name: {cachedCircle.gameObject.name}");
-                    Logger.Msg($"cachedCircle.AssignedNPC_ID: {cachedCircle.AssignedNPC_ID}");
-                    Logger.Msg($"cachedCircle.AssignedNPC: {cachedCircle.AssignedNPC?.ID ?? "null"}");
-                    Logger.Msg($"cachedNPC (direct ref): {cachedNPC?.ID ?? "null"}");
-                    Logger.Msg($"cachedNPC.fullName: {cachedNPC?.fullName ?? "null"}");
-
-                    // Use the directly cached NPC reference instead of going through AssignedNPC
-                    var npcToOpen = cachedNPC;
-                    Logger.Msg($"Opening DetailPanel with: {npcToOpen?.ID ?? "null"}");
-
-                    contactsApp.DetailPanel.Open(npcToOpen);
-
-                    Logger.Msg($"After Open - SelectedNPC.ID: {contactsApp.DetailPanel.SelectedNPC?.ID ?? "null"}");
-                    Logger.Msg($"After Open - SelectedNPC.fullName: {contactsApp.DetailPanel.SelectedNPC?.fullName ?? "null"}");
-                    Logger.Msg($"After Open - NameLabel.text: {contactsApp.DetailPanel.NameLabel?.text ?? "null"}");
+                    contactsApp.DetailPanel.Open(cachedNPC);
 
                     // Zoom to the circle
                     if (zoomMethod != null)
-                    {
                         zoomMethod.Invoke(contactsApp, new object[] { cachedCircle.Rect });
-                    }
 
                     // Update selection indicator
                     contactsApp.SelectionIndicator.position = cachedCircle.Rect.position;
-                    Logger.Msg($"=== End Click Handler ===");
                 };
 
                 EnableDealerIndicator(circle, npc);
                 placeholders[npc] = circle;
-                Logger.Msg($"NPC {npc.ID}: Circle created successfully");
             }
 
             var regionCircles =
@@ -478,8 +438,6 @@ namespace S1API.Internal.Patches
                             zoomMethod.Invoke(contactsApp, new object[] { cachedNpcRect });
                         });
                     }
-
-                    Logger.Msg($"Created connection line: {npc.S1NPC.ID} <-> {connectedNPC.ID}");
                 }
             }
         }
