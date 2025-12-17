@@ -1,7 +1,11 @@
 #if (IL2CPPMELON)
 using S1AvatarFramework = Il2CppScheduleOne.AvatarFramework;
+using S1Map = Il2CppScheduleOne.Map;
+using S1NPCs = Il2CppScheduleOne.NPCs;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1AvatarFramework = ScheduleOne.AvatarFramework;
+using S1Map = ScheduleOne.Map;
+using S1NPCs = ScheduleOne.NPCs;
 #endif
 
 using HarmonyLib;
@@ -12,6 +16,7 @@ using System.Reflection;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.UI;
 
 using S1API.Entities.Appearances.AccessoryFields;
 using S1API.Entities.Appearances.Base;
@@ -133,8 +138,6 @@ namespace S1API.Entities
                     continue;
                 }
 
-                CacheAndResetMugshotRigTransform(mugshotRig.transform);
-
                 // Phase 1: setup without yielding
                 S1AvatarFramework.Avatar previousAvatar = next.NPC.S1NPC.Avatar;
                 next.NPC.S1NPC.Avatar = mugshotRig;
@@ -142,9 +145,23 @@ namespace S1API.Entities
                 if (mugshotParent != null)
                     mugshotParent.gameObject.SetActive(true);
 
+                // Activate the rig (same as game's GenerateMugshot)
+                mugshotRig.gameObject.SetActive(true);
+
                 // Use a per-capture clone so subsequent appearance edits don't mutate the in-flight mugshot
                 var mugshotSettings = ScriptableObject.Instantiate(next._customAvatarSettings);
+                mugshotSettings.Height = 1f;
                 next.NPC.S1NPC.Avatar.LoadAvatarSettings(mugshotSettings);
+
+                // Set layer for icon generation (same as game's GenerateMugshot)
+                SetLayerRecursively(mugshotRig.gameObject, LayerMask.NameToLayer("IconGeneration"));
+
+                // Enable updateWhenOffscreen for proper bounds calculation (same as game's GenerateMugshot)
+                var skinnedMeshRenderers = mugshotRig.GetComponentsInChildren<SkinnedMeshRenderer>();
+                foreach (var smr in skinnedMeshRenderers)
+                {
+                    smr.updateWhenOffscreen = true;
+                }
 
                 // Capture current lighting state so the ambient flip from the generator doesn't leak
                 var previousAmbientMode = RenderSettings.ambientMode;
@@ -152,7 +169,7 @@ namespace S1API.Entities
                 var previousAmbientIntensity = RenderSettings.ambientIntensity;
                 bool? previousModifyLighting = iconGenerator != null ? iconGenerator.ModifyLighting : null;
                 if (iconGenerator != null)
-                    iconGenerator.ModifyLighting = false;
+                    iconGenerator.ModifyLighting = true;
 
                 // Give the rig a frame to update meshes/bounds with the new settings before capture
                 yield return new WaitForEndOfFrame();
@@ -164,9 +181,26 @@ namespace S1API.Entities
                     try
                     {
                         generatedMugshot.Apply();
-                        Sprite iconSprite = Sprite.Create(generatedMugshot, new Rect(0, 0, generatedMugshot.width, generatedMugshot.height), Vector2.zero);
+
+                        // Apply a modest crop to handle accessories (like hats) that extend bounds
+                        // This ensures faces are consistently sized regardless of head accessories
+                        float cropScale = 0.92f; // Take 92% of the image
+                        int cropWidth = Mathf.RoundToInt(generatedMugshot.width * cropScale);
+                        int cropHeight = Mathf.RoundToInt(generatedMugshot.height * cropScale);
+                        int cropX = (generatedMugshot.width - cropWidth) / 2; // Center horizontally
+                        int cropY = Mathf.RoundToInt(generatedMugshot.height * 0.04f); // Slight offset up for face focus
+
+                        // Clamp to valid bounds
+                        cropX = Mathf.Clamp(cropX, 0, generatedMugshot.width - cropWidth);
+                        cropY = Mathf.Clamp(cropY, 0, generatedMugshot.height - cropHeight);
+
+                        Rect cropRect = new Rect(cropX, cropY, cropWidth, cropHeight);
+                        Sprite iconSprite = Sprite.Create(generatedMugshot, cropRect, new Vector2(0.5f, 0.5f));
                         next.NPC.Icon = iconSprite;
                         next.NPC.RefreshMessagingIcons();
+
+                        // Update any map POI icons that reference this NPC
+                        UpdatePoiIcons(next.NPC.S1NPC, iconSprite);
                     }
                     catch (Exception ex)
                     {
@@ -192,10 +226,14 @@ namespace S1API.Entities
                 // Phase 3: restore without yielding
                 next.NPC.S1NPC.Avatar = previousAvatar ?? next._runtimeAvatar;
                 next.ApplyToAvatar(next._runtimeAvatar);
-                ResetMugshotRigTransform(mugshotRig.transform);
 
-                // Small yield between jobs to keep frame time healthy
-                yield return null;
+                // Restore rig to default state (same as game's GenerateMugshot)
+                if (generator.DefaultSettings != null)
+                    mugshotRig.LoadAvatarSettings(generator.DefaultSettings);
+                mugshotRig.gameObject.SetActive(false);
+
+                // Small delay between jobs to let the mugshot rig fully reset
+                yield return new WaitForSeconds(0.05f);
             }
         }
 
@@ -567,35 +605,66 @@ namespace S1API.Entities
         private static readonly object _mugshotQueueLock = new object();
         private static readonly Queue<NPCAppearance> _mugshotQueue = new Queue<NPCAppearance>();
         private static bool _isProcessingMugshots = false;
-        private static bool _cachedRigDefaults = false;
-        private static Vector3 _mugshotRigDefaultLocalPosition;
-        private static Quaternion _mugshotRigDefaultLocalRotation;
-        private static Vector3 _mugshotRigDefaultLocalScale;
 
-        private static void CacheAndResetMugshotRigTransform(Transform rigTransform)
+        /// <summary>
+        /// Returns true when all queued mugshots have been processed.
+        /// </summary>
+        internal static bool MugshotsProcessingComplete
         {
-            if (rigTransform == null)
-                return;
-
-            if (!_cachedRigDefaults)
+            get
             {
-                _mugshotRigDefaultLocalPosition = rigTransform.localPosition;
-                _mugshotRigDefaultLocalRotation = rigTransform.localRotation;
-                _mugshotRigDefaultLocalScale = rigTransform.localScale;
-                _cachedRigDefaults = true;
+                lock (_mugshotQueueLock)
+                {
+                    return !_isProcessingMugshots && _mugshotQueue.Count == 0;
+                }
             }
-
-            ResetMugshotRigTransform(rigTransform);
         }
 
-        private static void ResetMugshotRigTransform(Transform rigTransform)
+        /// <summary>
+        /// Sets the layer of a GameObject and all its children recursively.
+        /// </summary>
+        private static void SetLayerRecursively(GameObject obj, int layer)
         {
-            if (rigTransform == null || !_cachedRigDefaults)
+            if (obj == null) return;
+            obj.layer = layer;
+            foreach (Transform child in obj.transform)
+            {
+                SetLayerRecursively(child.gameObject, layer);
+            }
+        }
+
+        /// <summary>
+        /// Updates the icon on any map POI components that reference the given NPC.
+        /// </summary>
+        private static void UpdatePoiIcons(S1NPCs.NPC npc, Sprite iconSprite)
+        {
+            if (npc == null || iconSprite == null)
                 return;
 
-            rigTransform.localPosition = _mugshotRigDefaultLocalPosition;
-            rigTransform.localRotation = _mugshotRigDefaultLocalRotation;
-            rigTransform.localScale = _mugshotRigDefaultLocalScale;
+            try
+            {
+                // Find all NPCPoI components in the scene that reference this NPC
+                var allPoIs = UnityEngine.Object.FindObjectsOfType<S1Map.NPCPoI>();
+                foreach (var poi in allPoIs)
+                {
+                    if (poi.NPC == npc && poi.IconContainer != null)
+                    {
+                        var iconTransform = poi.IconContainer.Find("Outline/Icon");
+                        if (iconTransform != null)
+                        {
+                            var image = iconTransform.GetComponent<Image>();
+                            if (image != null)
+                            {
+                                image.sprite = iconSprite;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Failed to update POI icons: {ex.Message}");
+            }
         }
 
         #endregion
