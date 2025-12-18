@@ -397,16 +397,6 @@ var item = ItemCreator.CreateBuilder()
     .Build();
 ```
 
-## Clothing Items (Overview)
-
-Clothing content now lives in its own guide so we can cover cloning, accessory customization, slots, and testing in depth. The quick hits:
-
-- Use `ClothingItemCreator` to clone base items or build from scratch.
-- Override meshes or textures with `AccessoryFactory.CreateAndRegisterAccessory`.
-- Register items (and Avatar accessories) after the Main scene loads to keep registries in sync.
-
-👉 Head over to [Creating Custom Clothing Items](./clothing-items.md) for the full workflow, best practices, and step-by-step examples.
-
 ## Builder API Reference
 
 ### StorableItemDefinitionBuilder Methods
