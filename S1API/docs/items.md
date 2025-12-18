@@ -397,140 +397,15 @@ var item = ItemCreator.CreateBuilder()
     .Build();
 ```
 
-## Creating Clothing Items
+## Clothing Items (Overview)
 
-Clothing items are wearable items that appear on the player's avatar. S1API provides a specialized API for creating clothing items with support for cloning existing items.
+Clothing content now lives in its own guide so we can cover cloning, accessory customization, slots, and testing in depth. The quick hits:
 
-### Clothing Categories and Properties
+- Use `ClothingItemCreator` to clone base items or build from scratch.
+- Override meshes or textures with `AccessoryFactory.CreateAndRegisterAccessory`.
+- Register items (and Avatar accessories) after the Main scene loads to keep registries in sync.
 
-Clothing items have several unique properties:
-
-- **Slot**: Where the clothing is worn (Head, Top, Bottom, Feet, Eyes, etc.)
-- **Application Type**: How it's rendered (Accessory for 3D meshes, BodyLayer for textures)
-- **Colorable**: Whether the player can change its color
-- **Default Color**: The initial color when spawned
-- **Blocked Slots**: Other slots this item prevents from being used
-
-### Creating a New Clothing Item
-
-```csharp
-using S1API.Items;
-
-var customHat = ClothingItemCreator.CreateBuilder()
-    .WithBasicInfo("my_hat", "Custom Hat", "A fancy custom hat")
-    .WithSlot(ClothingSlot.Head)
-    .WithApplicationType(ClothingApplicationType.Accessory)
-    .WithClothingAsset("MyMod/Accessories/CustomHat")
-    .WithColorable(true)
-    .WithDefaultColor(ClothingColor.Black)
-    .WithPricing(50f, 0.5f)
-    .Build();
-```
-
-### Cloning Existing Clothing Items
-
-The easiest way to create clothing variants is to clone existing items:
-
-```csharp
-using S1API.Items;
-
-// Clone the base game cap and customize it
-var customCap = ClothingItemCreator.CloneFrom("cap")
-    .WithBasicInfo("stay_silly_cap", "Stay Silly Cap", "A silly custom cap")
-    .WithClothingAsset("MyMod/Accessories/StaySillyCap")
-    .WithColorable(false)  // Use custom textures instead
-    .WithPricing(75f, 0.5f)
-    .Build();
-```
-
-### Clothing Slots
-
-Available clothing slots:
-
-- `ClothingSlot.Head` - Hats, caps, helmets
-- `ClothingSlot.Eyes` - Glasses, sunglasses
-- `ClothingSlot.Neck` - Necklaces, scarves
-- `ClothingSlot.Top` - Shirts, jackets
-- `ClothingSlot.Outerwear` - Coats, vests
-- `ClothingSlot.Hands` - Gloves
-- `ClothingSlot.Waist` - Belts
-- `ClothingSlot.Bottom` - Pants, shorts
-- `ClothingSlot.Feet` - Shoes, boots
-- `ClothingSlot.Wrist` - Watches, bracelets
-
-### Clothing Application Types
-
-- `ClothingApplicationType.Accessory` - 3D mesh accessory (hats, glasses, shoes)
-- `ClothingApplicationType.BodyLayer` - Flat texture on body (shirts, pants)
-- `ClothingApplicationType.FaceLayer` - Flat texture on face (face paint, tattoos)
-
-### Clothing Colors
-
-Available colors include: White, Black, Red, Blue, Green, Yellow, Purple, Orange, Pink, Brown, Grey, and many more.
-See `ClothingColor` enum for the complete list.
-
-### Complete Clothing Example
-
-```csharp
-using MelonLoader;
-using S1API.Items;
-using S1API.Internal.Utils;
-using System.Reflection;
-using UnityEngine;
-
-public class MyMod : MelonMod
-{
-    private bool _itemsInitialized = false;
-
-    public override void OnSceneWasLoaded(int buildIndex, string sceneName)
-    {
-        if (sceneName == "Main" && !_itemsInitialized)
-        {
-            CreateCustomClothing();
-            _itemsInitialized = true;
-        }
-    }
-
-    private void CreateCustomClothing()
-    {
-        // Load icon from resources
-        var assembly = Assembly.GetExecutingAssembly();
-        var icon = ImageUtils.LoadImageFromResource(assembly, "MyMod.Resources.hat_icon.png");
-
-        // Clone existing cap and customize
-        var customCap = ClothingItemCreator.CloneFrom("cap")
-            .WithBasicInfo(
-                id: "custom_silly_cap",
-                name: "Silly Cap",
-                description: "A custom cap with unique style"
-            )
-            .WithClothingAsset("MyMod/Accessories/SillyCap")
-            .WithIcon(icon)
-            .WithColorable(false)
-            .WithDefaultColor(ClothingColor.Red)
-            .WithPricing(60f, 0.5f)
-            .WithKeywords("hat", "custom", "silly")
-            .Build();
-
-        MelonLogger.Msg($"Created clothing item: {customCap.Name}");
-    }
-}
-```
-
-### ClothingItemDefinitionBuilder Methods
-
-- `WithBasicInfo(id, name, description)` - Sets core clothing properties
-- `WithSlot(slot)` - Sets the clothing slot
-- `WithApplicationType(type)` - Sets how clothing is rendered
-- `WithClothingAsset(assetPath)` - Sets the Resources path to the clothing asset
-- `WithColorable(colorable)` - Sets whether the item can be colored
-- `WithDefaultColor(color)` - Sets the default color
-- `WithBlockedSlots(slots)` - Sets which slots are blocked when worn
-- `WithIcon(sprite)` - Sets the item icon
-- `WithPricing(basePrice, resellMultiplier)` - Configures pricing
-- `WithKeywords(keywords)` - Sets search keywords
-- `WithLabelColor(color)` - Sets UI label color
-- `Build()` - Registers and returns the clothing item
+👉 Head over to [Creating Custom Clothing Items](./clothing-items.md) for the full workflow, best practices, and step-by-step examples.
 
 ## Builder API Reference
 
