@@ -39,6 +39,9 @@
   href: cartel-system.md
 - name: Items
   href: items.md
+  items:
+    - name: Creating Custom Clothing Items
+      href: clothing-items.md
 - name: Phone Apps
   href: phone-app.md
 - name: UI
