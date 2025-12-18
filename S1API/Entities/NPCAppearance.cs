@@ -627,10 +627,19 @@ namespace S1API.Entities
         {
             if (obj == null) return;
             obj.layer = layer;
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+            // Il2Cpp: foreach iteration returns Il2CppSystem.Object, use index-based access
+            for (int i = 0; i < obj.transform.childCount; i++)
+            {
+                SetLayerRecursively(obj.transform.GetChild(i).gameObject, layer);
+            }
+#else
+            // Mono: foreach works directly with Transform
             foreach (Transform child in obj.transform)
             {
                 SetLayerRecursively(child.gameObject, layer);
             }
+#endif
         }
 
         /// <summary>
