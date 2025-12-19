@@ -126,6 +126,26 @@ namespace S1API.Entities
                 currentCount = inv.ItemSlots.Count;
             }
 
+            // CRITICAL: Unlock all existing slots before creating new ones
+            // Base game NPCs may have locked slots, which prevents AddCash/InsertItem from working
+            for (int i = 0; i < inv.ItemSlots.Count; i++)
+            {
+                var slot = inv.ItemSlots[i];
+                if (slot != null)
+                {
+                    try 
+                    { 
+                        ReflectionUtils.TrySetFieldOrProperty(slot, "ActiveLock", null); 
+                    } 
+                    catch { }
+                    try 
+                    { 
+                        ReflectionUtils.TrySetFieldOrProperty(slot, "IsAddLocked", false); 
+                    } 
+                    catch { }
+                }
+            }
+
             // Create missing slots if we have too few
             // Note: SetSlotOwner automatically adds the slot to ItemSlots, so we don't call Add() manually
             if (currentCount < targetCount)

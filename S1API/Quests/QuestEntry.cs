@@ -8,6 +8,7 @@ using System;
 using System.Collections;
 using MelonLoader;
 using S1API.Entities;
+using S1API.Graffiti;
 using S1API.Internal.Abstraction;
 using S1API.Internal.Utils;
 using S1API.Quests.Constants;
@@ -149,6 +150,20 @@ namespace S1API.Quests
             // or when AddEntry was called without a location first
             MelonCoroutines.Start(EnsurePOICreationForNPC(S1QuestEntry));
             
+            return true;
+        }
+
+        /// <summary>
+        /// Sets the POI location to a spray surface's position.
+        /// </summary>
+        /// <param name="spraySurface">The spray surface to set POI to.</param>
+        /// <returns>True if the spray surface was valid and POI location was set, false otherwise.</returns>
+        public bool SetPOIToSpraySurface(SpraySurface spraySurface)
+        {
+            if (spraySurface == null)
+                return false;
+            
+            POIPosition = spraySurface.Position;
             return true;
         }
 
