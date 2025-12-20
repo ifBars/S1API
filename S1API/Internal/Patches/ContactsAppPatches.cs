@@ -162,16 +162,34 @@ namespace S1API.Internal.Patches
                 return customNPCs.All(npc => npc.RelationshipDataAppliedFromPrefab);
             }));
 
-            AddRelationCircles(contactsApp);
-            
+            // Wait for all custom NPCs to have valid S1NPC references with RelationData
+            yield return new WaitUntil((Func<bool>)(() =>
+            {
+                return customNPCs.All(npc =>
+                    npc.S1NPC != null &&
+                    npc.S1NPC.RelationData != null);
+            }));
+
+            // Additional frame delay to let everything settle
+            yield return null;
+            yield return null;
+
+            // Wait for mugshots to be generated before creating circles
+            // This ensures HeadshotImg.sprite gets the correct mugshot, not the default icon
+            yield return new WaitUntil((Func<bool>)(() => NPCAppearance.MugshotsProcessingComplete));
+
+            // Run Start() FIRST so it doesn't call LoadNPCData() on our custom circles
             try
             {
                 startMethod.Invoke(contactsApp, null);
             }
             catch (System.Exception ex)
             {
-                Logger.Error($"Error invoking Start after adding circles: {ex}");
+                Logger.Error($"Error invoking Start: {ex}");
             }
+
+            // Add our circles AFTER Start() so they aren't processed by LoadNPCData()
+            AddRelationCircles(contactsApp);
         }
 
         /// <summary>
@@ -183,30 +201,74 @@ namespace S1API.Internal.Patches
                 .Where(n => n.IsCustomNPC &&
                             (NPC.IsCustomerType(n.GetType()) || NPC.IsDealerType(n.GetType())))
                 .ToList();
+
             var regionUIs = contactsApp.RegionUIs.ToDictionary(r => r.Region, r => r);
             var placeholders = new System.Collections.Generic.Dictionary<NPC, S1Relations.RelationCircle>();
+
+            // Track IDs of circles we create so we don't use them as templates
+            var createdCircleIds = new System.Collections.Generic.HashSet<string>();
 
             // create circle game objects for all custom NPCs
             foreach (var npc in customNPCs)
             {
-                if (!regionUIs.TryGetValue(npc.S1NPC.Region, out var regionUI) || regionUI?.Container == null)
+                // Validate NPC is fully initialized
+                if (npc.S1NPC == null || npc.S1NPC.RelationData == null)
+                {
+                    Logger.Warning($"Skipping NPC {npc.ID} - S1NPC={npc.S1NPC != null}, RelationData={npc.S1NPC?.RelationData != null}");
                     continue;
+                }
+
+                if (!regionUIs.TryGetValue(npc.S1NPC.Region, out var regionUI) || regionUI?.Container == null)
+                {
+                    Logger.Warning($"Skipping NPC {npc.ID} - region {npc.S1NPC.Region} not found in regionUIs");
+                    continue;
+                }
 
                 var existing = regionUI.Container.GetComponentsInChildren<S1Relations.RelationCircle>(true)
                     .FirstOrDefault(c => c.AssignedNPC_ID == npc.S1NPC.ID);
                 if (existing != null)
                     continue;
 
-                var template = regionUI.Container.GetComponentInChildren<S1Relations.RelationCircle>(true)
-                               ?? contactsApp.CirclesContainer.GetComponentInChildren<S1Relations.RelationCircle>(true);
+                // Find a base game template - exclude circles we've already created
+                var allCirclesInRegion = regionUI.Container.GetComponentsInChildren<S1Relations.RelationCircle>(true);
+
+                var template = allCirclesInRegion
+                    .FirstOrDefault(c => !createdCircleIds.Contains(c.AssignedNPC_ID))
+                    ?? contactsApp.CirclesContainer.GetComponentInChildren<S1Relations.RelationCircle>(true);
+
                 if (template == null)
                     continue;
 
                 var go = Object.Instantiate(template.gameObject, regionUI.Container);
                 go.name = npc.ID;
                 var circle = go.GetComponent<S1Relations.RelationCircle>();
-                circle.AssignedNPC = npc.S1NPC;
+
+                // Set ID first, then call AssignNPC to properly set up everything
+                // AssignNPC handles: UnassignNPC (cleanup), event handlers, HeadshotImg, display refresh
                 circle.AssignedNPC_ID = npc.S1NPC.ID;
+                circle.AssignNPC(npc.S1NPC);
+
+                // Track this circle so we don't use it as a template
+                createdCircleIds.Add(npc.S1NPC.ID);
+
+                // Call the same methods that the game's Select method calls
+                var zoomMethod = typeof(S1ContactsApp.ContactsApp).GetMethod("ZoomToRect",
+                    BindingFlags.NonPublic | BindingFlags.Instance);
+
+                var cachedCircle = circle;
+                var cachedNPC = npc.S1NPC; // Cache the NPC reference directly
+                circle.onClicked = (Action)delegate
+                {
+                    contactsApp.DetailPanel.Open(cachedNPC);
+
+                    // Zoom to the circle
+                    if (zoomMethod != null)
+                        zoomMethod.Invoke(contactsApp, new object[] { cachedCircle.Rect });
+
+                    // Update selection indicator
+                    contactsApp.SelectionIndicator.position = cachedCircle.Rect.position;
+                };
+
                 EnableDealerIndicator(circle, npc);
                 placeholders[npc] = circle;
             }
@@ -257,6 +319,125 @@ namespace S1API.Internal.Patches
                     var existingEdges = GetAllEdges(circlesInRegion, rectTransforms);
                     var newPos = ComputePlacement(circle, circlesInRegion, circleById, rectTransforms, existingEdges);
                     rectTransforms[circle].anchoredPosition = newPos;
+                }
+            }
+
+            // Create connection lines for custom NPCs
+            CreateConnectionLines(contactsApp, customNPCs, regionUIs);
+        }
+
+        /// <summary>
+        /// Creates connection lines between custom NPCs and their connections.
+        /// </summary>
+        private static void CreateConnectionLines(
+            S1ContactsApp.ContactsApp contactsApp,
+            System.Collections.Generic.List<NPC> customNPCs,
+            System.Collections.Generic.Dictionary<S1Map.EMapRegion, S1ContactsApp.ContactsApp.RegionUI> regionUIs)
+        {
+            if (contactsApp.ConnectionPrefab == null)
+            {
+                Logger.Warning("ConnectionPrefab is null, cannot create connection lines");
+                return;
+            }
+
+            // Track connections we've already created to avoid duplicates
+            var createdConnections = new System.Collections.Generic.HashSet<string>();
+
+            foreach (var npc in customNPCs)
+            {
+                if (npc.S1NPC?.RelationData?.Connections == null)
+                    continue;
+
+                if (!regionUIs.TryGetValue(npc.S1NPC.Region, out var regionUI) || regionUI?.Container == null)
+                    continue;
+
+                var circlesInRegion = regionUI.Container.GetComponentsInChildren<S1Relations.RelationCircle>(true);
+                var npcCircle = circlesInRegion.FirstOrDefault(c => c.AssignedNPC_ID == npc.S1NPC.ID);
+                if (npcCircle == null)
+                    continue;
+
+#if MONOMELON
+                var connections = npc.S1NPC.RelationData.Connections;
+#elif IL2CPPMELON
+                var connections = npc.S1NPC.RelationData.Connections._items;
+#endif
+
+                foreach (var connectedNPC in connections)
+                {
+                    if (connectedNPC == null)
+                        continue;
+
+                    // Skip if different region
+                    if (connectedNPC.Region != npc.S1NPC.Region)
+                        continue;
+
+                    // Create a unique key for this connection (order-independent)
+                    var id1 = npc.S1NPC.ID;
+                    var id2 = connectedNPC.ID;
+                    var connKey = string.Compare(id1, id2, System.StringComparison.Ordinal) < 0
+                        ? $"{id1}->{id2}"
+                        : $"{id2}->{id1}";
+
+                    // Skip if connection already exists
+                    if (createdConnections.Contains(connKey))
+                        continue;
+
+                    // Find circle for connected NPC
+                    var otherCircle = circlesInRegion.FirstOrDefault(c => c.AssignedNPC_ID == connectedNPC.ID);
+                    if (otherCircle == null)
+                        continue;
+
+                    // Mark connection as created
+                    createdConnections.Add(connKey);
+
+                    // Get the connections container for this region
+                    var connectionsContainer = regionUI.ConnectionsContainer ?? contactsApp.ConnectionsContainer;
+                    if (connectionsContainer == null)
+                        continue;
+
+                    // Create the connection line (same logic as game's Start method)
+                    var connectionGO = Object.Instantiate(contactsApp.ConnectionPrefab, connectionsContainer);
+                    var connectionRect = connectionGO.GetComponent<RectTransform>();
+
+                    // Position at midpoint between circles
+                    connectionRect.anchoredPosition = (otherCircle.Rect.anchoredPosition + npcCircle.Rect.anchoredPosition) / 2f;
+
+                    // Calculate rotation
+                    Vector3 direction = otherCircle.Rect.anchoredPosition - npcCircle.Rect.anchoredPosition;
+                    float angle = -Mathf.Atan2(direction.x, direction.y) * Mathf.Rad2Deg;
+                    connectionRect.localRotation = Quaternion.Euler(0f, 0f, angle);
+
+                    // Set length
+                    connectionRect.sizeDelta = new Vector2(
+                        connectionRect.sizeDelta.x,
+                        Vector3.Distance(otherCircle.Rect.anchoredPosition, npcCircle.Rect.anchoredPosition));
+
+                    connectionGO.name = $"{npc.S1NPC.ID} -> {connectedNPC.ID}";
+
+                    // Set up click handlers for the connection endpoints
+                    var startButton = connectionRect.Find("StartButton")?.GetComponent<Button>();
+                    var endButton = connectionRect.Find("EndButton")?.GetComponent<Button>();
+
+                    var zoomMethod = typeof(S1ContactsApp.ContactsApp).GetMethod("ZoomToRect",
+                        BindingFlags.NonPublic | BindingFlags.Instance);
+
+                    if (startButton != null && zoomMethod != null)
+                    {
+                        var cachedOtherRect = otherCircle.Rect;
+                        startButton.onClick.AddListener((UnityEngine.Events.UnityAction)delegate
+                        {
+                            zoomMethod.Invoke(contactsApp, new object[] { cachedOtherRect });
+                        });
+                    }
+
+                    if (endButton != null && zoomMethod != null)
+                    {
+                        var cachedNpcRect = npcCircle.Rect;
+                        endButton.onClick.AddListener((UnityEngine.Events.UnityAction)delegate
+                        {
+                            zoomMethod.Invoke(contactsApp, new object[] { cachedNpcRect });
+                        });
+                    }
                 }
             }
         }

@@ -4,12 +4,10 @@ using S1AvatarEquipping = Il2CppScheduleOne.AvatarFramework.Equipping;
 using S1AvatarEquipping = ScheduleOne.AvatarFramework.Equipping;
 #endif
 
-using System.Collections.Generic;
-using HarmonyLib;
 using S1API.AssetBundles;
 using S1API.Logging;
+using S1API.Rendering;
 using UnityEngine;
-using Object = UnityEngine.Object;
 
 namespace S1API.Items
 {
@@ -17,11 +15,12 @@ namespace S1API.Items
     /// Manages registration and loading of AvatarEquippable prefabs from AssetBundles.
     /// Allows modders to load AvatarEquippable prefabs and register them so they can be used with equippable items.
     /// </summary>
+    /// <remarks>
+    /// This class now uses RuntimeResourceRegistry internally for asset registration.
+    /// </remarks>
     public static class AvatarEquippableRegistry
     {
         private static readonly Log _logger = new Log("AvatarEquippableRegistry");
-        private static readonly Dictionary<string, GameObject> _registeredPrefabs = new Dictionary<string, GameObject>();
-        private static bool _isPatched = false;
 
         /// <summary>
         /// Registers an AvatarEquippable prefab with a Resources path.
@@ -55,15 +54,13 @@ namespace S1API.Items
                 _logger.Warning($"Prefab '{prefab.name}' does not have an AvatarEquippable component. It will still be registered, but may not work correctly.");
             }
 
-            if (_registeredPrefabs.ContainsKey(assetPath))
+            // Use RuntimeResourceRegistry for actual registration
+            bool success = RuntimeResourceRegistry.RegisterGameObject(assetPath, prefab);
+            if (success)
             {
-                _logger.Warning($"AvatarEquippable at path '{assetPath}' is already registered. Overwriting with new prefab.");
+                _logger.Msg($"Registered AvatarEquippable prefab: {assetPath}");
             }
-
-            EnsurePatched();
-            _registeredPrefabs[assetPath] = prefab;
-            _logger.Msg($"Registered AvatarEquippable prefab: {assetPath}");
-            return true;
+            return success;
         }
 
         /// <summary>
@@ -131,7 +128,7 @@ namespace S1API.Items
         /// <returns>True if registered, false otherwise.</returns>
         public static bool IsRegistered(string assetPath)
         {
-            return _registeredPrefabs.ContainsKey(assetPath);
+            return RuntimeResourceRegistry.IsRegistered(assetPath);
         }
 
         /// <summary>
@@ -141,78 +138,7 @@ namespace S1API.Items
         /// <returns>The registered prefab, or null if not found.</returns>
         public static GameObject GetRegisteredPrefab(string assetPath)
         {
-            _registeredPrefabs.TryGetValue(assetPath, out var prefab);
-            return prefab;
-        }
-
-        /// <summary>
-        /// INTERNAL: Ensures the Resources.Load patch is applied.
-        /// </summary>
-        private static void EnsurePatched()
-        {
-            if (_isPatched)
-                return;
-
-            try
-            {
-                var harmony = new HarmonyLib.Harmony("S1API.AvatarEquippableRegistry");
-                
-                // Patch Resources.Load(string, Type) - the main overload
-                var loadWithTypeMethod = typeof(Resources).GetMethod("Load", new[] { typeof(string), typeof(System.Type) });
-                if (loadWithTypeMethod != null)
-                {
-                    var prefixMethod = typeof(AvatarEquippableRegistry).GetMethod(nameof(ResourcesLoadPrefix), 
-                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-                    harmony.Patch(loadWithTypeMethod, prefix: new HarmonyMethod(prefixMethod));
-                }
-
-                // Patch Resources.Load(string) - convenience overload
-                var loadStringMethod = typeof(Resources).GetMethod("Load", new[] { typeof(string) });
-                if (loadStringMethod != null)
-                {
-                    var prefixMethod = typeof(AvatarEquippableRegistry).GetMethod(nameof(ResourcesLoadStringPrefix), 
-                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-                    harmony.Patch(loadStringMethod, prefix: new HarmonyMethod(prefixMethod));
-                }
-
-                _isPatched = true;
-            }
-            catch (System.Exception ex)
-            {
-                _logger.Error($"Failed to patch Resources.Load: {ex.Message}");
-                _logger.Error(ex.StackTrace);
-            }
-        }
-
-        /// <summary>
-        /// INTERNAL: Harmony prefix for Resources.Load(string, Type) to check our registry first.
-        /// </summary>
-        private static bool ResourcesLoadPrefix(string path, System.Type systemTypeInstance, ref Object __result)
-        {
-            // Only intercept if it's a GameObject request and we have a registered prefab
-            if (systemTypeInstance == typeof(GameObject) || systemTypeInstance == null)
-            {
-                if (_registeredPrefabs.TryGetValue(path, out var prefab))
-                {
-                    __result = prefab;
-                    return false; // Skip original method
-                }
-            }
-            return true; // Continue with original method
-        }
-
-        /// <summary>
-        /// INTERNAL: Harmony prefix for Resources.Load(string) to check our registry first.
-        /// </summary>
-        private static bool ResourcesLoadStringPrefix(string path, ref Object __result)
-        {
-            // Check if we have a registered prefab for this path
-            if (_registeredPrefabs.TryGetValue(path, out var prefab))
-            {
-                __result = prefab;
-                return false; // Skip original method
-            }
-            return true; // Continue with original method
+            return RuntimeResourceRegistry.GetRegisteredAsset<GameObject>(assetPath);
         }
     }
 }

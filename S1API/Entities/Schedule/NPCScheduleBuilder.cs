@@ -5,6 +5,7 @@ using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
 #endif
 
 using System;
+using S1API.Casino;
 using UnityEngine;
 using S1API.Map;
 using S1API.Vehicles;
@@ -135,6 +136,159 @@ namespace S1API.Entities.Schedule
         public PrefabScheduleBuilder UseVendingMachine(int startTime, string machineGUID = null, string name = null)
         {
             _specs.Add(new UseVendingMachineSpec { StartTime = startTime, MachineGUID = machineGUID, Name = name });
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a slot machine usage action at the specified time.
+        /// </summary>
+        /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>
+        /// <param name="machinePosition">The world position of the slot machine to use.</param>
+        /// <param name="betAmount">The amount to bet in dollars (default: 10).</param>
+        /// <param name="sessionMode">The gambling session mode (default: single spin).</param>
+        /// <param name="maxSearchDistance">Maximum distance to search for a slot machine from the position (default: 5.0).</param>
+        /// <param name="name">Optional custom name for this action; defaults to "UseSlotMachine".</param>
+        /// <returns>This builder instance for method chaining.</returns>
+        /// <remarks>
+        /// Creates a <see cref="UseSlotMachineSpec"/> that makes the NPC walk to the slot machine
+        /// location and play it according to the session mode. The NPC must have sufficient cash
+        /// in their inventory to place bets.
+        /// </remarks>
+        public PrefabScheduleBuilder UseSlotMachine(
+            int startTime, 
+            Vector3 machinePosition, 
+            int betAmount = 10, 
+            GamblingSessionMode sessionMode = GamblingSessionMode.SingleSpin,
+            float maxSearchDistance = 5f, 
+            string name = null)
+        {
+            _specs.Add(new UseSlotMachineSpec 
+            { 
+                StartTime = startTime, 
+                MachinePosition = machinePosition, 
+                BetAmount = betAmount,
+                SessionMode = sessionMode,
+                MaxSearchDistance = maxSearchDistance,
+                Name = name 
+            });
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a slot machine usage action that plays multiple spins.
+        /// </summary>
+        /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>
+        /// <param name="machinePosition">The world position of the slot machine to use.</param>
+        /// <param name="spinCount">The number of spins to play.</param>
+        /// <param name="betAmount">The amount to bet per spin in dollars (default: 10).</param>
+        /// <param name="timeBetweenSpins">Time to wait between spins in seconds (default: 10.0).</param>
+        /// <param name="maxSearchDistance">Maximum distance to search for a slot machine from the position (default: 5.0).</param>
+        /// <param name="name">Optional custom name for this action; defaults to "UseSlotMachine".</param>
+        /// <returns>This builder instance for method chaining.</returns>
+        /// <remarks>
+        /// The NPC will play the specified number of spins, waiting between each one.
+        /// If the NPC runs out of cash before completing all spins, the session will end early.
+        /// </remarks>
+        public PrefabScheduleBuilder UseSlotMachineMultipleTimes(
+            int startTime, 
+            Vector3 machinePosition, 
+            int spinCount,
+            int betAmount = 10,
+            float timeBetweenSpins = 10f,
+            float maxSearchDistance = 5f, 
+            string name = null)
+        {
+            _specs.Add(new UseSlotMachineSpec 
+            { 
+                StartTime = startTime, 
+                MachinePosition = machinePosition, 
+                BetAmount = betAmount,
+                SessionMode = GamblingSessionMode.SpinCount,
+                SpinCount = spinCount,
+                TimeBetweenSpins = timeBetweenSpins,
+                MaxSearchDistance = maxSearchDistance,
+                Name = name 
+            });
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a slot machine usage action that plays until a specific time.
+        /// </summary>
+        /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>
+        /// <param name="endTime">The time when gambling should stop, in minutes from midnight (0-1439).</param>
+        /// <param name="machinePosition">The world position of the slot machine to use.</param>
+        /// <param name="betAmount">The amount to bet per spin in dollars (default: 10).</param>
+        /// <param name="timeBetweenSpins">Time to wait between spins in seconds (default: 10.0).</param>
+        /// <param name="stopIfBroke">If true, stops gambling when out of cash; if false, only stops at end time (default: true).</param>
+        /// <param name="maxSearchDistance">Maximum distance to search for a slot machine from the position (default: 5.0).</param>
+        /// <param name="name">Optional custom name for this action; defaults to "UseSlotMachine".</param>
+        /// <returns>This builder instance for method chaining.</returns>
+        /// <remarks>
+        /// The NPC will gamble continuously until the end time is reached.
+        /// If <paramref name="stopIfBroke"/> is true, the session will also end if the NPC runs out of cash.
+        /// </remarks>
+        public PrefabScheduleBuilder UseSlotMachineUntilTime(
+            int startTime,
+            int endTime,
+            Vector3 machinePosition, 
+            int betAmount = 10,
+            float timeBetweenSpins = 10f,
+            bool stopIfBroke = true,
+            float maxSearchDistance = 5f,
+            Map.Building building = null,
+            string name = null)
+        {
+            _specs.Add(new UseSlotMachineSpec 
+            { 
+                StartTime = startTime, 
+                MachinePosition = machinePosition, 
+                BetAmount = betAmount,
+                SessionMode = stopIfBroke ? 
+                    GamblingSessionMode.UntilTimeOrBroke : 
+                    GamblingSessionMode.UntilTime,
+                EndTime = endTime,
+                TimeBetweenSpins = timeBetweenSpins,
+                MaxSearchDistance = maxSearchDistance,
+                Building = building,
+                Name = name 
+            });
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a slot machine usage action that plays until the NPC runs out of cash.
+        /// </summary>
+        /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>
+        /// <param name="machinePosition">The world position of the slot machine to use.</param>
+        /// <param name="betAmount">The amount to bet per spin in dollars (default: 10).</param>
+        /// <param name="timeBetweenSpins">Time to wait between spins in seconds (default: 10.0).</param>
+        /// <param name="maxSearchDistance">Maximum distance to search for a slot machine from the position (default: 5.0).</param>
+        /// <param name="name">Optional custom name for this action; defaults to "UseSlotMachine".</param>
+        /// <returns>This builder instance for method chaining.</returns>
+        /// <remarks>
+        /// The NPC will gamble continuously until they no longer have enough cash for another bet.
+        /// This can result in the NPC gambling away all their money, so ensure they have a reasonable
+        /// amount of cash or use time-based limits instead.
+        /// </remarks>
+        public PrefabScheduleBuilder UseSlotMachineUntilBroke(
+            int startTime,
+            Vector3 machinePosition, 
+            int betAmount = 10,
+            float timeBetweenSpins = 10f,
+            float maxSearchDistance = 5f, 
+            string name = null)
+        {
+            _specs.Add(new UseSlotMachineSpec 
+            { 
+                StartTime = startTime, 
+                MachinePosition = machinePosition, 
+                BetAmount = betAmount,
+                SessionMode = GamblingSessionMode.UntilBroke,
+                TimeBetweenSpins = timeBetweenSpins,
+                MaxSearchDistance = maxSearchDistance,
+                Name = name 
+            });
             return this;
         }
 
