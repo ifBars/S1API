@@ -235,7 +235,7 @@ namespace S1API.Entities
         /// <summary>
         /// Property this player is currently in
         /// </summary>
-        public BaseProperty? CurrentProperty {
+        public PropertyWrapper? CurrentProperty {
             get {
                 if(S1Player.CurrentProperty == null)
                     return null;
@@ -251,7 +251,7 @@ namespace S1API.Entities
         /// Last Property this player visted
         /// (May only be owned properties)
         /// </summary>
-        public BaseProperty? LastVisitedProperty {
+        public PropertyWrapper? LastVisitedProperty {
             get {
                 var s1Prop = S1Player.LastVisitedProperty;
                 if(s1Prop == null)
