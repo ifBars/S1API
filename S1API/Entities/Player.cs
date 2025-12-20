@@ -15,6 +15,9 @@ using S1API.Entities.Interfaces;
 using S1API.Internal.Abstraction;
 using S1API.Law;
 using UnityEngine;
+using S1API.Vehicles;
+using S1API.Property;
+using S1API.Map;
 
 namespace S1API.Entities
 {
@@ -163,6 +166,107 @@ namespace S1API.Entities
                     InvinciblePlayers.Remove(S1Player);
             }
         }
+
+        /// <summary>
+        /// The Last vehicle this player has driven
+        /// </summary>
+        public LandVehicle? LastDrivenVehicle {
+            get {
+                if (S1Player.LastDrivenVehicle == null)
+                    return null;
+                foreach (var v in VehicleRegistry.GetAll()) {
+                    if (v.S1LandVehicle == S1Player.LastDrivenVehicle) {
+                        return v;
+                    }
+                }
+                return null;
+            }
+        }
+        /// <summary>
+        /// If player is currently in a vehicle
+        /// </summary>
+        public bool IsInVehicle => S1Player.IsInVehicle;
+
+        /// <summary>
+        /// Time since player has exited a vehicle
+        /// </summary>
+        public float TimeSinceVehicleExit => S1Player.TimeSinceVehicleExit;
+
+        /// <summary>
+        /// Is player crouching
+        /// </summary>
+        public bool Crouched => S1Player.Crouched;
+
+        /// <summary>
+        /// If player is ready for sleep
+        /// </summary>
+        public bool IsReadyToSleep => S1Player.IsReadyToSleep;
+
+        /// <summary>
+        /// If player is currently using a skateboard
+        /// </summary>
+        public bool IsSkating => S1Player.IsSkating;
+
+        /// <summary>
+        /// If player is currently sleeping
+        /// </summary>
+        public bool IsSleeping => S1Player.IsSleeping;
+
+        /// <summary>
+        /// Is Player currently ragdolled
+        /// </summary>
+        public bool IsRagdolled => S1Player.IsRagdolled;
+
+        /// <summary>
+        /// If player is currently under arrest
+        /// </summary>
+        public bool IsArrested => S1Player.IsArrested;
+
+        /// <summary>
+        /// Is player currently under tased effect
+        /// </summary>
+        public bool IsTased => S1Player.IsTased;
+
+        /// <summary>
+        /// If player is unconscious
+        /// </summary>
+        public bool IsUnconscious => S1Player.IsUnconscious;
+
+        /// <summary>
+        /// Property this player is currently in
+        /// </summary>
+        public BaseProperty? CurrentProperty {
+            get {
+                if(S1Player.CurrentProperty == null)
+                    return null;
+                foreach (var p in PropertyManager.GetAllProperties()) {
+                    if (p.InnerProperty == S1Player.CurrentProperty)
+                        return p;
+                }
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Last Property this player visted
+        /// (May only be owned properties)
+        /// </summary>
+        public BaseProperty? LastVisitedProperty {
+            get {
+                var s1Prop = S1Player.LastVisitedProperty;
+                if(s1Prop == null)
+                    return null;
+                foreach (var p in PropertyManager.GetAllProperties()) {
+                    if (p.InnerProperty == s1Prop)
+                        return p;
+                }
+                return null;
+            }
+        }
+        /// <summary>
+        /// Region this player is currently in
+        /// </summary>
+        public Region CurrentRegion => (Region)S1Player.CurrentRegion;
 
         /// <summary>
         /// Revives the player.
