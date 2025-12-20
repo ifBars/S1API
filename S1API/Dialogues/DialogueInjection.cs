@@ -1,3 +1,4 @@
+using S1API.Entities;
 using System;
 
 namespace S1API.Dialogues
@@ -7,12 +8,16 @@ namespace S1API.Dialogues
     /// </summary>
     public class DialogueInjection
     {
+        /*
         /// <summary>
         /// Represents the name of the NPC (Non-Player Character) to which the dialogue injection is associated.
         /// This value is expected to match or partially match the name of an NPC in the game, allowing the system
         /// to identify and target the specific NPC for dialogue modifications.
         /// </summary>
         public string NpcName;
+        */
+
+        public Predicate<NPC> AppliesTo;
 
         /// <summary>
         /// Represents the name of the dialogue container being referenced for injections or modifications
@@ -64,9 +69,9 @@ namespace S1API.Dialogues
         /// <summary>
         /// Represents an injectable dialogue configuration that can be used to add or modify dialogue interactions in a game.
         /// </summary>
-        public DialogueInjection(string npc, string container, string from, string to, string label, string text, Action onConfirmed)
+        public DialogueInjection(Predicate<NPC> appliesToNpc, string container, string from, string to, string label, string text, Action onConfirmed)
         {
-            NpcName = npc;
+            AppliesTo = appliesToNpc;
             ContainerName = container;
             FromNodeGuid = from;
             ToNodeGuid = to;
@@ -74,5 +79,9 @@ namespace S1API.Dialogues
             ChoiceText = text;
             OnConfirmed = onConfirmed;
         }
+
+        public DialogueInjection(string npc, string container, string from, string to, string label, string text, Action onConfirmed)
+            : this(x => x.ID.Equals(npc), container, from, to, label, text, onConfirmed)
+        { }
     }
 }
