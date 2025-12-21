@@ -62,11 +62,11 @@ namespace S1API.Law
                 return 0f; // Safe fallback - modders should use Intensity property instead
 #else
                 // In Mono we can access the field directly through reflection if needed
-                var field = typeof(S1Law.LawController).GetField("internalLawIntensity",
+                var fieldInfo = typeof(S1Law.LawController).GetField("internalLawIntensity",
                     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (field != null)
+                if (fieldInfo != null)
                 {
-                    return (float)field.GetValue(Internal);
+                    return (float)fieldInfo.GetValue(Internal);
                 }
                 return 0f;
 #endif
