@@ -222,6 +222,23 @@ Track and respond to cartel relationship status.
 
 ---
 
+### Law Enforcement
+**Namespace**: `S1API.Law`
+
+Control checkpoints, police dispatch, wanted levels, and law enforcement intensity.
+
+**Key Classes**:
+- `CheckpointManager` - Road checkpoint control
+- `CheckpointInfo` - Checkpoint state information
+- `LawController` - Law enforcement intensity and automatic activities
+- `LawManager` - Police dispatch and wanted levels
+- `PursuitLevel` - Wanted level severity
+- `PlayerCrimeData` - Player crime tracking
+
+**Documentation**: [Law Enforcement](law-enforcement.md)
+
+---
+
 ### Leveling
 **Namespace**: `S1API.Leveling`
 

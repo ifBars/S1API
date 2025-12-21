@@ -37,6 +37,15 @@
   href: quests-system.md
 - name: Cartel System
   href: cartel-system.md
+- name: Law Enforcement
+  href: law-enforcement.md
+  items:
+    - name: Checkpoint Management
+      href: checkpoint-management.md
+    - name: Law Enforcement Intensity
+      href: law-enforcement-intensity.md
+    - name: Police Dispatch
+      href: police-dispatch.md
 - name: Slot Machines
   href: casino-slot-machines.md
 - name: Items

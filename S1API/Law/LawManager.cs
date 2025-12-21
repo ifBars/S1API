@@ -17,12 +17,12 @@ namespace S1API.Law
 {
     /// <summary>
     /// Provides access to law enforcement and police dispatch functionality.
-    /// Manages police responses to crimes and patrol operations.
+    /// Manages police responses, patrol operations, and wanted levels.
     /// </summary>
     public static class LawManager
     {
         /// <summary>
-        /// Provides internal access to the underlying law management singleton.
+        /// INTERNAL: Provides access to the underlying law management singleton.
         /// </summary>
         private static S1Law.LawManager Internal => S1Law.LawManager.Instance;
 
@@ -197,5 +197,109 @@ namespace S1API.Law
             if (target == null) return false;
             return target.CrimeData.CurrentPursuitLevel == PursuitLevel.Lethal;
         }
+
+        #region Patrol Management
+
+        /// <summary>
+        /// Starts a foot patrol using the specified route and number of officers.
+        /// Officers are pulled from the nearest police station to the route's starting point.
+        /// </summary>
+        /// <param name="route">The foot patrol route to use.</param>
+        /// <param name="requestedMembers">The number of officers to assign to the patrol.</param>
+        /// <returns>A PatrolGroup object representing the active patrol, or null if insufficient officers are available.</returns>
+        /// <remarks>
+        /// If insufficient officers are available at the nearest police station, the patrol will not be created.
+        /// Use <see cref="FindFootPatrolRoute"/> to locate existing patrol routes in the scene.
+        /// </remarks>
+        public static PatrolGroup StartFootPatrol(FootPatrolRoute route, int requestedMembers = 2)
+        {
+            if (Internal == null || route?.S1Route == null) return null;
+            var s1PatrolGroup = Internal.StartFootpatrol(route.S1Route, requestedMembers);
+            return s1PatrolGroup != null ? new PatrolGroup(s1PatrolGroup) : null;
+        }
+
+        /// <summary>
+        /// Starts a vehicle patrol using the specified route.
+        /// One officer is pulled from the nearest police station and assigned a patrol vehicle.
+        /// </summary>
+        /// <param name="route">The vehicle patrol route to use.</param>
+        /// <returns>True if the patrol was started successfully, false otherwise.</returns>
+        /// <remarks>
+        /// If no officers are available at the nearest police station, the patrol will not be created.
+        /// Use <see cref="FindVehiclePatrolRoute"/> to locate existing patrol routes in the scene.
+        /// The assigned officer will automatically patrol the route with a police vehicle.
+        /// </remarks>
+        public static bool StartVehiclePatrol(VehiclePatrolRoute route)
+        {
+            if (Internal == null || route?.S1Route == null) return false;
+            var officer = Internal.StartVehiclePatrol(route.S1Route);
+            return officer != null;
+        }
+
+        /// <summary>
+        /// Finds a foot patrol route in the scene by name.
+        /// </summary>
+        /// <param name="routeName">The name of the patrol route to find.</param>
+        /// <returns>The FootPatrolRoute wrapper, or null if not found.</returns>
+        public static FootPatrolRoute FindFootPatrolRoute(string routeName)
+        {
+            if (string.IsNullOrEmpty(routeName)) return null;
+            var routes = Object.FindObjectsOfType<S1NPCBehaviour.FootPatrolRoute>();
+            for (int i = 0; i < routes.Length; i++)
+            {
+                if (routes[i].RouteName == routeName)
+                    return new FootPatrolRoute(routes[i]);
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Finds a vehicle patrol route in the scene by name.
+        /// </summary>
+        /// <param name="routeName">The name of the patrol route to find.</param>
+        /// <returns>The VehiclePatrolRoute wrapper, or null if not found.</returns>
+        public static VehiclePatrolRoute FindVehiclePatrolRoute(string routeName)
+        {
+            if (string.IsNullOrEmpty(routeName)) return null;
+            var routes = Object.FindObjectsOfType<S1NPCBehaviour.VehiclePatrolRoute>();
+            for (int i = 0; i < routes.Length; i++)
+            {
+                if (routes[i].RouteName == routeName)
+                    return new VehiclePatrolRoute(routes[i]);
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Gets all foot patrol routes currently in the scene.
+        /// </summary>
+        /// <returns>An array of FootPatrolRoute wrappers.</returns>
+        public static FootPatrolRoute[] GetAllFootPatrolRoutes()
+        {
+            var s1Routes = Object.FindObjectsOfType<S1NPCBehaviour.FootPatrolRoute>();
+            var routes = new FootPatrolRoute[s1Routes.Length];
+            for (int i = 0; i < s1Routes.Length; i++)
+            {
+                routes[i] = new FootPatrolRoute(s1Routes[i]);
+            }
+            return routes;
+        }
+
+        /// <summary>
+        /// Gets all vehicle patrol routes currently in the scene.
+        /// </summary>
+        /// <returns>An array of VehiclePatrolRoute wrappers.</returns>
+        public static VehiclePatrolRoute[] GetAllVehiclePatrolRoutes()
+        {
+            var s1Routes = Object.FindObjectsOfType<S1NPCBehaviour.VehiclePatrolRoute>();
+            var routes = new VehiclePatrolRoute[s1Routes.Length];
+            for (int i = 0; i < s1Routes.Length; i++)
+            {
+                routes[i] = new VehiclePatrolRoute(s1Routes[i]);
+            }
+            return routes;
+        }
+
+        #endregion
     }
 }
