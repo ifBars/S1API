@@ -131,7 +131,7 @@ jobs:
 
       - name: Restore S1API dependencies
         if: steps.verify-assemblies.outputs.has_assemblies == 'true'
-        run: dotnet restore S1API/S1API.csproj
+        run: dotnet restore S1API/S1API.csproj -c MonoMelon
 
       - name: Build S1API
         if: steps.verify-assemblies.outputs.has_assemblies == 'true'
@@ -147,7 +147,7 @@ jobs:
         run: |
           dotnet run --project tools/S1APICoverageAnalyzer/S1APICoverageAnalyzer.csproj --no-build -c Release -- \
             --game-assembly S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll \
-            --api-assembly S1API/bin/MonoMelon/net472/S1API.dll \
+            --api-assembly S1API/bin/MonoMelon/netstandard2.1/S1API.dll \
             --output coverage-report.json \
             --badge-output coverage-badge.md \
             --verbose
