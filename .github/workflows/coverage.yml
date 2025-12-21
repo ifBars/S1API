@@ -1,0 +1,183 @@
+name: API Coverage Analysis
+
+on:
+  push:
+    branches: [ master, main, stable ]
+  pull_request:
+    branches: [ master, main, stable ]
+  workflow_dispatch:
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout S1API
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Create Assembly Directory Structure
+        run: |
+          mkdir -p S1API/ScheduleOneAssemblies/Managed
+          mkdir -p S1API/ScheduleOneAssemblies/MelonLoader
+
+      # Try to restore assemblies from cache first (for external PRs)
+      - name: Cache Game Assemblies
+        id: cache-assemblies
+        uses: actions/cache@v4
+        with:
+          path: S1API/ScheduleOneAssemblies
+          key: game-assemblies-${{ hashFiles('S1API/S1API.csproj') }}
+          restore-keys: |
+            game-assemblies-
+
+      # Only checkout game assemblies if cache miss AND we have access to secrets
+      - name: Checkout Game Assemblies
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.GAME_ASSEMBLIES_REPO }}
+          token: ${{ secrets.GAME_ASSEMBLIES_TOKEN }}
+          path: game-assemblies
+          fetch-depth: 1
+        if: steps.cache-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        continue-on-error: true
+
+      - name: Debug Game Assemblies Structure
+        run: |
+          echo "=== Game Assemblies Repository Structure ==="
+          find game-assemblies -type f -name "*.dll" | head -20
+          echo ""
+          echo "=== Looking for Assembly-CSharp.dll ==="
+          find game-assemblies -name "Assembly-CSharp.dll" -type f
+        if: steps.cache-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+
+      - name: Copy Game Assemblies
+        run: |
+          # Copy Mono assemblies
+          if [ -d "game-assemblies/Managed" ]; then
+            cp -r game-assemblies/Managed/* S1API/ScheduleOneAssemblies/Managed/ || echo "Failed to copy Mono assemblies"
+            echo "Copied Mono assemblies from game-assemblies/Managed/"
+          else
+            echo "No game-assemblies/Managed directory found"
+          fi
+
+          # Copy mod loader assemblies
+          if [ -d "game-assemblies/MelonLoader" ]; then
+            cp -r game-assemblies/MelonLoader/* S1API/ScheduleOneAssemblies/MelonLoader/ || echo "Failed to copy MelonLoader assemblies"
+            echo "Copied MelonLoader assemblies"
+          else
+            echo "No game-assemblies/MelonLoader directory found"
+          fi
+
+          # Ensure Unity.TextMeshPro.dll is available
+          if [ ! -f "S1API/ScheduleOneAssemblies/Managed/Unity.TextMeshPro.dll" ]; then
+            echo "Unity.TextMeshPro.dll not found in Managed folder, searching for it..."
+            TMPRO_PATH=$(find game-assemblies -name "Unity.TextMeshPro.dll" -type f | head -1)
+            if [ -n "$TMPRO_PATH" ]; then
+              echo "Found Unity.TextMeshPro.dll at: $TMPRO_PATH"
+              cp "$TMPRO_PATH" S1API/ScheduleOneAssemblies/Managed/ || echo "Failed to copy Unity.TextMeshPro.dll"
+              echo "Copied Unity.TextMeshPro.dll to Managed folder"
+            else
+              echo "Warning: Unity.TextMeshPro.dll not found in game-assemblies repository"
+            fi
+          fi
+        if: steps.cache-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+
+      - name: Verify Assembly Copies
+        id: verify-assemblies
+        run: |
+          echo "=== Verifying Assembly Structure ==="
+          ls -la S1API/ScheduleOneAssemblies/ || echo "ScheduleOneAssemblies directory not found"
+          echo ""
+          echo "=== Critical Assembly Check ==="
+          if [ -f S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll ]; then
+            echo "✓ Found Assembly-CSharp.dll"
+            ls -l S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll
+            echo "has_assemblies=true" >> $GITHUB_OUTPUT
+          else
+            echo "✗ Missing Assembly-CSharp.dll - Coverage analysis will be skipped"
+            echo "has_assemblies=false" >> $GITHUB_OUTPUT
+          fi
+          echo ""
+          if [ "${{ steps.cache-assemblies.outputs.cache-hit }}" == "true" ]; then
+            echo "✓ Using cached assemblies for build"
+          else
+            echo "✓ Using fresh assemblies from repository"
+          fi
+
+      - name: Create CI Build Properties
+        if: steps.verify-assemblies.outputs.has_assemblies == 'true'
+        run: |
+          cat > ci.build.props << 'EOF'
+          <Project>
+              <PropertyGroup>
+                  <AutomateLocalDeployment>false</AutomateLocalDeployment>
+
+                  <!-- CI Assembly Paths (relative to S1API/S1API.csproj) -->
+                  <MelonLoaderAssembliesPath>../ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
+
+                  <!-- Mono Configuration -->
+                  <LocalMonoDeploymentPath>null</LocalMonoDeploymentPath>
+                  <MonoAssembliesPath>../ScheduleOneAssemblies/Managed</MonoAssembliesPath>
+              </PropertyGroup>
+          </Project>
+          EOF
+
+      - name: Restore S1API dependencies
+        if: steps.verify-assemblies.outputs.has_assemblies == 'true'
+        run: dotnet restore S1API/S1API.csproj
+
+      - name: Build S1API
+        if: steps.verify-assemblies.outputs.has_assemblies == 'true'
+        run: dotnet build S1API/S1API.csproj --no-restore -c MonoMelon -v minimal
+
+      - name: Build Coverage Analyzer
+        if: steps.verify-assemblies.outputs.has_assemblies == 'true'
+        run: dotnet build tools/S1APICoverageAnalyzer/S1APICoverageAnalyzer.csproj -c Release
+
+      - name: Run Coverage Analysis
+        if: steps.verify-assemblies.outputs.has_assemblies == 'true'
+        id: coverage
+        run: |
+          dotnet run --project tools/S1APICoverageAnalyzer/S1APICoverageAnalyzer.csproj --no-build -c Release -- \
+            --game-assembly S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll \
+            --api-assembly S1API/bin/MonoMelon/net472/S1API.dll \
+            --output coverage-report.json \
+            --badge-output coverage-badge.md \
+            --verbose
+
+      - name: Upload Coverage Report
+        if: steps.verify-assemblies.outputs.has_assemblies == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage-report.json
+            coverage-badge.md
+          retention-days: 30
+
+      - name: Display Coverage Badge
+        if: steps.verify-assemblies.outputs.has_assemblies == 'true'
+        run: |
+          echo "=== Coverage Badge ===" 
+          cat coverage-badge.md || echo "Badge file not found"
+          echo ""
+          echo "=== Coverage Summary ==="
+          if [ -f coverage-report.json ]; then
+            # Extract key metrics from JSON
+            echo "Class Coverage: $(jq -r '.classCoverage.percentage' coverage-report.json)%"
+            echo "Member Coverage: $(jq -r '.memberCoverage.percentage' coverage-report.json)%"
+            echo "Covered Classes: $(jq -r '.classCoverage.covered' coverage-report.json) / $(jq -r '.classCoverage.total' coverage-report.json)"
+          fi
+
+      - name: Coverage Skipped Notice
+        if: steps.verify-assemblies.outputs.has_assemblies != 'true'
+        run: |
+          echo "::warning::Coverage analysis was skipped because game assemblies are not available."
+          echo "This is expected for external PRs or when the assemblies repository is not accessible."
