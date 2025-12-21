@@ -185,6 +185,11 @@ jobs:
             # Read the new badge markdown (trim whitespace)
             NEW_BADGE=$(cat coverage-badge.md | tr -d '\n\r')
             
+            # Replace the link to point to the GitHub Actions workflow
+            # Extract the badge image URL and replace the link URL
+            WORKFLOW_URL="https://github.com/${{ github.repository }}/actions/workflows/coverage.yml"
+            NEW_BADGE=$(echo "$NEW_BADGE" | sed "s|](docs/coverage-report.json)|]($WORKFLOW_URL)|g")
+            
             echo "New badge: $NEW_BADGE"
             
             # Update line 5 in README.md with the new badge
