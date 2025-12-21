@@ -131,7 +131,7 @@ jobs:
 
       - name: Restore S1API dependencies
         if: steps.verify-assemblies.outputs.has_assemblies == 'true'
-        run: dotnet restore S1API/S1API.csproj -c MonoMelon
+        run: dotnet restore S1API/S1API.csproj -p:Configuration=MonoMelon
 
       - name: Build S1API
         if: steps.verify-assemblies.outputs.has_assemblies == 'true'
