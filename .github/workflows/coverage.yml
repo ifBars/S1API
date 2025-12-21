@@ -10,6 +10,8 @@ on:
 jobs:
   coverage:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout S1API
         uses: actions/checkout@v4
@@ -174,6 +176,38 @@ jobs:
             echo "Class Coverage: $(jq -r '.classCoverage.percentage' coverage-report.json)%"
             echo "Member Coverage: $(jq -r '.memberCoverage.percentage' coverage-report.json)%"
             echo "Covered Classes: $(jq -r '.classCoverage.covered' coverage-report.json) / $(jq -r '.classCoverage.total' coverage-report.json)"
+          fi
+
+      - name: Update README Badge
+        if: steps.verify-assemblies.outputs.has_assemblies == 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable')
+        run: |
+          if [ -f coverage-badge.md ]; then
+            # Read the new badge markdown (trim whitespace)
+            NEW_BADGE=$(cat coverage-badge.md | tr -d '\n\r')
+            
+            echo "New badge: $NEW_BADGE"
+            
+            # Update line 5 in README.md with the new badge
+            # Use a temporary file to avoid sed escaping issues
+            awk -v new_badge="$NEW_BADGE" 'NR==5 {print new_badge; next} {print}' S1API/README.md > S1API/README.md.tmp
+            mv S1API/README.md.tmp S1API/README.md
+            
+            # Configure git
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            
+            # Check if there are changes
+            if git diff --quiet S1API/README.md; then
+              echo "No changes to README.md"
+            else
+              echo "Updating README.md with new coverage badge"
+              git diff S1API/README.md
+              git add S1API/README.md
+              git commit -m "chore: update API coverage badge [skip ci]"
+              git push
+            fi
+          else
+            echo "coverage-badge.md not found, skipping README update"
           fi
 
       - name: Coverage Skipped Notice
