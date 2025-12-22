@@ -2488,7 +2488,6 @@ namespace S1API.Entities
                                         if (addCashMethod != null)
                                         {
                                             addCashMethod.Invoke(inventory, new object[] { (float)cashAmount });
-                                            Logger.Msg($"[NPC] ApplyRandomInventoryDefaults: '{npcId}' added ${cashAmount} cash using AddCash method");
                                         }
                                         else
                                         {
@@ -2500,7 +2499,6 @@ namespace S1API.Entities
                                                 if (cashInstance != null)
                                                 {
                                                     inventory.InsertItem(cashInstance, network: true);
-                                                    Logger.Msg($"[NPC] ApplyRandomInventoryDefaults: '{npcId}' added ${cashAmount} cash using manual insertion");
                                                 }
                                                 else
                                                 {

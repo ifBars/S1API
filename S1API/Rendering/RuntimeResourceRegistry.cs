@@ -14,7 +14,7 @@ namespace S1API.Rendering
     /// </summary>
     public static class RuntimeResourceRegistry
     {
-        private static readonly Log Logger = new Log("RuntimeResourceRegistry");
+        private static readonly Log Logger = new Log("S1API.RuntimeResourceRegistry");
         private static readonly Dictionary<string, Object> _registeredAssets = new Dictionary<string, Object>();
         private static bool _isPatched = false;
 
@@ -46,7 +46,6 @@ namespace S1API.Rendering
 
             EnsurePatched();
             _registeredAssets[resourcePath] = asset;
-            Logger.Msg($"Registered asset: {resourcePath} ({asset.GetType().Name})");
             return true;
         }
 
@@ -109,8 +108,6 @@ namespace S1API.Rendering
             {
                 var harmony = new HarmonyLib.Harmony("S1API.RuntimeResourceRegistry");
                 
-                int patchedCount = 0;
-                
                 // Get all Resources.Load methods and filter manually to avoid ambiguity
                 var allLoadMethods = typeof(Resources).GetMethods(
                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
@@ -165,19 +162,7 @@ namespace S1API.Rendering
                         System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
                     
                     if (prefixMethod != null)
-                    {
                         harmony.Patch(loadWithTypeMethod, prefix: new HarmonyMethod(prefixMethod));
-                        patchedCount++;
-                        Logger.Msg($"Patched Resources.Load(string, Type)");
-                    }
-                    else
-                    {
-                        Logger.Error("Failed to find ResourcesLoadPrefix method");
-                    }
-                }
-                else
-                {
-                    Logger.Warning("Could not find Resources.Load(string, Type) method to patch");
                 }
                 
                 // Patch Resources.Load(string path)
@@ -188,49 +173,16 @@ namespace S1API.Rendering
                         System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
                     
                     if (prefixMethod != null)
-                    {
                         harmony.Patch(loadStringMethod, prefix: new HarmonyMethod(prefixMethod));
-                        patchedCount++;
-                        Logger.Msg($"Patched Resources.Load(string)");
-                    }
-                    else
-                    {
-                        Logger.Error("Failed to find ResourcesLoadStringPrefix method");
-                    }
                 }
-                else
-                {
-                    Logger.Warning("Could not find Resources.Load(string) method to patch");
-                }
-                
-                // Note: Cannot patch generic Resources.Load<T>(string) in IL2CPP due to Harmony limitations.
-                // The Resources.Load(string) patch should handle most cases, but typed loads like
-                // Resources.Load<Accessory> will fall through to Unity's implementation.
-                // We'll patch PlayerClothing.RefreshAppearance as a workaround.
-                PatchPlayerClothingRefreshAppearance(harmony, ref patchedCount);
 
                 _isPatched = true;
-                Logger.Msg($"Resources.Load patching completed ({patchedCount} overload(s) patched)");
             }
             catch (Exception ex)
             {
                 Logger.Error($"Failed to patch Resources.Load: {ex.Message}");
                 Logger.Error(ex.StackTrace);
             }
-        }
-
-        /// <summary>
-        /// INTERNAL: Attempts to patch PlayerClothing.RefreshAppearance as a workaround for generic method patching limitations.
-        /// Note: Generic method patching doesn't work in IL2CPP, so Resources.Load&lt;T&gt; calls cannot be intercepted.
-        /// The Resources.Load(string) patch handles non-generic loads (used by Avatar.ApplyAccessorySettings).
-        /// </summary>
-        private static void PatchPlayerClothingRefreshAppearance(HarmonyLib.Harmony harmony, ref int patchedCount)
-        {
-            // Generic method patching doesn't work in IL2CPP, so we can't directly intercept Resources.Load<Accessory>.
-            // The Resources.Load(string) patch handles non-generic loads, but typed loads will fall through.
-            // This is a known limitation - Avatar.ApplyAccessorySettings uses Resources.Load(string) which works,
-            // but PlayerClothing.RefreshAppearance uses Resources.Load<Accessory> which cannot be patched.
-            Logger.Msg("Note: Generic Resources.Load<T> calls cannot be patched in IL2CPP. Non-generic Resources.Load(string) is patched and working.");
         }
 
         /// <summary>

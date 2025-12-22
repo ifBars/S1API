@@ -89,7 +89,6 @@ namespace S1API.Rendering
                 // Since this prefab is DontDestroyOnLoad and not in any scene hierarchy, it won't render itself.
                 clonedPrefab.SetActive(true);
 
-                Logger.Msg($"Successfully cloned accessory: {newName} from {sourceResourcePath}");
                 return clonedPrefab;
             }
             catch (Exception ex)
