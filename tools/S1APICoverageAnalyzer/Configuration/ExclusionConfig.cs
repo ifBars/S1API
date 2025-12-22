@@ -24,7 +24,6 @@ public static class ExclusionConfig
         
         // FishNet networking internals
         "ScheduleOne.Networking",
-        "ScheduleOne.SteamNetworkLib", // Low level net
         
         // Audio system (internal implementation, likely not wrapped)
         "ScheduleOne.Audio",
@@ -39,7 +38,6 @@ public static class ExclusionConfig
         "ScheduleOne.Packaging", // Visuals for packaging
         "ScheduleOne.PostProcessing",
         "ScheduleOne.Shaders",
-        "ScheduleOne.ScheduleOneShaderFix",
         
         // Physics / Math / Core Utils
         "ScheduleOne.GamePhysics",
@@ -47,13 +45,11 @@ public static class ExclusionConfig
         "ScheduleOne.Math",
         "ScheduleOne.Tiles",
         "ScheduleOne.Variables", // Internal variables system
-        "ScheduleOne.Stealth", // Internal visibility logic
         "ScheduleOne.Vision", // Internal NPC vision logic
         "ScheduleOne.Polling", // Internal polling/feedback
         "ScheduleOne.Dragging",
         "ScheduleOne.Doors", // Internal door logic
         "ScheduleOne.Decoration",
-        "ScheduleOne.ReflectionNonLiteralStrings",
         
         // Avatar internals (Animation, Rendering, etc.) - API wraps high level Avatar only
         "ScheduleOne.AvatarFramework.Animation",
@@ -83,17 +79,8 @@ public static class ExclusionConfig
         
         // Player Tasks (Mini-games internals)
         "ScheduleOne.PlayerTasks",
-        
-        // Building/construction internals
-        "ScheduleOne.ConstructableScripts",
-        "ScheduleOne.Construction",
-        "ScheduleOne.Building", // BuildManager internals (wrapped via events, not classes)
-        
-        // Other specific mods/folders found in source but might be in assembly
-        "ScheduleOne.SimpleHealthBar",
-        "ScheduleOne.WorkingNetworkPrefabs",
-        "ScheduleOne.SerenaFlatsRewrite", // seems like a mod/content pack
-        "ScheduleOne.Silkroad_S1API", // seems like internal API usage
+        "Casino.UI",
+        "ScheduleOne.Console",
     ];
     
     /// <summary>
@@ -124,6 +111,26 @@ public static class ExclusionConfig
         // Specific types that shouldn't count toward coverage
         "AchievementManager", // Internal achievement system
         "IGUIDRegisterable", // Internal interface
+        "Stan",
+        "Meg",
+        "Jerry",
+        "Doris",
+        "Donna",
+        "Chloe",
+        "Billy",
+        "CashSlot",
+        "IMessageEntity",
+        "ResponseCallback",
+        "WaterCollider",
+        "BranchNodeData",
+        "BranchOptionData",
+        "EClothingColor",
+        "SlotReel",
+        "AvatarLayer",
+        "Eyebrow",
+        "FaceLayer",
+        "Hair",
+        "Registry",
     ];
     
     /// <summary>
