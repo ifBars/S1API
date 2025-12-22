@@ -121,7 +121,11 @@ namespace S1API.Internal.Patches
         /// </summary>
         private static IEnumerator WaitForNPCs(S1ContactsApp.ContactsApp contactsApp)
         {
-            yield return new WaitWhile((Func<bool>)(() => NPCPatches.CustomNpcsReady == false));
+            // Wait for custom NPCs to be ready - use polling for Il2Cpp compatibility
+            while (!NPCPatches.CustomNpcsReady)
+            {
+                yield return null;
+            }
 
             // Check for physical custom NPCs immediately after CustomNpcsReady
             // If there are no physical NPCs, we can skip all the waiting and proceed immediately

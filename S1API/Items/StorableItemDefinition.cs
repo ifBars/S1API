@@ -50,10 +50,10 @@ namespace S1API.Items
         }
 
         /// <summary>
-        /// Gets whether this item is currently purchasable based on level requirements.
+        /// Gets whether this item is currently unlocked (available for purchase/use).
         /// </summary>
-        public bool IsPurchasable =>
-            S1StorableItemDefinition.IsPurchasable;
+        public bool IsUnlocked =>
+            S1StorableItemDefinition.IsUnlocked;
     }
 }
 

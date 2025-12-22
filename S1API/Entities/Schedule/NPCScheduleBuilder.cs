@@ -196,10 +196,11 @@ namespace S1API.Entities.Schedule
         /// <param name="name">Optional custom name for this action; defaults to "HandleDeal".</param>
         /// <returns>This builder instance for method chaining.</returns>
         /// <remarks>
-        /// Creates a <see cref="HandleDealSpec"/> that, when applied, configures a
-        /// <see cref="S1NPCsSchedules.NPCSignal_HandleDeal"/>. The owning NPC is expected to be a dealer
-        /// with contract assignment handled by gameplay systems.
+        /// As of v0.4.2f4, deal handling is now automatic through the DealerAttendDealBehaviour system.
+        /// This method is kept for backwards compatibility but is a no-op. Dealer NPCs set up with
+        /// EnsureDealer() will automatically handle deals when contracts are assigned.
         /// </remarks>
+        [System.Obsolete("HandleDeal is no longer needed as of game version 0.4.2f4. Deal handling is now automatic through DealerAttendDealBehaviour.")]
         public PrefabScheduleBuilder HandleDeal(int startTime, string name = null)
         {
             _specs.Add(new HandleDealSpec { StartTime = startTime, Name = name });

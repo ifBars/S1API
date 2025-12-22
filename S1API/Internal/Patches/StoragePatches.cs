@@ -174,9 +174,9 @@ namespace S1API.Internal.Patches
         /// <summary>
         /// Hydrate expanded slots before loading contents so extra slots are restored from saves.
         /// </summary>
-        [HarmonyPatch(typeof(S1PersistenceLoaders.StorageRackLoader), "Load", new Type[] { typeof(S1Persistence.DynamicSaveData) })]
+        [HarmonyPatch(typeof(S1PersistenceLoaders.PlaceableStorageEntityLoader), "Load", new Type[] { typeof(S1Persistence.DynamicSaveData) })]
         [HarmonyPrefix]
-        private static bool StorageRackLoader_Load_Prefix(S1PersistenceLoaders.StorageRackLoader __instance, S1Persistence.DynamicSaveData data)
+        private static bool PlaceableStorageEntityLoader_Load_Prefix(S1PersistenceLoaders.PlaceableStorageEntityLoader __instance, S1Persistence.DynamicSaveData data)
         {
             try
             {
@@ -232,7 +232,7 @@ namespace S1API.Internal.Patches
             }
             catch (Exception ex)
             {
-                Logger.Error($"Error in StorageRackLoader_Load_Prefix: {ex.Message}");
+                Logger.Error($"Error in PlaceableStorageEntityLoader_Load_Prefix: {ex.Message}");
             }
 
             // Skip original loader to avoid double-loading

@@ -1,20 +1,4 @@
-#if (IL2CPPMELON)
-using Il2Cpp;
-using S1NPCs = Il2CppScheduleOne.NPCs;
-using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
-using S1Map = Il2CppScheduleOne.Map;
-using S1Vehicles = Il2CppScheduleOne.Vehicles;
-using S1VehiclesAI = Il2CppScheduleOne.Vehicles.AI;
-using S1ObjectScripts = Il2CppScheduleOne.ObjectScripts;
-#elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
-using S1NPCs = ScheduleOne.NPCs;
-using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
-using S1Map = ScheduleOne.Map;
-using S1Vehicles = ScheduleOne.Vehicles;
-using S1VehiclesAI = ScheduleOne.Vehicles.AI;
-using S1ObjectScripts = ScheduleOne.ObjectScripts;
-#endif
-using UnityEngine;
+using System;
 
 namespace S1API.Entities.Schedule
 {
@@ -22,9 +6,11 @@ namespace S1API.Entities.Schedule
     /// Specifies an action that handles a customer deal handover at the active contract location.
     /// </summary>
     /// <remarks>
-    /// Creates a <see cref="S1NPCsSchedules.NPCSignal_HandleDeal"/>. This action expects the owning NPC
-    /// to be a Dealer and for gameplay systems to assign the active contract at runtime.
+    /// As of v0.4.2f4, deal handling is now automatic through the DealerAttendDealBehaviour system.
+    /// This spec is kept for backwards compatibility but is a no-op. Dealer NPCs set up with
+    /// EnsureDealer() will automatically handle deals when contracts are assigned.
     /// </remarks>
+    [Obsolete("HandleDealSpec is no longer needed as of game version 0.4.2f4. Deal handling is now automatic through DealerAttendDealBehaviour.")]
     public sealed class HandleDealSpec : IScheduleActionSpec
     {
         /// <summary>
@@ -39,7 +25,9 @@ namespace S1API.Entities.Schedule
 
         void IScheduleActionSpec.ApplyTo(NPCSchedule schedule)
         {
-            schedule.AddActionInternal<S1NPCsSchedules.NPCSignal_HandleDeal>(StartTime, string.IsNullOrEmpty(Name) ? "HandleDeal" : Name);
+            // No-op: Deal handling is now automatic through DealerAttendDealBehaviour.
+            // Dealers set up with EnsureDealer() will automatically handle deals when contracts are assigned.
+            // This method intentionally does nothing to maintain backwards compatibility.
         }
     }
 }

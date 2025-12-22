@@ -1,7 +1,11 @@
 #if (IL2CPPMELON)
 using S1Growing = Il2CppScheduleOne.Growing;
+using S1Trash = Il2CppScheduleOne.Trash;
+using S1DevUtilities = Il2CppScheduleOne.DevUtilities;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Growing = ScheduleOne.Growing;
+using S1Trash = ScheduleOne.Trash;
+using S1DevUtilities = ScheduleOne.DevUtilities;
 #endif
 
 using S1API.Internal.Utils;
@@ -68,10 +72,33 @@ namespace S1API.Growing
         /// <summary>
         /// Destroys this plant in-game.
         /// </summary>
-        /// <param name="dropScraps">Whether to drop trash scraps.</param>
+        /// <param name="dropScraps">Whether to drop plant scraps (trash) at the plant's location.</param>
         public void Destroy(bool dropScraps = false)
         {
-            S1Plant.Destroy(dropScraps);
+            if (dropScraps && S1Plant.PlantScrapPrefab != null)
+            {
+                try
+                {
+                    // Spawn the plant scrap at the plant's position
+                    var trashManager = S1DevUtilities.NetworkSingleton<S1Trash.TrashManager>.Instance;
+                    if (trashManager != null)
+                    {
+                        var position = S1Plant.transform.position;
+                        var rotation = Quaternion.identity;
+                        trashManager.CreateTrashItem(
+                            S1Plant.PlantScrapPrefab.ID,
+                            position,
+                            rotation
+                        );
+                    }
+                }
+                catch
+                {
+                    // Silently fail if trash spawning fails - still destroy the plant
+                }
+            }
+
+            Object.Destroy(S1Plant.gameObject);
         }
     }
 }
