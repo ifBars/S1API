@@ -131,6 +131,9 @@ public static class ExclusionConfig
         "FaceLayer",
         "Hair",
         "Registry",
+        "ForkliftCamera",
+        "IStorageEntity",
+        "CosmeticPowerLine",
     ];
     
     /// <summary>
