@@ -1092,6 +1092,8 @@ namespace S1API.Entities
                 S1NPC.FirstName = firstName;
             if (!string.IsNullOrEmpty(lastName))
                 S1NPC.LastName = lastName;
+            else
+                S1NPC.hasLastName = false; // Ensure hasLastName is false when lastName is empty/null
             if (icon != null)
                 S1NPC.MugshotSprite = icon;
 
@@ -1983,12 +1985,38 @@ namespace S1API.Entities
                 }
             }
 
+            // CRITICAL: Ensure inventory is properly initialized with unlocked slots before spawn
+            // This must happen after construction but before the NPC is fully active
+            // Without this, base game code calling AddCash will fail with "CanItemFit() returned false"
+            try
+            {
+                Inventory.EnsureInitialized();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[NPC] CreateInternal: Failed to ensure inventory initialized for '{S1NPC?.ID ?? "null"}': {ex.Message}");
+            }
+
+            // Apply random inventory defaults AFTER slots are initialized
+            // This ensures slots exist when adding startup cash/items
+            try
+            {
+                ApplyRandomInventoryDefaults();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[NPC] CreateInternal: Failed to apply inventory defaults for '{S1NPC?.ID ?? "null"}': {ex.Message}");
+            }
+
             base.CreateInternal();
         }
 
         internal override void SaveInternal(string folderPath, ref List<string> extraSaveables)
         {
-            string npcPath = Path.Combine(folderPath, S1NPC.SaveFolderName);
+            // Trim whitespace from SaveFolderName to prevent trailing spaces in folder paths
+            // This handles cases where lastName is empty but hasLastName is still true
+            string saveFolderName = S1NPC.SaveFolderName?.Trim() ?? "UnknownNPC";
+            string npcPath = Path.Combine(folderPath, saveFolderName);
             base.SaveInternal(npcPath, ref extraSaveables);
         }
         #endregion
@@ -2346,8 +2374,7 @@ namespace S1API.Entities
                 S1NPC.Inventory.PickpocketIntObj = pickpocket;
             }
 
-            // Apply random inventory defaults if configured
-            ApplyRandomInventoryDefaults();
+            // NOTE: ApplyRandomInventoryDefaults() moved to CreateInternal() to ensure slots exist before adding items/cash
         }
 
         private void InitializeRelationshipData()
@@ -2404,6 +2431,94 @@ namespace S1API.Entities
                         inventory.RandomCashMin = data.RandomCashMin.Value;
                     if (data.RandomCashMax.HasValue)
                         inventory.RandomCashMax = data.RandomCashMax.Value;
+                    
+                    // Actually add cash to inventory immediately (not just configure for later)
+                    // Check if slots exist (Awake has run) before adding cash
+                    bool slotsExist = inventory.ItemSlots != null && inventory.ItemSlots.Count > 0;
+                    if (slotsExist)
+                    {
+                        // Check if NPC already has cash (e.g., from save data or previous initialization)
+                        int existingCash = 0;
+                        try
+                        {
+                            if (inventory.ItemSlots != null)
+                            {
+                                for (int i = 0; i < inventory.ItemSlots.Count; i++)
+                                {
+                                    var slot = inventory.ItemSlots[i];
+                                    if (slot?.ItemInstance != null)
+                                    {
+                                        var itemDef = slot.ItemInstance.Definition;
+                                        if (itemDef != null && itemDef.ID == "cash")
+                                        {
+                                            // Try to get cash value
+                                            var valueProp = slot.ItemInstance.GetType().GetProperty("Value");
+                                            if (valueProp != null)
+                                            {
+                                                var value = valueProp.GetValue(slot.ItemInstance);
+                                                if (value is int intValue)
+                                                    existingCash += intValue;
+                                                else if (value is float floatValue)
+                                                    existingCash += (int)floatValue;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Warning($"[NPC] ApplyRandomInventoryDefaults: '{npcId}' failed to check existing cash: {ex.Message}");
+                        }
+                        
+                        // Only add cash if NPC doesn't already have any (prevents duplicate cash on reload)
+                        if (existingCash == 0)
+                        {
+                            int minCash = data.RandomCashMin ?? 0;
+                            int maxCash = data.RandomCashMax ?? 100;
+                            if (maxCash > 0)
+                            {
+                                int cashAmount = UnityEngine.Random.Range(minCash, maxCash + 1);
+                                if (cashAmount > 0)
+                                {
+                                    try
+                                    {
+                                        // Use the proper AddCash method on NPCInventory, which handles chunking and network sync correctly
+                                        var addCashMethod = inventory.GetType().GetMethod("AddCash", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                                        if (addCashMethod != null)
+                                        {
+                                            addCashMethod.Invoke(inventory, new object[] { (float)cashAmount });
+                                        }
+                                        else
+                                        {
+                                            // Fallback to manual insertion if AddCash method not found
+                                            var moneyManager = S1DevUtilities.NetworkSingleton<S1Money.MoneyManager>.Instance;
+                                            if (moneyManager != null)
+                                            {
+                                                var cashInstance = moneyManager.GetCashInstance(cashAmount);
+                                                if (cashInstance != null)
+                                                {
+                                                    inventory.InsertItem(cashInstance, network: true);
+                                                }
+                                                else
+                                                {
+                                                    Logger.Warning($"[NPC] ApplyRandomInventoryDefaults: '{npcId}' MoneyManager.GetCashInstance returned null for amount {cashAmount}");
+                                                }
+                                            }
+                                            else
+                                            {
+                                                Logger.Warning($"[NPC] ApplyRandomInventoryDefaults: '{npcId}' MoneyManager not available to create cash");
+                                            }
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Logger.Warning($"[NPC] ApplyRandomInventoryDefaults: '{npcId}' failed to add cash: {ex.Message}");
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // Apply ClearInventoryEachNight setting

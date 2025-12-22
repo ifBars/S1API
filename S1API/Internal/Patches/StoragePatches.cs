@@ -220,7 +220,14 @@ namespace S1API.Internal.Patches
                     }
                     catch (Exception metaEx)
                     {
-                        Logger.Warning($"Failed to deserialize storage slot metadata: {metaEx.Message}");
+                        string itemId = placeableStorage?.ItemInstance?.Definition?.ID ?? "unknown";
+                        
+                        Logger.Warning(
+                            $"Failed to deserialize storage slot metadata for item '{itemId}'. " +
+                            $"This usually happens when a mod that added extra storage rows is no longer loaded. " +
+                            $"The save file contains expanded storage data, but the mod that created it is missing. " +
+                            $"Exception: {metaEx.GetType().Name}: {metaEx.Message}. "
+                        );
                     }
                 }
 

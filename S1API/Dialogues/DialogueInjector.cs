@@ -9,11 +9,14 @@ using Il2CppScheduleOne.Dialogue;
 using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.NPCs.Schedules;
 using Il2CppFishNet;
+using S1API.Entities;
+using S1NPC = Il2CppScheduleOne.NPCs.NPC;
 #else
 using ScheduleOne.Dialogue;
 using ScheduleOne.NPCs;
 using ScheduleOne.NPCs.Schedules;
 using FishNet;
+using S1NPC = ScheduleOne.NPCs.NPC;
 #endif
 
 namespace S1API.Dialogues
@@ -87,22 +90,21 @@ namespace S1API.Dialogues
                 for (int i = _pendingInjections.Count - 1; i >= 0; i--)
                 {
                     DialogueInjection? injection = _pendingInjections[i];
-                    var npcs = Object.FindObjectsOfType<NPC>();
-                    NPC? target = null;
+                    Entities.NPC? target = null;
 
-                    foreach (NPC npc in npcs)
+                    foreach (Entities.NPC npc in Entities.NPC.All)
                     {
-                        if (!npc || !npc.name.Contains(injection.NpcName))
+                        if (npc == null || !injection.AppliesTo(npc))
                             continue;
 
                         target = npc;
                         break;
                     }
 
-                    if (!target)
+                    if (target == null)
                         continue;
 
-                    TryInject(injection, target);
+                    TryInject(injection, target.S1NPC);
                     _pendingInjections.RemoveAt(i);
                 }
 
@@ -115,7 +117,7 @@ namespace S1API.Dialogues
         /// </summary>
         /// <param name="injection">The dialogue injection object containing the data for the choice to inject.</param>
         /// <param name="npc">The NPC that will have the dialogue choice injected.</param>
-        private static void TryInject(DialogueInjection injection, NPC npc)
+        private static void TryInject(DialogueInjection injection, S1NPC npc)
         {
             DialogueHandler handler = npc.GetComponent<DialogueHandler>();
             NPCEvent_LocationDialogue dialogueEvent = npc.GetComponentInChildren<NPCEvent_LocationDialogue>(true);

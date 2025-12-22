@@ -1,0 +1,263 @@
+#if (IL2CPPMELON)
+using S1Clothing = Il2CppScheduleOne.Clothing;
+using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
+using S1Registry = Il2CppScheduleOne.Registry;
+using Il2CppCollections = Il2CppSystem.Collections.Generic;
+#elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
+using S1Clothing = ScheduleOne.Clothing;
+using S1ItemFramework = ScheduleOne.ItemFramework;
+using S1Registry = ScheduleOne.Registry;
+using Il2CppCollections = System.Collections.Generic;
+#endif
+
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace S1API.Items
+{
+    /// <summary>
+    /// Builder for composing clothing item definitions at runtime.
+    /// Use fluent methods to configure clothing properties before calling <see cref="Build"/>.
+    /// </summary>
+    public sealed class ClothingItemDefinitionBuilder
+    {
+        private readonly S1Clothing.ClothingDefinition _definition;
+
+        /// <summary>
+        /// INTERNAL: Creates a new builder instance with a fresh ClothingDefinition.
+        /// </summary>
+        internal ClothingItemDefinitionBuilder()
+        {
+            _definition = ScriptableObject.CreateInstance<S1Clothing.ClothingDefinition>();
+            
+            // Set defaults
+            _definition.StackLimit = 10;
+            _definition.BasePurchasePrice = 10f;
+            _definition.ResellMultiplier = 0.5f;
+            _definition.Category = S1ItemFramework.EItemCategory.Clothing;
+            _definition.legalStatus = S1ItemFramework.ELegalStatus.Legal;
+            _definition.AvailableInDemo = true;
+            _definition.UsableInFilters = true;
+            _definition.LabelDisplayColor = Color.white;
+            
+            // Clothing-specific defaults
+            _definition.Slot = S1Clothing.EClothingSlot.Head;
+            _definition.ApplicationType = S1Clothing.EClothingApplicationType.Accessory;
+            _definition.ClothingAssetPath = "Path/To/Clothing/Asset";
+            _definition.Colorable = true;
+            _definition.DefaultColor = S1Clothing.EClothingColor.White;
+#if (IL2CPPMELON)
+            _definition.SlotsToBlock = new Il2CppCollections.List<S1Clothing.EClothingSlot>();
+#else
+            _definition.SlotsToBlock = new List<S1Clothing.EClothingSlot>();
+#endif
+        }
+
+        /// <summary>
+        /// INTERNAL: Creates a builder from an existing clothing definition (for cloning).
+        /// </summary>
+        internal ClothingItemDefinitionBuilder(S1Clothing.ClothingDefinition source)
+        {
+            _definition = ScriptableObject.CreateInstance<S1Clothing.ClothingDefinition>();
+            
+            // Copy all StorableItemDefinition properties
+            _definition.ID = source.ID;
+            _definition.Name = source.Name;
+            _definition.Description = source.Description;
+            _definition.Icon = source.Icon;
+            _definition.StackLimit = source.StackLimit;
+            _definition.BasePurchasePrice = source.BasePurchasePrice;
+            _definition.ResellMultiplier = source.ResellMultiplier;
+            _definition.Category = source.Category;
+            _definition.legalStatus = source.legalStatus;
+            _definition.AvailableInDemo = source.AvailableInDemo;
+            _definition.UsableInFilters = source.UsableInFilters;
+            _definition.LabelDisplayColor = source.LabelDisplayColor;
+            _definition.Keywords = source.Keywords;
+            _definition.StoredItem = source.StoredItem;
+            _definition.Equippable = source.Equippable;
+            
+            // Copy clothing-specific properties
+            _definition.Slot = source.Slot;
+            _definition.ApplicationType = source.ApplicationType;
+            _definition.ClothingAssetPath = source.ClothingAssetPath;
+            _definition.Colorable = source.Colorable;
+            _definition.DefaultColor = source.DefaultColor;
+#if (IL2CPPMELON)
+            _definition.SlotsToBlock = new Il2CppCollections.List<S1Clothing.EClothingSlot>();
+            if (source.SlotsToBlock != null)
+            {
+                foreach (var slot in source.SlotsToBlock)
+                {
+                    _definition.SlotsToBlock.Add(slot);
+                }
+            }
+#else
+            _definition.SlotsToBlock = new List<S1Clothing.EClothingSlot>(source.SlotsToBlock);
+#endif
+        }
+
+        /// <summary>
+        /// Sets the basic information for the clothing item.
+        /// </summary>
+        /// <param name="id">Unique identifier for the item (e.g., "my_custom_hat").</param>
+        /// <param name="name">Display name shown in UI.</param>
+        /// <param name="description">Item description shown in tooltips.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public ClothingItemDefinitionBuilder WithBasicInfo(string id, string name, string description)
+        {
+            _definition.ID = id;
+            _definition.Name = name;
+            _definition.Description = description;
+            _definition.name = string.IsNullOrEmpty(name) ? id : name;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the clothing slot this item occupies.
+        /// </summary>
+        /// <param name="slot">The clothing slot.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public ClothingItemDefinitionBuilder WithSlot(ClothingSlot slot)
+        {
+            _definition.Slot = (S1Clothing.EClothingSlot)slot;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets how this clothing item is applied to the avatar.
+        /// </summary>
+        /// <param name="applicationType">The application type.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public ClothingItemDefinitionBuilder WithApplicationType(ClothingApplicationType applicationType)
+        {
+            _definition.ApplicationType = (S1Clothing.EClothingApplicationType)applicationType;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the asset path to the clothing prefab or layer.
+        /// </summary>
+        /// <param name="assetPath">Resources path to the clothing asset.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public ClothingItemDefinitionBuilder WithClothingAsset(string assetPath)
+        {
+            _definition.ClothingAssetPath = assetPath;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets whether this clothing item can be colored.
+        /// </summary>
+        /// <param name="colorable">True if colorable, false otherwise.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public ClothingItemDefinitionBuilder WithColorable(bool colorable)
+        {
+            _definition.Colorable = colorable;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the default color for this clothing item.
+        /// </summary>
+        /// <param name="color">The default color.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public ClothingItemDefinitionBuilder WithDefaultColor(ClothingColor color)
+        {
+            _definition.DefaultColor = (S1Clothing.EClothingColor)color;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the list of clothing slots this item blocks when equipped.
+        /// </summary>
+        /// <param name="slots">Array of slots to block.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public ClothingItemDefinitionBuilder WithBlockedSlots(params ClothingSlot[] slots)
+        {
+#if (IL2CPPMELON)
+            _definition.SlotsToBlock = new Il2CppCollections.List<S1Clothing.EClothingSlot>();
+            foreach (var slot in slots)
+            {
+                _definition.SlotsToBlock.Add((S1Clothing.EClothingSlot)slot);
+            }
+#else
+            _definition.SlotsToBlock = new List<S1Clothing.EClothingSlot>();
+            foreach (var slot in slots)
+            {
+                _definition.SlotsToBlock.Add((S1Clothing.EClothingSlot)slot);
+            }
+#endif
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the icon sprite displayed for this item in UI.
+        /// </summary>
+        /// <param name="icon">The sprite to use as the item icon.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public ClothingItemDefinitionBuilder WithIcon(Sprite icon)
+        {
+            _definition.Icon = icon;
+            return this;
+        }
+
+        /// <summary>
+        /// Configures the economic properties of the item.
+        /// </summary>
+        /// <param name="basePurchasePrice">Base price when buying from shops.</param>
+        /// <param name="resellMultiplier">Fraction of purchase price recovered when selling (0.0 to 1.0).</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public ClothingItemDefinitionBuilder WithPricing(float basePurchasePrice, float resellMultiplier = 0.5f)
+        {
+            _definition.BasePurchasePrice = Mathf.Max(0f, basePurchasePrice);
+            _definition.ResellMultiplier = Mathf.Clamp01(resellMultiplier);
+            return this;
+        }
+
+        /// <summary>
+        /// Sets keywords used for filtering and searching this item.
+        /// </summary>
+        /// <param name="keywords">Array of keywords.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public ClothingItemDefinitionBuilder WithKeywords(params string[] keywords)
+        {
+            _definition.Keywords = keywords;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the color of the label displayed in UI.
+        /// </summary>
+        /// <param name="color">The color to use for the item label.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public ClothingItemDefinitionBuilder WithLabelColor(Color color)
+        {
+            _definition.LabelDisplayColor = color;
+            return this;
+        }
+
+        /// <summary>
+        /// Builds the clothing item definition, registers it with the game's registry, and returns a wrapper.
+        /// </summary>
+        /// <returns>A wrapper around the created clothing item definition.</returns>
+        public ClothingItemDefinition Build()
+        {
+            // Register with the game's registry
+            S1Registry.Instance.AddToRegistry(_definition);
+
+            // Return wrapper
+            return new ClothingItemDefinition(_definition);
+        }
+
+        /// <summary>
+        /// INTERNAL: Builds and returns the raw game item definition without registering.
+        /// Used internally by S1API.
+        /// </summary>
+        internal S1Clothing.ClothingDefinition BuildInternal()
+        {
+            return _definition;
+        }
+    }
+}
+

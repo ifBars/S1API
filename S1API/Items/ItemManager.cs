@@ -3,11 +3,13 @@ using S1 = Il2CppScheduleOne;
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1Product = Il2CppScheduleOne.Product;
 using S1Registry = Il2CppScheduleOne.Registry;
+using S1Clothing = Il2CppScheduleOne.Clothing;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1 = ScheduleOne;
 using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1Product = ScheduleOne.Product;
 using S1Registry = ScheduleOne.Registry;
+using S1Clothing = ScheduleOne.Clothing;
 #endif
 
 using S1API.Internal.Utils;
@@ -41,6 +43,10 @@ namespace S1API.Items
             if (CrossType.Is(itemDefinition,
                     out S1ItemFramework.CashDefinition cashDefinition))
                 return new CashDefinition(cashDefinition);
+
+            if (CrossType.Is(itemDefinition,
+                    out S1Clothing.ClothingDefinition clothingDefinition))
+                return new ClothingItemDefinition(clothingDefinition);
 
             if (CrossType.Is(itemDefinition,
                     out S1ItemFramework.BuildableItemDefinition buildableItemDefinition))

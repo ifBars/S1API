@@ -342,6 +342,9 @@ namespace S1API.Entities
         /// <summary>
         /// Builds a DialogueContainer with choice-based flow and registers it by name.
         /// Use this to define custom conversations for this NPC entirely from code.
+        /// 
+        /// If a custom NPC, you must also call <see cref="BuildAndSetDatabase(Action{DialogueDatabaseBuilder})">BuildAndSetDatabase</see>
+        /// for this to work
         /// </summary>
         public void BuildAndRegisterContainer(string containerName, Action<DialogueContainerBuilder> configure)
         {
