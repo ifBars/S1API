@@ -3060,7 +3060,6 @@ namespace S1API.Entities
                     "NPCSignal_WaitForDelivery",
                     "NPCSignal_UseVendingMachine",
                     "NPCSignal_UseATM",
-                    "NPCSignal_HandleDeal",
                     "NPCSignal_DriveToCarPark",
                     "NPCEvent_StayInBuilding",
                     "NPCEvent_Sit",

@@ -4,6 +4,7 @@ using S1Quests = Il2CppScheduleOne.Quests;
 using S1Economy = Il2CppScheduleOne.Economy;
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
+using S1NPCsBehaviour = Il2CppScheduleOne.NPCs.Behaviour;
 using S1Items = Il2CppScheduleOne.ItemFramework;
 using S1Messaging = Il2CppScheduleOne.Messaging;
 using S1DevUtilities = Il2CppScheduleOne.DevUtilities;
@@ -14,6 +15,7 @@ using S1Quests = ScheduleOne.Quests;
 using S1NPCs = ScheduleOne.NPCs;
 using S1Economy = ScheduleOne.Economy;
 using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
+using S1NPCsBehaviour = ScheduleOne.NPCs.Behaviour;
 using S1Items = ScheduleOne.ItemFramework;
 using S1Messaging = ScheduleOne.Messaging;
 using S1DevUtilities = ScheduleOne.DevUtilities;
@@ -821,34 +823,31 @@ namespace S1API.Entities
                 }
 #endif
 
-                // Ensure DealSignal exists for dealer schedule
+                // Ensure DealerAttendDealBehaviour exists (replaced NPCSignal_HandleDeal in v0.4.2f4)
                 try
                 {
-#if MONOMELON
-                    var dealSignalField = typeof(S1Economy.Dealer).GetField("DealSignal", BindingFlags.Public | BindingFlags.Instance);
-#else
-                    var dealSignalField = typeof(S1Economy.Dealer).GetProperty("DealSignal", BindingFlags.Public | BindingFlags.Instance);
-#endif
-                    var existingSignal = dealSignalField?.GetValue(dealer) as S1NPCsSchedules.NPCSignal_HandleDeal;
-                    if (existingSignal == null)
+                    var attendDealField = typeof(S1Economy.Dealer).GetField("_attendDealBehaviour", BindingFlags.NonPublic | BindingFlags.Instance);
+                    var existingBehaviour = attendDealField?.GetValue(dealer) as S1NPCsBehaviour.DealerAttendDealBehaviour;
+                    if (existingBehaviour == null)
                     {
-                        var sched = NPC.gameObject.GetComponentInChildren<S1NPCs.NPCScheduleManager>(true);
-                        if (sched == null)
+                        // Get or create NPCBehaviour manager
+                        var npcBehaviour = NPC.gameObject.GetComponentInChildren<S1NPCsBehaviour.NPCBehaviour>(true);
+                        if (npcBehaviour == null)
                         {
-                            var schedGo = new GameObject("NPCScheduleManager");
-                            schedGo.transform.SetParent(NPC.gameObject.transform, false);
-                            sched = schedGo.AddComponent<S1NPCs.NPCScheduleManager>();
+                            var behGo = new GameObject("NPCBehaviour");
+                            behGo.transform.SetParent(NPC.gameObject.transform, false);
+                            npcBehaviour = behGo.AddComponent<S1NPCsBehaviour.NPCBehaviour>();
                         }
 
-                        var signal = NPC.gameObject.GetComponentInChildren<S1NPCsSchedules.NPCSignal_HandleDeal>(true);
-                        if (signal == null)
+                        var behaviour = NPC.gameObject.GetComponentInChildren<S1NPCsBehaviour.DealerAttendDealBehaviour>(true);
+                        if (behaviour == null)
                         {
-                            var go = new GameObject("DealSignal");
-                            go.transform.SetParent(sched.transform, false);
-                            signal = go.AddComponent<S1NPCsSchedules.NPCSignal_HandleDeal>();
+                            var go = new GameObject("DealerAttendDealBehaviour");
+                            go.transform.SetParent(npcBehaviour.transform, false);
+                            behaviour = go.AddComponent<S1NPCsBehaviour.DealerAttendDealBehaviour>();
                             go.SetActive(false);
                         }
-                        dealSignalField?.SetValue(dealer, signal);
+                        attendDealField?.SetValue(dealer, behaviour);
                     }
                 }
                 catch { /* ignore */ }

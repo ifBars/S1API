@@ -1469,8 +1469,14 @@ namespace S1API.Internal.Patches
                     }
                 }
 
-                // Respect minimal fill
-                if (__instance.GetItemCount() >= 3)
+                // Respect minimal fill - count non-empty slots (GetItemCount was removed in v0.4.2f4)
+                int itemCount = 0;
+                for (int j = 0; j < __instance.ItemSlots.Count; j++)
+                {
+                    if (__instance.ItemSlots[j]?.ItemInstance != null)
+                        itemCount++;
+                }
+                if (itemCount >= 3)
                     return false;
 
                 // Random cash (local-only)
@@ -1484,22 +1490,13 @@ namespace S1API.Internal.Patches
                     }
                 }
 
-                // Random items (local-only)
+                // Random items (local-only) - Use AddRandomItemsToInventory which handles the new API
                 if (__instance.RandomItems && __instance.RandomInventoryItems != null &&
                     __instance.RandomInventoryItems.Length > 0)
                 {
-                    int count = UnityEngine.Random.Range(__instance.RandomItemMin, __instance.RandomItemMax + 1);
-                    var getRandomMethod = typeof(S1NPCs.NPCInventory).GetMethod("GetRandomInventoryItem",
-                        BindingFlags.NonPublic | BindingFlags.Instance);
-                    for (int i = 0; i < count; i++)
-                    {
-                        var def = getRandomMethod?.Invoke(__instance, null) as S1Items.StorableItemDefinition;
-                        if (def != null)
-                        {
-                            var inst = def.GetDefaultInstance();
-                            __instance.InsertItem(inst, network: false);
-                        }
-                    }
+                    // v0.4.2f4 changed GetRandomInventoryItem to require excludeIDs parameter
+                    // and added AddRandomItemsToInventory() as a public method - use that instead
+                    __instance.AddRandomItemsToInventory();
                 }
             }
             catch (Exception ex)

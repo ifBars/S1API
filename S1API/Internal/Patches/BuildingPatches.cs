@@ -92,7 +92,7 @@ namespace S1API.Internal.Patches
         /// <summary>
         /// Patch for BuildableItem.InitializeBuildableItem - raises OnBuildableItemInitialized event.
         /// </summary>
-        [HarmonyPatch(typeof(S1EntityFramework.BuildableItem), nameof(S1EntityFramework.BuildableItem.InitializeBuildableItem))]
+        [HarmonyPatch(typeof(S1EntityFramework.BuildableItem), "InitializeBuildableItem")]
         [HarmonyPostfix]
         private static void InitializeBuildableItem_Postfix(S1EntityFramework.BuildableItem __instance, S1ItemFramework.ItemInstance instance)
         {
