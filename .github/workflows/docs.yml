@@ -209,7 +209,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: S1API-Mono
-          path: S1API/S1API/bin/MonoMelon/S1API.dll
+          path: S1API/bin/MonoMelon/netstandard2.1/S1API.dll
 
       - name: Install DocFX
         run: dotnet tool install -g docfx
