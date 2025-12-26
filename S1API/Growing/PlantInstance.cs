@@ -58,10 +58,10 @@ namespace S1API.Growing
             S1Plant.QualityLevel;
 
         /// <summary>
-        /// The yield level (amount) of this plant.
+        /// The yield multiplier of this plant.
         /// </summary>
-        public float Yield =>
-            S1Plant.YieldLevel;
+        public float YieldMultiplier =>
+            S1Plant.YieldMultiplier;
 
         /// <summary>
         /// The GameObject of the plant.
