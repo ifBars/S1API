@@ -365,7 +365,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: S1API-Il2Cpp
-          path: S1API/S1API/bin/Il2CppMelon/S1API.dll
+          path: S1API/bin/Il2CppMelon/net6.0/S1API.dll
 
       - name: Build Summary
         if: always()
