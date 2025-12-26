@@ -1,10 +1,12 @@
 #if (IL2CPPMELON)
 using S1GameTime = Il2CppScheduleOne.GameTime;
+using Il2CppInterop.Runtime;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1GameTime = ScheduleOne.GameTime;
 #endif
 
 using System;
+using System.Reflection;
 
 namespace S1API.GameTime
 {
@@ -69,7 +71,9 @@ namespace S1API.GameTime
 
             instance.onDayPass += DayPassHandler;
             instance.onWeekPass += WeekPassHandler;
-            instance.onTick += TickHandler;
+            
+            AddToActionList(instance.onTick, TickHandler);
+            
             instance.onSleepStart += SleepStartHandler;
             instance.onTimeSkip += TimeSkipHandler;
             instance.onSleepEnd += SleepEndHandler;
@@ -92,10 +96,46 @@ namespace S1API.GameTime
 
             instance.onDayPass -= DayPassHandler;
             instance.onWeekPass -= WeekPassHandler;
-            instance.onTick -= TickHandler;
+            
+            RemoveFromActionList(instance.onTick, TickHandler);
+            
             instance.onSleepStart -= SleepStartHandler;
             instance.onTimeSkip -= TimeSkipHandler;
             instance.onSleepEnd -= SleepEndHandler;
+        }
+
+        private static void AddToActionList(object actionList, Action handler)
+        {
+            if (actionList == null) return;
+            var method = actionList.GetType().GetMethod("Add", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            if (method == null) return;
+
+            object param = handler;
+#if IL2CPPMELON
+            var parameters = method.GetParameters();
+            if (parameters.Length > 0 && parameters[0].ParameterType == typeof(Il2CppSystem.Action))
+            {
+                param = DelegateSupport.ConvertDelegate<Il2CppSystem.Action>(handler);
+            }
+#endif
+            method.Invoke(actionList, new object[] { param });
+        }
+
+        private static void RemoveFromActionList(object actionList, Action handler)
+        {
+            if (actionList == null) return;
+            var method = actionList.GetType().GetMethod("Remove", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            if (method == null) return;
+
+            object param = handler;
+#if IL2CPPMELON
+            var parameters = method.GetParameters();
+            if (parameters.Length > 0 && parameters[0].ParameterType == typeof(Il2CppSystem.Action))
+            {
+                param = DelegateSupport.ConvertDelegate<Il2CppSystem.Action>(handler);
+            }
+#endif
+            method.Invoke(actionList, new object[] { param });
         }
 
         /// <summary>
