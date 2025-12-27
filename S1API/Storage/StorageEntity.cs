@@ -146,6 +146,50 @@ namespace S1API.Storage
         public bool IsPlaceable =>
             S1PlaceableStorageEntity != null;
 
+        /// <summary>
+        /// Gets or sets the custom name set by the player via the management clipboard.
+        /// Returns null if this is not placeable storage or no custom name is set.
+        /// Setting this value updates the Configuration.Name field which persists to save files.
+        /// </summary>
+        /// <remarks>
+        /// This is different from <see cref="Name"/> which is the base StorageEntityName.
+        /// CustomName reflects the user-editable name shown in the clipboard UI.
+        /// When a player renames storage via the clipboard, this property is updated.
+        /// </remarks>
+        public string CustomName
+        {
+            get => S1PlaceableStorageEntity?.Configuration?.Name?.Value;
+            set
+            {
+                if (S1PlaceableStorageEntity?.Configuration?.Name != null && !string.IsNullOrEmpty(value))
+                {
+                    S1PlaceableStorageEntity.Configuration.Name.SetValue(value, true);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets whether this storage has a custom name set by the player.
+        /// </summary>
+        public bool HasCustomName =>
+            !string.IsNullOrEmpty(CustomName);
+
+        /// <summary>
+        /// Synchronizes the StorageEntityName with the custom name from Configuration.
+        /// Call this before opening the storage menu to ensure the custom name is displayed.
+        /// </summary>
+        /// <remarks>
+        /// The base game's StorageMenu uses StorageEntityName for display, but custom names
+        /// set via the clipboard are stored in Configuration.Name. This method syncs them.
+        /// </remarks>
+        public void SyncCustomNameToDisplayName()
+        {
+            if (HasCustomName)
+            {
+                Name = CustomName;
+            }
+        }
+
         // ====== Slot Manipulation Methods ======
 
         /// <summary>
