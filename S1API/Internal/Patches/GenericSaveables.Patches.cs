@@ -26,6 +26,13 @@ namespace S1API.Internal.Patches
 	/// <summary>
 	/// INTERNAL: Save/Load pipeline for mod-registered Saveables not tied to base entities.
 	/// Writes to Modded/Saveables and restores on load. Cross-compatible for Mono/Il2Cpp.
+	/// <para>
+	/// Supports configurable load order via <see cref="S1API.Internal.Abstraction.Saveable.LoadOrder"/>:
+	/// </para>
+	/// <list type="bullet">
+	/// <item><description>BeforeBaseGame: Loads before BuildingsLoader.Load (prefix patch)</description></item>
+	/// <item><description>AfterBaseGame (default): Loads after NPCsLoader.Load (postfix patch)</description></item>
+	/// </list>
 	/// </summary>
 	[HarmonyPatch]
 	internal static class GenericSaveablesPatches
@@ -64,17 +71,24 @@ namespace S1API.Internal.Patches
 			}
 		}
 
-		[HarmonyPatch(typeof(S1Loaders.NPCsLoader), "Load")]
-		[HarmonyPostfix]
-		private static void AfterBaseLoaders(string mainPath)
+		/// <summary>
+		/// Loads saveables marked with BeforeBaseGame load order BEFORE base game loaders run.
+		/// This runs as a prefix to BuildingsLoader.Load, which is one of the earliest loaders.
+		/// </summary>
+		[HarmonyPatch(typeof(S1Loaders.BuildingsLoader), "Load")]
+		[HarmonyPrefix]
+		private static void BeforeBaseLoaders()
 		{
 			try
 			{
 				string basePath = Path.Combine(S1Persistence.LoadManager.Instance.LoadedGameFolderPath, "Modded", "Saveables");
 				
-				// Use automatic discovery instead of manual registry
 				foreach (var saveable in SaveableAutoRegistry.GetRegisteredSaveables())
 				{
+					// Only load saveables that want to load before base game
+					if (saveable.LoadOrder != SaveableLoadOrder.BeforeBaseGame)
+						continue;
+
 					string folder = saveable.GetType().Name;
 					string path = Path.Combine(basePath, folder);
 
@@ -96,7 +110,59 @@ namespace S1API.Internal.Patches
 						    }
 						    catch (Exception e)
 						    {
-							    try { MelonLoader.MelonLogger.Warning($"[Saveables] InitializeOnLoadComplete failed: {e.Message}\n{e.StackTrace}"); } catch { }
+							    try { MelonLoader.MelonLogger.Warning($"[Saveables] InitializeOnLoadComplete (Before) failed: {e.Message}\n{e.StackTrace}"); } catch { }
+						    }
+						}
+						EventHelper.AddListener(InitializeOnLoadComplete, lm.onLoadComplete);
+					}
+				}
+			}
+			catch (Exception e)
+			{
+				try { MelonLoader.MelonLogger.Warning($"[Saveables] BeforeBaseLoaders failed: {e.Message}\n{e.StackTrace}"); } catch { }
+			}
+		}
+
+		/// <summary>
+		/// Loads saveables marked with AfterBaseGame load order AFTER base game loaders run.
+		/// This runs as a postfix to NPCsLoader.Load, which is one of the last loaders.
+		/// </summary>
+		[HarmonyPatch(typeof(S1Loaders.NPCsLoader), "Load")]
+		[HarmonyPostfix]
+		private static void AfterBaseLoaders(string mainPath)
+		{
+			try
+			{
+				string basePath = Path.Combine(S1Persistence.LoadManager.Instance.LoadedGameFolderPath, "Modded", "Saveables");
+				
+				foreach (var saveable in SaveableAutoRegistry.GetRegisteredSaveables())
+				{
+					// Only load saveables that want to load after base game (default behavior)
+					if (saveable.LoadOrder != SaveableLoadOrder.AfterBaseGame)
+						continue;
+
+					string folder = saveable.GetType().Name;
+					string path = Path.Combine(basePath, folder);
+
+					if (Directory.Exists(path))
+					{
+						// Existing save data found -> load
+						saveable.LoadInternal(path);
+					}
+					else
+					{
+						// No save data yet for this save -> initialize once after full game load
+						var lm = S1Persistence.LoadManager.Instance;
+						void InitializeOnLoadComplete()
+						{
+						    try
+						    {
+							    EventHelper.RemoveListener(InitializeOnLoadComplete, lm.onLoadComplete);
+							    ((IRegisterable)saveable).CreateInternal();
+						    }
+						    catch (Exception e)
+						    {
+							    try { MelonLoader.MelonLogger.Warning($"[Saveables] InitializeOnLoadComplete (After) failed: {e.Message}\n{e.StackTrace}"); } catch { }
 						    }
 						}
 						EventHelper.AddListener(InitializeOnLoadComplete, lm.onLoadComplete);

@@ -30,6 +30,46 @@ namespace S1API.Internal.Abstraction
     public abstract class Saveable : Registerable, ISaveable
     {
         /// <summary>
+        /// Determines when this saveable should load relative to base game saveables.
+        /// </summary>
+        /// <value>
+        /// Default is <see cref="SaveableLoadOrder.AfterBaseGame"/>, which loads after base game entities are loaded.
+        /// Override this property to return <see cref="SaveableLoadOrder.BeforeBaseGame"/> if your mod data needs to be
+        /// available before the base game's ISaveables are loaded.
+        /// </value>
+        /// <remarks>
+        /// <para>
+        /// <strong>AfterBaseGame (default):</strong> Your <see cref="OnLoaded"/> method is called after base game entities 
+        /// (NPCs, buildings, vehicles) have been loaded. This is the recommended setting for most mods.
+        /// </para>
+        /// <para>
+        /// <strong>BeforeBaseGame:</strong> Your <see cref="OnLoaded"/> method is called before base game entities are loaded.
+        /// Use this only if you need to set up hooks or state that the base game loading process depends on.
+        /// </para>
+        /// <para>
+        /// <strong>Note:</strong> All saveables are saved at the same time (after base game save), regardless of load order.
+        /// </para>
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// public class EarlyConfigSaveable : Saveable
+        /// {
+        ///     public override SaveableLoadOrder LoadOrder => SaveableLoadOrder.BeforeBaseGame;
+        ///     
+        ///     [SaveableField("config")]
+        ///     private ModConfig _config = new ModConfig();
+        ///     
+        ///     protected override void OnLoaded()
+        ///     {
+        ///         // Base game entities are NOT loaded yet
+        ///         ApplyGlobalSettings(_config);
+        ///     }
+        /// }
+        /// </code>
+        /// </example>
+        public virtual SaveableLoadOrder LoadOrder => SaveableLoadOrder.AfterBaseGame;
+
+        /// <summary>
         /// Requests the game to perform a save operation. If a game is not currently loaded,
         /// the request is ignored and the method returns false.
         /// </summary>
