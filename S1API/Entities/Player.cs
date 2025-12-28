@@ -269,6 +269,11 @@ namespace S1API.Entities
         public Region CurrentRegion => (Region)S1Player.CurrentRegion;
 
         /// <summary>
+        /// The player's current avatar settings (appearance configuration).
+        /// </summary>
+        public object CurrentAvatarSettings => S1Player.CurrentAvatarSettings;
+
+        /// <summary>
         /// Revives the player.
         /// </summary>
         public void Revive() =>
