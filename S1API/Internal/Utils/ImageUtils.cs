@@ -56,7 +56,7 @@ namespace S1API.Internal.Utils
                 Texture2D tex = new Texture2D(2, 2);
                 if (tex.LoadImage(data))
                 {
-                    return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+                    return TextureToSprite(tex);
                 }
             }
             catch (System.Exception ex)
@@ -64,6 +64,18 @@ namespace S1API.Internal.Utils
                 _loggerInstance.Error("❌ Failed to load sprite: " + ex);
             }
             return null;
+        }
+
+        /// <summary>
+        /// Converts a Texture2D to a Sprite.
+        /// </summary>
+        /// <param name="texture">The texture to convert.</param>
+        /// <param name="pixelsPerUnit">The pixels per unit for the sprite. Defaults to 100f.</param>
+        /// <returns>A Sprite object, or null if texture is null.</returns>
+        public static Sprite? TextureToSprite(Texture2D? texture, float pixelsPerUnit = 100f)
+        {
+            if (texture == null) return null;
+            return Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f), pixelsPerUnit);
         }
 
         /// <summary>
