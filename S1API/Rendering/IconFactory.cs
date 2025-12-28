@@ -20,6 +20,15 @@ namespace S1API.Rendering
 {
     /// <summary>
     /// Factory for generating item icons using the game's IconGenerator and MugshotGenerator.
+    /// <para>
+    /// <b>Item Icon Generation (Experimental):</b> Direct item icon generation using IconGenerator is experimental.
+    /// Use <see cref="GenerateIcon"/> for static mesh item models.
+    /// </para>
+    /// <para>
+    /// <b>Accessory Icon Generation (Confirmed Working):</b> Accessory icon generation using MugshotGenerator
+    /// is confirmed to work. Use <see cref="GenerateAccessoryIcon"/> or <see cref="GenerateAccessoryIconSprite"/>
+    /// for clothing accessories (hats, glasses, etc.).
+    /// </para>
     /// </summary>
     public static class IconFactory
     {
@@ -185,6 +194,13 @@ namespace S1API.Rendering
         /// <param name="callback">Callback invoked with the generated texture when complete</param>
         /// <param name="accessoryColor">Optional tint color for the accessory (defaults to white)</param>
         /// <param name="size">The size of the square icon (default 512)</param>
+        /// <remarks>
+        /// This method attempts to use the local player's current avatar settings for a personalized icon.
+        /// However, if called during mod initialization (e.g., in OnSceneWasLoaded), the player may not have
+        /// spawned yet, causing it to fall back to a generic avatar with neutral face, eyes, and basic clothing.
+        /// To use the player's actual appearance, consider deferring icon generation until after player spawn
+        /// by subscribing to <see cref="Entities.Player.LocalPlayerSpawned"/>.
+        /// </remarks>
         public static void GenerateAccessoryIcon(string accessoryPath, Action<Texture2D> callback, Color? accessoryColor = null, int size = 512)
         {
             if (string.IsNullOrEmpty(accessoryPath))
