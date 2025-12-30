@@ -188,6 +188,7 @@ public abstract class AssemblyAnalyzer
     
     /// <summary>
     /// Normalize a type name from Il2CppScheduleOne to ScheduleOne for matching.
+    /// Also preserves nested type separators (+).
     /// </summary>
     protected static string NormalizeScheduleOneTypeName(string? fullName)
     {
@@ -196,6 +197,8 @@ public abstract class AssemblyAnalyzer
         if (fullName.StartsWith("Il2CppScheduleOne.", StringComparison.Ordinal))
             return "ScheduleOne." + fullName[18..];
         
+        // Ensure nested types use + separator (C# standard)
+        // Reflection may sometimes show them differently, but we preserve +
         return fullName;
     }
 }

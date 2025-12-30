@@ -134,6 +134,7 @@ public static class ExclusionConfig
         "ForkliftCamera",
         "IStorageEntity",
         "CosmeticPowerLine",
+        "AvatarLODBoundsUpdater",
     ];
     
     /// <summary>

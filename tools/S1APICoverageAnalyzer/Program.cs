@@ -1,11 +1,25 @@
 using System.CommandLine;
 using S1APICoverageAnalyzer.Analysis;
+using S1APICoverageAnalyzer.Models;
 using S1APICoverageAnalyzer.Output;
 
 namespace S1APICoverageAnalyzer;
 
 public class Program
 {
+    private sealed record AnalysisOptions(
+        FileInfo GameAssembly,
+        FileInfo ApiAssembly,
+        FileInfo? Output,
+        FileInfo? BadgeOutput,
+        FileInfo? TextOutput,
+        bool Verbose,
+        FileInfo? HistoryFile,
+        bool SkipHistory,
+        string? Annotation,
+        FileInfo? ChartOutput,
+        string ChartFormat);
+    
     public static async Task<int> Main(string[] args)
     {
         var gameAssemblyOption = new Option<FileInfo>(
@@ -38,6 +52,27 @@ public class Program
             aliases: ["--verbose", "-v"],
             description: "Show detailed output");
         
+        var historyFileOption = new Option<FileInfo?>(
+            aliases: ["--history-file"],
+            description: "Path to coverage history JSON file (default: coverage-history.json)");
+        
+        var skipHistoryOption = new Option<bool>(
+            aliases: ["--skip-history"],
+            description: "Don't update history (for testing)");
+        
+        var annotationOption = new Option<string?>(
+            aliases: ["--annotation"],
+            description: "Add a custom note to this history entry");
+        
+        var chartOutputOption = new Option<FileInfo?>(
+            aliases: ["--chart-output"],
+            description: "Path to write chart markdown/URL");
+        
+        var chartFormatOption = new Option<string>(
+            aliases: ["--chart-format"],
+            description: "Chart output format: url, markdown, html, mermaid",
+            getDefaultValue: () => "markdown");
+        
         var rootCommand = new RootCommand("S1API Coverage Analyzer - Analyzes API coverage of Schedule One game types")
         {
             gameAssemblyOption,
@@ -45,25 +80,39 @@ public class Program
             outputOption,
             badgeOutputOption,
             textOutputOption,
-            verboseOption
+            verboseOption,
+            historyFileOption,
+            skipHistoryOption,
+            annotationOption,
+            chartOutputOption,
+            chartFormatOption
         };
         
-        rootCommand.SetHandler(async (gameAssembly, apiAssembly, output, badgeOutput, textOutput, verbose) =>
+        rootCommand.SetHandler(async (context) =>
         {
-            await RunAnalysis(gameAssembly, apiAssembly, output, badgeOutput, textOutput, verbose);
-        }, gameAssemblyOption, apiAssemblyOption, outputOption, badgeOutputOption, textOutputOption, verboseOption);
+            var options = new AnalysisOptions(
+                context.ParseResult.GetValueForOption(gameAssemblyOption)!,
+                context.ParseResult.GetValueForOption(apiAssemblyOption)!,
+                context.ParseResult.GetValueForOption(outputOption),
+                context.ParseResult.GetValueForOption(badgeOutputOption),
+                context.ParseResult.GetValueForOption(textOutputOption),
+                context.ParseResult.GetValueForOption(verboseOption),
+                context.ParseResult.GetValueForOption(historyFileOption),
+                context.ParseResult.GetValueForOption(skipHistoryOption),
+                context.ParseResult.GetValueForOption(annotationOption),
+                context.ParseResult.GetValueForOption(chartOutputOption),
+                context.ParseResult.GetValueForOption(chartFormatOption) ?? "markdown");
+            await RunAnalysis(options);
+        });
         
         return await rootCommand.InvokeAsync(args);
     }
     
-    private static async Task RunAnalysis(
-        FileInfo gameAssemblyFile,
-        FileInfo apiAssemblyFile,
-        FileInfo? outputFile,
-        FileInfo? badgeOutputFile,
-        FileInfo? textOutputFile,
-        bool verbose)
+    private static async Task RunAnalysis(AnalysisOptions options)
     {
+        var (gameAssemblyFile, apiAssemblyFile, outputFile, badgeOutputFile, textOutputFile, verbose,
+            historyFile, skipHistory, annotation, chartOutput, chartFormat) = options;
+        
         Console.WriteLine("S1API Coverage Analyzer");
         Console.WriteLine("=======================");
         Console.WriteLine();
@@ -131,6 +180,18 @@ public class Program
             Console.WriteLine($"Badge URL: {badgeUrl}");
             Console.WriteLine();
             
+            // History tracking
+            if (!skipHistory)
+            {
+                var historyPath = historyFile?.FullName ?? 
+                    Path.Combine(Path.GetDirectoryName(outputFile?.FullName ?? ".") ?? ".", "coverage-history.json");
+                
+                Console.WriteLine("Updating coverage history...");
+                await UpdateCoverageHistory(historyPath, result, gameAssemblyFile.FullName, annotation, verbose);
+                Console.WriteLine($"History updated: {historyPath}");
+                Console.WriteLine();
+            }
+            
             // Write outputs
             if (outputFile != null)
             {
@@ -161,6 +222,17 @@ public class Program
                 
                 await ReportGenerator.WriteTextReportAsync(result, textOutputFile.FullName);
                 Console.WriteLine($"Text report written to: {textOutputFile.FullName}");
+            }
+            
+            // Chart generation
+            if (chartOutput != null && !skipHistory)
+            {
+                var historyPath = historyFile?.FullName ?? 
+                    Path.Combine(Path.GetDirectoryName(outputFile?.FullName ?? ".") ?? ".", "coverage-history.json");
+                
+                Console.WriteLine("Generating coverage chart...");
+                await GenerateCoverageChart(historyPath, chartOutput.FullName, chartFormat, verbose);
+                Console.WriteLine($"Chart written to: {chartOutput.FullName}");
             }
             
             // Verbose output
@@ -195,6 +267,134 @@ public class Program
             if (verbose)
                 Console.Error.WriteLine(ex.StackTrace);
             Environment.Exit(1);
+        }
+    }
+    
+    private static Task UpdateCoverageHistory(
+        string historyFilePath,
+        CoverageResult result,
+        string gameAssemblyPath,
+        string? annotation,
+        bool verbose)
+    {
+        try
+        {
+            var historyManager = new HistoryManager(historyFilePath);
+            var versionTracker = new VersionTracker();
+            
+            var previousEntry = historyManager.GetLatestEntry();
+            
+            // Detect changes
+            var events = versionTracker.DetectChanges(previousEntry, result, gameAssemblyPath);
+            
+            // Add manual annotation if provided
+            if (!string.IsNullOrEmpty(annotation))
+            {
+                events.Add(new HistoryEvent
+                {
+                    Type = EventType.ManualAnnotation,
+                    Description = annotation
+                });
+            }
+            
+            // Create new entry
+            var entry = new CoverageHistoryEntry
+            {
+                Timestamp = DateTime.UtcNow,
+                ClassCoveragePercentage = result.ClassCoveragePercentage,
+                MemberCoveragePercentage = result.MemberCoveragePercentage,
+                TotalClasses = result.TotalGameClasses,
+                CoveredClasses = result.CoveredGameClasses,
+                TotalMembers = result.TotalGameMembers,
+                CoveredMembers = result.CoveredGameMembers,
+                ExcludedClasses = result.ExcludedTypeCount,
+                GameAssemblyVersion = versionTracker.GetAssemblyVersion(gameAssemblyPath),
+                GameAssemblyHash = versionTracker.GetAssemblyHash(gameAssemblyPath),
+                AnalyzerVersion = versionTracker.GetAnalyzerVersion(),
+                Events = events,
+                Note = annotation
+            };
+            
+            // Append to history
+            historyManager.AppendEntry(entry);
+            
+            if (verbose && events.Count > 0)
+            {
+                Console.WriteLine($"  Detected {events.Count} event(s):");
+                foreach (var evt in events)
+                {
+                    Console.WriteLine($"    - [{evt.Type}] {evt.Description}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Warning: Failed to update history: {ex.Message}");
+            if (verbose)
+                Console.WriteLine(ex.StackTrace);
+        }
+        
+        return Task.CompletedTask;
+    }
+    
+    private static async Task GenerateCoverageChart(
+        string historyFilePath,
+        string chartOutputPath,
+        string chartFormat,
+        bool verbose)
+    {
+        try
+        {
+            var historyManager = new HistoryManager(historyFilePath);
+            var history = historyManager.LoadHistory();
+            
+            if (history.Entries.Count == 0)
+            {
+                Console.WriteLine("  No history data available yet. Run analysis a few times to build history.");
+                return;
+            }
+            
+            var chartGenerator = new ChartGenerator();
+            
+            // Ensure directory exists
+            var dir = Path.GetDirectoryName(chartOutputPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+            
+            switch (chartFormat.ToLowerInvariant())
+            {
+                case "url":
+                    var chartUrl = chartGenerator.GenerateChartUrl(history, new ChartOptions());
+                    await File.WriteAllTextAsync(chartOutputPath, chartUrl);
+                    break;
+                    
+                case "markdown":
+                    var markdown = chartGenerator.GenerateChartMarkdown(history, new ChartOptions());
+                    await File.WriteAllTextAsync(chartOutputPath, markdown);
+                    break;
+                    
+                case "html":
+                    var html = chartGenerator.GenerateChartHtml(history, new ChartOptions());
+                    await File.WriteAllTextAsync(chartOutputPath, html);
+                    break;
+                    
+                case "mermaid":
+                    var mermaid = chartGenerator.GenerateChartMermaid(history, new ChartOptions());
+                    await File.WriteAllTextAsync(chartOutputPath, mermaid);
+                    break;
+                    
+                default:
+                    Console.WriteLine($"  Warning: Unknown chart format '{chartFormat}', using markdown");
+                    var defaultMarkdown = chartGenerator.GenerateChartMarkdown(history, new ChartOptions());
+                    await File.WriteAllTextAsync(chartOutputPath, defaultMarkdown);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Warning: Failed to generate chart: {ex.Message}");
+            if (verbose)
+                Console.WriteLine(ex.StackTrace);
         }
     }
 }

@@ -301,6 +301,7 @@ public sealed class ApiAssemblyAnalyzer : AssemblyAnalyzer
     
     /// <summary>
     /// Analyze method signatures for game type references in parameters and return types.
+    /// Also checks generic method constraints.
     /// </summary>
     private void AnalyzeMethodSignatures(Type apiType, ApiTypeInfo apiTypeInfo)
     {
@@ -320,6 +321,19 @@ public sealed class ApiAssemblyAnalyzer : AssemblyAnalyzer
                     foreach (var param in method.GetParameters())
                     {
                         RegisterGameTypeReference(param.ParameterType, apiType, apiTypeInfo);
+                    }
+                    
+                    // Check generic method constraints
+                    if (method.IsGenericMethodDefinition)
+                    {
+                        foreach (var genericParam in method.GetGenericArguments())
+                        {
+                            // Check constraints (base type, interfaces)
+                            foreach (var constraint in genericParam.GetGenericParameterConstraints())
+                            {
+                                RegisterGameTypeReference(constraint, apiType, apiTypeInfo);
+                            }
+                        }
                     }
                 }
                 catch { }
@@ -343,7 +357,7 @@ public sealed class ApiAssemblyAnalyzer : AssemblyAnalyzer
     
     /// <summary>
     /// Analyze method bodies for game type references in IL code.
-    /// This catches static method calls, type instantiation, field accesses, etc.
+    /// This catches local variables and attempts to extract type references from IL.
     /// </summary>
     private void AnalyzeMethodBodies(Type apiType, ApiTypeInfo apiTypeInfo)
     {
@@ -355,14 +369,7 @@ public sealed class ApiAssemblyAnalyzer : AssemblyAnalyzer
             {
                 try
                 {
-                    var body = method.GetMethodBody();
-                    if (body == null) continue;
-                    
-                    // Check local variables
-                    foreach (var local in body.LocalVariables)
-                    {
-                        RegisterGameTypeReference(local.LocalType, apiType, apiTypeInfo);
-                    }
+                    AnalyzeMethodBody(method, apiType, apiTypeInfo);
                 }
                 catch { }
             }
@@ -372,18 +379,106 @@ public sealed class ApiAssemblyAnalyzer : AssemblyAnalyzer
             {
                 try
                 {
-                    var body = ctor.GetMethodBody();
-                    if (body == null) continue;
-                    
-                    foreach (var local in body.LocalVariables)
-                    {
-                        RegisterGameTypeReference(local.LocalType, apiType, apiTypeInfo);
-                    }
+                    AnalyzeMethodBody(ctor, apiType, apiTypeInfo);
                 }
                 catch { }
             }
         }
         catch { }
+    }
+    
+    /// <summary>
+    /// Analyze a single method body for game type references.
+    /// </summary>
+    private void AnalyzeMethodBody(MethodBase method, Type apiType, ApiTypeInfo apiTypeInfo)
+    {
+        var body = method.GetMethodBody();
+        if (body == null) return;
+        
+        // Check local variables
+        foreach (var local in body.LocalVariables)
+        {
+            RegisterGameTypeReference(local.LocalType, apiType, apiTypeInfo);
+        }
+        
+        // Try to extract type references from IL tokens
+        try
+        {
+            var ilBytes = body.GetILAsByteArray();
+            if (ilBytes == null || ilBytes.Length == 0) return;
+            
+            // Simple approach: scan for type tokens in IL
+            // Look for ldtoken, call, callvirt, newobj instructions that reference types
+            ExtractTypesFromIL(ilBytes, method.Module, apiType, apiTypeInfo);
+        }
+        catch
+        {
+            // If IL parsing fails, that's okay - we've already checked local variables
+        }
+    }
+    
+    /// <summary>
+    /// Extract type references from IL bytecode by scanning for type tokens.
+    /// </summary>
+    private void ExtractTypesFromIL(byte[] ilBytes, Module module, Type apiType, ApiTypeInfo apiTypeInfo)
+    {
+        // Scan for method call tokens (0x28 call, 0x6F callvirt, 0x73 newobj)
+        // These are followed by 4-byte metadata tokens
+        for (int i = 0; i < ilBytes.Length - 4; i++)
+        {
+            byte opcode = ilBytes[i];
+            
+            // Check for call (0x28), callvirt (0x6F), newobj (0x73), ldtoken (0xD0)
+            if (opcode == 0x28 || opcode == 0x6F || opcode == 0x73 || opcode == 0xD0)
+            {
+                // Check for two-byte opcode prefix (0xFE)
+                if (i > 0 && ilBytes[i - 1] == 0xFE)
+                {
+                    // Two-byte opcode, skip
+                    continue;
+                }
+                
+                // Read the token (4 bytes, little-endian)
+                int token = BitConverter.ToInt32(ilBytes, i + 1);
+                
+                try
+                {
+                    // Try to resolve as method (most common for call/callvirt/newobj)
+                    if (opcode == 0x28 || opcode == 0x6F || opcode == 0x73)
+                    {
+                        var member = module.ResolveMethod(token);
+                        if (member is MethodInfo method)
+                        {
+                            // Check if this is a generic method with game type arguments
+                            if (method.IsGenericMethod && !method.IsGenericMethodDefinition)
+                            {
+                                foreach (var arg in method.GetGenericArguments())
+                                {
+                                    RegisterGameTypeReference(arg, apiType, apiTypeInfo);
+                                }
+                            }
+                            
+                            // Check return type and parameters
+                            RegisterGameTypeReference(method.ReturnType, apiType, apiTypeInfo);
+                            foreach (var param in method.GetParameters())
+                            {
+                                RegisterGameTypeReference(param.ParameterType, apiType, apiTypeInfo);
+                            }
+                        }
+                    }
+                    // Try to resolve as type (for ldtoken)
+                    else if (opcode == 0xD0)
+                    {
+                        var type = module.ResolveType(token);
+                        RegisterGameTypeReference(type, apiType, apiTypeInfo);
+                    }
+                }
+                catch
+                {
+                    // Token resolution failed, skip
+                }
+            }
+        }
     }
     
     /// <summary>
