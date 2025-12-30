@@ -88,10 +88,25 @@
         }
       ],
       "note": null
+    },
+    {
+      "timestamp": "2025-12-30T22:23:24.4238896Z",
+      "classCoveragePercentage": 27.491785323110623,
+      "memberCoveragePercentage": 0,
+      "totalClasses": 913,
+      "coveredClasses": 251,
+      "totalMembers": 22812,
+      "coveredMembers": 0,
+      "excludedClasses": 1081,
+      "gameAssemblyVersion": "0.0.0.0",
+      "gameAssemblyHash": "B9A1838C5D2667C2FD3CB8E43F8E5F8E9412FD63C771E2000C5B8D635DB42D16",
+      "analyzerVersion": "1.0.0.0",
+      "events": [],
+      "note": null
     }
   ],
   "latestEntry": {
-    "timestamp": "2025-12-30T22:18:37.6785178Z",
+    "timestamp": "2025-12-30T22:23:24.4238896Z",
     "classCoveragePercentage": 27.491785323110623,
     "memberCoveragePercentage": 0,
     "totalClasses": 913,
@@ -102,13 +117,7 @@
     "gameAssemblyVersion": "0.0.0.0",
     "gameAssemblyHash": "B9A1838C5D2667C2FD3CB8E43F8E5F8E9412FD63C771E2000C5B8D635DB42D16",
     "analyzerVersion": "1.0.0.0",
-    "events": [
-      {
-        "type": 3,
-        "description": "Class coverage increased by \u002B2.49%",
-        "details": "25.00% \u2192 27.49%"
-      }
-    ],
+    "events": [],
     "note": null
   }
 }
