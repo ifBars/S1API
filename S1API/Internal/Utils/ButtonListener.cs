@@ -6,9 +6,10 @@ using UnityEngine.UI;
 namespace S1API.Internal.Utils
 {
     /// <summary>
-    /// Utility helpers for managing Unity UI <see cref="Button"/>s.
-    /// Note: lives under <c>S1API.Internal</c> and is subject to change.
+    /// INTERNAL: Utility helpers for managing Unity UI <see cref="Button"/>s.
+    /// This class is intended for internal API use only. Mod developers should use <see cref="S1API.Utils.ButtonUtils"/> instead.
     /// </summary>
+    [Obsolete("This class is for internal API use only. Mod developers should use S1API.Utils.ButtonUtils instead. This class will be made internal in a future version.")]
     public static class ButtonUtils
     {
         /// <summary>

@@ -7,8 +7,10 @@ using System;
 namespace S1API.Internal.Utils
 {
     /// <summary>
-    /// Extensions for Arrays
+    /// INTERNAL: Extensions for Arrays.
+    /// This class is intended for internal API use only. Mod developers should use <see cref="S1API.Utils.ArrayExtensions"/> instead.
     /// </summary>
+    [Obsolete("This class is for internal API use only. Mod developers should use S1API.Utils.ArrayExtensions instead. This class will be made internal in a future version.")]
     public static class ArrayExtensions
     {
         /// <summary>

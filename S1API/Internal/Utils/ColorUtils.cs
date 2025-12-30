@@ -1,10 +1,14 @@
 ﻿using UnityEngine;
 
+using System;
+
 namespace S1API.Internal.Utils
 {
     /// <summary>
-    /// Utilities for the <see cref="Color"/> class
+    /// INTERNAL: Utilities for the <see cref="Color"/> class.
+    /// This class is intended for internal API use only. Mod developers should use <see cref="S1API.Utils.ColorUtils"/> instead.
     /// </summary>
+    [Obsolete("This class is for internal API use only. Mod developers should use S1API.Utils.ColorUtils instead. This class will be made internal in a future version.")]
     public static class ColorUtils
     {
         /// <summary>

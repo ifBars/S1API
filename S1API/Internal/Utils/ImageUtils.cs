@@ -1,4 +1,5 @@
 using S1API.Logging;
+using System;
 using System.IO;
 using System.Reflection;
 using UnityEngine;
@@ -6,9 +7,11 @@ using UnityEngine;
 namespace S1API.Internal.Utils
 {
     /// <summary>
-    /// A utility class to assist with loading images into the game.
+    /// INTERNAL: A utility class to assist with loading images into the game.
     /// Useful for icons such as on phone apps, custom NPCs, quests, etc.
+    /// This class is intended for internal API use only. Mod developers should use <see cref="S1API.Utils.ImageUtils"/> instead.
     /// </summary>
+    [Obsolete("This class is for internal API use only. Mod developers should use S1API.Utils.ImageUtils instead. This class will be made internal in a future version.")]
     public static class ImageUtils
     {
         private static readonly Log _loggerInstance = new Log("ImageUtils");

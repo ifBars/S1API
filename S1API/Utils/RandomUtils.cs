@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Generic;
 
-namespace S1API.Internal.Utils
+namespace S1API.Utils
 {
     /// <summary>
-    /// INTERNAL: A utility class providing random selection functionality for lists and numeric ranges.
-    /// This class is intended for internal API use only. Mod developers should use <see cref="S1API.Utils.RandomUtils"/> instead.
+    /// A utility class providing random selection functionality for lists and numeric ranges.
+    /// This class is intended for public use by mod developers.
     /// </summary>
-    [Obsolete("This class is for internal API use only. Mod developers should use S1API.Utils.RandomUtils instead. This class will be made internal in a future version.")]
     public static class RandomUtils
     {
         /// <summary>
@@ -15,13 +14,8 @@ namespace S1API.Internal.Utils
         /// </summary>
         /// <param name="list">The list from which to select a random element.</param>
         /// <returns>A randomly selected element from the list, or the default value of type T if the list is null or empty.</returns>
-        public static T PickOne<T>(this IList<T> list)
-        {
-            if (list == null || list.Count == 0)
-                return default!;
-
-            return list[UnityEngine.Random.Range(0, list.Count)];
-        }
+        public static T PickOne<T>(this IList<T> list) =>
+            Internal.Utils.RandomUtils.PickOne(list);
 
         /// <summary>
         /// Returns a random element from a list that satisfies the given condition, with a maximum number of attempts.
@@ -31,20 +25,8 @@ namespace S1API.Internal.Utils
         /// <param name="isDuplicate">A function to determine if the selected item satisfies the duplicate condition.</param>
         /// <param name="maxTries">The maximum number of attempts to find a valid item.</param>
         /// <returns>A randomly selected item that satisfies the condition, or the default value of the type if no valid item is found.</returns>
-        public static T PickUnique<T>(this IList<T> list, Func<T, bool> isDuplicate, int maxTries = 10)
-        {
-            if (list.Count == 0)
-                return default!;
-
-            for (int i = 0; i < maxTries; i++)
-            {
-                T item = list.PickOne();
-                if (!isDuplicate(item))
-                    return item;
-            }
-
-            return default!;
-        }
+        public static T PickUnique<T>(this IList<T> list, Func<T, bool> isDuplicate, int maxTries = 10) =>
+            Internal.Utils.RandomUtils.PickUnique(list, isDuplicate, maxTries);
 
         /// <summary>
         /// Returns a specified number of unique random elements from a list.
@@ -53,30 +35,8 @@ namespace S1API.Internal.Utils
         /// <param name="list">The list of items to pick from.</param>
         /// <param name="count">The number of random items to pick.</param>
         /// <returns>A list containing the selected random items, or an empty list if the input list is null or empty.</returns>
-        public static List<T> PickMany<T>(this IList<T> list, int count)
-        {
-            if (list.Count == 0) 
-                return new List<T>();
-            
-            var copy = new List<T>(list);
-            var result = new List<T>();
-
-            for (int i = 0; i < count && copy.Count > 0; i++)
-            {
-                int index = UnityEngine.Random.Range(0, copy.Count);
-                result.Add(copy[index]);
-                copy.RemoveAt(index);
-            }
-
-            return result;
-        }
-
-        /// <summary>
-        /// A private static instance of the System.Random class used for generating pseudo-random numbers
-        /// in the RandomUtils utility class methods. It serves as the base random number generator for
-        /// methods requiring randomness that do not rely on UnityEngine.Random.
-        /// </summary>
-        private static readonly System.Random SystemRng = new System.Random();
+        public static List<T> PickMany<T>(this IList<T> list, int count) =>
+            Internal.Utils.RandomUtils.PickMany(list, count);
 
         /// <summary>
         /// Generates a random integer within the specified range.
@@ -84,10 +44,8 @@ namespace S1API.Internal.Utils
         /// <param name="minInclusive">The inclusive lower bound of the random number.</param>
         /// <param name="maxExclusive">The exclusive upper bound of the random number.</param>
         /// <returns>A random integer greater than or equal to <paramref name="minInclusive"/> and less than <paramref name="maxExclusive"/>.</returns>
-        public static int RangeInt(int minInclusive, int maxExclusive)
-        {
-            return SystemRng.Next(minInclusive, maxExclusive);
-        }
+        public static int RangeInt(int minInclusive, int maxExclusive) =>
+            Internal.Utils.RandomUtils.RangeInt(minInclusive, maxExclusive);
     }
-    
 }
+

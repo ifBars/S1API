@@ -7,10 +7,12 @@ using UnityEngine.UI;
 namespace S1API.Internal.Utils
 {
     /// <summary>
-    /// Utilities for subscribing to and managing Toggle value change events in a
+    /// INTERNAL: Utilities for subscribing to and managing Toggle value change events in a
     /// cross-compatible way between Mono and IL2CPP. Handles Unity versions where
     /// Toggle.onValueChanged is exposed as either a field or a property.
+    /// This class is intended for internal API use only. Mod developers should use <see cref="S1API.Utils.ToggleUtils"/> instead.
     /// </summary>
+    [Obsolete("This class is for internal API use only. Mod developers should use S1API.Utils.ToggleUtils instead. This class will be made internal in a future version.")]
     public static class ToggleUtils
     {
         private static FieldInfo? _onValueChangedField;
