@@ -228,6 +228,85 @@ namespace S1API.Internal.Shops
             }
         }
 
+        /// <summary>
+        /// Refreshes the icon for an item in all shop listings that display it.
+        /// </summary>
+        internal static int RefreshItemIconInShops(ItemDefinition item)
+        {
+            if (item?.S1ItemDefinition == null)
+                return 0;
+
+            int updatedCount = 0;
+
+            try
+            {
+                var shops = ShopManager.GetAllShops();
+                foreach (var shop in shops)
+                {
+                    if (shop?.S1ShopInterface == null)
+                        continue;
+
+                    // Find all listings for this item
+                    foreach (var listing in shop.S1ShopInterface.Listings)
+                    {
+                        if (listing?.Item?.ID == item.ID)
+                        {
+                            // Update the icon in all ListingUI instances for this listing
+                            updatedCount += UpdateListingUIcons(shop.S1ShopInterface, listing, item.Icon);
+                        }
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Logger.Error($"Failed to refresh item icon for '{item.ID}': {ex.Message}");
+            }
+
+            return updatedCount;
+        }
+
+        private static int UpdateListingUIcons(S1UIShop.ShopInterface shop, S1UIShop.ShopListing listing, Sprite newIcon)
+        {
+            if (newIcon == null)
+                return 0;
+
+            int updatedCount = 0;
+
+            try
+            {
+                var listingUIField = typeof(S1UIShop.ShopInterface).GetField(
+                    "listingUI",
+                    BindingFlags.NonPublic | BindingFlags.Instance
+                );
+
+                if (listingUIField != null)
+                {
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                    var listingUIList = listingUIField.GetValue(shop) as Il2CppSystem.Collections.Generic.List<S1UIShop.ListingUI>;
+#else
+                    var listingUIList = listingUIField.GetValue(shop) as System.Collections.Generic.List<S1UIShop.ListingUI>;
+#endif
+                    if (listingUIList != null)
+                    {
+                        foreach (var listingUI in listingUIList)
+                        {
+                            if (listingUI?.Listing == listing && listingUI.Icon != null)
+                            {
+                                listingUI.Icon.sprite = newIcon;
+                                updatedCount++;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Logger.Warning($"Could not update ListingUI icons: {ex.Message}");
+            }
+
+            return updatedCount;
+        }
+
         private static void RemoveListingUI(S1UIShop.ShopInterface shop, S1UIShop.ShopListing listing)
         {
             try

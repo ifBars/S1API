@@ -165,6 +165,63 @@ namespace S1API.Shops
         }
 
         /// <summary>
+        /// Refreshes the icon displayed in shop listings for the specified item.
+        /// This is useful when an item's icon is generated or updated after it has been added to shops.
+        /// </summary>
+        /// <param name="item">The item whose icon should be refreshed in shop listings.</param>
+        /// <returns>The number of shop listings that were updated.</returns>
+        /// <example>
+        /// <code>
+        /// // After generating a custom icon for an item
+        /// myItem.Icon = generatedSprite;
+        /// int updated = ShopManager.RefreshItemIcon(myItem);
+        /// Logger.Msg($"Updated icon in {updated} shop listing(s)");
+        /// </code>
+        /// </example>
+        public static int RefreshItemIcon(ItemDefinition item)
+        {
+            if (item == null)
+                return 0;
+
+            return Internal.Shops.ShopIntegration.RefreshItemIconInShops(item);
+        }
+
+        /// <summary>
+        /// Refreshes the icon displayed in shop listings for the specified item by ID.
+        /// This is useful when an item's icon is generated or updated after it has been added to shops.
+        /// </summary>
+        /// <param name="itemId">The ID of the item whose icon should be refreshed.</param>
+        /// <returns>The number of shop listings that were updated.</returns>
+        public static int RefreshItemIcon(string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId))
+                return 0;
+
+            var shops = FindShopsByItem(itemId);
+            if (shops.Length == 0)
+                return 0;
+
+            // Get the item definition from the first shop that has it
+            foreach (var shop in shops)
+            {
+                foreach (var listing in shop.S1ShopInterface.Listings)
+                {
+                    if (listing?.Item?.ID == itemId)
+                    {
+                        var itemDef = ItemManager.GetItemDefinition(itemId);
+                        if (itemDef != null)
+                        {
+                            return RefreshItemIcon(itemDef);
+                        }
+                        return 0;
+                    }
+                }
+            }
+
+            return 0;
+        }
+
+        /// <summary>
         /// INTERNAL: Invalidates the shop cache.
         /// Called by S1API when scenes change.
         /// </summary>
