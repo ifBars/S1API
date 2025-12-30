@@ -335,7 +335,7 @@ public sealed class ChartOptions
 {
     public int MaxDataPoints { get; set; } = 50;
     public bool ShowClassCoverage { get; set; } = true;
-    public bool ShowMemberCoverage { get; set; } = true;
+    public bool ShowMemberCoverage { get; set; } = false;
     public bool ShowEventAnnotations { get; set; } = true;
     public bool ShowTotalCounts { get; set; } = false;
     public string Title { get; set; } = "S1API Coverage Over Time";

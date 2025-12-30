@@ -152,6 +152,9 @@ jobs:
             --api-assembly S1API/bin/MonoMelon/netstandard2.1/S1API.dll \
             --output coverage-report.json \
             --badge-output coverage-badge.md \
+            --history-file tools/S1APICoverageAnalyzer/coverage-history.json \
+            --chart-output coverage-chart.md \
+            --chart-format markdown \
             --verbose
 
       - name: Upload Coverage Report
@@ -178,7 +181,7 @@ jobs:
             echo "Covered Classes: $(jq -r '.classCoverage.covered' coverage-report.json) / $(jq -r '.classCoverage.total' coverage-report.json)"
           fi
 
-      - name: Update README Badge
+      - name: Update README Badge and Chart
         if: steps.verify-assemblies.outputs.has_assemblies == 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable')
         run: |
           if [ -f coverage-badge.md ]; then
@@ -197,19 +200,51 @@ jobs:
             awk -v new_badge="$NEW_BADGE" 'NR==5 {print new_badge; next} {print}' README.md > README.md.tmp
             mv README.md.tmp README.md
             
+            # Update coverage chart in README if chart file exists
+            if [ -f coverage-chart.md ]; then
+              echo "Updating coverage chart in README..."
+              
+              # Extract the chart image URL from coverage-chart.md (line 3)
+              CHART_URL=$(sed -n '3p' coverage-chart.md)
+              
+              # Find the line number with the existing chart in README
+              CHART_LINE=$(grep -n "!\[Coverage Chart\]" README.md | head -1 | cut -d: -f1)
+              
+              if [ -n "$CHART_LINE" ]; then
+                echo "Found chart at line $CHART_LINE, updating..."
+                # Replace the chart line
+                awk -v line="$CHART_LINE" -v new_chart="$CHART_URL" 'NR==line {print new_chart; next} {print}' README.md > README.md.tmp
+                mv README.md.tmp README.md
+              else
+                echo "Chart line not found in README"
+              fi
+            fi
+            
             # Configure git
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             
-            # Check if there are changes
-            if git diff --quiet README.md; then
-              echo "No changes to README.md"
-            else
-              echo "Updating README.md with new coverage badge"
+            # Check if there are changes to commit
+            CHANGES_EXIST=false
+            
+            if ! git diff --quiet README.md; then
+              echo "README.md has changes"
+              CHANGES_EXIST=true
+            fi
+            
+            if ! git diff --quiet tools/S1APICoverageAnalyzer/coverage-history.json; then
+              echo "coverage-history.json has changes"
+              CHANGES_EXIST=true
+            fi
+            
+            if [ "$CHANGES_EXIST" = true ]; then
+              echo "Committing changes..."
               git diff README.md
-              git add README.md
-              git commit -m "chore: update API coverage badge [skip ci]"
+              git add README.md tools/S1APICoverageAnalyzer/coverage-history.json
+              git commit -m "chore: update API coverage badge and history [skip ci]"
               git push
+            else
+              echo "No changes to commit"
             fi
           else
             echo "coverage-badge.md not found, skipping README update"
