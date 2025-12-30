@@ -264,7 +264,7 @@ Automatic JSON-based save/load system.
 **Key Classes**:
 - `Saveable` - Base saveable class
 - `SaveableField` - Attribute for marking fields
-- `ModSaveableRegistry` - Registry system
+- `SaveableLoadOrder` - Load order control for saveables
 
 **Documentation**: [Save System](save-system.md)
 

@@ -9,7 +9,6 @@ namespace S1API.Saveables
 {
     /// <summary>
     /// Automatically discovers and manages saveable classes that inherit from Saveable.
-    /// Eliminates the need for manual registration via ModSaveableRegistry.
     /// </summary>
     internal static class SaveableAutoRegistry
     {
