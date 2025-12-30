@@ -71,38 +71,29 @@ namespace S1API.Internal.Patches
 			}
 		}
 
-		private static bool beforeBaseLoadersExecuted = false;
-
-		/// <summary>
-		/// Resets the beforeBaseLoadersExecuted flag when a new load starts.
-		/// </summary>
-		[HarmonyPatch(typeof(S1Persistence.LoadManager), "Load")]
-		[HarmonyPrefix]
-		private static void LoadManager_Load_Prefix()
-		{
-			beforeBaseLoadersExecuted = false;
-		}
+		private static string lastLoadedGameFolderPath = null;
 
 		/// <summary>
 		/// Loads saveables marked with BeforeBaseGame load order BEFORE base game loaders run.
 		/// This runs as a prefix to LoadRequest constructor on the first LoadRequest creation,
 		/// which happens right before base game loaders start processing.
+		/// Uses the LoadedGameFolderPath to detect new load cycles.
 		/// </summary>
 		[HarmonyPatch(typeof(S1Persistence.LoadRequest), MethodType.Constructor, new Type[] { typeof(string), typeof(S1Persistence.Loaders.Loader) })]
 		[HarmonyPrefix]
 		private static void BeforeBaseLoaders(string filePath, S1Persistence.Loaders.Loader loader)
 		{
-			// Only run once, on the first LoadRequest creation
-			if (beforeBaseLoadersExecuted)
-				return;
-
 			try
 			{
 				var lm = S1Persistence.LoadManager.Instance;
 				if (lm == null || string.IsNullOrEmpty(lm.LoadedGameFolderPath))
 					return;
 
-				beforeBaseLoadersExecuted = true;
+				// Only run once per load cycle by checking if the folder path has changed
+				if (lastLoadedGameFolderPath == lm.LoadedGameFolderPath)
+					return;
+
+				lastLoadedGameFolderPath = lm.LoadedGameFolderPath;
 
 				string basePath = Path.Combine(lm.LoadedGameFolderPath, "Modded", "Saveables");
 				
