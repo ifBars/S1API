@@ -13,6 +13,11 @@ namespace S1API
     /// </summary>
     public class S1API : MelonMod
     {
+        public override void OnPreSupportModule()
+        {
+            VersionChecker.CheckMelonLoaderVersion();
+        }
+        
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)
         {
             if (sceneName == "Main")
