@@ -24,6 +24,6 @@ namespace S1API.Entities.Appearances.AccessoryFields
         public const string Beanie = "Avatar/Accessories/Head/Beanie/Beanie";
         public const string TrashCrown = "Avatar/Accessories/Head/TrashCrown/TrashCrown";
         public const string SantaHat = "Avatar/Accessories/Head/SantaHat/SantaHat";
-	public const string MushroomHat = "Avatar/Accessories/Head/MushroomHat/MushroomHat";
+	    public const string MushroomHat = "Avatar/Accessories/Head/MushroomHat/MushroomHat";
     }
 }
