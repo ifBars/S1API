@@ -2,13 +2,22 @@
 
 [![IL2CPP Build Check](https://github.com/ifBars/S1API/actions/workflows/il2cpp-build-check.yml/badge.svg?branch=stable)](https://github.com/ifBars/S1API/actions/workflows/il2cpp-build-check.yml)
 [![Build and Deploy Documentation](https://github.com/ifBars/S1API/actions/workflows/docs.yml/badge.svg)](https://github.com/ifBars/S1API/actions/workflows/docs.yml)
-[![API Coverage](https://img.shields.io/badge/API%20Coverage-27.5%25-orange)](https://github.com/ifBars/S1API/actions/workflows/coverage.yml)
 [![GitHub release](https://img.shields.io/github/v/release/ifBars/S1API?include_prereleases&sort=semver)](https://github.com/ifBars/S1API/releases)
 [![GitHub stars](https://img.shields.io/github/stars/ifBars/S1API)](https://github.com/ifBars/S1API/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/ifBars/S1API)](https://github.com/ifBars/S1API/network/members)
 [![GitHub issues](https://img.shields.io/github/issues/ifBars/S1API)](https://github.com/ifBars/S1API/issues)
 [![GitHub license](https://img.shields.io/github/license/ifBars/S1API)](https://github.com/ifBars/S1API/blob/stable/LICENSE)
 [![GitHub last commit](https://img.shields.io/github/last-commit/ifBars/S1API/stable)](https://github.com/ifBars/S1API/commits/stable)
+
+## Coverage History
+
+Track S1API's progress in wrapping Schedule One's game types:
+
+[![API Coverage](https://img.shields.io/badge/API%20Coverage-27.5%25-orange)](https://github.com/ifBars/S1API/actions/workflows/coverage.yml)
+
+![Coverage Chart](https://quickchart.io/chart?c=%7B%22type%22%3A%22line%22%2C%22data%22%3A%7B%22labels%22%3A%5B%222025-12-30%22%2C%222025-12-30%22%2C%222025-12-30%22%2C%222025-12-30%22%2C%222025-12-30%22%5D%2C%22datasets%22%3A%5B%7B%22label%22%3A%22Class%20Coverage%20%25%22%2C%22data%22%3A%5B15.925925925925927%2C25%2C25%2C25%2C27.491785323110623%5D%2C%22borderColor%22%3A%22rgb%2875%2C%20192%2C%20192%29%22%2C%22backgroundColor%22%3A%22rgba%2875%2C%20192%2C%20192%2C%200.1%29%22%2C%22fill%22%3Afalse%2C%22tension%22%3A0.1%7D%5D%7D%2C%22options%22%3A%7B%22responsive%22%3Atrue%2C%22plugins%22%3A%7B%22title%22%3A%7B%22display%22%3Atrue%2C%22text%22%3A%22S1API%20Coverage%20Over%20Time%22%7D%2C%22legend%22%3A%7B%22display%22%3Atrue%2C%22position%22%3A%22top%22%7D%7D%2C%22scales%22%3A%7B%22y%22%3A%7B%22beginAtZero%22%3Atrue%2C%22max%22%3A100%2C%22title%22%3A%7B%22display%22%3Atrue%2C%22text%22%3A%22Coverage%20%25%22%7D%7D%2C%22x%22%3A%7B%22title%22%3A%7B%22display%22%3Atrue%2C%22text%22%3A%22Date%22%7D%7D%7D%7D%7D&width=800&height=400)
+
+*View detailed coverage reports in the [Coverage Analysis workflow](https://github.com/ifBars/S1API/actions/workflows/coverage.yml)*
 
 S1API is an open source collaboration project to help standardize Schedule One modding processes.
 The goal is to provide a standard place for common functionalities so you can focus on making content versus reverse engineering the game.
@@ -36,14 +45,6 @@ For mod developers or users seeking the latest features and fixes before officia
 - **Mono Build**: Available as artifacts from the [Documentation workflow](https://github.com/ifBars/S1API/actions/workflows/docs.yml)
 
 ⚠️ **Note**: These artifacts represent the bleeding edge of development and may contain untested features or bugs. Use at your own risk. Stable releases remain the recommended choice for most users.
-
-## Coverage History
-
-Track S1API's progress in wrapping Schedule One's game types:
-
-![Coverage Chart](https://quickchart.io/chart?c=%7B%22type%22%3A%22line%22%2C%22data%22%3A%7B%22labels%22%3A%5B%222025-12-30%22%2C%222025-12-30%22%2C%222025-12-30%22%2C%222025-12-30%22%2C%222025-12-30%22%5D%2C%22datasets%22%3A%5B%7B%22label%22%3A%22Class%20Coverage%20%25%22%2C%22data%22%3A%5B15.925925925925927%2C25%2C25%2C25%2C27.491785323110623%5D%2C%22borderColor%22%3A%22rgb%2875%2C%20192%2C%20192%29%22%2C%22backgroundColor%22%3A%22rgba%2875%2C%20192%2C%20192%2C%200.1%29%22%2C%22fill%22%3Afalse%2C%22tension%22%3A0.1%7D%5D%7D%2C%22options%22%3A%7B%22responsive%22%3Atrue%2C%22plugins%22%3A%7B%22title%22%3A%7B%22display%22%3Atrue%2C%22text%22%3A%22S1API%20Coverage%20Over%20Time%22%7D%2C%22legend%22%3A%7B%22display%22%3Atrue%2C%22position%22%3A%22top%22%7D%7D%2C%22scales%22%3A%7B%22y%22%3A%7B%22beginAtZero%22%3Atrue%2C%22max%22%3A100%2C%22title%22%3A%7B%22display%22%3Atrue%2C%22text%22%3A%22Coverage%20%25%22%7D%7D%2C%22x%22%3A%7B%22title%22%3A%7B%22display%22%3Atrue%2C%22text%22%3A%22Date%22%7D%7D%7D%7D%7D&width=800&height=400)
-
-*View detailed coverage reports in the [Coverage Analysis workflow](https://github.com/ifBars/S1API/actions/workflows/coverage.yml)*
 
 ## What Does it Do?
 * Allows creation of new game elements (quests, npcs, etc.)
