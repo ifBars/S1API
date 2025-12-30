@@ -195,10 +195,18 @@ jobs:
             
             echo "New badge: $NEW_BADGE"
             
-            # Update line 5 in README.md with the new badge
-            # Use a temporary file to avoid sed escaping issues
-            awk -v new_badge="$NEW_BADGE" 'NR==5 {print new_badge; next} {print}' README.md > README.md.tmp
-            mv README.md.tmp README.md
+            # Find the line number with the API Coverage badge in README
+            BADGE_LINE=$(grep -n "\[!\[API Coverage\]" README.md | head -1 | cut -d: -f1)
+            
+            if [ -n "$BADGE_LINE" ]; then
+              echo "Found API Coverage badge at line $BADGE_LINE, updating..."
+              # Update the badge line in README.md
+              # Use a temporary file to avoid sed escaping issues
+              awk -v line="$BADGE_LINE" -v new_badge="$NEW_BADGE" 'NR==line {print new_badge; next} {print}' README.md > README.md.tmp
+              mv README.md.tmp README.md
+            else
+              echo "Warning: API Coverage badge not found in README.md"
+            fi
             
             # Update coverage chart in README if chart file exists
             if [ -f coverage-chart.md ]; then
