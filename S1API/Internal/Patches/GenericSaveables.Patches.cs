@@ -30,7 +30,7 @@ namespace S1API.Internal.Patches
 	/// Supports configurable load order via <see cref="S1API.Internal.Abstraction.Saveable.LoadOrder"/>:
 	/// </para>
 	/// <list type="bullet">
-	/// <item><description>BeforeBaseGame: Loads before BuildingsLoader.Load (prefix patch)</description></item>
+	/// <item><description>BeforeBaseGame: Loads before base game loaders run (prefix patch on LoadRequest constructor)</description></item>
 	/// <item><description>AfterBaseGame (default): Loads after NPCsLoader.Load (postfix patch)</description></item>
 	/// </list>
 	/// </summary>
@@ -71,17 +71,40 @@ namespace S1API.Internal.Patches
 			}
 		}
 
+		private static bool beforeBaseLoadersExecuted = false;
+
+		/// <summary>
+		/// Resets the beforeBaseLoadersExecuted flag when a new load starts.
+		/// </summary>
+		[HarmonyPatch(typeof(S1Persistence.LoadManager), "Load")]
+		[HarmonyPrefix]
+		private static void LoadManager_Load_Prefix()
+		{
+			beforeBaseLoadersExecuted = false;
+		}
+
 		/// <summary>
 		/// Loads saveables marked with BeforeBaseGame load order BEFORE base game loaders run.
-		/// This runs as a prefix to BuildingsLoader.Load, which is one of the earliest loaders.
+		/// This runs as a prefix to LoadRequest constructor on the first LoadRequest creation,
+		/// which happens right before base game loaders start processing.
 		/// </summary>
-		[HarmonyPatch(typeof(S1Loaders.BuildingsLoader), "Load")]
+		[HarmonyPatch(typeof(S1Persistence.LoadRequest), MethodType.Constructor, new Type[] { typeof(string), typeof(S1Persistence.Loaders.Loader) })]
 		[HarmonyPrefix]
-		private static void BeforeBaseLoaders()
+		private static void BeforeBaseLoaders(string filePath, S1Persistence.Loaders.Loader loader)
 		{
+			// Only run once, on the first LoadRequest creation
+			if (beforeBaseLoadersExecuted)
+				return;
+
 			try
 			{
-				string basePath = Path.Combine(S1Persistence.LoadManager.Instance.LoadedGameFolderPath, "Modded", "Saveables");
+				var lm = S1Persistence.LoadManager.Instance;
+				if (lm == null || string.IsNullOrEmpty(lm.LoadedGameFolderPath))
+					return;
+
+				beforeBaseLoadersExecuted = true;
+
+				string basePath = Path.Combine(lm.LoadedGameFolderPath, "Modded", "Saveables");
 				
 				foreach (var saveable in SaveableAutoRegistry.GetRegisteredSaveables())
 				{
@@ -100,7 +123,6 @@ namespace S1API.Internal.Patches
 					else
 					{
 						// No save data yet for this save -> initialize once after full game load
-						var lm = S1Persistence.LoadManager.Instance;
 						void InitializeOnLoadComplete()
 						{
 						    try
