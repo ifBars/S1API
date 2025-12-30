@@ -64,7 +64,7 @@ namespace S1API.Items
             _definition.Icon = source.Icon;
             _definition.legalStatus = source.legalStatus;
             _definition.PickpocketDifficultyMultiplier = source.PickpocketDifficultyMultiplier;
-            _definition.CombatUtilityForNPCs = source.CombatUtilityForNPCs;
+            _definition.CombatUtility = source.CombatUtility;
 
             // StorableItemDefinition properties
             _definition.BasePurchasePrice = source.BasePurchasePrice;

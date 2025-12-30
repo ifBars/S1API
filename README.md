@@ -18,6 +18,25 @@ The goal is to provide a standard place for common functionalities so you can fo
 > **This GitHub repository is intended for developers.**
 > If you are just looking to mod your game, please refer to the releases / mod repositories such as Thunderstore and Nexus Mods.
 
+## Release Channels
+
+S1API is available through multiple release channels:
+
+### **Stable Releases** (Recommended)
+The recommended way to get S1API is through official releases:
+- **[GitHub Releases](https://github.com/ifBars/S1API/releases)** - Tagged releases with changelogs
+- **[Nexus Mods](https://www.nexusmods.com/schedule1/mods/1194)** - Mod repository with version tracking
+- **[Thunderstore](https://thunderstore.io/c/schedule-i/p/ifBars/S1API_Forked/)** - Mod manager integration
+
+These releases are thoroughly tested and recommended for both mod users and developers.
+
+### **Experimental/Bleeding Edge Builds**
+For mod developers or users seeking the latest features and fixes before official releases, experimental builds are automatically generated via GitHub Actions:
+- **IL2CPP Build**: Available as artifacts from the [IL2CPP Build Check workflow](https://github.com/ifBars/S1API/actions/workflows/il2cpp-build-check.yml)
+- **Mono Build**: Available as artifacts from the [Documentation workflow](https://github.com/ifBars/S1API/actions/workflows/docs.yml)
+
+⚠️ **Note**: These artifacts represent the bleeding edge of development and may contain untested features or bugs. Use at your own risk. Stable releases remain the recommended choice for most users.
+
 ## What Does it Do?
 * Allows creation of new game elements (quests, npcs, etc.)
 * Provides an easy-to-use abstraction for save/load of class data

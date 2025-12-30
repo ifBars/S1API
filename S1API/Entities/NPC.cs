@@ -212,7 +212,6 @@ namespace S1API.Entities
                 }
 
                 // Prefer a spawnable prefab provided by the base game.
-                // For dealer types, use "Dealer" prefab; otherwise use "BaseNPC".
                 var nm = InstanceFinder.NetworkManager;
                 if (nm == null)
                     throw new Exception("NetworkManager not found when resolving NPC prefab.");
@@ -266,14 +265,13 @@ namespace S1API.Entities
                     }
                 }
                 
-                // If not a dealer type or dealer prefab not found, use BaseNPC logic
+                // If not a dealer type or dealer prefab not found, use CivilianNPC logic
                 if (chosen == null)
                 {
-                    // Look for "BaseNPC" prefab
                     for (int i = 0; i < count; i++)
                     {
                         NetworkObject obj = spawnablePrefabs.GetObject(true, i);
-                        if (obj != null && obj.gameObject != null && obj.gameObject.name == "BaseNPC")
+                        if (obj != null && obj.gameObject != null && obj.gameObject.name == "CivilianNPC")
                         {
                             chosen = obj;
                             break;
@@ -281,7 +279,8 @@ namespace S1API.Entities
                     }
                 }
 
-                // If "BaseNPC" was not found, look for any spawnable containing the base NPC component.
+                // If "CivilianNPC" was not found, look for any spawnable containing the base NPC component.
+                // TODO: Migrate to falling back to "BaseNPC"
                 if (chosen == null)
                 {
                     for (int i = 0; i < count; i++)
@@ -297,7 +296,7 @@ namespace S1API.Entities
 
                 if (chosen == null)
                 {
-                    string expectedPrefabName = isDealerType ? "Dealer" : "BaseNPC";
+                    string expectedPrefabName = isDealerType ? "Dealer" : "CivilianNPC";
                     string expectedComponent = isDealerType ? "Dealer" : "NPC";
                     throw new Exception($"Failed to locate a suitable NPC spawnable prefab ({expectedPrefabName} or any with {expectedComponent} component).");
                 }
@@ -395,7 +394,7 @@ namespace S1API.Entities
                             }
                             else
                             {
-                                // If we're using BaseNPC prefab but need dealer functionality, warn
+                                // If we're using CivilianNPC prefab but need dealer functionality, warn
                                 Logger.Warning($"[S1API] NPC {npcType.Name} requested dealer functionality but prefab does not have Dealer component. EnsureDealer() was called before prefab creation.");
                             }
                         }
@@ -1392,7 +1391,7 @@ namespace S1API.Entities
         /// </summary>
         /// <remarks>
         /// Dealer NPCs (<c>true</c>): Can manage customers, handle contracts, accept cash payments, and track inventory for sales.
-        /// When true, the NPC prefab will use the "Dealer" network prefab instead of "BaseNPC".
+        /// When true, the NPC prefab will use the "Dealer" network prefab instead of "CivilianNPC".
         /// Non-dealer NPCs (<c>false</c>): Regular NPCs without dealer-specific functionality.
         /// </remarks>
         public virtual bool IsDealer => false;
@@ -3060,7 +3059,6 @@ namespace S1API.Entities
                     "NPCSignal_WaitForDelivery",
                     "NPCSignal_UseVendingMachine",
                     "NPCSignal_UseATM",
-                    "NPCSignal_HandleDeal",
                     "NPCSignal_DriveToCarPark",
                     "NPCEvent_StayInBuilding",
                     "NPCEvent_Sit",

@@ -4,6 +4,7 @@ using S1EntityFramework = Il2CppScheduleOne.EntityFramework;
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1ObjectScripts = Il2CppScheduleOne.ObjectScripts;
 using S1Persistence = Il2CppScheduleOne.Persistence.Datas;
+using S1UI = Il2CppScheduleOne.UI;
 using Il2CppInterop.Runtime;
 using Il2CppSystem.Collections.Generic;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
@@ -12,6 +13,7 @@ using S1EntityFramework = ScheduleOne.EntityFramework;
 using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1ObjectScripts = ScheduleOne.ObjectScripts;
 using S1Persistence = ScheduleOne.Persistence.Datas;
+using S1UI = ScheduleOne.UI;
 #endif
 
 using HarmonyLib;
@@ -45,6 +47,64 @@ namespace S1API.Internal.Patches
             public int SlotCount;
             public int DisplayRowCount;
             public string ItemId;
+        }
+
+        /// <summary>
+        /// Manually parse StorageSlotMeta from JSON to avoid IL2CPP generic method issues.
+        /// </summary>
+        private static StorageSlotMeta ParseStorageSlotMeta(string json)
+        {
+            if (string.IsNullOrEmpty(json))
+                return null;
+
+            try
+            {
+                // Simple manual parsing since the JSON structure is known and simple
+                // Format: {"SlotCount":X,"DisplayRowCount":Y,"ItemId":"Z"}
+                var meta = new StorageSlotMeta();
+
+                // Extract SlotCount
+                int slotCountIdx = json.IndexOf("\"SlotCount\":");
+                if (slotCountIdx >= 0)
+                {
+                    int valueStart = slotCountIdx + 12;
+                    int valueEnd = json.IndexOfAny(new char[] { ',', '}' }, valueStart);
+                    if (valueEnd > valueStart && int.TryParse(json.Substring(valueStart, valueEnd - valueStart), out int slotCount))
+                    {
+                        meta.SlotCount = slotCount;
+                    }
+                }
+
+                // Extract DisplayRowCount
+                int displayRowIdx = json.IndexOf("\"DisplayRowCount\":");
+                if (displayRowIdx >= 0)
+                {
+                    int valueStart = displayRowIdx + 18;
+                    int valueEnd = json.IndexOfAny(new char[] { ',', '}' }, valueStart);
+                    if (valueEnd > valueStart && int.TryParse(json.Substring(valueStart, valueEnd - valueStart), out int displayRowCount))
+                    {
+                        meta.DisplayRowCount = displayRowCount;
+                    }
+                }
+
+                // Extract ItemId
+                int itemIdIdx = json.IndexOf("\"ItemId\":\"");
+                if (itemIdIdx >= 0)
+                {
+                    int valueStart = itemIdIdx + 10;
+                    int valueEnd = json.IndexOf("\"", valueStart);
+                    if (valueEnd > valueStart)
+                    {
+                        meta.ItemId = json.Substring(valueStart, valueEnd - valueStart);
+                    }
+                }
+
+                return meta;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         /// <summary>
@@ -174,9 +234,9 @@ namespace S1API.Internal.Patches
         /// <summary>
         /// Hydrate expanded slots before loading contents so extra slots are restored from saves.
         /// </summary>
-        [HarmonyPatch(typeof(S1PersistenceLoaders.StorageRackLoader), "Load", new Type[] { typeof(S1Persistence.DynamicSaveData) })]
+        [HarmonyPatch(typeof(S1PersistenceLoaders.PlaceableStorageEntityLoader), "Load", new Type[] { typeof(S1Persistence.DynamicSaveData) })]
         [HarmonyPrefix]
-        private static bool StorageRackLoader_Load_Prefix(S1PersistenceLoaders.StorageRackLoader __instance, S1Persistence.DynamicSaveData data)
+        private static bool PlaceableStorageEntityLoader_Load_Prefix(S1PersistenceLoaders.PlaceableStorageEntityLoader __instance, S1Persistence.DynamicSaveData data)
         {
             try
             {
@@ -208,7 +268,8 @@ namespace S1API.Internal.Patches
                 {
                     try
                     {
-                        var meta = JsonUtility.FromJson<StorageSlotMeta>(metaJson);
+                        // Parse manually to avoid IL2CPP generic method issues with JsonUtility.FromJson<T>
+                        var meta = ParseStorageSlotMeta(metaJson);
                         if (meta != null)
                         {
                             targetSlots = Math.Max(targetSlots, meta.SlotCount);
@@ -221,7 +282,7 @@ namespace S1API.Internal.Patches
                     catch (Exception metaEx)
                     {
                         string itemId = placeableStorage?.ItemInstance?.Definition?.ID ?? "unknown";
-                        
+
                         Logger.Warning(
                             $"Failed to deserialize storage slot metadata for item '{itemId}'. " +
                             $"This usually happens when a mod that added extra storage rows is no longer loaded. " +
@@ -239,11 +300,38 @@ namespace S1API.Internal.Patches
             }
             catch (Exception ex)
             {
-                Logger.Error($"Error in StorageRackLoader_Load_Prefix: {ex.Message}");
+                Logger.Error($"Error in PlaceableStorageEntityLoader_Load_Prefix: {ex.Message}");
             }
 
             // Skip original loader to avoid double-loading
             return false;
+        }
+
+        /// <summary>
+        /// Patch for StorageMenu.Open(StorageEntity) - raises OnStorageOpening event.
+        /// This allows mods to sync custom names before the menu displays.
+        /// </summary>
+        [HarmonyPatch(typeof(S1UI.StorageMenu), nameof(S1UI.StorageMenu.Open), new Type[] { typeof(S1Storage.StorageEntity) })]
+        [HarmonyPrefix]
+        private static void StorageMenu_Open_Prefix(S1Storage.StorageEntity entity)
+        {
+            if (entity == null)
+                return;
+
+            try
+            {
+                // Get the placeable storage entity (if this is placeable storage)
+                var placeableStorage = entity.GetComponentInParent<S1ObjectScripts.PlaceableStorageEntity>();
+
+                // Wrap and raise event
+                var storageWrapper = new StorageEntity(entity, placeableStorage);
+                var args = new StorageEventArgs(storageWrapper);
+                StorageEvents.RaiseStorageOpening(args);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Error in StorageMenu_Open_Prefix: {ex.Message}");
+            }
         }
     }
 }

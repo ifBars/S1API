@@ -116,6 +116,27 @@ namespace S1API.Storage
         public static event Action<StorageLoadingEventArgs> OnStorageLoading;
 
         /// <summary>
+        /// Event raised just before the storage menu opens for a storage entity.
+        /// Use this event to update the display name or perform other pre-open actions.
+        /// </summary>
+        /// <remarks>
+        /// This event is useful for syncing custom names (set via clipboard) to the display name.
+        /// The base game's StorageMenu uses StorageEntityName for display, but custom names
+        /// are stored separately in Configuration.Name. Subscribe to this event and call
+        /// <see cref="StorageEntity.SyncCustomNameToDisplayName"/> to ensure custom names are shown.
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// // Ensure custom names are displayed when opening storage
+        /// StorageEvents.OnStorageOpening += (args) =>
+        /// {
+        ///     args.Storage.SyncCustomNameToDisplayName();
+        /// };
+        /// </code>
+        /// </example>
+        public static event Action<StorageEventArgs> OnStorageOpening;
+
+        /// <summary>
         /// INTERNAL: Raises the OnStorageCreated event.
         /// Called by Harmony patches in S1API.Internal.Patches.StoragePatches.
         /// </summary>
@@ -150,6 +171,25 @@ namespace S1API.Storage
             catch (Exception ex)
             {
                 Logger.Error($"Exception in OnStorageLoading handler for storage '{args.ItemId}': {ex.Message}\n{ex.StackTrace}");
+            }
+        }
+
+        /// <summary>
+        /// INTERNAL: Raises the OnStorageOpening event.
+        /// Called by Harmony patches in S1API.Internal.Patches.StoragePatches.
+        /// </summary>
+        internal static void RaiseStorageOpening(StorageEventArgs args)
+        {
+            if (args == null)
+                return;
+
+            try
+            {
+                OnStorageOpening?.Invoke(args);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Exception in OnStorageOpening handler for storage '{args.ItemId}': {ex.Message}\n{ex.StackTrace}");
             }
         }
     }

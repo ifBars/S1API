@@ -1,6 +1,7 @@
 #if (IL2CPPMELON)
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
+using S1NPCsBehaviour = Il2CppScheduleOne.NPCs.Behaviour;
 using S1Economy = Il2CppScheduleOne.Economy;
 using S1AvatarFramework = Il2CppScheduleOne.AvatarFramework;
 using S1Items = Il2CppScheduleOne.ItemFramework;
@@ -8,6 +9,7 @@ using S1Registry = Il2CppScheduleOne.Registry;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1NPCs = ScheduleOne.NPCs;
 using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
+using S1NPCsBehaviour = ScheduleOne.NPCs.Behaviour;
 using S1Economy = ScheduleOne.Economy;
 using S1AvatarFramework = ScheduleOne.AvatarFramework;
 using S1Items = ScheduleOne.ItemFramework;
@@ -310,17 +312,25 @@ namespace S1API.Entities
             
             // Ensure required schedule components exist
             var mgr = EnsureScheduleManager();
-            
-            // Ensure NPCSignal_HandleDeal exists for dealer contract fulfillment
-            var handleDeal = prefabRoot.GetComponentInChildren<S1NPCsSchedules.NPCSignal_HandleDeal>(true);
-            if (handleDeal == null)
+
+            // Ensure DealerAttendDealBehaviour exists for dealer contract fulfillment (v0.4.2f4+)
+            var npcBehaviour = prefabRoot.GetComponentInChildren<S1NPCsBehaviour.NPCBehaviour>(true);
+            if (npcBehaviour == null)
             {
-                var go = new GameObject("HandleDeal");
-                go.transform.SetParent(mgr.transform, false);
-                handleDeal = go.AddComponent<S1NPCsSchedules.NPCSignal_HandleDeal>();
+                var behGo = new GameObject("NPCBehaviour");
+                behGo.transform.SetParent(mgr.transform, false);
+                npcBehaviour = behGo.AddComponent<S1NPCsBehaviour.NPCBehaviour>();
+            }
+
+            var attendDeal = prefabRoot.GetComponentInChildren<S1NPCsBehaviour.DealerAttendDealBehaviour>(true);
+            if (attendDeal == null)
+            {
+                var go = new GameObject("DealerAttendDealBehaviour");
+                go.transform.SetParent(npcBehaviour.transform, false);
+                attendDeal = go.AddComponent<S1NPCsBehaviour.DealerAttendDealBehaviour>();
                 go.SetActive(false);
             }
-            
+
             // Ensure NPCEvent_StayInBuilding exists for home behavior
             var stayInBuilding = prefabRoot.GetComponentInChildren<S1NPCsSchedules.NPCEvent_StayInBuilding>(true);
             if (stayInBuilding == null)
@@ -529,7 +539,7 @@ namespace S1API.Entities
 
             var mgr = EnsureScheduleManager();
 
-            int walkTo = 0, stayInBuilding = 0, locationDialogue = 0, useVending = 0, driveToCarPark = 0, dealSignal = 0, useATM = 0, handleDeal = 0;
+            int walkTo = 0, stayInBuilding = 0, locationDialogue = 0, useVending = 0, driveToCarPark = 0, dealSignal = 0, useATM = 0;
             for (int i = 0; i < specs.Count; i++)
             {
                 var s = specs[i];
@@ -540,7 +550,6 @@ namespace S1API.Entities
                 else if (s is DriveToCarParkSpec) driveToCarPark++;
                 else if (s is EnsureDealSignalSpec) dealSignal = Math.Max(dealSignal, 1);
                 else if (s is UseATMSpec) useATM++;
-                else if (s is HandleDealSpec) handleDeal++;
             }
 
             if (dealSignal > 0)
@@ -570,7 +579,6 @@ namespace S1API.Entities
             EnsurePrefabAction<S1NPCsSchedules.NPCSignal_UseVendingMachine>(useVending, "UseVending");
             EnsurePrefabAction<S1NPCsSchedules.NPCSignal_DriveToCarPark>(driveToCarPark, "DriveToCarPark");
             EnsurePrefabAction<S1NPCsSchedules.NPCSignal_UseATM>(useATM, "UseATM");
-            EnsurePrefabAction<S1NPCsSchedules.NPCSignal_HandleDeal>(handleDeal, "HandleDeal");
         }
 
         private void EnsurePrefabAction<T>(int count, string namePrefix) where T : S1NPCsSchedules.NPCAction
