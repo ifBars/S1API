@@ -494,25 +494,6 @@ namespace S1API.Entities
                 {
                     collectCashMethod.Invoke(Component, null);
                 }
-                else
-                {
-                    // Fallback: manually transfer cash
-                    float cash = GetCash();
-                    if (cash > 0f)
-                    {
-                        // Transfer cash to player
-                        var moneyManager = S1DevUtilities.NetworkSingleton<S1Money.MoneyManager>.Instance;
-                        if (moneyManager != null)
-                        {
-                            moneyManager.ChangeCashBalance(cash, visualizeChange: true, playCashSound: true);
-                            ChangeCash(-cash);
-                        }
-                        else
-                        {
-                            Logger.Warning($"MoneyManager not available to collect cash from dealer {NPC.ID}");
-                        }
-                    }
-                }
             }
             catch (Exception ex)
             {
