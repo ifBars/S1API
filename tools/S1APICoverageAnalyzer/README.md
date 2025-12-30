@@ -46,7 +46,7 @@ Handles nested type separator differences:
 - Game: `ScheduleOne.Casino.SlotMachine+ESymbol`
 - Matches: `ScheduleOne.Casino.SlotMachine.ESymbol`
 
-### 3. Fuzzy Match (New!)
+### 3. Fuzzy Match
 Handles common naming variations:
 
 #### Enum Prefix Differences
