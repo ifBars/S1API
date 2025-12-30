@@ -43,7 +43,7 @@ namespace S1API.Internal.Abstraction
 
         /// <summary>
         /// INTERNAL: Tracking for subscribed generic actions.
-        /// Maps Action<T> to UnityAction<T> instances for safe remove on IL2CPP.
+        /// Maps Action&lt;T&gt; to UnityAction&lt;T&gt; instances for safe remove on IL2CPP.
         /// </summary>
         private static readonly Dictionary<Delegate, Delegate> SubscribedGenericActions = new Dictionary<Delegate, Delegate>();
 

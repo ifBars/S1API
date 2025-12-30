@@ -41,7 +41,7 @@ namespace S1API.Quests
     /// An abstract class intended to be derived from for creating custom quests in the game.
     /// </summary>
     /// <remarks>
-    /// To create a quest, you must use <see cref="QuestManager.CreateQuest{T}(string? guid = null)"/> to instantiate your quest.
+    /// To create a quest, you must use <see cref="QuestManager.CreateQuest{T}(string?)"/> to instantiate your quest.
     /// </remarks>
     /// <seealso cref="Saveable.RequestGameSave(bool)"/>
     public abstract class Quest : Saveable

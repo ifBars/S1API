@@ -1,7 +1,7 @@
 namespace S1API.Quests.Identifiers
 {
     /// <summary>
-    /// Marker interface for quest identifier types used with QuestManager.Get<T>().
+    /// Marker interface for quest identifier types used with QuestManager.Get&lt;T&gt;().
     /// Implement empty classes like 'public sealed class DefeatCartel : IQuestIdentifier {}'
     /// and optionally annotate with [QuestName("Finishing the Job")].
     /// </summary>
