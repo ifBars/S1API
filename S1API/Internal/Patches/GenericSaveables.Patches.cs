@@ -75,13 +75,13 @@ namespace S1API.Internal.Patches
 
 		/// <summary>
 		/// Loads saveables marked with BeforeBaseGame load order BEFORE base game loaders run.
-		/// This runs as a prefix to LoadRequest constructor on the first LoadRequest creation,
+		/// This runs as a prefix to LoadManager.QueueLoadRequest on the first LoadRequest creation,
 		/// which happens right before base game loaders start processing.
 		/// Uses the LoadedGameFolderPath to detect new load cycles.
 		/// </summary>
-		[HarmonyPatch(typeof(S1Persistence.LoadRequest), MethodType.Constructor, new Type[] { typeof(string), typeof(S1Persistence.Loaders.Loader) })]
+		[HarmonyPatch(typeof(S1Persistence.LoadManager), nameof(S1Persistence.LoadManager.QueueLoadRequest))]
 		[HarmonyPrefix]
-		private static void BeforeBaseLoaders(string filePath, S1Persistence.Loaders.Loader loader)
+		private static void BeforeBaseLoaders(S1Persistence.LoadRequest request)
 		{
 			try
 			{
