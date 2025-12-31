@@ -20,6 +20,7 @@ using S1MapBase = Il2CppScheduleOne.Map;
 using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
 using S1Registry = Il2CppScheduleOne.Registry;
 using S1Money = Il2CppScheduleOne.Money;
+using ConversationCategoryList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.Messaging.EConversationCategory>;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1DevUtilities = ScheduleOne.DevUtilities;
 using S1Interaction = ScheduleOne.Interaction;
@@ -42,6 +43,7 @@ using S1MapBase = ScheduleOne.Map;
 using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
 using S1Registry = ScheduleOne.Registry;
 using S1Money = ScheduleOne.Money;
+using ConversationCategoryList = System.Collections.Generic.List<ScheduleOne.Messaging.EConversationCategory>;
 #endif
 
 #if (IL2CPPBEPINEX || IL2CPPMELON)
@@ -57,12 +59,6 @@ using Il2CppSystem.Collections.Generic;
 using System.Collections.Generic;
 #endif
 
-#if (IL2CPPMELON)
-using ConversationCategoryList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.Messaging.EConversationCategory>;
-#else
-using ConversationCategoryList = System.Collections.Generic.List<ScheduleOne.Messaging.EConversationCategory>;
-#endif
-
 using System;
 using System.Collections;
 using System.IO;
@@ -72,12 +68,10 @@ using System.Runtime.Serialization;
 using HarmonyLib;
 #if (IL2CPPMELON)
 using Il2CppFishNet;
-using Il2CppFishNet.Managing;
 using Il2CppFishNet.Managing.Object;
 using Il2CppFishNet.Object;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using FishNet;
-using FishNet.Managing;
 using FishNet.Managing.Object;
 using FishNet.Object;
 #endif
@@ -86,7 +80,6 @@ using S1API.Entities.Behaviour;
 using S1API.Entities.Interfaces;
 using S1API.Entities.Schedule;
 using S1API.Entities.Customer;
-using S1API.Entities.Equippables;
 using S1API.Entities.Dealer;
 using S1API.Entities.Relation;
 using S1API.Internal;
@@ -98,7 +91,6 @@ using S1API.Logging;
 using S1API.Vehicles;
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 namespace S1API.Entities
@@ -1284,6 +1276,17 @@ namespace S1API.Entities
         /// List of all NPCs within the base game and modded.
         /// </summary>
         public static readonly System.Collections.Generic.List<NPC> All = new System.Collections.Generic.List<NPC>();
+
+        /// <summary>
+        /// Whether all custom NPCs have been instantiated and finalized.
+        /// This flag is set to true once all custom NPC types have been spawned and initialized.
+        /// Mods can check this to ensure custom NPCs are ready before performing operations that depend on them.
+        /// </summary>
+        public static bool CustomNpcsReady
+        {
+            get => Internal.Patches.NPCPatches.CustomNpcsReady;
+            internal set => Internal.Patches.NPCPatches.CustomNpcsReady = value;
+        }
 
         /// <summary>
         /// The first name of this NPC.
@@ -2944,7 +2947,7 @@ namespace S1API.Entities
         private static void CheckAndSetCustomNpcsReady()
         {
             // If already ready, no need to check again
-            if (Internal.Patches.NPCPatches.CustomNpcsReady)
+            if (CustomNpcsReady)
                 return;
 
             try
@@ -2967,7 +2970,7 @@ namespace S1API.Entities
                 );
 
                 if (allTypesInstantiated)
-                    Internal.Patches.NPCPatches.CustomNpcsReady = true;
+                    CustomNpcsReady = true;
             }
             catch (Exception ex)
             {
