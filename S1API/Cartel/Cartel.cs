@@ -81,6 +81,21 @@ namespace S1API.Cartel
             S1Cartel.HoursSinceStatusChange;
 
         /// <summary>
+        /// Gets the goon manager for spawning and controlling cartel goons.
+        /// Returns null if the goon pool is not available.
+        /// </summary>
+        public GoonManager? GoonPool
+        {
+            get
+            {
+                var pool = S1Cartel.GoonPool;
+                if (pool == null)
+                    return null;
+                return new GoonManager(pool);
+            }
+        }
+
+        /// <summary>
         /// Event fired when the Cartel status changes.
         /// Provides the old status and new status as parameters.
         /// </summary>
