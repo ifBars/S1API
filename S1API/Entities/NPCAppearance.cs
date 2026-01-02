@@ -148,6 +148,13 @@ namespace S1API.Entities
                 // Activate the rig (same as game's GenerateMugshot)
                 mugshotRig.gameObject.SetActive(true);
 
+                // Disable distance culling so the mugshot rig never hides while the player camera is far away
+                bool previousAllowCulling = mugshotRig.Animation != null && mugshotRig.Animation.AllowCulling;
+                if (mugshotRig.Animation != null)
+                    mugshotRig.Animation.AllowCulling = false;
+                mugshotRig.SetVisible(true);
+                mugshotRig.Impostor.DisableImpostor();
+
                 // Use a per-capture clone so subsequent appearance edits don't mutate the in-flight mugshot
                 var mugshotSettings = ScriptableObject.Instantiate(next._customAvatarSettings);
                 mugshotSettings.Height = 1f;
@@ -172,7 +179,7 @@ namespace S1API.Entities
                     iconGenerator.ModifyLighting = true;
 
                 // Give the rig a frame to update meshes/bounds with the new settings before capture
-                yield return new WaitForEndOfFrame();
+                // yield return new WaitForEndOfFrame();
 
                 bool completed = false;
                 // Trigger capture (callback will flip flag)
@@ -194,8 +201,8 @@ namespace S1API.Entities
                         cropX = Mathf.Clamp(cropX, 0, generatedMugshot.width - cropWidth);
                         cropY = Mathf.Clamp(cropY, 0, generatedMugshot.height - cropHeight);
 
-                        Rect cropRect = new Rect(cropX, cropY, cropWidth, cropHeight);
-                        Sprite iconSprite = Sprite.Create(generatedMugshot, cropRect, new Vector2(0.5f, 0.5f));
+                        Rect cropRect = new Rect(0, 0, generatedMugshot.width, generatedMugshot.height);
+                        Sprite iconSprite = Sprite.Create(generatedMugshot, cropRect, Vector2.zero);
                         next.NPC.Icon = iconSprite;
                         next.NPC.RefreshMessagingIcons();
 
@@ -231,9 +238,11 @@ namespace S1API.Entities
                 if (generator.DefaultSettings != null)
                     mugshotRig.LoadAvatarSettings(generator.DefaultSettings);
                 mugshotRig.gameObject.SetActive(false);
+                if (mugshotRig.Animation != null)
+                    mugshotRig.Animation.AllowCulling = previousAllowCulling;
 
                 // Small delay between jobs to let the mugshot rig fully reset
-                yield return new WaitForSeconds(0.05f);
+                yield return new WaitForSeconds(0.1f);
             }
         }
 
