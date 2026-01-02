@@ -76,12 +76,27 @@ namespace S1API.Entities
         }
 
         /// <summary>
+        /// Register a callback to run when a conversation starts with this NPC.
+        /// This fires before the dialogue is displayed, allowing you to prepare or rebuild dialogue containers.
+        /// </summary>
+        public NPCDialogue OnConversationStart(Action callback)
+        {
+            if (callback == null)
+                return this;
+            EnsureHandler();
+            EnsureEventHooks();
+            _conversationStartCallbacks.Add(callback);
+            return this;
+        }
+
+        /// <summary>
         /// Removes all registered dialogue callbacks for this NPC.
         /// </summary>
         public void ClearCallbacks()
         {
             _choiceCallbacks.Clear();
             _nodeCallbacks.Clear();
+            _conversationStartCallbacks.Clear();
         }
 
         /// <summary>
@@ -169,6 +184,7 @@ namespace S1API.Entities
             // Handler events are invoked from DialogueHandler.ChoiceCallback and DialogueCallback
             EventHelper.AddListener(Internal_OnChoice, Handler.onDialogueChoiceChosen);
             EventHelper.AddListener(Internal_OnNode, Handler.onDialogueNodeDisplayed);
+            EventHelper.AddListener(Internal_OnConversationStart, Handler.onConversationStart);
         }
 
         /// <summary>
@@ -532,6 +548,14 @@ namespace S1API.Entities
             }
         }
 
+        private void Internal_OnConversationStart()
+        {
+            for (int i = 0; i < _conversationStartCallbacks.Count; i++)
+            {
+                try { _conversationStartCallbacks[i]?.Invoke(); } catch { }
+            }
+        }
+
 #if MONOMELON
         private FieldInfo dialogueContainersField = typeof(S1Dialogue.DialogueHandler).GetField("dialogueContainers", BindingFlags.NonPublic | BindingFlags.Instance);
         private PropertyInfo runtimeModulesProperty = typeof(S1Dialogue.DialogueHandler).GetProperty("runtimeModules", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -540,6 +564,7 @@ namespace S1API.Entities
 #endif
         private readonly Dictionary<string, List<Action>> _choiceCallbacks = new Dictionary<string, List<Action>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<Action>> _nodeCallbacks = new Dictionary<string, List<Action>>(StringComparer.OrdinalIgnoreCase);
+        private readonly List<Action> _conversationStartCallbacks = new List<Action>();
         private bool _eventsHooked;
 
 #if (IL2CPPMELON || IL2CPPBEPINEX)
