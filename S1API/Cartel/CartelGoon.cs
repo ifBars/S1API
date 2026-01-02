@@ -9,7 +9,6 @@ using S1Combat = ScheduleOne.Combat;
 #endif
 
 using S1API.Entities;
-using S1API.Entities.Behaviour;
 using S1API.Entities.Interfaces;
 using UnityEngine;
 
@@ -52,22 +51,6 @@ namespace S1API.Cartel
         /// The GameObject associated with this goon.
         /// </summary>
         public GameObject GameObject => S1Goon.gameObject;
-
-        /// <summary>
-        /// Gets the combat behaviour for this goon, allowing weapon and targeting configuration.
-        /// </summary>
-        public CombatBehaviour? Combat
-        {
-            get
-            {
-                var behaviour = S1Goon.Behaviour?.CombatBehaviour;
-                if (behaviour == null) return null;
-
-                // Note: CombatBehaviour currently takes NPC, but goons have similar structure
-                // This would need adjustment in CombatBehaviour to support CartelGoon
-                return null; // Placeholder - see GoonCombatBehaviour below
-            }
-        }
 
         /// <summary>
         /// Teleports this goon to a specific world position.
