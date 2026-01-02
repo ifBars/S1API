@@ -1772,6 +1772,48 @@ namespace S1API.Internal.Patches
         }
 
         /// <summary>
+        /// Fallback for NPCManager.GetNPC to resolve NPCs from S1API NPC.All list when the registry is missing entries.
+        /// Ensures the registry is backfilled to keep future lookups fast and messaging lookups reliable.
+        /// </summary>
+        [HarmonyPatch(typeof(S1NPCs.NPCManager), nameof(S1NPCs.NPCManager.GetNPC))]
+        [HarmonyPostfix]
+        private static void NPCManager_GetNPC_Postfix(string id, ref S1NPCs.NPC __result)
+        {
+            if (__result != null)
+                return;
+            if (string.IsNullOrWhiteSpace(id))
+                return;
+
+            try
+            {
+                for (int i = 0; i < NPC.All.Count; i++)
+                {
+                    var apiNpc = NPC.All[i];
+                    var baseNpc = apiNpc?.S1NPC;
+                    if (baseNpc == null || string.IsNullOrEmpty(baseNpc.ID))
+                        continue;
+
+                    if (baseNpc.ID.Equals(id, StringComparison.OrdinalIgnoreCase))
+                    {
+                        __result = baseNpc;
+                        try
+                        {
+                            var reg = S1NPCs.NPCManager.NPCRegistry;
+                            if (reg != null && !reg.Contains(baseNpc))
+                                reg.Add(baseNpc);
+                        }
+                        catch { }
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"NPCManager_GetNPC_Postfix: exception while backfilling registry for id '{id}': {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Guard: Prevent SetGravityMultiplier from running if any ConstantForce components are null.
         /// This happens on instanced custom NPCs (prefabs created in menu work correctly) and
         /// logs NREs to Player.log
