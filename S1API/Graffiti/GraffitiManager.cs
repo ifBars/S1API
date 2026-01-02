@@ -63,12 +63,18 @@ namespace S1API.Graffiti
         /// <summary>
         /// Gets all spray surfaces that have not been drawn on yet (no strokes).
         /// </summary>
+        public static List<SpraySurface> UntaggedSpraySurfaces =>
+            GetAllSpraySurfaces()
+                .Where(surface => surface.StrokeCount == 0 && !surface.HasDrawingBeenFinalized)
+                .ToList();
+
+        /// <summary>
+        /// Gets all spray surfaces that have not been drawn on yet (no strokes).
+        /// </summary>
         /// <returns>A list of untagged spray surfaces.</returns>
         public static List<SpraySurface> GetUntaggedSpraySurfaces()
         {
-            return GetAllSpraySurfaces()
-                .Where(surface => surface.StrokeCount == 0 && !surface.HasDrawingBeenFinalized)
-                .ToList();
+            return UntaggedSpraySurfaces;
         }
 
         /// <summary>
