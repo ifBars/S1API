@@ -1,8 +1,10 @@
 #if (IL2CPPMELON)
 using Il2Cpp;
 using S1Vehicles = Il2CppScheduleOne.Vehicles;
+using S1Guid = Il2CppSystem.Guid;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Vehicles = ScheduleOne.Vehicles;
+using S1Guid = System.Guid;
 #endif
 using System;
 using System.Collections.Generic;
@@ -149,6 +151,42 @@ namespace S1API.Vehicles
                 }
             }
             return null;
+        }
+
+        /// <summary>
+        /// Removes a vehicle from the game's lists, for permenently destroying a vehicle. This will be called automatically in OnDestroy, so there's likely no need to call this manually
+        /// </summary>
+        /// <param name="guidString"></param>
+        public static void RemoveVehicle(string guidString) {
+            S1Guid guid = new S1Guid(guidString);
+            var registry = S1Vehicles.VehicleManager.Instance;
+
+            int? allIndex = null;
+            S1Vehicles.LandVehicle? gameVehicle = null;
+            for (int i = 0; i < registry.AllVehicles.Count; ++i) {
+                if (registry.AllVehicles[i]?.GUID.Equals(guid) ?? false) {
+                    allIndex = i;
+                    gameVehicle = registry.AllVehicles[i];
+                    break;
+                }
+            }
+            int? playerIndex = null;
+            for (int i = 0; i < registry.PlayerOwnedVehicles.Count; ++i) {
+                if (registry.PlayerOwnedVehicles[i]?.GUID.Equals(guid) ?? false) {
+                    playerIndex = i;
+                    break;
+                }
+            }
+            if (allIndex != null) {
+                registry.AllVehicles.RemoveAt((int)allIndex);
+            }
+            if (playerIndex != null) {
+                registry.PlayerOwnedVehicles.RemoveAt((int)playerIndex);
+            }
+            
+            if(gameVehicle != null && _cache.ContainsKey(gameVehicle))
+                _cache.Remove(gameVehicle);
+
         }
 
         private static LandVehicle Wrap(S1Vehicles.LandVehicle veh)
