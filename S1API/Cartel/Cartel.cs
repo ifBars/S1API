@@ -81,6 +81,47 @@ namespace S1API.Cartel
             S1Cartel.HoursSinceStatusChange;
 
         /// <summary>
+        /// Gets the goon manager for spawning and controlling cartel goons.
+        /// Returns null if the goon pool is not available.
+        /// </summary>
+        public GoonManager? GoonPool
+        {
+            get
+            {
+                var pool = S1Cartel.GoonPool;
+                if (pool == null)
+                    return null;
+                return new GoonManager(pool);
+            }
+        }
+
+        /// <summary>
+        /// Gets the cartel influence manager for regional influence tracking.
+        /// Returns null if the influence system is not available.
+        /// </summary>
+        public CartelInfluence? Influence
+        {
+            get
+            {
+                var influence = S1Cartel.Influence;
+                if (influence == null)
+                    return null;
+                return new CartelInfluence(influence);
+            }
+        }
+
+        /// <summary>
+        /// Sets the cartel status. This is a server RPC that will sync to all clients.
+        /// </summary>
+        /// <param name="status">The new cartel status.</param>
+        /// <param name="resetTimer">Whether to reset the hours since status change timer.</param>
+        public void SetStatus(CartelStatus status, bool resetTimer = true)
+        {
+            // Cast through int since our CartelStatus values match the game's ECartelStatus values
+            S1Cartel.SetStatus_Server((ECartelStatus)(int)status, resetTimer);
+        }
+
+        /// <summary>
         /// Event fired when the Cartel status changes.
         /// Provides the old status and new status as parameters.
         /// </summary>

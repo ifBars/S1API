@@ -486,6 +486,7 @@ var allQuests = QuestManager.Get<CleanCash>();
 
 ## See Also
 
+- [Complete Example: Multi-Phase Quest](quests-complete-example.md) - Full heist quest with NPC triggers, parallel objectives, and save persistence
 - [S1NotesApp Example](https://github.com/ifBars/S1NotesApp) - Uses `StarredNoteQuest` with `NotesManager` and `NotesApp`
 - [Save System](save-system.md) - For persisting quest data
 - [Custom NPCs](custom-npcs.md) - For quest-giving NPCs
