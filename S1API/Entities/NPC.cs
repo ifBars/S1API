@@ -626,7 +626,7 @@ namespace S1API.Entities
             }
         }
 
-        internal void RefreshMessagingIcons()
+        public void RefreshMessagingIcons()
         {
             try
             {
