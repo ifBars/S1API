@@ -3,21 +3,6 @@
   "version": "1.0",
   "entries": [
     {
-      "timestamp": "2025-12-30T22:02:20.5760404Z",
-      "classCoveragePercentage": 15.925925925925927,
-      "memberCoveragePercentage": 0,
-      "totalClasses": 540,
-      "coveredClasses": 86,
-      "totalMembers": 1726,
-      "coveredMembers": 0,
-      "excludedClasses": 1081,
-      "gameAssemblyVersion": "0.0.0.0",
-      "gameAssemblyHash": "B9A1838C5D2667C2FD3CB8E43F8E5F8E9412FD63C771E2000C5B8D635DB42D16",
-      "analyzerVersion": "1.0.0.0",
-      "events": [],
-      "note": null
-    },
-    {
       "timestamp": "2025-12-30T22:07:28.6699798Z",
       "classCoveragePercentage": 25,
       "memberCoveragePercentage": 0,
