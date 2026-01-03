@@ -752,7 +752,7 @@ namespace S1API.Entities
             catch (Exception ex)
             {
                 Logger.Error($"[S1API] PreRegisterAllNpcPrefabs failed: {ex.Message}");
-                Logger.Error($"[S1API] Stack Trace: {ex.StackTrace}")
+                Logger.Error($"[S1API] Stack Trace: {ex.StackTrace}");
             }
         }
 
