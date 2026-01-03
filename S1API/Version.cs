@@ -28,12 +28,12 @@ namespace S1API
 
                 if (string.IsNullOrEmpty(melonVersion))
                 {
-                    MelonLogger.Warning("[VersionChecker] Could not determine MelonLoader version!");
+                    MelonLogger.Warning("[S1API VersionChecker] Could not determine MelonLoader version!");
                     return;
                 }
 
                 MelonLogger.Msg("========================================");
-                MelonLogger.Msg($"[VersionChecker] MelonLoader Version Detected: {melonVersion}");
+                MelonLogger.Msg($"[S1API VersionChecker] MelonLoader Version Detected: {melonVersion}");
                 MelonLogger.Msg("========================================");
 
                 // Check if version matches problematic version (0.7.1.x)
@@ -43,12 +43,12 @@ namespace S1API
                 }
                 else
                 {
-                    MelonLogger.Msg("[VersionChecker] Your MelonLoader version appears to be compatible!");
+                    MelonLogger.Msg("[S1API VersionChecker] Your MelonLoader version appears to be compatible!");
                 }
             }
             catch (Exception ex)
             {
-                MelonLogger.Warning($"[VersionChecker] Version check failed: {ex.Message}");
+                MelonLogger.Warning($"[S1API VersionChecker] Version check failed: {ex.Message}");
             }
         }
 
@@ -157,12 +157,12 @@ namespace S1API
 
             MelonLogger.Error(warning);
 
-            MelonLogger.Error($"[VersionChecker] DETECTED PROBLEMATIC MELONLOADER VERSION: {detectedVersion}");
-            MelonLogger.Error($"[VersionChecker] PLEASE UPDATE TO {RECOMMENDED_VERSION_1} OR {RECOMMENDED_VERSION_2}");
+            MelonLogger.Error($"[S1API VersionChecker] DETECTED PROBLEMATIC MELONLOADER VERSION: {detectedVersion}");
+            MelonLogger.Error($"[S1API VersionChecker] PLEASE UPDATE TO {RECOMMENDED_VERSION_1} OR {RECOMMENDED_VERSION_2}");
 
             MelonLogger.Error(string.Concat(Enumerable.Repeat(Environment.NewLine, 2)));
             MelonLogger.Warning(
-                $"[VersionChecker] IMPORTANT: This message will be available in logs for your reference at \n{Path.Combine(MelonEnvironment.MelonLoaderLogsDirectory, "Latest.log")}");
+                $"[S1API VersionChecker] IMPORTANT: This message will be available in logs for your reference at \n{Path.Combine(MelonEnvironment.MelonLoaderLogsDirectory, "Latest.log")}");
         }
     }
 }
