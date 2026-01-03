@@ -154,39 +154,55 @@ namespace S1API.Vehicles
         }
 
         /// <summary>
-        /// Removes a vehicle from the game's lists, for permenently destroying a vehicle. This will be called automatically in OnDestroy, so there's likely no need to call this manually
+        /// Removes a vehicle from the game's lists, for permanently destroying a vehicle. This will be called automatically in OnDestroy, so there's likely no need to call this manually.
         /// </summary>
-        /// <param name="guidString"></param>
+        /// <param name="guidString">The GUID string of the vehicle to remove.</param>
         public static void RemoveVehicle(string guidString) {
-            S1Guid guid = new S1Guid(guidString);
+            if (string.IsNullOrEmpty(guidString))
+                return;
+
             var registry = S1Vehicles.VehicleManager.Instance;
+            if (registry == null)
+                return;
+
+            S1Guid guid = new S1Guid(guidString);
 
             int? allIndex = null;
             S1Vehicles.LandVehicle? gameVehicle = null;
-            for (int i = 0; i < registry.AllVehicles.Count; ++i) {
-                if (registry.AllVehicles[i]?.GUID.Equals(guid) ?? false) {
-                    allIndex = i;
-                    gameVehicle = registry.AllVehicles[i];
-                    break;
-                }
-            }
-            int? playerIndex = null;
-            for (int i = 0; i < registry.PlayerOwnedVehicles.Count; ++i) {
-                if (registry.PlayerOwnedVehicles[i]?.GUID.Equals(guid) ?? false) {
-                    playerIndex = i;
-                    break;
-                }
-            }
-            if (allIndex != null) {
-                registry.AllVehicles.RemoveAt((int)allIndex);
-            }
-            if (playerIndex != null) {
-                registry.PlayerOwnedVehicles.RemoveAt((int)playerIndex);
-            }
-            
-            if(gameVehicle != null && _cache.ContainsKey(gameVehicle))
-                _cache.Remove(gameVehicle);
 
+            var allVehicles = registry.AllVehicles;
+            if (allVehicles != null)
+            {
+                for (int i = 0; i < allVehicles.Count; ++i) {
+                    if (allVehicles[i]?.GUID.Equals(guid) ?? false) {
+                        allIndex = i;
+                        gameVehicle = allVehicles[i];
+                        break;
+                    }
+                }
+            }
+
+            int? playerIndex = null;
+            var playerVehicles = registry.PlayerOwnedVehicles;
+            if (playerVehicles != null)
+            {
+                for (int i = 0; i < playerVehicles.Count; ++i) {
+                    if (playerVehicles[i]?.GUID.Equals(guid) ?? false) {
+                        playerIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            if (allIndex != null && allVehicles != null) {
+                allVehicles.RemoveAt((int)allIndex);
+            }
+            if (playerIndex != null && playerVehicles != null) {
+                playerVehicles.RemoveAt((int)playerIndex);
+            }
+
+            if (gameVehicle != null && _cache.ContainsKey(gameVehicle))
+                _cache.Remove(gameVehicle);
         }
 
         private static LandVehicle Wrap(S1Vehicles.LandVehicle veh)

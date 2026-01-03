@@ -2242,6 +2242,32 @@ namespace S1API.Entities
                 S1NPC.Behaviour.ConsumeProductBehaviour = existing;
             }
 
+            // UnconsciousBehaviour and DeadBehaviour are required by NPC.IsConscious
+            // which is checked during pickpocketing and other interactions
+            if (S1NPC.Behaviour.UnconsciousBehaviour == null)
+            {
+                var existing = S1NPC.Behaviour.GetComponentInChildren<S1Behaviour.UnconsciousBehaviour>(true);
+                if (existing == null)
+                {
+                    GameObject go = new GameObject("UnconsciousBehaviour");
+                    go.transform.SetParent(S1NPC.Behaviour.transform, false);
+                    existing = go.AddComponent<S1Behaviour.UnconsciousBehaviour>();
+                }
+                S1NPC.Behaviour.UnconsciousBehaviour = existing;
+            }
+
+            if (S1NPC.Behaviour.DeadBehaviour == null)
+            {
+                var existing = S1NPC.Behaviour.GetComponentInChildren<S1Behaviour.DeadBehaviour>(true);
+                if (existing == null)
+                {
+                    GameObject go = new GameObject("DeadBehaviour");
+                    go.transform.SetParent(S1NPC.Behaviour.transform, false);
+                    existing = go.AddComponent<S1Behaviour.DeadBehaviour>();
+                }
+                S1NPC.Behaviour.DeadBehaviour = existing;
+            }
+
             TryRegisterBehaviourEventLinks();
         }
 

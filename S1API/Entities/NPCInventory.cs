@@ -223,21 +223,9 @@ namespace S1API.Entities
             {
                 ReflectionUtils.TrySetFieldOrProperty(inv, "npc", NPC.S1NPC);
 
-                if (inv.PickpocketIntObj != null)
-                {
-                    MethodInfo hoveredMi = typeof(S1NPCs.NPCInventory).GetMethod("Hovered", BindingFlags.Public | BindingFlags.Instance);
-                    MethodInfo interactedMi = typeof(S1NPCs.NPCInventory).GetMethod("Interacted", BindingFlags.Public | BindingFlags.Instance);
-                    if (hoveredMi != null)
-                    {
-                        UnityAction hovered = (UnityAction)Delegate.CreateDelegate(typeof(UnityAction), inv, hoveredMi);
-                        inv.PickpocketIntObj.onHovered?.AddListener(hovered);
-                    }
-                    if (interactedMi != null)
-                    {
-                        UnityAction interacted = (UnityAction)Delegate.CreateDelegate(typeof(UnityAction), inv, interactedMi);
-                        inv.PickpocketIntObj.onInteractStart?.AddListener(interacted);
-                    }
-                }
+                // NOTE: Do NOT add listeners here - the game's NPCInventory.Awake() already adds
+                // onHovered and onInteractStart listeners. Adding them again causes duplicate
+                // event firing which breaks the pickpocket screen.
             }
             catch { }
 

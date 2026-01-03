@@ -15,7 +15,15 @@ namespace S1API.Internal.Patches
         [HarmonyPatch("OnDestroy")]
         [HarmonyPostfix]
         public static void OnDestroy(S1Vehicles.LandVehicle __instance) {
-            VehicleRegistry.RemoveVehicle(__instance.GUID.ToString());
+            try
+            {
+                if (__instance != null)
+                    VehicleRegistry.RemoveVehicle(__instance.GUID.ToString());
+            }
+            catch
+            {
+                // Ignore errors during cleanup - VehicleManager may be destroyed during scene unload
+            }
         }
 
     }
