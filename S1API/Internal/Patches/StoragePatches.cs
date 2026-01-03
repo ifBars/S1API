@@ -110,11 +110,15 @@ namespace S1API.Internal.Patches
         /// <summary>
         /// Patch for PlaceableStorageEntity.Start - raises OnStorageCreated event.
         /// This fires when storage items are placed in the world.
+        /// Note: In multiplayer, ItemInstance may be null on clients when Start() runs
+        /// because the network RPC hasn't arrived yet. The InitializeGridItem patch
+        /// handles this case.
         /// </summary>
         [HarmonyPatch(typeof(S1ObjectScripts.PlaceableStorageEntity), "Start")]
         [HarmonyPostfix]
         private static void PlaceableStorageEntity_Start_Postfix(S1ObjectScripts.PlaceableStorageEntity __instance)
         {
+            // Skip if ItemInstance isn't ready yet - InitializeGridItem patch will handle it
             if (__instance?.ItemInstance?.Definition == null)
                 return;
 
@@ -136,6 +140,40 @@ namespace S1API.Internal.Patches
             catch (Exception ex)
             {
                 Logger.Error($"Error in PlaceableStorageEntity_Start_Postfix: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Patch for PlaceableStorageEntity.InitializeGridItem - handles multiplayer case.
+        /// In multiplayer, when a client places storage, Start() runs before the ItemInstance
+        /// is set via network RPC. This patch fires after InitializeGridItem is called,
+        /// which is when ItemInstance is guaranteed to be set on both host and client.
+        /// </summary>
+        [HarmonyPatch(typeof(S1ObjectScripts.PlaceableStorageEntity), nameof(S1ObjectScripts.PlaceableStorageEntity.InitializeGridItem))]
+        [HarmonyPostfix]
+        private static void PlaceableStorageEntity_InitializeGridItem_Postfix(S1ObjectScripts.PlaceableStorageEntity __instance)
+        {
+            if (__instance?.ItemInstance?.Definition == null)
+                return;
+
+            if (__instance.StorageEntity == null)
+                return;
+
+            // Check if already processed by Start() patch
+            int instanceId = __instance.GetInstanceID();
+            if (_processedStorages.Contains(instanceId))
+                return;
+            _processedStorages.Add(instanceId);
+
+            try
+            {
+                var storageWrapper = new StorageEntity(__instance.StorageEntity, __instance);
+                var args = new StorageEventArgs(storageWrapper);
+                StorageEvents.RaiseStorageCreated(args);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Error in PlaceableStorageEntity_InitializeGridItem_Postfix: {ex.Message}");
             }
         }
 
