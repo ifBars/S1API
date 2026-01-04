@@ -1745,6 +1745,23 @@ namespace S1API.Entities
         public void Goto(Vector3 position) =>
             S1NPC.Movement.SetDestination(position);
 
+        /// <summary>
+        /// Clears the NPC's conversation categories, removing any badge (C/S/D) from the messages UI.
+        /// This makes the NPC appear like Uncle Nelson - present in messages but without a category badge.
+        /// </summary>
+        public void ClearConversationCategories()
+        {
+            try
+            {
+                S1NPC.ConversationCategories?.Clear();
+                S1NPC.MSGConversation?.Categories?.Clear();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Failed to clear conversation categories for {ID}: {ex.Message}");
+            }
+        }
+
         // TODO: Add OnEnterVehicle listener (currently missing LandVehicle abstraction)
         // public event Action OnEnterVehicle { }
 
