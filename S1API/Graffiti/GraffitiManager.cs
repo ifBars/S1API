@@ -43,21 +43,36 @@ namespace S1API.Graffiti
             if (instance == null)
                 return new List<SpraySurface>();
 
-            var spraySurfaces = ReflectionUtils.TryGetFieldOrProperty(instance, "SpraySurfaces");
-            if (spraySurfaces is System.Collections.IList surfacesList)
-            {
-                var result = new List<SpraySurface>();
-                foreach (var surface in surfacesList)
-                {
-                    if (surface != null)
-                    {
-                        result.Add(new SpraySurface((S1Graffiti.SpraySurface)surface));
-                    }
-                }
-                return result;
-            }
+            var result = new List<SpraySurface>();
 
-            return new List<SpraySurface>();
+#if (IL2CPPMELON)
+            // IL2CPP: Access SpraySurfaces directly as Il2CppSystem.Collections.Generic.List
+            if (instance.SpraySurfaces == null)
+                return result;
+
+            for (int i = 0; i < instance.SpraySurfaces.Count; i++)
+            {
+                var surface = instance.SpraySurfaces[i];
+                if (surface != null)
+                {
+                    result.Add(new SpraySurface(surface));
+                }
+            }
+#elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
+            // Mono: Access SpraySurfaces and iterate directly
+            if (instance.SpraySurfaces == null)
+                return result;
+
+            foreach (var surface in instance.SpraySurfaces)
+            {
+                if (surface != null)
+                {
+                    result.Add(new SpraySurface(surface));
+                }
+            }
+#endif
+
+            return result;
         }
 
         /// <summary>
