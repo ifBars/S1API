@@ -10,6 +10,7 @@ This guide covers NPC lifecycle, runtime properties, and management during gamep
 4. [Health Management](#health-management)
 5. [Movement Control](#movement-control)
 6. [Messaging System](#messaging-system)
+    - [Conversation Categories](#conversation-categories)
 7. [Component Access](#component-access)
 8. [Runtime Examples](#runtime-examples)
 9. [Best Practices](#best-practices)
@@ -218,6 +219,37 @@ response.OnSelected(() => {
 ```csharp
 // Set conversation visibility
 ConversationCanBeHidden = true;
+```
+
+### Conversation Categories
+
+NPCs in the messages UI display category badges: "C" for Customer, "S" for Supplier, or "D" for Dealer. By default, custom NPCs are assigned the Customer category.
+
+```csharp
+// Remove the category badge (C/S/D) from the messages UI
+// This makes the NPC appear like Uncle Nelson - present in messages but without a badge
+ClearConversationCategories();
+```
+
+This is useful for NPCs that don't fit into the standard Customer/Supplier/Dealer categories, such as:
+- Family members or friends
+- Story NPCs
+- Informants
+- Special contacts
+
+**Example:**
+
+```csharp
+protected override void OnCreated()
+{
+    base.OnCreated();
+
+    Appearance.Build();
+    Schedule.Enable();
+
+    // Remove the "C" badge from messages UI
+    ClearConversationCategories();
+}
 ```
 
 ## Component Access
