@@ -29,6 +29,9 @@ namespace S1API.Products
             if (CrossType.Is<S1Product.CocaineDefinition>(item, out var coke))
                 return new CocaineDefinition(coke);
 
+            if (CrossType.Is<S1Product.ShroomDefinition>(item, out var shroom))
+                return new ShroomDefinition(shroom);
+
             return def;
         }
     }

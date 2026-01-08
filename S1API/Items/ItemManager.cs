@@ -1,20 +1,23 @@
-﻿#if (IL2CPPMELON)
+#if (IL2CPPMELON)
 using S1 = Il2CppScheduleOne;
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1Product = Il2CppScheduleOne.Product;
 using S1Registry = Il2CppScheduleOne.Registry;
 using S1Clothing = Il2CppScheduleOne.Clothing;
+using S1Packaging = Il2CppScheduleOne.Product.Packaging;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1 = ScheduleOne;
 using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1Product = ScheduleOne.Product;
 using S1Registry = ScheduleOne.Registry;
 using S1Clothing = ScheduleOne.Clothing;
+using S1Packaging = ScheduleOne.Product.Packaging;
 #endif
 
 using S1API.Internal.Utils;
 using S1API.Money;
 using S1API.Products;
+using S1API.Products.Packaging;
 
 namespace S1API.Items
 {
@@ -51,6 +54,10 @@ namespace S1API.Items
             if (CrossType.Is(itemDefinition,
                     out S1ItemFramework.BuildableItemDefinition buildableItemDefinition))
                 return new BuildableItemDefinition(buildableItemDefinition);
+
+            if (CrossType.Is(itemDefinition,
+                    out S1Packaging.PackagingDefinition packagingDefinition))
+                return new PackagingDefinition(packagingDefinition);
 
             if (CrossType.Is(itemDefinition,
                     out S1ItemFramework.StorableItemDefinition storableItemDefinition))

@@ -1,4 +1,4 @@
-﻿#if (IL2CPPMELON)
+#if (IL2CPPMELON)
 using S1Packaging = Il2CppScheduleOne.Product.Packaging;
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
@@ -8,6 +8,7 @@ using S1ItemFramework = ScheduleOne.ItemFramework;
 
 using S1API.Internal.Utils;
 using S1API.Items;
+using S1API.Products.Packaging;
 
 namespace S1API.Products
 {
@@ -34,5 +35,11 @@ namespace S1API.Products
         /// </summary>
         public int Quantity =>
             S1PackagingDefinition.Quantity;
+
+        /// <summary>
+        /// The stealth level of this packaging.
+        /// </summary>
+        public StealthLevel StealthLevel =>
+            S1PackagingDefinition.StealthLevel.ToAPI();
     }
 }

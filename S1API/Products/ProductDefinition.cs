@@ -1,4 +1,4 @@
-﻿#if (IL2CPPMELON)
+#if (IL2CPPMELON)
 using Il2CppInterop.Runtime.InteropTypes;
 using S1Product = Il2CppScheduleOne.Product;
 using ItemFramework = Il2CppScheduleOne.ItemFramework;
@@ -14,6 +14,7 @@ using S1API.Internal.Utils;
 using S1API.Items;
 using S1API.Properties;
 using S1API.Properties.Interfaces;
+using S1API.Products.Packaging;
 using UnityEngine;
 
 namespace S1API.Products
@@ -119,8 +120,44 @@ namespace S1API.Products
         /// <summary>
         /// The primary drug type for this product (convenience property).
         /// </summary>
-        public S1Product.EDrugType DrugType => 
+        public S1Product.EDrugType DrugType =>
             S1ProductDefinition.DrugType;
 
-}
+        /// <summary>
+        /// Creates a packaged instance of this product with the specified packaging.
+        /// </summary>
+        /// <param name="quantity">The quantity of the product.</param>
+        /// <param name="packaging">The packaging to apply to the product.</param>
+        /// <returns>A packaged product instance, or null if packaging is not found.</returns>
+        public ProductInstance? CreatePackagedInstance(int quantity, PackagingDefinition packaging)
+        {
+            try
+            {
+#if (IL2CPPMELON)
+                var s1Packaging = CrossType.As<Il2CppScheduleOne.Product.Packaging.PackagingDefinition>(packaging.S1ItemDefinition);
+#elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
+                var s1Packaging = CrossType.As<ScheduleOne.Product.Packaging.PackagingDefinition>(packaging.S1ItemDefinition);
+#endif
+
+                if (s1Packaging == null)
+                {
+                    return null;
+                }
+
+                var s1ProductInstance = new S1Product.ProductItemInstance(
+                    S1ProductDefinition,
+                    quantity,
+                    ItemFramework.EQuality.Standard,
+                    s1Packaging
+                );
+
+                return new ProductInstance(s1ProductInstance);
+            }
+            catch (System.Exception)
+            {
+                return null;
+            }
+        }
+
+    }
 }
