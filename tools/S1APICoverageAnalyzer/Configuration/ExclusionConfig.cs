@@ -16,7 +16,6 @@ public static class ExclusionConfig
         "ScheduleOne.Persistence", // Exclude entire persistence layer
         
         // Internal game systems not meant for modding
-        "ScheduleOne.Trash",
         "ScheduleOne.VoiceChat",
         "ScheduleOne.Tutorials",
         "ScheduleOne.Tools", // Internal tools
@@ -48,7 +47,6 @@ public static class ExclusionConfig
         "ScheduleOne.Vision", // Internal NPC vision logic
         "ScheduleOne.Polling", // Internal polling/feedback
         "ScheduleOne.Dragging",
-        "ScheduleOne.Doors", // Internal door logic
         "ScheduleOne.Decoration",
         
         // Avatar internals (Animation, Rendering, etc.) - API wraps high level Avatar only
