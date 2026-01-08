@@ -1,4 +1,4 @@
-﻿#if (IL2CPPMELON)
+#if (IL2CPPMELON)
 using S1Storage = Il2CppScheduleOne.Storage;
 using S1AccessSettings = Il2CppScheduleOne.Storage.StorageEntity.EAccessSettings;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
@@ -9,6 +9,7 @@ using S1AccessSettings = ScheduleOne.Storage.StorageEntity.EAccessSettings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
 using S1API.Internal.Abstraction;
 using S1API.Items;
 
@@ -57,6 +58,81 @@ namespace S1API.Storages
         /// </summary>
         /// <param name="storage"></param>
         internal StorageInstance(S1Storage.StorageEntity storage) => S1Storage = storage;
+
+        #region Static Factory Methods
+
+        /// <summary>
+        /// Gets a storage instance from a GameObject that has a StorageEntity component.
+        /// </summary>
+        /// <param name="gameObject">The GameObject to check for a StorageEntity component.</param>
+        /// <returns>A StorageInstance wrapper if found, otherwise null.</returns>
+        /// <remarks>
+        /// This method first checks the GameObject itself, then searches up the parent hierarchy.
+        /// Useful for getting storage from spawned prefabs like Display Cabinets, Wall Shelves, etc.
+        /// </remarks>
+        public static StorageInstance? FromGameObject(GameObject gameObject)
+        {
+            if (gameObject == null)
+            {
+                Debug.LogWarning("[StorageInstance] FromGameObject called with null GameObject");
+                return null;
+            }
+
+            Debug.Log($"[StorageInstance] Searching for StorageEntity on GameObject '{gameObject.name}'");
+
+            var storageEntity = gameObject.GetComponent<S1Storage.StorageEntity>();
+
+            if (storageEntity != null)
+            {
+                Debug.Log($"[StorageInstance] Found StorageEntity directly on '{gameObject.name}'");
+                return new StorageInstance(storageEntity);
+            }
+
+            Debug.Log($"[StorageInstance] StorageEntity not found directly, searching parent hierarchy of '{gameObject.name}'");
+            storageEntity = gameObject.GetComponentInParent<S1Storage.StorageEntity>();
+
+            if (storageEntity != null)
+            {
+                Debug.Log($"[StorageInstance] Found StorageEntity in parent hierarchy of '{gameObject.name}' on object '{storageEntity.gameObject.name}'");
+                return new StorageInstance(storageEntity);
+            }
+
+            Debug.LogWarning($"[StorageInstance] No StorageEntity found on '{gameObject.name}' or its parents");
+            return null;
+        }
+
+        /// <summary>
+        /// Gets a storage instance from a GameObject that has a StorageEntity component in its children.
+        /// </summary>
+        /// <param name="gameObject">The GameObject to search.</param>
+        /// <returns>A StorageInstance wrapper if found, otherwise null.</returns>
+        /// <remarks>
+        /// This method searches the GameObject and all its children for a StorageEntity component.
+        /// Use this when the storage component might be on a child object.
+        /// </remarks>
+        public static StorageInstance? FromGameObjectInChildren(GameObject gameObject)
+        {
+            if (gameObject == null)
+            {
+                Debug.LogWarning("[StorageInstance] FromGameObjectInChildren called with null GameObject");
+                return null;
+            }
+
+            Debug.Log($"[StorageInstance] Searching for StorageEntity in children of '{gameObject.name}'");
+
+            var storageEntity = gameObject.GetComponentInChildren<S1Storage.StorageEntity>();
+
+            if (storageEntity == null)
+            {
+                Debug.LogWarning($"[StorageInstance] No StorageEntity found in children of '{gameObject.name}'");
+                return null;
+            }
+
+            Debug.Log($"[StorageInstance] Found StorageEntity in children of '{gameObject.name}' on object '{storageEntity.gameObject.name}'");
+            return new StorageInstance(storageEntity);
+        }
+
+        #endregion
 
         // ====== Metadata Properties ======
 
