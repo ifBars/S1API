@@ -6,10 +6,11 @@ using S1Properties = ScheduleOne.Effects;
 
 using System.Collections.Generic;
 using System.Linq;
+using S1API.Properties;
 using UnityEngine;
 using S1API.Properties.Interfaces;
 
-namespace S1API.Properties.Internal
+namespace S1API.Internal.Properties
 {
     /// <summary>
     /// INTERNAL: Resolves API property wrappers/tokens to runtime game properties.

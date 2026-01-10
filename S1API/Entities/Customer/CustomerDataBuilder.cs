@@ -19,7 +19,7 @@ using S1API.Properties;
 using S1API.Economy;
 using S1API.Products;
 using S1API.Properties.Interfaces;
-using S1API.Properties.Internal;
+using S1API.Internal.Properties;
 
 namespace S1API.Entities.Customer
 {
