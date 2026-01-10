@@ -59,23 +59,5 @@ namespace S1API.Products
             }
             return result;
         }
-
-        /// <summary>
-        /// DEPRECATED: Use GetProperties() which returns IProperty wrappers.
-        /// Retrieves the raw Schedule One properties (may cause assembly reference issues in IL2CPP).
-        /// </summary>
-        /// <returns>A list of raw Schedule One properties.</returns>
-        [System.Obsolete("Use GetProperties() instead for IL2CPP compatibility")]
-        public List<S1Properties.Effect> GetRawProperties()
-        {
-            var result = new List<S1Properties.Effect>();
-            var list = S1MethDefinition?.Properties;
-            if (list != null)
-            {
-                for (int i = 0; i < list.Count; i++)
-                    result.Add(list[i]);
-            }
-            return result;
-        }
     }
 }

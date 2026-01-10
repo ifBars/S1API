@@ -29,12 +29,9 @@ namespace S1API.Internal.Patches
         static bool Prefix(ProductManagerAppType __instance)
         {
             // Only allow the original ProductManagerApp to run Start()
-            // Cloned instances (custom phone apps) get renamed and should not subscribe to discovery events
             if (__instance.gameObject.name != "ProductManagerApp")
             {
-                // This is a cloned instance used by a custom phone app
                 // Skip the Start method to prevent duplicate event subscriptions
-                __instance.SetOpen(false);
                 return false;
             }
             

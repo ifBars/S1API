@@ -304,16 +304,6 @@ namespace S1API.Entities
             }
         }
 
-        /// <summary>
-        /// Deprecated: Declare defaults in <see cref="NPC.ConfigurePrefab"/> via <see cref="NPCPrefabBuilder.WithRelationshipDefaults"/>.
-        /// Runtime mutation is no longer supported to preserve save/load consistency.
-        /// </summary>
-        [Obsolete("Declare defaults in NPC.ConfigurePrefab via NPCPrefabBuilder.WithRelationshipDefaults. Runtime mutation is disabled.")]
-        public void BuildAndSetRelationshipData(Action<NPCRelationshipDataBuilder> configure)
-        {
-            // Keep a no-op to avoid breaking mods at runtime but guide them to the new API
-        }
-
         #endregion
 
         #region Internal
