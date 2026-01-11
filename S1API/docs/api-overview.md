@@ -78,6 +78,18 @@ Build fully-featured phone applications with custom UI.
 
 ---
 
+### TV Apps
+**Namespace**: `S1API.TVApp`
+
+Build custom TV applications with full-screen UI displayed on in-game TVs.
+
+**Key Classes**:
+- `TVApp` - Base TV app class
+
+**Documentation**: [TV Apps](tv-app.md)
+
+---
+
 ### Phone Calls
 **Namespace**: `S1API.PhoneCalls`
 
@@ -426,6 +438,7 @@ Reflection and cross-runtime utilities.
 | Quest | `S1API.Quests` | [Quests System](quests-system.md) |
 | Item | `S1API.Items` | [Items](items.md) |
 | Phone App | `S1API.PhoneApp` | [Phone Apps](phone-app.md) |
+| TV App | `S1API.TVApp` | [TV Apps](tv-app.md) |
 | Phone Call | `S1API.PhoneCalls` | [Phone Calls](phone-calls.md) |
 | Custom Product | `S1API.Products` | [Products & Properties](products-system.md) |
 | UI Element | `S1API.UI` | [UI](ui.md) |
@@ -449,7 +462,8 @@ Reflection and cross-runtime utilities.
 1. **New to S1API?** Start with [Getting Started](getting-started.md)
 2. **Want to create NPCs?** Read [Custom NPCs](custom-npcs.md)
 3. **Building a phone app?** See [Phone Apps](phone-app.md)
-4. **Need to save data?** Check [Save System](save-system.md)
+4. **Building a TV app?** See [TV Apps](tv-app.md)
+5. **Need to save data?** Check [Save System](save-system.md)
 
 ---
 
@@ -461,6 +475,7 @@ Learn by example:
 - **More-NPCs** - Additional NPCs with Cartel integration
 - **S1NotesApp** - Full phone app with save system and quests
 - **TextYourFriends** - Messaging system example
+- **HelloWorldTVApp** - Minimal TV app example ([GitHub](https://github.com/HazDS/HelloWorldTVApp))
 
 All examples available in the [S1API repository](https://github.com/ifBars/S1API).
 
