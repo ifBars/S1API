@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using HarmonyLib;
+using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using S1API.Internal.Utils;
 using S1API.Internal.Abstraction;
@@ -66,6 +68,9 @@ namespace S1API.Internal.Patches
             if (!string.Equals(SceneManager.GetActiveScene().name, "Main", StringComparison.OrdinalIgnoreCase))
                 return;
 
+            // Set up horizontal scrolling for the app button container (if not already set up)
+            SetupScrollRect(__instance);
+
             // Clear existing registrations (scene reload handling)
             TVAppRegistry.Clear();
 
@@ -94,6 +99,136 @@ namespace S1API.Internal.Patches
                     Logger.Warning($"[TVApp] Failed to register {type.FullName}: {e.Message}");
                     Logger.Warning($"[TVApp] Stack trace: {e.StackTrace}");
                 }
+            }
+        }
+
+        /// <summary>
+        /// Sets up a horizontal ScrollRect for the app button container to allow scrolling
+        /// when there are more apps than can fit on screen.
+        /// </summary>
+        private static void SetupScrollRect(TVHomeScreen homeScreen)
+        {
+            if (homeScreen.AppButtonContainer == null)
+            {
+                Logger.Warning("[TVApp] Cannot setup scroll: AppButtonContainer is null");
+                return;
+            }
+
+            // Check if scroll is already set up
+            if (homeScreen.AppButtonContainer.GetComponentInParent<ScrollRect>() != null)
+                return;
+
+            try
+            {
+                RectTransform content = homeScreen.AppButtonContainer;
+                Transform originalParent = content.parent;
+                int siblingIndex = content.GetSiblingIndex();
+
+                // Check existing components
+                var existingLayout = content.GetComponent<HorizontalLayoutGroup>();
+                var existingGrid = content.GetComponent<GridLayoutGroup>();
+
+                // Store original values
+                Vector2 originalAnchorMin = content.anchorMin;
+                Vector2 originalAnchorMax = content.anchorMax;
+                Vector2 originalAnchoredPos = content.anchoredPosition;
+                Vector2 originalPivot = content.pivot;
+
+                // Get the ACTUAL rendered size of content
+                LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+                Rect contentRect = content.rect;
+
+                // Get parent's rect to determine viewport size
+                RectTransform parentRT = originalParent as RectTransform;
+                Rect parentRect = parentRT != null ? parentRT.rect : new Rect(0, 0, 800, 200);
+
+                // Create scroll view - stretch to fill parent horizontally, use content height
+                GameObject scrollViewObj = new GameObject("AppScrollView");
+                scrollViewObj.transform.SetParent(originalParent, false);
+                scrollViewObj.transform.SetSiblingIndex(siblingIndex);
+
+                RectTransform scrollViewRT = scrollViewObj.AddComponent<RectTransform>();
+                // Stretch horizontally to fill parent, keep at same vertical position
+                scrollViewRT.anchorMin = new Vector2(0f, originalAnchorMin.y);
+                scrollViewRT.anchorMax = new Vector2(1f, originalAnchorMax.y);
+                scrollViewRT.anchoredPosition = new Vector2(0f, originalAnchoredPos.y);
+                scrollViewRT.sizeDelta = new Vector2(0f, contentRect.height > 0 ? contentRect.height : 200f);
+                scrollViewRT.pivot = originalPivot;
+
+                // Create viewport
+                GameObject viewportObj = new GameObject("Viewport");
+                viewportObj.transform.SetParent(scrollViewObj.transform, false);
+
+                RectTransform viewportRT = viewportObj.AddComponent<RectTransform>();
+                viewportRT.anchorMin = Vector2.zero;
+                viewportRT.anchorMax = Vector2.one;
+                viewportRT.sizeDelta = Vector2.zero;
+                viewportRT.anchoredPosition = Vector2.zero;
+                viewportRT.pivot = originalPivot;
+
+                // Reparent content into viewport
+                content.SetParent(viewportObj.transform, false);
+
+                // Position content at left edge of viewport, vertically centered
+                content.anchorMin = new Vector2(0f, 0.5f);
+                content.anchorMax = new Vector2(0f, 0.5f);
+                content.pivot = new Vector2(0f, 0.5f);
+                content.anchoredPosition = Vector2.zero; // Start at left edge
+
+                // Configure layout group with padding for tidy appearance
+                if (existingLayout != null)
+                {
+                    // Update existing layout group
+                    existingLayout.padding = new RectOffset(80, 80, 0, 0); // 80px padding left and right
+                }
+                else if (existingGrid == null)
+                {
+                    // Add new layout group with padding
+                    var layoutGroup = content.gameObject.AddComponent<HorizontalLayoutGroup>();
+                    layoutGroup.childAlignment = TextAnchor.MiddleLeft;
+                    layoutGroup.childControlWidth = false;
+                    layoutGroup.childControlHeight = false;
+                    layoutGroup.childForceExpandWidth = false;
+                    layoutGroup.childForceExpandHeight = false;
+                    layoutGroup.spacing = 15f;
+                    layoutGroup.padding = new RectOffset(80, 80, 0, 0); // 80px padding left and right
+                }
+
+                // Add ContentSizeFitter - let it control both dimensions based on children
+                ContentSizeFitter sizeFitter = content.gameObject.GetComponent<ContentSizeFitter>();
+                if (sizeFitter == null)
+                {
+                    sizeFitter = content.gameObject.AddComponent<ContentSizeFitter>();
+                }
+                sizeFitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+                sizeFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+                // Configure ScrollRect
+                ScrollRect scrollRect = scrollViewObj.AddComponent<ScrollRect>();
+                scrollRect.content = content;
+                scrollRect.viewport = viewportRT;
+                scrollRect.horizontal = true;
+                scrollRect.vertical = false;
+                scrollRect.movementType = ScrollRect.MovementType.Elastic;
+                scrollRect.elasticity = 0.1f;
+                scrollRect.inertia = true;
+                scrollRect.decelerationRate = 0.135f;
+
+                // Force layout rebuild
+                LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+                LayoutRebuilder.ForceRebuildLayoutImmediate(scrollViewRT);
+
+                // Log each button
+                for (int i = 0; i < content.childCount; i++)
+                {
+                    var child = content.GetChild(i);
+                    var childRT = child.GetComponent<RectTransform>();
+                }
+            }
+            catch (Exception e)
+            {
+                Logger.Error($"[TVApp] Failed to setup scroll rect: {e.Message}");
+                Logger.Error($"[TVApp] Stack trace: {e.StackTrace}");
             }
         }
     }
