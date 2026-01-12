@@ -3,42 +3,6 @@
   "version": "1.0",
   "entries": [
     {
-      "timestamp": "2025-12-30T22:07:28.6699798Z",
-      "classCoveragePercentage": 25,
-      "memberCoveragePercentage": 0,
-      "totalClasses": 540,
-      "coveredClasses": 135,
-      "totalMembers": 1726,
-      "coveredMembers": 0,
-      "excludedClasses": 1081,
-      "gameAssemblyVersion": "0.0.0.0",
-      "gameAssemblyHash": "B9A1838C5D2667C2FD3CB8E43F8E5F8E9412FD63C771E2000C5B8D635DB42D16",
-      "analyzerVersion": "1.0.0.0",
-      "events": [
-        {
-          "type": 3,
-          "description": "Class coverage increased by \u002B9.07%",
-          "details": "15.93% \u2192 25.00%"
-        }
-      ],
-      "note": null
-    },
-    {
-      "timestamp": "2025-12-30T22:14:06.8445098Z",
-      "classCoveragePercentage": 25,
-      "memberCoveragePercentage": 0,
-      "totalClasses": 540,
-      "coveredClasses": 135,
-      "totalMembers": 1726,
-      "coveredMembers": 0,
-      "excludedClasses": 1081,
-      "gameAssemblyVersion": "0.0.0.0",
-      "gameAssemblyHash": "B9A1838C5D2667C2FD3CB8E43F8E5F8E9412FD63C771E2000C5B8D635DB42D16",
-      "analyzerVersion": "1.0.0.0",
-      "events": [],
-      "note": null
-    },
-    {
       "timestamp": "2025-12-30T22:16:51.3785816Z",
       "classCoveragePercentage": 25,
       "memberCoveragePercentage": 0,
@@ -346,51 +310,6 @@
     },
     {
       "timestamp": "2026-01-08T11:28:12.9952932Z",
-      "classCoveragePercentage": 27.628865979381445,
-      "memberCoveragePercentage": 0,
-      "totalClasses": 970,
-      "coveredClasses": 268,
-      "totalMembers": 24717,
-      "coveredMembers": 0,
-      "excludedClasses": 1054,
-      "gameAssemblyVersion": "0.0.0.0",
-      "gameAssemblyHash": "B9A1838C5D2667C2FD3CB8E43F8E5F8E9412FD63C771E2000C5B8D635DB42D16",
-      "analyzerVersion": "1.0.0.0",
-      "events": [],
-      "note": null
-    },
-    {
-      "timestamp": "2026-01-10T07:33:03.00343Z",
-      "classCoveragePercentage": 27.628865979381445,
-      "memberCoveragePercentage": 0,
-      "totalClasses": 970,
-      "coveredClasses": 268,
-      "totalMembers": 24717,
-      "coveredMembers": 0,
-      "excludedClasses": 1054,
-      "gameAssemblyVersion": "0.0.0.0",
-      "gameAssemblyHash": "B9A1838C5D2667C2FD3CB8E43F8E5F8E9412FD63C771E2000C5B8D635DB42D16",
-      "analyzerVersion": "1.0.0.0",
-      "events": [],
-      "note": null
-    },
-    {
-      "timestamp": "2026-01-10T07:52:44.195272Z",
-      "classCoveragePercentage": 27.628865979381445,
-      "memberCoveragePercentage": 0,
-      "totalClasses": 970,
-      "coveredClasses": 268,
-      "totalMembers": 24717,
-      "coveredMembers": 0,
-      "excludedClasses": 1054,
-      "gameAssemblyVersion": "0.0.0.0",
-      "gameAssemblyHash": "B9A1838C5D2667C2FD3CB8E43F8E5F8E9412FD63C771E2000C5B8D635DB42D16",
-      "analyzerVersion": "1.0.0.0",
-      "events": [],
-      "note": null
-    },
-    {
-      "timestamp": "2026-01-10T08:00:48.5833438Z",
       "classCoveragePercentage": 27.628865979381445,
       "memberCoveragePercentage": 0,
       "totalClasses": 970,
