@@ -303,6 +303,39 @@ Stack overflow.
 
 ## Advanced Features
 
+### Large Choice Lists (Paging)
+
+Vanilla dialogue UI only displays 8 visible choices (based on the prefab). If a dialogue node has more choices than that, you can opt-in to paging.
+
+This utility patches `DialogueCanvas` to show a page of choices as:
+
+- Up to `ChoicesPerPage` real choices
+- A final "More (x/y)" entry to advance to the next page
+
+Enable paging once during your mod initialization:
+
+```csharp
+using S1API.Dialogues;
+
+DialogueChoicePaging.Enable(new DialogueChoicePagingOptions
+{
+    ChoicesPerPage = 7,
+    MoreTextFormat = "More ({0}/{1})",
+    WrapPages = true
+});
+```
+
+To stop affecting dialogues:
+
+```csharp
+DialogueChoicePaging.Disable();
+```
+
+Notes:
+
+- Paging is opt-in and does nothing unless enabled.
+- Paging remaps the visible choice index back to the real choice index, so validity checks match the correct underlying choice.
+
 ### Multiple Containers
 
 Use different containers for different contexts:
