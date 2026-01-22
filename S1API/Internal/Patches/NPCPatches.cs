@@ -2465,7 +2465,7 @@ namespace S1API.Internal.Patches
 
                 try
                 {
-                    dealer.SendAddCustomer(customer.NPC.ID);
+                    dealer.AddCustomer_Server(customer.NPC.ID);
                 }
                 catch (Exception ex)
                 {

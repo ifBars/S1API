@@ -396,7 +396,7 @@ namespace S1API.Entities
 
             try
             {
-                Component.SendAddCustomer(customer.ID);
+                Component.AddCustomer_Server(customer.ID);
 
                 // Best-effort local wiring so both sides have AssignedDealer set immediately
                 try

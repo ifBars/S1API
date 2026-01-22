@@ -22,10 +22,10 @@ namespace S1API.Internal.Patches
         /// <summary>
         /// Fires the GraffitiCompleted event when a player finishes a graffiti piece and receives rewards.
         /// </summary>
-        /// <param name="__instance">The SpraySurfaceInteraction instance that called Reward.</param>
-        [HarmonyPatch(typeof(S1Graffiti.SpraySurfaceInteraction), "Reward")]
+        /// <param name="__instance">The WorldSpraySurface instance that called Reward.</param>
+        [HarmonyPatch(typeof(S1Graffiti.WorldSpraySurface), "Reward")]
         [HarmonyPostfix]
-        private static void SpraySurfaceInteraction_Reward_Postfix(S1Graffiti.SpraySurfaceInteraction __instance)
+        private static void WorldSpraySurface_Reward_Postfix(S1Graffiti.WorldSpraySurface __instance)
         {
             try
             {
@@ -35,14 +35,8 @@ namespace S1API.Internal.Patches
                     return;
                 }
 
-                if (__instance.SpraySurface == null)
-                {
-                    Logger.Warning("SpraySurface is null in Reward patch");
-                    return;
-                }
-
                 // Fire the event through GraffitiEvents
-                var wrappedSurface = new SpraySurface(__instance.SpraySurface);
+                var wrappedSurface = new SpraySurface(__instance);
                 GraffitiEvents.OnGraffitiRewarded(wrappedSurface);
             }
             catch (Exception ex)

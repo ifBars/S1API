@@ -73,9 +73,16 @@ namespace S1API.Internal.Abstraction
         /// Requests the game to perform a save operation. If a game is not currently loaded,
         /// the request is ignored and the method returns false.
         /// </summary>
-        /// <param name="immediate">When true, saves immediately; otherwise schedules a short delayed save.</param>
+        /// <param name="immediate">This parameter is ignored in v0.4.3+ (kept for backwards compatibility).</param>
         /// <returns>True if a save was requested; false if the game is not in a savable state.</returns>
-        public static bool RequestGameSave(bool immediate = false)
+        public static bool RequestGameSave(bool immediate) => RequestGameSave();
+
+        /// <summary>
+        /// Requests the game to perform a save operation. If a game is not currently loaded,
+        /// the request is ignored and the method returns false.
+        /// </summary>
+        /// <returns>True if a save was requested; false if the game is not in a savable state.</returns>
+        public static bool RequestGameSave()
         {
             try
             {
@@ -87,14 +94,7 @@ namespace S1API.Internal.Abstraction
                 if (saveManager == null)
                     return false;
 
-                if (immediate)
-                {
-                    saveManager.Save();
-                }
-                else
-                {
-                    saveManager.DelayedSave();
-                }
+                saveManager.Save();
 
                 return true;
             }

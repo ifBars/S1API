@@ -166,17 +166,12 @@ namespace S1API.GameTime
         /// <summary>
         /// Whether the player is currently sleeping.
         /// </summary>
-        public static bool SleepInProgress => S1GameTime.TimeManager.Instance.SleepInProgress;
-
-        /// <summary>
-        /// Whether the time is currently overridden (frozen or custom).
-        /// </summary>
-        public static bool TimeOverridden => S1GameTime.TimeManager.Instance.TimeOverridden;
+        public static bool SleepInProgress => S1GameTime.TimeManager.Instance.IsSleepInProgress;
 
         /// <summary>
         /// The current normalized time of day (0.0 = start, 1.0 = end).
         /// </summary>
-        public static float NormalizedTime => S1GameTime.TimeManager.Instance.NormalizedTime;
+        public static float NormalizedTime => S1GameTime.TimeManager.Instance.NormalizedTimeOfDay;
 
         /// <summary>
         /// Total playtime (in seconds).
@@ -184,19 +179,10 @@ namespace S1API.GameTime
         public static float Playtime => S1GameTime.TimeManager.Instance.Playtime;
 
         /// <summary>
-        /// Fast-forwards time to morning wake time (7:00 AM).
+        /// Sets the current time manually and synchronizes across the network.
+        /// This can only be called by the host.
         /// </summary>
-        public static void FastForwardToWakeTime() => S1GameTime.TimeManager.Instance.FastForwardToWakeTime();
-
-        /// <summary>
-        /// Sets the current time manually.
-        /// </summary>
-        public static void SetTime(int time24h, bool local = false) => S1GameTime.TimeManager.Instance.SetTime(time24h, local);
-
-        /// <summary>
-        /// Sets the number of elapsed in-game days.
-        /// </summary>
-        public static void SetElapsedDays(int days) => S1GameTime.TimeManager.Instance.SetElapsedDays(days);
+        public static void SetTime(int time24h) => S1GameTime.TimeManager.Instance.SetTimeAndSync(time24h);
 
         /// <summary>
         /// Gets the current time formatted in 12-hour AM/PM format.

@@ -5,7 +5,7 @@ using S1API.Internal.Lifecycle;
 using S1API.Lifecycle;
 using S1API.Map;
 
-[assembly: MelonInfo(typeof(S1API.S1API), "S1API (Forked by Bars)", "2.9.3", "KaBooMa")]
+[assembly: MelonInfo(typeof(S1API.S1API), "S1API (Forked by Bars)", "2.9.4", "KaBooMa")]
 [assembly: MelonPriority(Int32.MinValue)]
 // Marked as incompatible as it breaks base game apps (causes them to show the mod manager instead of the base game app)
 [assembly: MelonIncompatibleAssemblies("ModManager&PhoneApp")]

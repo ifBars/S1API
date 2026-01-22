@@ -34,9 +34,9 @@ namespace S1API.Graffiti
         }
 
         /// <summary>
-        /// Gets all spray surfaces in the game.
+        /// Gets all world spray surfaces in the game.
         /// </summary>
-        /// <returns>A list of all spray surfaces, wrapped in S1API SpraySurface objects.</returns>
+        /// <returns>A list of all world spray surfaces, wrapped in S1API SpraySurface objects.</returns>
         public static List<SpraySurface> GetAllSpraySurfaces()
         {
             var instance = Instance;
@@ -46,24 +46,24 @@ namespace S1API.Graffiti
             var result = new List<SpraySurface>();
 
 #if (IL2CPPMELON)
-            // IL2CPP: Access SpraySurfaces directly as Il2CppSystem.Collections.Generic.List
-            if (instance.SpraySurfaces == null)
+            // IL2CPP: Access WorldSpraySurfaces directly as Il2CppSystem.Collections.Generic.List
+            if (instance.WorldSpraySurfaces == null)
                 return result;
 
-            for (int i = 0; i < instance.SpraySurfaces.Count; i++)
+            for (int i = 0; i < instance.WorldSpraySurfaces.Count; i++)
             {
-                var surface = instance.SpraySurfaces[i];
+                var surface = instance.WorldSpraySurfaces[i];
                 if (surface != null)
                 {
                     result.Add(new SpraySurface(surface));
                 }
             }
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
-            // Mono: Access SpraySurfaces and iterate directly
-            if (instance.SpraySurfaces == null)
+            // Mono: Access WorldSpraySurfaces and iterate directly
+            if (instance.WorldSpraySurfaces == null)
                 return result;
 
-            foreach (var surface in instance.SpraySurfaces)
+            foreach (var surface in instance.WorldSpraySurfaces)
             {
                 if (surface != null)
                 {
