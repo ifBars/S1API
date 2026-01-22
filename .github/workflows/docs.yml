@@ -51,9 +51,9 @@ jobs:
       # Try to restore assemblies from cache first (for external PRs)
       # Cache key includes assembly branch to separate beta from main
       # v1 suffix allows cache invalidation by bumping version
-      - name: Cache Game Assemblies
+      - name: Restore Game Assemblies from Cache
         id: cache-assemblies
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: S1API/ScheduleOneAssemblies
           key: game-assemblies-v1-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
@@ -239,6 +239,14 @@ jobs:
         with:
           path: ./S1API/_site
         if: github.event_name != 'pull_request'
+
+      # Save cache even if build fails (to enable beta cache priming)
+      - name: Save Game Assemblies to Cache
+        uses: actions/cache/save@v4
+        if: always() && steps.cache-assemblies.outputs.cache-hit != 'true'
+        with:
+          path: S1API/ScheduleOneAssemblies
+          key: game-assemblies-v1-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
 
   deploy:
     environment:

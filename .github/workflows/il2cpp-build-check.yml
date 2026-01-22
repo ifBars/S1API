@@ -42,9 +42,9 @@ jobs:
       # Try to restore assemblies from cache first (for external PRs)
       # Cache key includes assembly branch to separate beta from main
       # v1 suffix allows cache invalidation by bumping version
-      - name: Cache IL2CPP Game Assemblies
+      - name: Restore IL2CPP Game Assemblies from Cache
         id: cache-il2cpp-assemblies
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: S1API/ScheduleOneAssemblies
           key: il2cpp-game-assemblies-v1-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
@@ -381,6 +381,14 @@ jobs:
         with:
           name: S1API-Il2Cpp
           path: S1API/bin/Il2CppMelon/net6.0/S1API.dll
+
+      # Save cache even if build fails (to enable beta cache priming)
+      - name: Save IL2CPP Game Assemblies to Cache
+        uses: actions/cache/save@v4
+        if: always() && steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true'
+        with:
+          path: S1API/ScheduleOneAssemblies
+          key: il2cpp-game-assemblies-v1-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
 
       - name: Build Summary
         if: always()
