@@ -31,22 +31,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Create Assembly Directory Structure
-        run: |
-          mkdir -p S1API/ScheduleOneAssemblies/Managed
-          mkdir -p S1API/ScheduleOneAssemblies/MelonLoader
-
-      # Try to restore assemblies from cache first (for external PRs)
-      - name: Cache Game Assemblies
-        id: cache-assemblies
-        uses: actions/cache@v4
-        with:
-          path: S1API/ScheduleOneAssemblies
-          key: game-assemblies-${{ hashFiles('S1API/S1API.csproj') }}
-          restore-keys: |
-            game-assemblies-
-
-      # Determine which assembly branch to use (beta or main)
+      # Determine which assembly branch to use (beta or main) - MUST run before cache
       - name: Determine Assembly Branch
         id: assembly-branch
         run: |
@@ -57,6 +42,22 @@ jobs:
             echo "branch=main" >> $GITHUB_OUTPUT
             echo "Using main/stable assemblies"
           fi
+
+      - name: Create Assembly Directory Structure
+        run: |
+          mkdir -p S1API/ScheduleOneAssemblies/Managed
+          mkdir -p S1API/ScheduleOneAssemblies/MelonLoader
+
+      # Try to restore assemblies from cache first (for external PRs)
+      # Cache key includes assembly branch to separate beta from main
+      - name: Cache Game Assemblies
+        id: cache-assemblies
+        uses: actions/cache@v4
+        with:
+          path: S1API/ScheduleOneAssemblies
+          key: game-assemblies-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
+          restore-keys: |
+            game-assemblies-${{ steps.assembly-branch.outputs.branch }}-
 
       # Only checkout game assemblies if cache miss AND we have access to secrets
       - name: Checkout Game Assemblies
