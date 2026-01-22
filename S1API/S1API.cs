@@ -9,6 +9,7 @@ using S1API.Map;
 [assembly: MelonPriority(Int32.MinValue)]
 // Marked as incompatible as it breaks base game apps (causes them to show the mod manager instead of the base game app)
 // See https://www.nexusmods.com/schedule1/mods/1484?tab=bugs
+// Testing beta cache
 [assembly: MelonIncompatibleAssemblies("ModManager&PhoneApp")]
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 namespace S1API
