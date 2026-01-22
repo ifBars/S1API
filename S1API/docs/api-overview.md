@@ -262,7 +262,7 @@ Player progression and rank management with XP accessors, unlockables, and rank-
 - `Unlockable` - Rank-locked UI entries
 - `Rank` - Rank enumeration
 
-**Documentation**: In development
+**Documentation**: [Leveling](leveling.md)
 
 ---
 
