@@ -44,6 +44,7 @@ jobs:
       # Try to restore assemblies from cache first (for external PRs)
       # Cache key includes assembly branch to separate beta from main
       # v1 suffix allows cache invalidation by bumping version
+      # save-always: true ensures cache is saved even if build fails (needed to prime beta cache)
       - name: Cache Game Assemblies
         id: cache-assemblies
         uses: actions/cache@v4
@@ -52,6 +53,7 @@ jobs:
           key: game-assemblies-v1-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
           restore-keys: |
             game-assemblies-v1-${{ steps.assembly-branch.outputs.branch }}-
+          save-always: true
 
       # Only checkout game assemblies if cache miss AND we have access to secrets
       - name: Checkout Game Assemblies
