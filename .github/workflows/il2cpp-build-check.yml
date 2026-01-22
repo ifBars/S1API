@@ -37,12 +37,25 @@ jobs:
           restore-keys: |
             il2cpp-game-assemblies-
 
+      # Determine which assembly branch to use (beta or main)
+      - name: Determine Assembly Branch
+        id: assembly-branch
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]] && [[ "${{ contains(github.event.pull_request.labels.*.name, 'beta') }}" == "true" ]]; then
+            echo "branch=beta" >> $GITHUB_OUTPUT
+            echo "Using beta assemblies for PR with beta label"
+          else
+            echo "branch=main" >> $GITHUB_OUTPUT
+            echo "Using main/stable assemblies"
+          fi
+
       # Only checkout IL2CPP assemblies if cache miss AND we have access to secrets
       - name: Checkout IL2CPP Game Assemblies
         uses: actions/checkout@v4
         with:
           repository: ${{ secrets.IL2CPP_ASSEMBLIES_REPO }}
           token: ${{ secrets.IL2CPP_ASSEMBLIES_TOKEN }}
+          ref: ${{ steps.assembly-branch.outputs.branch }}
           path: il2cpp-scheduleone-assemblies
           fetch-depth: 1
         if: steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)

@@ -46,12 +46,25 @@ jobs:
           restore-keys: |
             game-assemblies-
 
+      # Determine which assembly branch to use (beta or main)
+      - name: Determine Assembly Branch
+        id: assembly-branch
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]] && [[ "${{ contains(github.event.pull_request.labels.*.name, 'beta') }}" == "true" ]]; then
+            echo "branch=beta" >> $GITHUB_OUTPUT
+            echo "Using beta assemblies for PR with beta label"
+          else
+            echo "branch=main" >> $GITHUB_OUTPUT
+            echo "Using main/stable assemblies"
+          fi
+
       # Only checkout game assemblies if cache miss AND we have access to secrets
       - name: Checkout Game Assemblies
         uses: actions/checkout@v4
         with:
           repository: ${{ secrets.GAME_ASSEMBLIES_REPO }}
           token: ${{ secrets.GAME_ASSEMBLIES_TOKEN }}
+          ref: ${{ steps.assembly-branch.outputs.branch }}
           path: game-assemblies
           fetch-depth: 1
         if: steps.cache-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
