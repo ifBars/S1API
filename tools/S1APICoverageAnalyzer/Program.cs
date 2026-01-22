@@ -5,6 +5,8 @@ using S1APICoverageAnalyzer.Output;
 
 namespace S1APICoverageAnalyzer;
 
+// S1API Coverage Analyzer - Analyzes Schedule 1 game assembly and S1API mono assembly to provide a coverage report
+
 public class Program
 {
     private sealed record AnalysisOptions(
