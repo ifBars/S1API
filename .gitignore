@@ -38,6 +38,3 @@ coverage-chart.md
 
 # Coverage history is tracked to show progress over time
 !tools/S1APICoverageAnalyzer/coverage-history.json
-
-# Documentation for assemblies repo (tracked separately)
-ASSEMBLIES.md

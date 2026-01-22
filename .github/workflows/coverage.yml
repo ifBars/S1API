@@ -43,14 +43,15 @@ jobs:
 
       # Try to restore assemblies from cache first (for external PRs)
       # Cache key includes assembly branch to separate beta from main
+      # v1 suffix allows cache invalidation by bumping version
       - name: Cache Game Assemblies
         id: cache-assemblies
         uses: actions/cache@v4
         with:
           path: S1API/ScheduleOneAssemblies
-          key: game-assemblies-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
+          key: game-assemblies-v1-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
           restore-keys: |
-            game-assemblies-${{ steps.assembly-branch.outputs.branch }}-
+            game-assemblies-v1-${{ steps.assembly-branch.outputs.branch }}-
 
       # Only checkout game assemblies if cache miss AND we have access to secrets
       - name: Checkout Game Assemblies
