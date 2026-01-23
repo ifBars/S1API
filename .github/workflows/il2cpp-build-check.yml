@@ -54,15 +54,15 @@ jobs:
 
       # Try to restore assemblies from cache first (for external PRs)
       # Cache key includes assembly branch to separate beta from main
-      # v1 suffix allows cache invalidation by bumping version
+      # v2 suffix allows cache invalidation by bumping version
       - name: Restore IL2CPP Game Assemblies from Cache
         id: cache-il2cpp-assemblies
         uses: actions/cache/restore@v4
         with:
           path: S1API/ScheduleOneAssemblies
-          key: il2cpp-game-assemblies-v1-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
+          key: il2cpp-game-assemblies-v2-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
           restore-keys: |
-            il2cpp-game-assemblies-v1-${{ steps.assembly-branch.outputs.branch }}-
+            il2cpp-game-assemblies-v2-${{ steps.assembly-branch.outputs.branch }}-
 
       # Only checkout IL2CPP assemblies if cache miss AND we have access to secrets
       - name: Checkout IL2CPP Game Assemblies
@@ -401,7 +401,7 @@ jobs:
         if: always() && steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true'
         with:
           path: S1API/ScheduleOneAssemblies
-          key: il2cpp-game-assemblies-v1-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
+          key: il2cpp-game-assemblies-v2-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
 
       - name: Build Summary
         if: always()
