@@ -401,7 +401,7 @@ jobs:
         if: always() && steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true'
         with:
           path: S1API/ScheduleOneAssemblies
-          key: il2cpp-game-assemblies-v1-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
+          key: il2cpp-game-assemblies-v2-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
 
       - name: Build Summary
         if: always()
