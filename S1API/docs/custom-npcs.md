@@ -32,6 +32,15 @@ The Custom NPC system is documented across multiple focused pages:
 ### API Reference
 - <xref:S1API> - Detailed API documentation
 
+## Example Repository
+
+For complete, production-ready NPC implementations, see the **[S1API NPC Example Repository](https://github.com/ifBars/S1APINPCExample)**. This repository contains four fully-featured example NPCs covering all major use cases:
+
+- **[ExamplePhysicalNPC1](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/ExamplePhysicalNPC1.cs)** - Customer with dialogue, inventory, and complex scheduling
+- **[ExamplePhysicalNPC2](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/ExamplePhysicalNPC2.cs)** - Customer events and dealer recommendations
+- **[ExamplePhysicalDealerNPC](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/ExamplePhysicalDealerNPC.cs)** - Complete dealer implementation
+- **[CharacterCustomizerNPC](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/CharacterCustomizerNPC.cs)** - UI integration example
+
 ## Quick Start
 
 Here's a minimal example to get you started:
@@ -76,63 +85,11 @@ public sealed class MyFirstNPC : NPC
 }
 ```
 
-## Key Concepts
+## What To Read First
 
-### Physical vs Non-Physical NPCs
-
-**Physical NPCs** (`IsPhysical = true`):
-- Visible in the game world with 3D models
-- Can be directly interacted with
-- Can move around and follow schedules
-- Have collision detection and physics
-
-**Non-Physical NPCs** (`IsPhysical = false`):
-- Invisible in the world
-- Primarily used for messaging and phone contacts
-- Cannot be directly interacted with
-- Useful for remote contacts or story NPCs
-
-### Configuration Phases
-
-NPCs are configured in two main phases:
-
-1. **Prefab Configuration** (in `ConfigurePrefab`):
-   - Set spawn position
-   - Configure customer defaults
-   - Set relationship defaults
-   - Define schedule actions
-   - **Must be done here for save/load compatibility**
-
-2. **Runtime Initialization** (in `OnCreated`):
-   - Set up appearance
-   - Configure dialogue systems
-   - Subscribe to events
-   - Enable schedule system
-   - Set basic properties
-
-### Component System
-
-Each NPC has access to several component systems:
-
-- **`Appearance`**: Visual customization and avatar management
-- **`Dialogue`**: Interactive conversation systems
-- **`Schedule`**: Movement and activity scheduling
-- **`Customer`**: Business customer behavior
-- **`Relationship`**: Social connections and relationships
-- **`Inventory`**: Item management
-- **`Movement`**: Physical movement control
-
-## Best Practices
-
-1. **Always configure customer, relationship, and schedule data in `ConfigurePrefab`** - these systems require prefab-level configuration for proper save/load behavior.
-
-2. **Use the builder pattern** - All configuration methods return the builder instance, allowing for fluent chaining.
-
-3. **Handle exceptions gracefully** - Wrap configuration code in try-catch blocks to prevent NPC creation failures.
-
-4. **Test in both single-player and multiplayer** - NPCs work in both environments, but test thoroughly.
-
-5. **Use meaningful IDs** - NPC IDs are used for save/load and should be unique and descriptive.
+- Start here: **[Basic NPC Creation](basic-npc-creation.md)**
+- Then: **[Prefab Configuration](prefab-configuration.md)** (identity, relationships, schedules, customer/dealer defaults)
+- As needed: **[Dialogue System](dialogue-system.md)**, **[Scheduling System](scheduling-system.md)**, **[Customer Behavior](customer-behavior.md)**, **[Dealer System](dealer-system.md)**
 
 ## Getting Help
 
@@ -141,6 +98,6 @@ Each NPC has access to several component systems:
 
 ## Next Steps
 
-1. Read [Basic NPC Creation](basic-npc-creation.md) to understand the fundamentals
-2. Explore [Prefab Configuration](prefab-configuration.md) to learn about component setup
-3. Refer to individual system pages for detailed feature documentation
+1. Copy an example NPC and get it spawning: [S1API NPC Example Repository](https://github.com/ifBars/S1APINPCExample)
+2. Make it walk somewhere: [Scheduling System](scheduling-system.md)
+3. Add interaction: [Dialogue System](dialogue-system.md)

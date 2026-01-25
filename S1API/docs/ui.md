@@ -18,7 +18,34 @@ The `UIFactory` class provides a set of common UI primitives to rapidly build el
 - `UIFactory.SetLayoutGroupPadding(layoutGroup, left, right, top, bottom)`: Sets padding for a layout group.
 - `UIFactory.CreateQuestRow(name, parent, out iconPanel, out textPanel)`: Creates a specialized row for quest display, returning its icon and text panels for customization.
 
-## Example
+## CharacterCreatorManager
+
+The `S1API.UI.CharacterCreatorManager` provides access to the game's character customization UI. This allows NPCs to open the character creator for the player.
+
+### Opening the Character Creator
+
+```csharp
+using S1API.UI;
+// If you open this from dialogue, pre-register before closing dialogue to avoid camera conflicts.
+CharacterCreatorManager.PreRegisterAsActiveUI();
+
+// Then close dialogue (if applicable) and open the creator.
+// Dialogue.End();
+CharacterCreatorManager.Open();
+```
+
+**Important**: When opening the character creator from dialogue, you must:
+1. Call `CharacterCreatorManager.PreRegisterAsActiveUI()` before ending dialogue
+2. End the dialogue with `Dialogue.End()`
+3. Then open the character creator
+
+This prevents the dialogue system from restoring the camera when it closes.
+
+### Complete Example
+
+For a complete working example of NPC-triggered character customization, see **[CharacterCustomizerNPC](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/CharacterCustomizerNPC.cs)** from the S1API NPC Example Repository.
+
+## UIFactory Examples
 
 ```csharp
 using UnityEngine; // Required for Color, TextAnchor, FontStyle, Transform, GameObject

@@ -16,34 +16,35 @@ Products in Schedule One are represented by `ProductDefinition` wrappers that pr
 
 ### Accessing Products
 
+Product definitions are discovered per-save. Use `ProductManager.DiscoveredProducts` to enumerate what's available:
+
 ```csharp
 using S1API.Products;
 
-// Access a product by type
-var weedProduct = ProductDefinition.GetByType(DrugType.Marijuana);
-var cokeProduct = ProductDefinition.GetByType(DrugType.Cocaine);
-
-// Check product information
-if (weedProduct != null)
+foreach (var product in ProductManager.DiscoveredProducts)
 {
-    string name = weedProduct.Name;
-    float marketValue = weedProduct.MarketValue;
+    MelonLoader.MelonLogger.Msg($"{product.ID}: {product.Name} (${product.MarketValue})");
 }
 ```
 
+If you already know an item ID, you can resolve it via `ItemManager` and cast to `ProductDefinition`.
+
 ### Drug Types
 
-Available drug types in the game:
+S1API exposes an API-safe `S1API.Products.DrugType` enum for use in affinities:
 
 ```csharp
+using S1API.Products;
+
+// Mirrors the base game's drug types
 public enum DrugType
 {
-    None,
     Marijuana,
-    Cocaine,
     Methamphetamine,
-    Heroin,
-    // ... other types
+    Cocaine,
+    MDMA,
+    Shrooms,
+    Heroin
 }
 ```
 

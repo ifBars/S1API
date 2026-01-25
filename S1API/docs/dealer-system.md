@@ -413,9 +413,15 @@ Without `EnsureDealSignal()`, the dealer won't be able to accept or complete con
 2. The `Dealer` component isn't null before subscribing
 3. You're not unsubscribing prematurely
 
+## Complete Dealer Example
+
+For a production-ready dealer NPC implementation, see **[ExamplePhysicalDealerNPC](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/ExamplePhysicalDealerNPC.cs)** from the S1API NPC Example Repository.
+
+This example includes dealer defaults, a dealer-ready schedule, and safe event subscribe/unsubscribe patterns.
+
 ## See Also
 
-- [CustomNPCTest Example](https://github.com/ifBars/S1APINPCExample) - Contains `ExamplePhysicalDealerNPC`
+- **[ExamplePhysicalDealerNPC](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/ExamplePhysicalDealerNPC.cs)** - Reference implementation
 - [Custom NPCs](custom-npcs.md) - Core NPC creation guide
 - [Customer Behavior](customer-behavior.md) - For creating customer NPCs
 - <xref:S1API.Economy> - Economy API Reference

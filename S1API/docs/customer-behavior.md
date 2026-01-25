@@ -408,6 +408,13 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 - **Test with multiple customers** - ensure customer behavior works well together
 - **Monitor customer performance** in multiplayer environments
 
+## Complete Customer Examples
+
+The **[S1API NPC Example Repository](https://github.com/ifBars/S1APINPCExample)** contains working customer NPCs you can copy from:
+
+- **[ExamplePhysicalNPC1](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/ExamplePhysicalNPC1.cs)** (customer defaults + preferences)
+- **[ExamplePhysicalNPC2](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/ExamplePhysicalNPC2.cs)** (customer events + dealer recommendation)
+
 ## Next Steps
 
 Now that you understand customer behavior, explore:
@@ -415,3 +422,4 @@ Now that you understand customer behavior, explore:
 - **[Relationship Management](relationship-management.md)** - Relationship system details
 - **[Scheduling System](scheduling-system.md)** - Customer schedules and activities
 - **[Runtime Management](runtime-management.md)** - NPC lifecycle and properties
+- **[Dealer System](dealer-system.md)** - Creating dealer NPCs that customers can recommend

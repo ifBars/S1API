@@ -500,6 +500,29 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 }
 ```
 
+## Complete Configuration Examples
+
+The **[S1API NPC Example Repository](https://github.com/ifBars/S1APINPCExample)** contains multiple complete prefab configuration examples:
+
+### Customer Configuration
+See **[ExamplePhysicalNPC1](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/ExamplePhysicalNPC1.cs)** for:
+- Detailed appearance customization with avatar layers
+- Customer behavior with spending patterns and product affinities
+- Complex schedule with vending machines, buildings, and vehicles
+- Inventory setup with startup items and random cash
+
+### Dealer Configuration
+See **[ExamplePhysicalDealerNPC](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/ExamplePhysicalDealerNPC.cs)** for:
+- Dealer-specific configuration with signing fees and commission rates
+- Home building assignment
+- Quality control settings
+- Schedule with `EnsureDealSignal()` for contract handling
+
+### Advanced Schedule Specs
+See **[ExamplePhysicalNPC2](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/ExamplePhysicalNPC2.cs)** for:
+- Schedule configuration using the `Add()` method with spec objects
+- `UseVendingMachineSpec`, `StayInBuildingSpec`, and `LocationDialogueSpec` usage
+
 ## Next Steps
 
 Now that you understand prefab configuration, explore:

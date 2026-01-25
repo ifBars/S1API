@@ -522,7 +522,7 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 - **Configure schedules in `ConfigurePrefab`** - required for save/load compatibility
 - **Prefer wrapper methods** over `.Add()` for common actions (better type safety and cleaner code)
 - **Use strongly-typed building identifiers** like `Building.Get<Buildings.NorthApartments>()`
-- **Use wrapper objects** when available (see `docs/building-registry.md`) (see `docs/building-registry.md`)
+- **Use wrapper objects** when available (see `docs/building-registry.md`)
 - **Use meaningful action names** for debugging and events
 - **Test schedule timing** to ensure actions don't overlap
 - **Use appropriate durations** for building stays
@@ -565,6 +565,14 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 - **Use appropriate action durations** - don't make actions too short or long
 - **Test with multiple NPCs** - ensure schedules work well together
 - **Monitor schedule performance** in multiplayer environments
+
+## Complete Schedule Examples
+
+For complete schedules (including vending machines, buildings, spec objects, and dealer-ready plans), see the **[S1API NPC Example Repository](https://github.com/ifBars/S1APINPCExample)**:
+
+- **[ExamplePhysicalNPC1](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/ExamplePhysicalNPC1.cs)** (fluent helpers + vehicles)
+- **[ExamplePhysicalNPC2](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/ExamplePhysicalNPC2.cs)** (`Add(...)` specs)
+- **[ExamplePhysicalDealerNPC](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/ExamplePhysicalDealerNPC.cs)** (dealer schedule requirements)
 
 ## Next Steps
 

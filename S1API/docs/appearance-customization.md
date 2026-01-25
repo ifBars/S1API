@@ -405,6 +405,14 @@ protected override void OnCreated()
 ```
 
 
+## Complete Appearance Examples
+
+If you want a working reference to copy/paste from, the **[S1API NPC Example Repository](https://github.com/ifBars/S1APINPCExample)** includes multiple NPCs with fully-specified `WithAppearanceDefaults(...)` blocks:
+
+- **[ExamplePhysicalNPC1](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/ExamplePhysicalNPC1.cs)**
+- **[ExamplePhysicalNPC2](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/ExamplePhysicalNPC2.cs)**
+- **[ExamplePhysicalDealerNPC](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/ExamplePhysicalDealerNPC.cs)**
+
 ## Next Steps
 
 Now that you understand appearance customization, explore:

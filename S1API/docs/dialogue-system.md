@@ -445,6 +445,10 @@ protected override void OnCreated()
 - **Test with multiple NPCs** - ensure dialogue works well together
 - **Monitor dialogue performance** in multiplayer environments
 
+## Complete Example
+
+For a working NPC that wires up a dialogue container, callbacks, and programmatic navigation, see **[ExamplePhysicalNPC1](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/ExamplePhysicalNPC1.cs)**.
+
 ## Next Steps
 
 Now that you understand the dialogue system, explore:

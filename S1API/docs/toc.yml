@@ -33,6 +33,11 @@
   href: dealer-system.md
 - name: Products & Properties
   href: products-system.md
+  items:
+    - name: Products API
+      href: products-api.md
+    - name: ProductPopulator
+      href: products-populator.md
 - name: Quests
   href: quests-system.md
 - name: Cartel System
@@ -57,9 +62,15 @@
   href: phone-app.md
 - name: TV Apps
   href: tv-app.md
+  items:
+    - name: Advanced Notes
+      href: tv-app-advanced.md
 - name: UI
   href: ui.md
 - name: Save System
   href: save-system.md
 - name: Phone Calls
   href: phone-calls.md
+  items:
+    - name: Stages & Triggers
+      href: phone-calls-stages-triggers.md

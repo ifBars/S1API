@@ -22,9 +22,15 @@ The goals are predictable behavior, safe integration with the base game, and a s
 ## Quick Links
 
 - Getting started: [Getting Started](getting-started.md)
+- Custom NPCs: [Custom NPCs](custom-npcs.md)
 - Phone Apps: [Phone Apps](phone-app.md)
 - UI Factory: [UI](ui.md)
 - Save System: [Save System](save-system.md)
 - Phone Calls: [Phone Calls](phone-calls.md)
 
-If you're looking for a practical example, see the [S1NotesApp](https://github.com/ifBars/S1NotesApp) mod which implements a full in-game Notes application using S1API's PhoneApp and Saveables systems.
+## Example Projects
+
+For practical, production-ready examples:
+
+- **[S1API NPC Examples](https://github.com/ifBars/S1APINPCExample)** - Complete custom NPC implementations covering customers, dealers, dialogue systems, schedules, and UI integration
+- **[S1NotesApp](https://github.com/ifBars/S1NotesApp)** - Full in-game Notes application using S1API's PhoneApp and Saveables systems
