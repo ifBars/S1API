@@ -76,6 +76,67 @@ var myItem = ItemCreator.CreateBuilder()
     .Build();
 ```
 
+## Creating Runtime Additives
+
+Create **runtime additives** (i.e., `AdditiveDefinition`) via a builder API.
+
+Important notes:
+- **Builder-only:** `AdditiveDefinition` is intentionally **read-only** after registration to avoid mid-session mutation issues. Configure effects during build.
+- **Timing:** For best results, register additives before save data loads. Prefer `GameLifecycle.OnPreLoad` when possible.
+
+### Example (recommended timing)
+
+```csharp
+using MelonLoader;
+using S1API.Items;
+using S1API.Lifecycle;
+using UnityEngine;
+
+public class MyMod : MelonMod
+{
+    public override void OnSceneWasLoaded(int buildIndex, string sceneName)
+    {
+        // S1API initializes lifecycle hooks when Main loads
+        if (sceneName != "Main")
+            return;
+
+        GameLifecycle.OnPreLoad += RegisterItems;
+    }
+
+    private static void RegisterItems()
+    {
+        var growthBooster = AdditiveItemCreator.CreateBuilder()
+            .WithBasicInfo(
+                id: "mymod_growth_booster",
+                name: "Growth Booster",
+                description: "A custom growth enhancer additive.",
+                category: ItemCategory.Growing
+            )
+            .WithStackLimit(10)
+            .WithPricing(basePurchasePrice: 150f, resellMultiplier: 0.5f)
+            .WithLabelColor(new Color(0.4f, 0.2f, 0.6f, 1f))
+            .WithEffects(
+                yieldMultiplier: 1.5f,
+                instantGrowth: 0.5f,
+                qualityChange: 1.0f
+            )
+            .Build();
+
+        MelonLogger.Msg($"Registered additive: {growthBooster.Name} ({growthBooster.ID})");
+    }
+}
+```
+
+### Cloning an existing additive
+
+```csharp
+// Clone an existing additive definition by ID and tweak the effects
+var variant = AdditiveItemCreator.CloneFrom("pgr")
+    .WithBasicInfo("mymod_pgr_variant", "PGR Variant", "A tweaked PGR.", ItemCategory.Growing)
+    .WithEffects(1.25f, 0.25f, 0.0f)
+    .Build();
+```
+
 ## Item Categories
 
 Available item categories:
@@ -906,5 +967,8 @@ For items with custom state (like the ScratcherTicket with `IsScratched`, `Prize
 - <xref:S1API.Items.ItemDefinition> - ItemDefinition API Reference
 - <xref:S1API.Items.ItemCreator> - ItemCreator API Reference
 - <xref:S1API.Items.StorableItemDefinitionBuilder> - StorableItemDefinitionBuilder API Reference
+- <xref:S1API.Items.AdditiveItemCreator> - Additive item creation API
+- <xref:S1API.Items.AdditiveDefinitionBuilder> - AdditiveDefinition builder API
+- <xref:S1API.Items.AdditiveDefinition> - AdditiveDefinition wrapper API
 - <xref:S1API.Items.AvatarEquippableRegistry> - For registering AvatarEquippable prefabs from AssetBundles
 - <xref:S1API.Items.AvatarEquippablePaths> - Constants for base game AvatarEquippable prefab paths
