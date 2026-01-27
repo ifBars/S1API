@@ -137,6 +137,12 @@ var variant = AdditiveItemCreator.CloneFrom("pgr")
     .Build();
 ```
 
+## Related: Stations
+
+Some station APIs are item-adjacent (they reference item definitions), but are documented separately.
+
+See `S1API/docs/stations.md` for Chemistry Station recipe registration.
+
 ## Item Categories
 
 Available item categories:
