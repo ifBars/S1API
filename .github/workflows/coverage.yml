@@ -232,14 +232,36 @@ jobs:
             HISTORY_DEDUPLICATED=true
           fi
           
-          # If coverage hasn't changed, only commit history deduplication if needed
+          # If coverage hasn't changed, only commit history deduplication and chart update if needed
           if [ "$COVERAGE_CHANGED" != "true" ]; then
-            echo "Coverage percentage unchanged - skipping README update"
+            echo "Coverage percentage unchanged - skipping badge update"
             
             if [ "$HISTORY_DEDUPLICATED" = true ]; then
-              echo "Committing deduplicated history..."
-              git add tools/S1APICoverageAnalyzer/coverage-history.json
-              git commit -m "chore: deduplicate coverage history [skip ci]"
+              echo "Updating chart with deduplicated history..."
+              
+              # Update coverage chart in README if chart file exists
+              if [ -f coverage-chart.md ]; then
+                echo "Updating coverage chart in README..."
+                
+                # Extract the chart image URL from coverage-chart.md (line 3)
+                CHART_URL=$(sed -n '3p' coverage-chart.md)
+                
+                # Find the line number with the existing chart in README
+                CHART_LINE=$(grep -n "!\[Coverage Chart\]" README.md | head -1 | cut -d: -f1)
+                
+                if [ -n "$CHART_LINE" ]; then
+                  echo "Found chart at line $CHART_LINE, updating..."
+                  # Replace the chart line
+                  awk -v line="$CHART_LINE" -v new_chart="$CHART_URL" 'NR==line {print new_chart; next} {print}' README.md > README.md.tmp
+                  mv README.md.tmp README.md
+                else
+                  echo "Chart line not found in README"
+                fi
+              fi
+              
+              echo "Committing deduplicated history and updated chart..."
+              git add README.md tools/S1APICoverageAnalyzer/coverage-history.json
+              git commit -m "chore: deduplicate coverage history and update chart [skip ci]"
               git push
             else
               echo "No changes to commit"
