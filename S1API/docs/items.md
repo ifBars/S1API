@@ -137,6 +137,36 @@ var variant = AdditiveItemCreator.CloneFrom("pgr")
     .Build();
 ```
 
+### Allowing additives on Grow Containers
+
+Grow containers have a fixed allowlist of additives (`GrowContainer.AllowedAdditives`). S1API can extend that allowlist globally so mods don’t need to patch `GrowContainer.InitializeGridItem`.
+
+Notes:
+- Applies to **all** grow containers.
+- Duplicate `AllowAdditive(...)` calls are a no-op.
+- If the ID can’t be resolved to an `AdditiveDefinition` at runtime, S1API will **warn once** and **skip** it.
+
+```csharp
+using MelonLoader;
+using S1API.Growing;
+using S1API.Lifecycle;
+
+public class MyMod : MelonMod
+{
+    public override void OnSceneWasLoaded(int buildIndex, string sceneName)
+    {
+        if (sceneName != "Main")
+            return;
+
+        GameLifecycle.OnPreLoad += () =>
+        {
+            // Allow a runtime additive you registered earlier in OnPreLoad
+            GrowContainerAdditives.AllowAdditive("mymod_growth_booster");
+        };
+    }
+}
+```
+
 ## Item Categories
 
 Available item categories:
