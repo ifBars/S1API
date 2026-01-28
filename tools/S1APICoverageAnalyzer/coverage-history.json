@@ -487,14 +487,29 @@
       "analyzerVersion": "1.0.0.0",
       "events": [],
       "note": null
+    },
+    {
+      "timestamp": "2026-01-28T11:41:42.7155379Z",
+      "classCoveragePercentage": 28.45360824742268,
+      "memberCoveragePercentage": 0,
+      "totalClasses": 970,
+      "coveredClasses": 276,
+      "totalMembers": 24717,
+      "coveredMembers": 0,
+      "excludedClasses": 1054,
+      "gameAssemblyVersion": "0.0.0.0",
+      "gameAssemblyHash": "B9A1838C5D2667C2FD3CB8E43F8E5F8E9412FD63C771E2000C5B8D635DB42D16",
+      "analyzerVersion": "1.0.0.0",
+      "events": [],
+      "note": null
     }
   ],
   "latestEntry": {
-    "timestamp": "2026-01-27T07:27:58.3749693Z",
-    "classCoveragePercentage": 28.24742268041237,
+    "timestamp": "2026-01-28T11:41:42.7155379Z",
+    "classCoveragePercentage": 28.45360824742268,
     "memberCoveragePercentage": 0,
     "totalClasses": 970,
-    "coveredClasses": 274,
+    "coveredClasses": 276,
     "totalMembers": 24717,
     "coveredMembers": 0,
     "excludedClasses": 1054,
