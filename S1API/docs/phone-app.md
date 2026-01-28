@@ -17,6 +17,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using S1API.PhoneApp;
 using S1API.UI;
+using S1API.Utils;
 
 public class HelloWorldApp : PhoneApp
 {
@@ -51,7 +52,9 @@ public class HelloWorldApp : PhoneApp
             140, 40, 18, 
             Color.white
         );
-        button.onClick.AddListener(() => 
+        
+        // Use ButtonUtils.AddListener for IL2CPP/Mono compatibility
+        ButtonUtils.AddListener(button, () => 
         {
             Logger.Msg("Button Clicked!");
             // Your button logic here
