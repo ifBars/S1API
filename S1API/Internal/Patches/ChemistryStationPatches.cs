@@ -10,7 +10,6 @@ using S1UIStations = ScheduleOne.UI.Stations;
 
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using HarmonyLib;
 using S1API.Internal.Utils;
 using S1API.Logging;
@@ -29,73 +28,7 @@ namespace S1API.Internal.Patches
         private static readonly HashSet<string> LoggedCanvasConflicts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private static readonly HashSet<string> LoggedEntryConflicts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        private static FieldInfo? _recipeEntriesField;
-        private static bool _recipeEntriesFieldLookupAttempted;
-        private static bool _loggedRecipeEntriesFieldDump;
-
-        private static FieldInfo? GetRecipeEntriesField()
-        {
-            if (_recipeEntriesFieldLookupAttempted)
-                return _recipeEntriesField;
-
-            _recipeEntriesFieldLookupAttempted = true;
-
-            // Mono: field is named "recipeEntries"
-            // IL2CPP: field name can differ; find by type instead of name.
-            try
-            {
-                var byName = AccessTools.Field(typeof(S1UIStations.ChemistryStationCanvas), "recipeEntries");
-                if (byName != null)
-                {
-                    _recipeEntriesField = byName;
-                    return _recipeEntriesField;
-                }
-            }
-            catch
-            {
-                // ignore and continue with scan
-            }
-
-            try
-            {
-                foreach (var field in AccessTools.GetDeclaredFields(typeof(S1UIStations.ChemistryStationCanvas)))
-                {
-                    if (field == null)
-                        continue;
-
-                    var ft = field.FieldType;
-                    if (ft == null || !ft.IsGenericType)
-                        continue;
-
-                    var genDef = ft.GetGenericTypeDefinition();
-                    if (genDef == null)
-                        continue;
-
-                    // Support both System.Collections.Generic.List<T> and Il2CppSystem.Collections.Generic.List<T>
-                    if (!string.Equals(genDef.FullName, "System.Collections.Generic.List`1", StringComparison.Ordinal)
-                        && !string.Equals(genDef.FullName, "Il2CppSystem.Collections.Generic.List`1", StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-
-                    var args = ft.GetGenericArguments();
-                    if (args == null || args.Length != 1)
-                        continue;
-
-                    if (args[0] == typeof(S1UIStations.StationRecipeEntry))
-                    {
-                        _recipeEntriesField = field;
-                        return _recipeEntriesField;
-                    }
-                }
-            }
-            catch
-            {
-                // ignore
-            }
-
-            return _recipeEntriesField;
-        }
+        private static bool _loggedRecipeEntriesMissing;
 
         private static bool TryGetRecipeEntriesList(
             S1UIStations.ChemistryStationCanvas canvas,
@@ -110,97 +43,22 @@ namespace S1API.Internal.Patches
             if (canvas == null)
                 return false;
 
-            // Mono: direct private field access is reliable.
-#if (MONOMELON || MONOBEPINEX)
-            var field = GetRecipeEntriesField();
-            if (field != null)
+            try
             {
-                try { entries = field.GetValue(canvas) as List<S1UIStations.StationRecipeEntry>; }
-                catch { entries = null; }
+                var value = ReflectionUtils.TryGetFieldOrProperty(canvas, "recipeEntries");
+                entries =
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                    value as Il2CppSystem.Collections.Generic.List<S1UIStations.StationRecipeEntry>;
+#else
+                    value as List<S1UIStations.StationRecipeEntry>;
+#endif
+            }
+            catch
+            {
+                entries = null;
             }
 
             return entries != null;
-#else
-            // IL2CPP: many private fields are exposed as generated properties on the proxy type.
-            try
-            {
-                var byName = ReflectionUtils.TryGetFieldOrProperty(canvas, "recipeEntries");
-                entries = byName as Il2CppSystem.Collections.Generic.List<S1UIStations.StationRecipeEntry>;
-                if (entries != null)
-                    return true;
-            }
-            catch { }
-
-            // Fallback: scan instance properties for a List<StationRecipeEntry>
-            try
-            {
-                var t = canvas.GetType();
-                const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-                foreach (var prop in t.GetProperties(flags))
-                {
-                    if (prop == null || !prop.CanRead)
-                        continue;
-
-                    var pt = prop.PropertyType;
-                    if (pt == null || !pt.IsGenericType)
-                        continue;
-
-                    var gen = pt.GetGenericTypeDefinition();
-                    if (gen == null)
-                        continue;
-
-                    if (!string.Equals(gen.FullName, "Il2CppSystem.Collections.Generic.List`1", StringComparison.Ordinal)
-                        && !string.Equals(gen.FullName, "System.Collections.Generic.List`1", StringComparison.Ordinal))
-                        continue;
-
-                    var args = pt.GetGenericArguments();
-                    if (args.Length != 1 || args[0] != typeof(S1UIStations.StationRecipeEntry))
-                        continue;
-
-                    var val = prop.GetValue(canvas);
-                    entries = val as Il2CppSystem.Collections.Generic.List<S1UIStations.StationRecipeEntry>;
-                    if (entries != null)
-                        return true;
-                }
-            }
-            catch { }
-
-            // Last chance: scan instance fields (rare on IL2CPP proxies, but cheap).
-            try
-            {
-                var t = canvas.GetType();
-                const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-                foreach (var f in t.GetFields(flags))
-                {
-                    if (f == null)
-                        continue;
-
-                    var ft = f.FieldType;
-                    if (ft == null || !ft.IsGenericType)
-                        continue;
-
-                    var gen = ft.GetGenericTypeDefinition();
-                    if (gen == null)
-                        continue;
-
-                    if (!string.Equals(gen.FullName, "Il2CppSystem.Collections.Generic.List`1", StringComparison.Ordinal)
-                        && !string.Equals(gen.FullName, "System.Collections.Generic.List`1", StringComparison.Ordinal))
-                        continue;
-
-                    var args = ft.GetGenericArguments();
-                    if (args.Length != 1 || args[0] != typeof(S1UIStations.StationRecipeEntry))
-                        continue;
-
-                    var val = f.GetValue(canvas);
-                    entries = val as Il2CppSystem.Collections.Generic.List<S1UIStations.StationRecipeEntry>;
-                    if (entries != null)
-                        return true;
-                }
-            }
-            catch { }
-
-            return false;
-#endif
         }
 
         [HarmonyPatch(typeof(S1UIStations.ChemistryStationCanvas), "Awake")]
@@ -275,42 +133,10 @@ namespace S1API.Internal.Patches
 
             if (!TryGetRecipeEntriesList(canvas, out var entries) || entries == null)
             {
-                if (!_loggedRecipeEntriesFieldDump)
+                if (!_loggedRecipeEntriesMissing)
                 {
-                    _loggedRecipeEntriesFieldDump = true;
-                    Logger.Warning("[S1API] ChemistryStationCanvas recipeEntries field could not be resolved. Late recipe UI sync will be skipped.");
-
-                    // Best-effort field dump to aid IL2CPP troubleshooting.
-                    try
-                    {
-                        var fields = AccessTools.GetDeclaredFields(typeof(S1UIStations.ChemistryStationCanvas));
-                        foreach (var f in fields)
-                        {
-                            if (f == null)
-                                continue;
-                            Logger.Warning($"[S1API] ChemistryStationCanvas field: {f.Name} : {f.FieldType?.FullName}");
-                        }
-                    }
-                    catch
-                    {
-                        // ignore
-                    }
-
-                    // Best-effort property dump (IL2CPP often exposes fields via properties).
-                    try
-                    {
-                        var props = AccessTools.GetDeclaredProperties(typeof(S1UIStations.ChemistryStationCanvas));
-                        foreach (var p in props)
-                        {
-                            if (p == null)
-                                continue;
-                            Logger.Warning($"[S1API] ChemistryStationCanvas property: {p.Name} : {p.PropertyType?.FullName}");
-                        }
-                    }
-                    catch
-                    {
-                        // ignore
-                    }
+                    _loggedRecipeEntriesMissing = true;
+                    Logger.Warning("[S1API] ChemistryStationCanvas recipeEntries could not be resolved. Late recipe UI sync will be skipped.");
                 }
 
                 return;
