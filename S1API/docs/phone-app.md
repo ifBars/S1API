@@ -24,6 +24,7 @@ public class HelloWorldApp : PhoneApp
     protected override string AppName => "HelloWorld";
     protected override string AppTitle => "Hello World";
     protected override string IconLabel => "Hello";
+    protected override string IconFileName => "hello_icon.png"; // Icon file in your Mods/Plugins folder
 
     // OnCreated is called once when the app is initialized.
     protected override void OnCreated()
@@ -41,11 +42,18 @@ public class HelloWorldApp : PhoneApp
         var panel = UIFactory.Panel("MainPanel", container.transform, new Color(0.1f, 0.1f, 0.1f), fullAnchor: true);
         UIFactory.Text("Title", "📱 Hello, S1API!", panel.transform, 22, TextAnchor.MiddleCenter);
         
-        // Example: Add a button
-        var button = UIFactory.Button("MyButton", "Click Me", panel.transform);
-        button.GetComponent<Button>().onClick.AddListener(() => 
+        // Example: Add a button using RoundedButtonWithLabel
+        var (maskGO, button, label) = UIFactory.RoundedButtonWithLabel(
+            "MyButton", 
+            "Click Me", 
+            panel.transform, 
+            new Color(0.2f, 0.5f, 0.3f), 
+            140, 40, 18, 
+            Color.white
+        );
+        button.onClick.AddListener(() => 
         {
-            LoggerInstance.Msg("Button Clicked!");
+            Logger.Msg("Button Clicked!");
             // Your button logic here
         });
     }

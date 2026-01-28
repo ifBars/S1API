@@ -13,8 +13,8 @@ The `UIFactory` class provides a set of common UI primitives to rapidly build el
 - `UIFactory.RoundedButtonWithLabel(name, label, parent, bgColor, width, height, fontSize, textColor)`: Creates a button with rounded corners and a label.
 - `UIFactory.ButtonWithLabel(name, label, parent, bgColor, width, height)`: Creates a standard button with a label.
 - `UIFactory.ButtonRow(name, parent, spacing?, alignment?)`: Arranges buttons in a horizontal row.
-- `UIFactory.VerticalLayoutOnGO(go)`: Adds a vertical layout group to a GameObject.
-- `UIFactory.HorizontalLayoutOnGO(go)`: Adds a horizontal layout group to a GameObject.
+- `UIFactory.VerticalLayoutOnGO(go, spacing?, padding?)`: Adds a vertical layout group to a GameObject.
+- `UIFactory.HorizontalLayoutOnGO(go, spacing?, padLeft?, padRight?, padTop?, padBottom?, alignment?)`: Adds a horizontal layout group to a GameObject.
 - `UIFactory.SetLayoutGroupPadding(layoutGroup, left, right, top, bottom)`: Sets padding for a layout group.
 - `UIFactory.CreateQuestRow(name, parent, out iconPanel, out textPanel)`: Creates a specialized row for quest display, returning its icon and text panels for customization.
 
