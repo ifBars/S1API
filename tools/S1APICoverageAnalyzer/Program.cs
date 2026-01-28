@@ -20,7 +20,8 @@ public class Program
         bool SkipHistory,
         string? Annotation,
         FileInfo? ChartOutput,
-        string ChartFormat);
+        string ChartFormat,
+        bool DeduplicateHistory);
     
     public static async Task<int> Main(string[] args)
     {
@@ -75,6 +76,10 @@ public class Program
             description: "Chart output format: url, markdown, html, mermaid",
             getDefaultValue: () => "markdown");
         
+        var deduplicateHistoryOption = new Option<bool>(
+            aliases: ["--deduplicate-history"],
+            description: "Remove consecutive duplicate entries from history file");
+        
         var rootCommand = new RootCommand("S1API Coverage Analyzer - Analyzes API coverage of Schedule One game types")
         {
             gameAssemblyOption,
@@ -87,7 +92,8 @@ public class Program
             skipHistoryOption,
             annotationOption,
             chartOutputOption,
-            chartFormatOption
+            chartFormatOption,
+            deduplicateHistoryOption
         };
         
         rootCommand.SetHandler(async (context) =>
@@ -103,7 +109,8 @@ public class Program
                 context.ParseResult.GetValueForOption(skipHistoryOption),
                 context.ParseResult.GetValueForOption(annotationOption),
                 context.ParseResult.GetValueForOption(chartOutputOption),
-                context.ParseResult.GetValueForOption(chartFormatOption) ?? "markdown");
+                context.ParseResult.GetValueForOption(chartFormatOption) ?? "markdown",
+                context.ParseResult.GetValueForOption(deduplicateHistoryOption));
             await RunAnalysis(options);
         });
         
@@ -113,7 +120,33 @@ public class Program
     private static async Task RunAnalysis(AnalysisOptions options)
     {
         var (gameAssemblyFile, apiAssemblyFile, outputFile, badgeOutputFile, textOutputFile, verbose,
-            historyFile, skipHistory, annotation, chartOutput, chartFormat) = options;
+            historyFile, skipHistory, annotation, chartOutput, chartFormat, deduplicateHistory) = options;
+        
+        Console.WriteLine("S1API Coverage Analyzer");
+        Console.WriteLine("=======================");
+        Console.WriteLine();
+        
+        // Handle history deduplication if requested
+        if (deduplicateHistory)
+        {
+            var historyPath = historyFile?.FullName ?? 
+                Path.Combine(Path.GetDirectoryName(outputFile?.FullName ?? ".") ?? ".", "coverage-history.json");
+            
+            if (File.Exists(historyPath))
+            {
+                Console.WriteLine("Deduplicating coverage history...");
+                var historyManager = new HistoryManager(historyPath);
+                int removedCount = historyManager.DeduplicateHistory();
+                Console.WriteLine($"Removed {removedCount} consecutive duplicate entries");
+                Console.WriteLine($"Updated history file: {historyPath}");
+            }
+            else
+            {
+                Console.WriteLine($"Warning: History file not found: {historyPath}");
+            }
+            
+            Console.WriteLine();
+        }
         
         Console.WriteLine("S1API Coverage Analyzer");
         Console.WriteLine("=======================");
@@ -183,15 +216,23 @@ public class Program
             Console.WriteLine();
             
             // History tracking
+            bool coverageChanged = false;
             if (!skipHistory)
             {
                 var historyPath = historyFile?.FullName ?? 
                     Path.Combine(Path.GetDirectoryName(outputFile?.FullName ?? ".") ?? ".", "coverage-history.json");
                 
                 Console.WriteLine("Updating coverage history...");
-                await UpdateCoverageHistory(historyPath, result, gameAssemblyFile.FullName, annotation, verbose);
+                coverageChanged = await UpdateCoverageHistory(historyPath, result, gameAssemblyFile.FullName, annotation, verbose);
                 Console.WriteLine($"History updated: {historyPath}");
+                Console.WriteLine($"Coverage changed: {coverageChanged}");
                 Console.WriteLine();
+                
+                // Write coverage changed status to file for CI consumption
+                var coverageChangedFile = Path.Combine(
+                    Path.GetDirectoryName(historyPath) ?? ".", 
+                    "coverage-changed.txt");
+                await File.WriteAllTextAsync(coverageChangedFile, coverageChanged.ToString().ToLowerInvariant());
             }
             
             // Write outputs
@@ -272,7 +313,7 @@ public class Program
         }
     }
     
-    private static Task UpdateCoverageHistory(
+    private static Task<bool> UpdateCoverageHistory(
         string historyFilePath,
         CoverageResult result,
         string gameAssemblyPath,
@@ -317,8 +358,8 @@ public class Program
                 Note = annotation
             };
             
-            // Append to history
-            historyManager.AppendEntry(entry);
+            // Append to history and check if coverage changed
+            bool coverageChanged = historyManager.AppendEntry(entry);
             
             if (verbose && events.Count > 0)
             {
@@ -328,15 +369,21 @@ public class Program
                     Console.WriteLine($"    - [{evt.Type}] {evt.Description}");
                 }
             }
+            
+            if (verbose)
+            {
+                Console.WriteLine($"  Coverage changed: {coverageChanged}");
+            }
+            
+            return Task.FromResult(coverageChanged);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Warning: Failed to update history: {ex.Message}");
             if (verbose)
                 Console.WriteLine(ex.StackTrace);
+            return Task.FromResult(false);
         }
-        
-        return Task.CompletedTask;
     }
     
     private static async Task GenerateCoverageChart(

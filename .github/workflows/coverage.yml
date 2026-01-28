@@ -183,7 +183,13 @@ jobs:
             --history-file tools/S1APICoverageAnalyzer/coverage-history.json \
             --chart-output coverage-chart.md \
             --chart-format markdown \
+            --deduplicate-history \
             --verbose
+          
+          # Read coverage change status
+          COVERAGE_CHANGED=$(cat tools/S1APICoverageAnalyzer/coverage-changed.txt 2>/dev/null || echo "true")
+          echo "coverage_changed=$COVERAGE_CHANGED" >> $GITHUB_OUTPUT
+          echo "Coverage changed: $COVERAGE_CHANGED"
 
       - name: Upload Coverage Report
         if: steps.verify-assemblies.outputs.has_assemblies == 'true'
@@ -212,6 +218,14 @@ jobs:
       - name: Update README Badge and Chart
         if: steps.verify-assemblies.outputs.has_assemblies == 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable')
         run: |
+          COVERAGE_CHANGED="${{ steps.coverage.outputs.coverage_changed }}"
+          echo "Coverage changed status: $COVERAGE_CHANGED"
+          
+          if [ "$COVERAGE_CHANGED" != "true" ]; then
+            echo "Coverage percentage unchanged - skipping README update to avoid redundant commits"
+            exit 0
+          fi
+          
           if [ -f coverage-badge.md ]; then
             # Read the new badge markdown (trim whitespace)
             NEW_BADGE=$(cat coverage-badge.md | tr -d '\n\r')

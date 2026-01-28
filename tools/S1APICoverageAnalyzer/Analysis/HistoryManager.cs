@@ -47,9 +47,16 @@ public sealed class HistoryManager
     /// <summary>
     /// Append a new entry to the history and save.
     /// </summary>
-    public void AppendEntry(CoverageHistoryEntry entry)
+    /// <returns>True if the coverage percentage changed from the last entry, false otherwise.</returns>
+    public bool AppendEntry(CoverageHistoryEntry entry)
     {
         var history = LoadHistory();
+        
+        // Check if coverage changed from the previous entry
+        var latestEntry = history.LatestEntry;
+        bool coverageChanged = latestEntry == null ||
+            Math.Abs(latestEntry.ClassCoveragePercentage - entry.ClassCoveragePercentage) > 0.01 ||
+            Math.Abs(latestEntry.MemberCoveragePercentage - entry.MemberCoveragePercentage) > 0.01;
         
         // Remove duplicate entries (same timestamp within 1 minute)
         history.Entries.RemoveAll(e => 
@@ -74,6 +81,8 @@ public sealed class HistoryManager
         };
         
         SaveHistory(updatedHistory);
+        
+        return coverageChanged;
     }
     
     /// <summary>
@@ -116,6 +125,56 @@ public sealed class HistoryManager
     {
         var history = LoadHistory();
         return history.GetEntriesInRange(start, end);
+    }
+    
+    /// <summary>
+    /// Remove duplicate consecutive entries where coverage percentages are identical.
+    /// Keeps the first entry of each unique coverage percentage.
+    /// </summary>
+    public int DeduplicateHistory()
+    {
+        var history = LoadHistory();
+        
+        if (history.Entries.Count == 0)
+        {
+            return 0;
+        }
+        
+        var sortedEntries = history.Entries
+            .OrderBy(e => e.Timestamp)
+            .ToList();
+        
+        var deduplicated = new List<CoverageHistoryEntry>();
+        CoverageHistoryEntry? lastEntry = null;
+        int removedCount = 0;
+        
+        foreach (var entry in sortedEntries)
+        {
+            // Keep the entry if it's the first one or if coverage changed from the previous entry
+            if (lastEntry == null ||
+                Math.Abs(lastEntry.ClassCoveragePercentage - entry.ClassCoveragePercentage) > 0.01 ||
+                Math.Abs(lastEntry.MemberCoveragePercentage - entry.MemberCoveragePercentage) > 0.01)
+            {
+                deduplicated.Add(entry);
+                lastEntry = entry;
+            }
+            else
+            {
+                removedCount++;
+            }
+        }
+        
+        // Save the deduplicated history
+        var updatedHistory = new CoverageHistory
+        {
+            GeneratedBy = history.GeneratedBy,
+            Version = history.Version,
+            Entries = deduplicated
+        };
+        
+        SaveHistory(updatedHistory);
+        
+        return removedCount;
     }
 }
 
