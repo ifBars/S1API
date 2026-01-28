@@ -221,11 +221,34 @@ jobs:
           COVERAGE_CHANGED="${{ steps.coverage.outputs.coverage_changed }}"
           echo "Coverage changed status: $COVERAGE_CHANGED"
           
+          # Configure git early for potential commits
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Check if history was deduplicated (has changes)
+          HISTORY_DEDUPLICATED=false
+          if ! git diff --quiet tools/S1APICoverageAnalyzer/coverage-history.json; then
+            echo "History file was deduplicated"
+            HISTORY_DEDUPLICATED=true
+          fi
+          
+          # If coverage hasn't changed, only commit history deduplication if needed
           if [ "$COVERAGE_CHANGED" != "true" ]; then
-            echo "Coverage percentage unchanged - skipping README update to avoid redundant commits"
+            echo "Coverage percentage unchanged - skipping README update"
+            
+            if [ "$HISTORY_DEDUPLICATED" = true ]; then
+              echo "Committing deduplicated history..."
+              git add tools/S1APICoverageAnalyzer/coverage-history.json
+              git commit -m "chore: deduplicate coverage history [skip ci]"
+              git push
+            else
+              echo "No changes to commit"
+            fi
+            
             exit 0
           fi
           
+          # Coverage changed - update README badge and chart
           if [ -f coverage-badge.md ]; then
             # Read the new badge markdown (trim whitespace)
             NEW_BADGE=$(cat coverage-badge.md | tr -d '\n\r')
@@ -269,10 +292,6 @@ jobs:
                 echo "Chart line not found in README"
               fi
             fi
-            
-            # Configure git
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
             
             # Check if there are changes to commit
             CHANGES_EXIST=false
