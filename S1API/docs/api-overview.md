@@ -50,6 +50,19 @@ Define custom items, equippables, and inventory management.
 
 ---
 
+### Stations
+**Namespace**: `S1API.Stations`
+
+Register station-related content at runtime (currently Chemistry Station recipes).
+
+**Key Classes**:
+- `ChemistryStationRecipeBuilder` - Build Chemistry Station recipes
+- `ChemistryStationRecipes` - Recipe registry
+
+**Documentation**: [Stations](stations.md)
+
+---
+
 ### Products & Properties
 **Namespace**: `S1API.Products`, `S1API.Properties`
 
