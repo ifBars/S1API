@@ -1,13 +1,18 @@
 #if (IL2CPPMELON)
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1Registry = Il2CppScheduleOne.Registry;
+using S1StationFramework = Il2CppScheduleOne.StationFramework;
 using S1Storage = Il2CppScheduleOne.Storage;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1Registry = ScheduleOne.Registry;
+using S1StationFramework = ScheduleOne.StationFramework;
 using S1Storage = ScheduleOne.Storage;
 #endif
 
+using System;
+using System.Collections.Generic;
+using S1API.Logging;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -23,6 +28,12 @@ namespace S1API.Items
     /// </remarks>
     public sealed class StorableItemDefinitionBuilder
     {
+        private static readonly Log Logger = new Log("StorableItemDefinitionBuilder");
+        private static readonly object StationItemGate = new object();
+        private static readonly Dictionary<int, S1StationFramework.StationItem> StationItemCache = new Dictionary<int, S1StationFramework.StationItem>();
+        private static readonly HashSet<int> WarnedStationItemModuleMissing = new HashSet<int>();
+        private static GameObject _stationItemRoot;
+
         private readonly S1ItemFramework.StorableItemDefinition _definition;
         private readonly GameObject _storedItemPlaceholder;
         private bool _hasCustomStoredItem;
@@ -181,6 +192,43 @@ namespace S1API.Items
         }
 
         /// <summary>
+        /// Assigns a StationItem prefab to this item definition so it can be used as a station/minigame ingredient
+        /// (e.g., Chemistry Station).
+        /// </summary>
+        /// <remarks>
+        /// S1API clones and caches the prefab under a hidden <c>DontDestroyOnLoad</c> root by default.
+        /// This avoids mutating shared prefabs and helps keep the reference stable across scene loads.
+        /// </remarks>
+        /// <param name="stationItemPrefab">A prefab GameObject that has a StationItem component.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="stationItemPrefab"/> is null.</exception>
+        /// <exception cref="ArgumentException">Thrown if <paramref name="stationItemPrefab"/> does not have a StationItem component.</exception>
+        public StorableItemDefinitionBuilder WithStationItem(GameObject stationItemPrefab)
+        {
+            if (stationItemPrefab == null)
+                throw new ArgumentNullException(nameof(stationItemPrefab));
+
+            var stationItem = stationItemPrefab.GetComponent<S1StationFramework.StationItem>();
+            if (stationItem == null)
+                throw new ArgumentException("Station item prefab must have a StationItem component.", nameof(stationItemPrefab));
+
+            var cached = GetOrCreateStationItemPrefab(stationItem);
+            _definition.StationItem = cached;
+
+            WarnIfStationItemMissingChemistryModules(cached);
+            return this;
+        }
+
+        /// <summary>
+        /// Clears the StationItem reference for this definition.
+        /// </summary>
+        public StorableItemDefinitionBuilder WithoutStationItem()
+        {
+            _definition.StationItem = null;
+            return this;
+        }
+
+        /// <summary>
         /// Sets whether this item is available in the demo version of the game.
         /// </summary>
         /// <param name="available">True if available in demo, false otherwise.</param>
@@ -221,6 +269,82 @@ namespace S1API.Items
         {
             return _definition;
         }
+
+        private static S1StationFramework.StationItem GetOrCreateStationItemPrefab(S1StationFramework.StationItem stationItemPrefab)
+        {
+            var id = stationItemPrefab.GetInstanceID();
+
+            lock (StationItemGate)
+            {
+                if (StationItemCache.TryGetValue(id, out var cached) && cached != null)
+                    return cached;
+
+                var root = GetStationItemRoot();
+
+                // Clone + cache (final decision): keep a stable hidden prefab reference across scene loads.
+                var clone = Object.Instantiate(stationItemPrefab, root.transform);
+                clone.gameObject.hideFlags = HideFlags.HideAndDontSave;
+                clone.name = $"{stationItemPrefab.name}_S1API_StationItem";
+
+                // Keep the cache far away from gameplay so it doesn't interfere with scenes.
+                clone.transform.position = root.transform.position;
+
+                StationItemCache[id] = clone;
+                return clone;
+            }
+        }
+
+        private static GameObject GetStationItemRoot()
+        {
+            if (_stationItemRoot != null)
+                return _stationItemRoot;
+
+            lock (StationItemGate)
+            {
+                if (_stationItemRoot != null)
+                    return _stationItemRoot;
+
+                var root = new GameObject("S1API_StationItemCache");
+                root.hideFlags = HideFlags.HideAndDontSave;
+                Object.DontDestroyOnLoad(root);
+
+                // Place it far below the world; keep it active so instantiated prefabs remain active by default.
+                root.transform.position = new Vector3(0f, -10000f, 0f);
+
+                _stationItemRoot = root;
+                return root;
+            }
+        }
+
+        private static void WarnIfStationItemMissingChemistryModules(S1StationFramework.StationItem stationItemPrefab)
+        {
+            if (stationItemPrefab == null)
+                return;
+
+            var id = stationItemPrefab.GetInstanceID();
+
+            lock (StationItemGate)
+            {
+                if (!WarnedStationItemModuleMissing.Add(id))
+                    return;
+            }
+
+            try
+            {
+                var hasIngredientModule = stationItemPrefab.GetComponentInChildren<S1StationFramework.IngredientModule>(true) != null;
+                var hasPourableModule = stationItemPrefab.GetComponentInChildren<S1StationFramework.PourableModule>(true) != null;
+
+                if (hasIngredientModule || hasPourableModule)
+                    return;
+
+                Logger.Warning(
+                    $"[S1API] StationItem prefab '{stationItemPrefab.name}' does not contain an IngredientModule or PourableModule. " +
+                    "Chemistry station tasks may log errors or skip this ingredient at runtime.");
+            }
+            catch
+            {
+                // best-effort warning only
+            }
+        }
     }
 }
-
