@@ -4,6 +4,8 @@ using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1ItemFramework = ScheduleOne.ItemFramework;
 #endif
 
+using UnityEngine;
+
 namespace S1API.Items
 {
     /// <summary>
@@ -54,6 +56,21 @@ namespace S1API.Items
         /// </summary>
         public bool IsUnlocked =>
             S1StorableItemDefinition.IsUnlocked;
+
+        /// <summary>
+        /// Gets whether this item has a StationItem assigned (used by station/minigame tasks, e.g., Chemistry Station).
+        /// </summary>
+        public bool HasStationItem =>
+            S1StorableItemDefinition.StationItem != null;
+
+        /// <summary>
+        /// Gets the StationItem prefab GameObject for this item, if any.
+        /// </summary>
+        /// <remarks>
+        /// This is primarily used for debugging and tooling. Prefer configuring StationItem via
+        /// <see cref="StorableItemDefinitionBuilder.WithStationItem"/> during build/registration.
+        /// </remarks>
+        public GameObject? StationItemPrefab =>
+            S1StorableItemDefinition.StationItem?.gameObject;
     }
 }
-

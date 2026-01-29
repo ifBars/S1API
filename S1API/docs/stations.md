@@ -45,6 +45,25 @@ public class MyMod : MelonMod
 }
 ```
 
+## Station Items for Custom Ingredients
+
+Some station/minigame tasks (like Chemistry) spawn ingredient props by instantiating `StorableItemDefinition.StationItem`.
+If an ingredient item has no StationItem, the game will log errors and may skip that ingredient.
+
+For runtime/custom items, set a StationItem prefab when you build the item:
+
+```csharp
+using S1API.Items;
+
+// A prefab GameObject that has a StationItem component (typically loaded from an AssetBundle)
+GameObject myIngredientStationItemPrefab = ...;
+
+var ingredient = ItemCreator.CreateBuilder()
+    .WithBasicInfo("mymod_custom_ingredient", "Custom Ingredient", "Used in stations.", ItemCategory.Consumable)
+    .WithStationItem(myIngredientStationItemPrefab)
+    .Build();
+```
+
 ## See Also
 
 - <xref:S1API.Stations.ChemistryStationRecipeBuilder> - Chemistry Station recipe builder API
