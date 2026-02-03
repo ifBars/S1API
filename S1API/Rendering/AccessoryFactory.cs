@@ -145,14 +145,24 @@ namespace S1API.Rendering
                 return false;
             }
 
-            // Verify it has an Accessory component
+            // Get the Accessory component
             var accessoryComponent = accessory.GetComponent<S1AvatarFramework.Accessory>();
             if (accessoryComponent == null)
             {
                 Logger.Warning($"GameObject '{accessory.name}' does not have an Accessory component. It may not work correctly as clothing.");
             }
 
-            return RuntimeResourceRegistry.RegisterGameObject(resourcePath, accessory);
+            // Register the GameObject for general lookups (Resources.Load<GameObject> or untyped)
+            bool gameObjectRegistered = RuntimeResourceRegistry.RegisterGameObject(resourcePath, accessory);
+
+            // Also register the Accessory component for typed lookups like Resources.Load<Accessory>
+            // This is critical for IL2CPP where GetComponent with runtime types can be unreliable
+            if (accessoryComponent != null)
+            {
+                RuntimeResourceRegistry.RegisterAssetForType(resourcePath, accessoryComponent, typeof(S1AvatarFramework.Accessory));
+            }
+
+            return gameObjectRegistered;
         }
 
         /// <summary>
