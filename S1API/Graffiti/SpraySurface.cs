@@ -13,20 +13,20 @@ using UnityEngine;
 namespace S1API.Graffiti
 {
     /// <summary>
-    /// Represents a surface that can be spray painted with graffiti.
+    /// Represents a world spray surface that can be spray painted with graffiti.
     /// </summary>
     public sealed class SpraySurface
     {
         /// <summary>
-        /// INTERNAL: The in-game spray surface instance.
+        /// INTERNAL: The in-game world spray surface instance.
         /// </summary>
-        internal readonly S1Graffiti.SpraySurface S1SpraySurface;
+        internal readonly S1Graffiti.WorldSpraySurface S1SpraySurface;
 
         /// <summary>
         /// INTERNAL: Creates a SpraySurface wrapper.
         /// </summary>
-        /// <param name="spraySurface">The in-game spray surface instance.</param>
-        internal SpraySurface(S1Graffiti.SpraySurface spraySurface) =>
+        /// <param name="spraySurface">The in-game world spray surface instance.</param>
+        internal SpraySurface(S1Graffiti.WorldSpraySurface spraySurface) =>
             S1SpraySurface = spraySurface;
 
         /// <summary>
@@ -72,10 +72,10 @@ namespace S1API.Graffiti
             S1SpraySurface.DrawingPaintedPixelCount;
 
         /// <summary>
-        /// Whether the drawing has been finalized (player closed the graffiti UI).
+        /// Whether the drawing has ever been marked by the player.
         /// </summary>
         public bool HasDrawingBeenFinalized =>
-            S1SpraySurface.HasDrawingBeenFinalized;
+            S1SpraySurface.HasEverBeenMarkedByPlayer;
 
         /// <summary>
         /// The output texture for the drawing on this surface.
