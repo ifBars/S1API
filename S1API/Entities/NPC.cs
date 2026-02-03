@@ -854,9 +854,8 @@ namespace S1API.Entities
 #else
                 dealerComponent.DealerType = (S1Economy.EDealerType)(int)data.DealerType;
 #endif
-                dealerComponent.SellInsufficientQualityItems = data.SellInsufficientQualityItems;
-                dealerComponent.SellExcessQualityItems = data.SellExcessQualityItems;
-                
+                // Note: SellInsufficientQualityItems and SellExcessQualityItems were removed in v0.4.3
+
                 // Store Home building reference in NPCPrefabIdentity for resolution in Main scene
                 // This runs in Menu scene where buildings aren't available yet
                 string buildingNameToStore = null;
