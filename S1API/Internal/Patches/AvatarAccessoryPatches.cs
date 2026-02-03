@@ -5,6 +5,7 @@ using S1AvatarFramework = ScheduleOne.AvatarFramework;
 #endif
 
 using HarmonyLib;
+using S1API.Internal.Utils;
 using S1API.Logging;
 using S1API.Rendering;
 using System;
@@ -40,11 +41,8 @@ namespace S1API.Internal.Patches
                 try
                 {
                     // Get the applied accessories array using reflection
-                    var accessoriesField = typeof(S1AvatarFramework.Avatar).GetField("appliedAccessories",
-                        BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-                    if (accessoriesField == null) return;
-
-                    var appliedAccessories = accessoriesField.GetValue(__instance);
+                    // On IL2CPP, fields are exposed as properties, so use TryGetFieldOrProperty
+                    var appliedAccessories = ReflectionUtils.TryGetFieldOrProperty(__instance, "appliedAccessories");
                     if (appliedAccessories == null) return;
 
                     // Use reflection to iterate through the array
@@ -59,21 +57,21 @@ namespace S1API.Internal.Patches
                         if (accessory == null) continue;
 
                         // Get the AssetPath to check if this is a custom accessory
-                        var assetPathProperty = accessory.GetType().GetProperty("AssetPath");
-                        if (assetPathProperty == null) continue;
-
-                        string assetPath = assetPathProperty.GetValue(accessory) as string;
+                        // On IL2CPP, fields are exposed as properties, so use TryGetFieldOrProperty
+                        string assetPath = ReflectionUtils.TryGetFieldOrProperty(accessory, "AssetPath") as string;
                         if (string.IsNullOrEmpty(assetPath)) continue;
 
                         // Check if we have texture replacements for this accessory
                         var textureReplacements = AccessoryFactory.GetTextureReplacements(assetPath);
                         if (textureReplacements == null || textureReplacements.Count == 0) continue;
 
-                        // Get the GameObject
-                        var gameObjectProperty = accessory.GetType().GetProperty("gameObject");
-                        if (gameObjectProperty == null) continue;
-
-                        GameObject accessoryObj = gameObjectProperty.GetValue(accessory) as GameObject;
+                        // Get the GameObject - accessory is a Component (MonoBehaviour)
+                        // Cast to Component to access gameObject reliably on IL2CPP
+                        GameObject accessoryObj = null;
+                        if (accessory is Component component)
+                        {
+                            accessoryObj = component.gameObject;
+                        }
                         if (accessoryObj == null) continue;
 
                         // Apply custom textures to all renderers
