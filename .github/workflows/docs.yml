@@ -63,7 +63,7 @@ jobs:
 
       # Try to restore assemblies from cache first (for external PRs)
       # Cache key includes assembly branch to separate beta from main
-      # v2 suffix allows cache invalidation by bumping version
+      # v3 suffix allows cache invalidation by bumping version
       # Only use cache for PR events to avoid stale assemblies after merges
       - name: Restore Game Assemblies from Cache
         id: cache-assemblies
@@ -71,9 +71,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: S1API/ScheduleOneAssemblies
-          key: game-assemblies-v2-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
+          key: game-assemblies-v3-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
           restore-keys: |
-            game-assemblies-v2-${{ steps.assembly-branch.outputs.branch }}-
+            game-assemblies-v3-${{ steps.assembly-branch.outputs.branch }}-
 
       # Only checkout game assemblies if cache miss AND we have access to secrets
       - name: Checkout Game Assemblies
@@ -262,7 +262,7 @@ jobs:
         if: always() && (github.event_name == 'pull_request' || (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable' || github.ref == 'refs/heads/npc-prefabs'))) && steps.cache-assemblies.outputs.cache-hit != 'true'
         with:
           path: S1API/ScheduleOneAssemblies
-          key: game-assemblies-v2-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
+          key: game-assemblies-v3-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
 
   deploy:
     environment:
