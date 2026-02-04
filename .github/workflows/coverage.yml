@@ -344,10 +344,10 @@ jobs:
           fi
 
       # Save cache even if build fails (to enable beta cache priming)
-      # Only save cache for PR events
+      # Save on PR events AND on pushes to main branches (to update cache after assembly updates)
       - name: Save Game Assemblies to Cache
         uses: actions/cache/save@v4
-        if: always() && github.event_name == 'pull_request' && steps.cache-assemblies.outputs.cache-hit != 'true'
+        if: always() && (github.event_name == 'pull_request' || (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable'))) && steps.cache-assemblies.outputs.cache-hit != 'true'
         with:
           path: S1API/ScheduleOneAssemblies
           key: game-assemblies-v2-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}

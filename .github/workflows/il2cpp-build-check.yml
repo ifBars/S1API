@@ -398,10 +398,10 @@ jobs:
           path: S1API/bin/Il2CppMelon/net6.0/S1API.dll
 
       # Save cache even if build fails (to enable beta cache priming)
-      # Only save cache for PR events
+      # Save on PR events AND on pushes to main branches (to update cache after assembly updates)
       - name: Save IL2CPP Game Assemblies to Cache
         uses: actions/cache/save@v4
-        if: always() && github.event_name == 'pull_request' && steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true'
+        if: always() && (github.event_name == 'pull_request' || (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable' || github.ref == 'refs/heads/npc-prefabs'))) && steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true'
         with:
           path: S1API/ScheduleOneAssemblies
           key: il2cpp-game-assemblies-v3-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
