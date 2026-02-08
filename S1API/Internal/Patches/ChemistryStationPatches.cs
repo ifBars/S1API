@@ -10,6 +10,7 @@ using S1UIStations = ScheduleOne.UI.Stations;
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using HarmonyLib;
 using S1API.Internal.Utils;
 using S1API.Logging;
@@ -25,10 +26,21 @@ namespace S1API.Internal.Patches
     internal static class ChemistryStationPatches
     {
         private static readonly Log Logger = new Log("ChemistryStationPatches");
-        private static readonly HashSet<string> LoggedCanvasConflicts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        private static readonly HashSet<string> LoggedEntryConflicts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static readonly ConditionalWeakTable<S1UIStations.ChemistryStationCanvas, CanvasInjectionState> CanvasStateTable =
+            new ConditionalWeakTable<S1UIStations.ChemistryStationCanvas, CanvasInjectionState>();
 
         private static bool _loggedRecipeEntriesMissing;
+
+        private sealed class CanvasInjectionState
+        {
+            public readonly HashSet<string> LoggedRecipeConflicts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            public readonly HashSet<string> LoggedEntryConflicts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static CanvasInjectionState GetCanvasState(S1UIStations.ChemistryStationCanvas canvas)
+        {
+            return CanvasStateTable.GetValue(canvas, _ => new CanvasInjectionState());
+        }
 
         private static bool TryGetRecipeEntriesList(
             S1UIStations.ChemistryStationCanvas canvas,
@@ -104,6 +116,7 @@ namespace S1API.Internal.Patches
             if (recipes == null)
                 return;
 
+            var state = GetCanvasState(canvas);
             for (int i = 0; i < registered.Count; i++)
             {
                 var custom = registered[i];
@@ -115,10 +128,13 @@ namespace S1API.Internal.Patches
                 if (string.IsNullOrWhiteSpace(id))
                     continue;
 
-                if (ContainsRecipeId(recipes, id))
+                var existing = FindRecipeById(recipes, id);
+                if (existing != null)
                 {
-                    if (LoggedCanvasConflicts.Add(id))
-                        Logger.Warning($"[S1API] Chemistry Station already has a recipe with ID '{id}'. Skipping S1API injection for this ID.");
+                    if (!ReferenceEquals(existing, custom) && state.LoggedRecipeConflicts.Add(id))
+                    {
+                        Logger.Warning($"[S1API] Chemistry Station already has a recipe with ID '{id}' (different instance). Skipping S1API injection for this ID.");
+                    }
                     continue;
                 }
 
@@ -146,6 +162,7 @@ namespace S1API.Internal.Patches
             if (registered == null || registered.Count == 0)
                 return;
 
+            var state = GetCanvasState(canvas);
             for (int i = 0; i < registered.Count; i++)
             {
                 var recipe = registered[i];
@@ -157,10 +174,14 @@ namespace S1API.Internal.Patches
                 if (string.IsNullOrWhiteSpace(id))
                     continue;
 
-                if (ContainsEntryForRecipeId(entries, id))
+                var existingEntry = FindEntryByRecipeId(entries, id);
+                if (existingEntry != null)
                 {
-                    if (LoggedEntryConflicts.Add(id))
-                        Logger.Warning($"[S1API] Chemistry Station UI already has an entry for recipe ID '{id}'. Skipping entry injection for this ID.");
+                    var existingRecipe = existingEntry.Recipe;
+                    if (!ReferenceEquals(existingRecipe, recipe) && state.LoggedEntryConflicts.Add(id))
+                    {
+                        Logger.Warning($"[S1API] Chemistry Station UI already has an entry for recipe ID '{id}' (different recipe). Skipping entry injection for this ID.");
+                    }
                     continue;
                 }
 
@@ -183,7 +204,7 @@ namespace S1API.Internal.Patches
             }
         }
 
-        private static bool ContainsRecipeId(
+        private static S1StationFramework.StationRecipe? FindRecipeById(
 #if (IL2CPPMELON || IL2CPPBEPINEX)
             Il2CppSystem.Collections.Generic.List<S1StationFramework.StationRecipe> recipes,
 #else
@@ -192,7 +213,7 @@ namespace S1API.Internal.Patches
             string recipeId)
         {
             if (recipes == null || string.IsNullOrWhiteSpace(recipeId))
-                return false;
+                return null;
 
             for (int i = 0; i < recipes.Count; i++)
             {
@@ -203,7 +224,7 @@ namespace S1API.Internal.Patches
                 try
                 {
                     if (string.Equals(r.RecipeID, recipeId, StringComparison.OrdinalIgnoreCase))
-                        return true;
+                        return r;
                 }
                 catch
                 {
@@ -211,10 +232,10 @@ namespace S1API.Internal.Patches
                 }
             }
 
-            return false;
+            return null;
         }
 
-        private static bool ContainsEntryForRecipeId(
+        private static S1UIStations.StationRecipeEntry? FindEntryByRecipeId(
 #if (IL2CPPMELON || IL2CPPBEPINEX)
             Il2CppSystem.Collections.Generic.List<S1UIStations.StationRecipeEntry> entries,
 #else
@@ -223,7 +244,7 @@ namespace S1API.Internal.Patches
             string recipeId)
         {
             if (entries == null || string.IsNullOrWhiteSpace(recipeId))
-                return false;
+                return null;
 
             for (int i = 0; i < entries.Count; i++)
             {
@@ -238,7 +259,7 @@ namespace S1API.Internal.Patches
                         continue;
 
                     if (string.Equals(r.RecipeID, recipeId, StringComparison.OrdinalIgnoreCase))
-                        return true;
+                        return e;
                 }
                 catch
                 {
@@ -246,7 +267,7 @@ namespace S1API.Internal.Patches
                 }
             }
 
-            return false;
+            return null;
         }
     }
 }
