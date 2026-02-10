@@ -7,9 +7,6 @@ using S1API.Map;
 
 [assembly: MelonInfo(typeof(S1API.S1API), "S1API (Forked by Bars)", "2.9.5", "KaBooMa")]
 [assembly: MelonPriority(Int32.MinValue)]
-// Marked as incompatible as it breaks base game apps (causes them to show the mod manager instead of the base game app)
-// See https://www.nexusmods.com/schedule1/mods/1484?tab=bugs
-[assembly: MelonIncompatibleAssemblies("ModManager&PhoneApp")]
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 namespace S1API
 {
