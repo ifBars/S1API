@@ -4,6 +4,7 @@ using UnityEngine.UI;
 using Object = UnityEngine.Object;
 using S1API.Internal.Abstraction;
 using S1API.Internal.Patches;
+using S1API.Internal.Utils;
 using System;
 using MelonLoader;
 #if IL2CPPMELON
@@ -329,7 +330,8 @@ namespace S1API.PhoneApp
             if (_iconModified)
                 return;
 
-            GameObject? appIcons = homeScreenInstance.transform.Find("AppIcons")?.gameObject;
+            // Use FindDescendant so we get the real AppIcons (under Viewport when scroll patch is active), not the stub.
+            GameObject? appIcons = TransformUtils.FindDescendant(homeScreenInstance.transform, "AppIcons")?.gameObject;
             if (appIcons == null)
             {
                 Logger.Error("AppIcons not found under HomeScreen.");
