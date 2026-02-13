@@ -1,6 +1,5 @@
 using HarmonyLib;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using S1API.Internal.Phone;
 using S1API.Logging;
@@ -24,11 +23,6 @@ namespace S1API.Internal.Patches
         private static readonly Log Logger = new Log("HomeScreenScroll");
         private static bool _isInitialized = false;
 
-        static HomeScreenScrollPatch()
-        {
-            SceneManager.activeSceneChanged += OnActiveSceneChanged;
-        }
-
         /// <summary>
         /// Sets up scrolling for the AppIcons container after HomeScreen initializes.
         /// </summary>
@@ -48,7 +42,7 @@ namespace S1API.Internal.Patches
             }
         }
 
-        private static void OnActiveSceneChanged(Scene _, Scene __)
+        internal static void ResetInitializationState()
         {
             _isInitialized = false;
         }

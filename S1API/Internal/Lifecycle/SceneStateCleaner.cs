@@ -91,6 +91,9 @@ namespace S1API.Internal.Lifecycle
 
                     // Drop bindings to the previous TimeManager so the next scene can rebind cleanly.
                     TimeManager.ResetBindings();
+
+                    // Re-arm HomeScreen scroll setup for the next gameplay session.
+                    HomeScreenScrollPatch.ResetInitializationState();
                 }
                 else
                 {
