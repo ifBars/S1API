@@ -94,6 +94,12 @@ namespace S1API.Internal.Lifecycle
 
                     // Re-arm HomeScreen scroll setup for the next gameplay session.
                     HomeScreenScrollPatch.ResetInitializationState();
+
+                    // Reset mugshot queue so warmup runs fresh on next scene load
+                    NPCAppearance.ResetMugshotState();
+                    
+                    // Reset loading screen patch state to prevent stuck flags
+                    LoadingScreenPatches.ResetState();
                 }
                 else
                 {
