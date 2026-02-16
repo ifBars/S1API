@@ -15,7 +15,6 @@ using System.Linq;
 using System.Reflection;
 using System.Collections;
 using UnityEngine;
-using UnityEngine.Rendering;
 using UnityEngine.UI;
 
 using S1API.Entities.Appearances.AccessoryFields;
@@ -105,6 +104,45 @@ namespace S1API.Entities
 
         private static IEnumerator ProcessMugshotQueue()
         {
+            var generator = S1AvatarFramework.MugshotGenerator.Instance;
+            var mugshotRig = generator != null ? generator.MugshotRig : null;
+            var iconGenerator = generator != null ? generator.Generator : null;
+
+            // === Quick physical warmup ===
+            // Toggle the rig active/inactive to force the GPU driver and Unity's internal
+            // SkinnedMeshRenderer/Animator/material pipeline to initialize. In a modding
+            // context (MelonLoader/IL2CPP) we cannot pre-warm shader variants directly,
+            // so cycling the GameObject is the only way to trigger lazy initialization.
+            // Pixel content is NOT checked here — testing proved DefaultSettings warmup
+            // renders produce black frames on cold start even when the rig is fully ready
+            // for real NPC captures. Actual content validation happens per-capture in the
+            // retry loop below.
+            if (mugshotRig != null && generator.DefaultSettings != null)
+            {
+                int iconLayer = LayerMask.NameToLayer("IconGeneration");
+                const int primeCycles = 5;
+
+                for (int warmup = 0; warmup < primeCycles; warmup++)
+                {
+                    Transform warmupParent = mugshotRig.transform.parent;
+                    if (warmupParent != null)
+                        warmupParent.gameObject.SetActive(true);
+                    mugshotRig.gameObject.SetActive(true);
+
+                    mugshotRig.LoadAvatarSettings(generator.DefaultSettings);
+                    SetLayerRecursively(mugshotRig.gameObject, iconLayer);
+
+                    var warmupSMRs = mugshotRig.GetComponentsInChildren<SkinnedMeshRenderer>();
+                    foreach (var smr in warmupSMRs)
+                        smr.updateWhenOffscreen = true;
+
+                    yield return new WaitForEndOfFrame();
+
+                    mugshotRig.LoadAvatarSettings(generator.DefaultSettings);
+                    mugshotRig.gameObject.SetActive(false);
+                }
+            }
+
             while (true)
             {
                 NPCAppearance next = null;
@@ -125,82 +163,114 @@ namespace S1API.Entities
                     continue;
                 }
 
-                var generator = S1AvatarFramework.MugshotGenerator.Instance;
-                var mugshotRig = generator != null ? generator.MugshotRig : null;
-                var iconGenerator = generator != null ? generator.Generator : null;
+                // Refresh references in case they became stale
+                generator = S1AvatarFramework.MugshotGenerator.Instance;
+                mugshotRig = generator != null ? generator.MugshotRig : null;
+                iconGenerator = generator != null ? generator.Generator : null;
                 if (mugshotRig == null)
                 {
-                    // Nothing we can do this frame; try again next frame
-                    // Re-enqueue to avoid dropping the request if generator is momentarily unavailable
                     lock (_mugshotQueueLock)
                         _mugshotQueue.Enqueue(next);
                     yield return null;
                     continue;
                 }
 
-                // Phase 1: setup without yielding
                 S1AvatarFramework.Avatar previousAvatar = next.NPC.S1NPC.Avatar;
                 next.NPC.S1NPC.Avatar = mugshotRig;
-                Transform mugshotParent = mugshotRig.transform.parent;
-                if (mugshotParent != null)
-                    mugshotParent.gameObject.SetActive(true);
-
-                // Activate the rig (same as game's GenerateMugshot)
-                mugshotRig.gameObject.SetActive(true);
-
-                // Disable distance culling so the mugshot rig never hides while the player camera is far away
-                bool previousAllowCulling = mugshotRig.Animation != null && mugshotRig.Animation.AllowCulling;
-                if (mugshotRig.Animation != null)
-                    mugshotRig.Animation.AllowCulling = false;
-                mugshotRig.SetVisible(true);
-                mugshotRig.Impostor.DisableImpostor();
 
                 // Use a per-capture clone so subsequent appearance edits don't mutate the in-flight mugshot
                 var mugshotSettings = ScriptableObject.Instantiate(next._customAvatarSettings);
                 mugshotSettings.Height = 1f;
-                next.NPC.S1NPC.Avatar.LoadAvatarSettings(mugshotSettings);
 
-                // Set layer for icon generation (same as game's GenerateMugshot)
-                SetLayerRecursively(mugshotRig.gameObject, LayerMask.NameToLayer("IconGeneration"));
+                // === Content-validated capture with retry ===
+                // On cold start the rig's renderers may not be ready, producing completely
+                // black textures (brightness 0.0) for 20+ consecutive frames before content
+                // appears. This was observed via MelonLoader logs across multiple hardware
+                // configs. The high retry count (30) is a safety cap for the worst case;
+                // on warm loads (quit-to-menu → reload) content appears on attempt 0.
+                // Do NOT reduce this — lower values will break cold start on some machines.
+                const int maxRetries = 30;
+                const float contentBrightnessFloor = 0.01f;
+                Texture2D generatedMugshot = null;
+                bool hasContent = false;
 
-                // Enable updateWhenOffscreen for proper bounds calculation (same as game's GenerateMugshot)
-                var skinnedMeshRenderers = mugshotRig.GetComponentsInChildren<SkinnedMeshRenderer>();
-                foreach (var smr in skinnedMeshRenderers)
+                for (int attempt = 0; attempt <= maxRetries; attempt++)
                 {
-                    smr.updateWhenOffscreen = true;
+                    Transform mugshotParent = mugshotRig.transform.parent;
+                    if (mugshotParent != null)
+                        mugshotParent.gameObject.SetActive(true);
+                    mugshotRig.gameObject.SetActive(true);
+
+                    // Disable distance culling so the mugshot rig never hides while the player camera is far away
+                    bool previousAllowCulling = mugshotRig.Animation != null && mugshotRig.Animation.AllowCulling;
+                    if (mugshotRig.Animation != null)
+                        mugshotRig.Animation.AllowCulling = false;
+                    mugshotRig.SetVisible(true);
+                    mugshotRig.Impostor.DisableImpostor();
+
+                    mugshotRig.LoadAvatarSettings(mugshotSettings);
+                    SetLayerRecursively(mugshotRig.gameObject, LayerMask.NameToLayer("IconGeneration"));
+
+                    var skinnedMeshRenderers = mugshotRig.GetComponentsInChildren<SkinnedMeshRenderer>();
+                    foreach (var smr in skinnedMeshRenderers)
+                        smr.updateWhenOffscreen = true;
+
+                    // Wait a full frame so the Avatar's internal Update/LateUpdate cycle
+                    // can apply skin color and other material properties from the settings.
+                    yield return null;
+                    yield return new WaitForEndOfFrame();
+
+                    generatedMugshot = null;
+                    try
+                    {
+                        generatedMugshot = iconGenerator.GetTexture(mugshotRig.transform);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"Direct GetTexture failed: {ex.Message}");
+                    }
+
+                    // Check if capture has actual content (not black/empty)
+                    hasContent = false;
+                    if (generatedMugshot != null && generatedMugshot.width > 0 && generatedMugshot.height > 0)
+                    {
+                        int cx = generatedMugshot.width / 2;
+                        int cy = generatedMugshot.height / 2;
+                        Color centerPx = generatedMugshot.GetPixel(cx, cy);
+                        Color topPx = generatedMugshot.GetPixel(cx, (int)(generatedMugshot.height * 0.85f));
+                        Color botPx = generatedMugshot.GetPixel(cx, (int)(generatedMugshot.height * 0.15f));
+                        Color leftPx = generatedMugshot.GetPixel((int)(generatedMugshot.width * 0.25f), cy);
+                        Color rightPx = generatedMugshot.GetPixel((int)(generatedMugshot.width * 0.75f), cy);
+
+                        float maxBrightness = 0f;
+                        Color[] samples = { centerPx, topPx, botPx, leftPx, rightPx };
+                        foreach (var s in samples)
+                        {
+                            float b = s.r + s.g + s.b;
+                            if (b > maxBrightness) maxBrightness = b;
+                        }
+                        hasContent = maxBrightness > contentBrightnessFloor;
+                    }
+
+                    if (hasContent)
+                        break;
+
+                    // No content — deactivate and retry
+                    if (generator.DefaultSettings != null)
+                        mugshotRig.LoadAvatarSettings(generator.DefaultSettings);
+                    if (mugshotRig.Animation != null)
+                        mugshotRig.Animation.AllowCulling = previousAllowCulling;
+                    mugshotRig.gameObject.SetActive(false);
+
+                    if (attempt == maxRetries)
+                        _logger.Warning($"[Mugshot] {next.NPC.S1NPC.FirstName}: no content after {maxRetries + 1} attempts, using last capture");
                 }
 
-                // Capture current lighting state so the ambient flip from the generator doesn't leak
-                var previousAmbientMode = RenderSettings.ambientMode;
-                var previousAmbientLight = RenderSettings.ambientLight;
-                var previousAmbientIntensity = RenderSettings.ambientIntensity;
-                bool? previousModifyLighting = iconGenerator != null ? iconGenerator.ModifyLighting : null;
-                if (iconGenerator != null)
-                    iconGenerator.ModifyLighting = true;
-
-                // Give the rig a frame to update meshes/bounds with the new settings before capture
-                // yield return new WaitForEndOfFrame();
-
-                bool completed = false;
-                // Trigger capture (callback will flip flag)
-                next.NPC.S1NPC.Avatar.GetMugshot((Action<Texture2D>)(generatedMugshot =>
+                if (generatedMugshot != null)
                 {
                     try
                     {
                         generatedMugshot.Apply();
-
-                        // Apply a modest crop to handle accessories (like hats) that extend bounds
-                        // This ensures faces are consistently sized regardless of head accessories
-                        float cropScale = 0.92f; // Take 92% of the image
-                        int cropWidth = Mathf.RoundToInt(generatedMugshot.width * cropScale);
-                        int cropHeight = Mathf.RoundToInt(generatedMugshot.height * cropScale);
-                        int cropX = (generatedMugshot.width - cropWidth) / 2; // Center horizontally
-                        int cropY = Mathf.RoundToInt(generatedMugshot.height * 0.04f); // Slight offset up for face focus
-
-                        // Clamp to valid bounds
-                        cropX = Mathf.Clamp(cropX, 0, generatedMugshot.width - cropWidth);
-                        cropY = Mathf.Clamp(cropY, 0, generatedMugshot.height - cropHeight);
-
                         Rect cropRect = new Rect(0, 0, generatedMugshot.width, generatedMugshot.height);
                         Sprite iconSprite = Sprite.Create(generatedMugshot, cropRect, Vector2.zero);
                         next.NPC.Icon = iconSprite;
@@ -213,33 +283,19 @@ namespace S1API.Entities
                     {
                         _logger.Error($"Failed to finalize mugshot: {ex.Message}");
                     }
-                    finally
-                    {
-                        completed = true;
-                    }
-                }));
+                }
 
-                // Phase 2: wait for completion
-                while (!completed)
-                    yield return null;
-
-                // Restore scene/global state
-                if (iconGenerator != null && previousModifyLighting.HasValue)
-                    iconGenerator.ModifyLighting = previousModifyLighting.Value;
-                RenderSettings.ambientMode = previousAmbientMode;
-                RenderSettings.ambientLight = previousAmbientLight;
-                RenderSettings.ambientIntensity = previousAmbientIntensity;
-
-                // Phase 3: restore without yielding
+                // Restore avatar reference
                 next.NPC.S1NPC.Avatar = previousAvatar ?? next._runtimeAvatar;
                 next.ApplyToAvatar(next._runtimeAvatar);
 
-                // Restore rig to default state (same as game's GenerateMugshot)
+                // Reset rig and deactivate
+                bool finalAllowCulling = mugshotRig.Animation != null && mugshotRig.Animation.AllowCulling;
                 if (generator.DefaultSettings != null)
                     mugshotRig.LoadAvatarSettings(generator.DefaultSettings);
-                mugshotRig.gameObject.SetActive(false);
                 if (mugshotRig.Animation != null)
-                    mugshotRig.Animation.AllowCulling = previousAllowCulling;
+                    mugshotRig.Animation.AllowCulling = finalAllowCulling;
+                mugshotRig.gameObject.SetActive(false);
 
                 // Small delay between jobs to let the mugshot rig fully reset
                 yield return new WaitForSeconds(0.1f);
@@ -614,6 +670,19 @@ namespace S1API.Entities
         private static readonly object _mugshotQueueLock = new object();
         private static readonly Queue<NPCAppearance> _mugshotQueue = new Queue<NPCAppearance>();
         private static bool _isProcessingMugshots = false;
+
+        /// <summary>
+        /// INTERNAL: Resets mugshot queue state on scene change so warmup runs fresh on reload.
+        /// Called from SceneStateCleaner.
+        /// </summary>
+        internal static void ResetMugshotState()
+        {
+            lock (_mugshotQueueLock)
+            {
+                _mugshotQueue.Clear();
+                _isProcessingMugshots = false;
+            }
+        }
 
         /// <summary>
         /// Returns true when all queued mugshots have been processed.
