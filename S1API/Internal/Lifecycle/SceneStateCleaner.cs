@@ -97,6 +97,9 @@ namespace S1API.Internal.Lifecycle
 
                     // Reset mugshot queue so warmup runs fresh on next scene load
                     NPCAppearance.ResetMugshotState();
+                    
+                    // Reset loading screen patch state to prevent stuck flags
+                    LoadingScreenPatches.ResetState();
                 }
                 else
                 {

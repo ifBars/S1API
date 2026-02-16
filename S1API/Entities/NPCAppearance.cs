@@ -94,6 +94,7 @@ namespace S1API.Entities
             lock (_mugshotQueueLock)
             {
                 _mugshotQueue.Enqueue(this);
+                _hasQueuedMugshots = true;
                 if (!_isProcessingMugshots)
                 {
                     _isProcessingMugshots = true;
@@ -670,6 +671,7 @@ namespace S1API.Entities
         private static readonly object _mugshotQueueLock = new object();
         private static readonly Queue<NPCAppearance> _mugshotQueue = new Queue<NPCAppearance>();
         private static bool _isProcessingMugshots = false;
+        private static bool _hasQueuedMugshots = false;
 
         /// <summary>
         /// INTERNAL: Resets mugshot queue state on scene change so warmup runs fresh on reload.
@@ -681,11 +683,13 @@ namespace S1API.Entities
             {
                 _mugshotQueue.Clear();
                 _isProcessingMugshots = false;
+                _hasQueuedMugshots = false;
             }
         }
 
         /// <summary>
         /// Returns true when all queued mugshots have been processed.
+        /// Returns false if no mugshots have ever been queued (generation hasn't started).
         /// </summary>
         internal static bool MugshotsProcessingComplete
         {
@@ -693,6 +697,9 @@ namespace S1API.Entities
             {
                 lock (_mugshotQueueLock)
                 {
+                    // If no mugshots have been queued yet, generation hasn't started
+                    if (!_hasQueuedMugshots)
+                        return false;
                     return !_isProcessingMugshots && _mugshotQueue.Count == 0;
                 }
             }
