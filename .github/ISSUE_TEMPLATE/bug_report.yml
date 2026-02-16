@@ -1,0 +1,164 @@
+name: Bug Report
+description: Report a bug or issue with S1API
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Before you submit...
+        
+        Please ensure you have:
+        - Read the [installation guide](https://ifbars.github.io/S1API/docs/getting-started.html#installation-guide)
+        - Verified your issue is related to S1API (not a general modding issue)
+        - Confirmed you're using the latest S1API version
+        
+        If you answered **no** to any of these, you probably shouldn't be posting here.
+        
+        For general modding support, refer to the **#support** channel in the [S1 modding Discord](https://discord.gg/UD4K4chKaki).
+        
+        ---
+        
+        **Note:** MelonLoader 0.7.1+ has crashing issues with the API. Please use **MelonLoader 0.7.0** to ensure compatibility.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A clear and concise description of the bug or issue you're experiencing.
+      placeholder: "Example: TimeManager.OnTick stops firing after hot load, or custom NPC corrupts phone UI..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: game-version
+    attributes:
+      label: Game Version
+      description: Which version of Schedule I are you running?
+      options:
+        - 0.4.1f13
+        - 0.4.1f8
+        - 0.4.3f3
+        - Other (specify in Additional Context)
+    validations:
+      required: true
+
+  - type: input
+    id: s1api-version
+    attributes:
+      label: S1API Version
+      description: Which version of S1API are you using?
+      placeholder: "e.g., 2.7.4, 2.7.3, 2.9.6"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: melonloader-version
+    attributes:
+      label: MelonLoader Version
+      description: Which version of MelonLoader are you using?
+      options:
+        - 0.7.0
+        - 0.7.2 Nightly
+        - 0.6.4
+        - 0.7.1+ (Known Issues)
+        - Other (specify in Additional Context)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime Environment
+      description: Which runtime are you testing on?
+      multiple: true
+      options:
+        - Mono (Alternate)
+        - IL2CPP (Regular)
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: |
+        Provide detailed steps to reproduce the issue. Include:
+        - What you were trying to accomplish
+        - Exact steps someone else could follow to see the same problem
+        - Any specific conditions required (e.g., hot load, specific NPC types, etc.)
+      placeholder: |
+        1. Create a custom NPC with IsPhysical = false
+        2. Load a save file
+        3. Open the Messages app on the in-game phone
+        4. Observe that...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected vs Actual Behavior
+      description: |
+        **Expected:** What should happen?
+        **Actual:** What actually happens?
+      placeholder: |
+        **Expected:** TimeManager.OnTick continues firing in every gameplay session.
+        **Actual:** TimeManager.OnTick handlers only fire in the first gameplay session. After returning to main menu and loading again, they never fire.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: MelonLoader Log
+      description: |
+        Attach your MelonLoader log file from `Schedule I/MelonLoader/Latest.log`.
+        
+        You can either:
+        - Drag and drop the file here
+        - Paste relevant excerpts (use code blocks)
+        - Upload to a paste service and provide a link
+      placeholder: |
+        Paste relevant log excerpts or drag-and-drop Latest.log here...
+
+  - type: textarea
+    id: tried-so-far
+    attributes:
+      label: What Have You Tried?
+      description: List any troubleshooting steps or workarounds you've already attempted.
+      placeholder: |
+        - Tried commenting out the custom NPC class → issue resolved
+        - Tested with PhoneApp disabled → issue persists
+        - Switched from obsolete constructor to ConfigurePrefab pattern → no change
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: |
+        Any other information that might be helpful:
+        - Screenshots or videos
+        - Links to related issues
+        - Theories about the root cause
+        - Specific API methods or classes involved
+      placeholder: |
+        Add any other context, screenshots, or theories here...
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following before submitting
+      options:
+        - label: I have read the installation guide
+          required: true
+        - label: I am using the latest version of S1API
+          required: true
+        - label: I have verified this issue is related to S1API (not general modding support)
+          required: true
+        - label: I am using MelonLoader 0.7.0 or have noted compatibility issues with 0.7.1+
+          required: false
+        - label: I have included my MelonLoader log or relevant excerpts
+          required: false
