@@ -15,6 +15,7 @@ using S1VehiclesAI = ScheduleOne.Vehicles.AI;
 using S1ObjectScripts = ScheduleOne.ObjectScripts;
 #endif
 using UnityEngine;
+using UnityEngine.AI;
 using S1API.Map;
 using S1API.Vehicles;
 
@@ -111,11 +112,23 @@ namespace S1API.Entities.Schedule
                 }
             }
 
+            // Project destination to navmesh height so the game's 3D distance checks
+            // (WalkResult.Success threshold and IsAtDestination) use a position consistent
+            // with where the NPC actually walks. Without this, a Y-coordinate mismatch > 1 unit
+            // causes WalkResult.Partial instead of Success, and ReachedDestination() never fires,
+            // so FaceDirection is never called.
+            Vector3 markerPosition = Destination;
+            NavMeshHit navHit;
+            if (NavMesh.SamplePosition(Destination, out navHit, 5f, NavMesh.AllAreas))
+            {
+                markerPosition = new Vector3(Destination.x, navHit.position.y, Destination.z);
+            }
+
             // Create destination marker in NPC's dedicated container
             var destinationTransform = NPCDestinationContainer.CreateDestinationMarker(
-                schedule.NPC.gameObject.name, 
-                "Destination", 
-                Destination, 
+                schedule.NPC.gameObject.name,
+                "Destination",
+                markerPosition,
                 forwardDirection);
 
             if (destinationTransform != null)
