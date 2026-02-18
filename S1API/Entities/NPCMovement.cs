@@ -11,7 +11,6 @@ namespace S1API.Entities
     /// <summary>
     /// Modder-facing movement wrapper for an <see cref="NPC"/>.
     /// Provides navigation, warping, facing, and reachability helpers.
-    /// Keep in mind that as of API version 1.8.1, custom NPCs do not have an Avatar or an NPCMovement component.
     /// </summary>
     public class NPCMovement
     {
