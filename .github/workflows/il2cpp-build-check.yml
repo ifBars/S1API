@@ -395,7 +395,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: S1API-Il2Cpp
-          path: S1API/bin/Il2CppMelon/net6.0/S1API.dll
+          path: S1API/bin/Il2CppMelon/net6.0/S1API.Il2Cpp.MelonLoader.dll
 
       # Save cache even if build fails (to enable beta cache priming)
       # Save on PR events AND on pushes to main branches (to update cache after assembly updates)
