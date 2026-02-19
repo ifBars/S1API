@@ -1,7 +1,9 @@
-﻿using System;
+using System;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using MelonLoader;
+using MelonLoader.Utils;
 
 [assembly: MelonInfo(typeof(S1APILoader.S1APILoader), "S1APILoader", "2.4.4", "KaBooMa")]
 
@@ -10,9 +12,16 @@ namespace S1APILoader
     public class S1APILoader : MelonPlugin
     {
         private const string BuildFolderName = "S1API";
-            
-        public override void OnPreModsLoaded()
+        private const string ProblematicMelonVersion = "0.7.1";
+        private const int InteropFixRevision = 1;
+        private const string InteropMarkerFileName = "S1API.InteropFix.marker";
+        private static bool _earlyInteropFixAttempted;
+        private static bool _il2CppAssemblyResolverInstalled;
+        
+        public override void OnApplicationEarlyStart()
         {
+            TryApplyEarlyIl2CppInteropFix();
+
             string? pluginsFolder = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             if (pluginsFolder == null)
                 throw new Exception("Failed to identify plugins folder.");
@@ -38,6 +47,304 @@ namespace S1APILoader
             NormalizeBuild(s1apiPluginsFolder, inactiveBuild, shouldBeEnabled: false, fileNamePattern: "S1API.{0}.dll");
             
             MelonLogger.Msg($"Successfully loaded S1API for {activeBuild}!");
+        }
+
+        private static void TryApplyEarlyIl2CppInteropFix()
+        {
+            if (_earlyInteropFixAttempted)
+                return;
+
+            _earlyInteropFixAttempted = true;
+
+            if (!MelonUtils.IsGameIl2Cpp())
+                return;
+
+            string? melonVersion = GetMelonLoaderVersion();
+            if (string.IsNullOrEmpty(melonVersion) || !melonVersion.StartsWith(ProblematicMelonVersion, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            MelonLogger.Warning("[S1APILoader] MelonLoader 0.7.1 detected. Applying early Il2CppInterop workaround...");
+            
+            TryForceAssemblyRegenerationIfNeeded(melonVersion);
+            
+            RegisterIl2CppAssemblyResolveFallback();
+            InstallIl2CppInteropFixes();
+        }
+
+        private static string? GetMelonLoaderVersion()
+        {
+            try
+            {
+                Assembly melonAssembly = typeof(MelonPlugin).Assembly;
+                Type? buildInfoType = melonAssembly.GetType("MelonLoader.Properties.BuildInfo");
+                PropertyInfo? versionProp = buildInfoType?.GetProperty("VersionNumber", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                object? value = versionProp?.GetValue(null);
+                if (value != null)
+                    return value.ToString();
+
+                Version? version = melonAssembly.GetName().Version;
+                if (version != null)
+                    return $"{version.Major}.{version.Minor}.{version.Build}";
+            }
+            catch
+            {
+            }
+
+            return null;
+        }
+
+        private static void InstallIl2CppInteropFixes()
+        {
+            try
+            {
+                Assembly melonAssembly = typeof(MelonPlugin).Assembly;
+                Type? fixesType = melonAssembly.GetType("MelonLoader.Fixes.Il2CppInteropFixes");
+                MethodInfo? installMethod = fixesType?.GetMethod("Install", BindingFlags.NonPublic | BindingFlags.Static);
+                if (installMethod == null)
+                {
+                    MelonLogger.Warning("[S1APILoader] Could not find Il2CppInteropFixes.Install().");
+                    return;
+                }
+
+                installMethod.Invoke(null, null);
+                MelonLogger.Msg("[S1APILoader] Early Il2CppInterop fixes applied.");
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning($"[S1APILoader] Failed to apply early Il2CppInterop fixes: {ex.Message}");
+            }
+        }
+
+        private static void TryForceAssemblyRegenerationIfNeeded(string melonVersion)
+        {
+            try
+            {
+                string markerPath = GetInteropMarkerPath();
+                
+                if (IsMarkerValid(markerPath, melonVersion))
+                {
+                    MelonLogger.Msg("[S1APILoader] Interop fix marker found. Skipping assembly regeneration.");
+                    return;
+                }
+
+                if (!HasPreGeneratedIl2CppAssemblies())
+                {
+                    MelonLogger.Msg("[S1APILoader] No pre-generated Il2Cpp assemblies found. MelonLoader will generate them normally.");
+                    WriteMarker(markerPath, melonVersion);
+                    return;
+                }
+
+                MelonLogger.Warning("[S1APILoader] Pre-generated Il2Cpp assemblies detected. Forcing regeneration...");
+                
+                if (ForceRunIl2CppAssemblyGenerator())
+                {
+                    WriteMarker(markerPath, melonVersion);
+                    MelonLogger.Msg("[S1APILoader] Il2Cpp assembly regeneration completed successfully.");
+                }
+                else
+                {
+                    MelonLogger.Warning("[S1APILoader] Il2Cpp assembly regeneration may have failed. Will retry on next launch.");
+                }
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning($"[S1APILoader] Error during assembly regeneration check: {ex.Message}");
+            }
+        }
+
+        private static string GetInteropMarkerPath()
+        {
+            string userDataDir = MelonEnvironment.UserDataDirectory;
+            if (!Directory.Exists(userDataDir))
+                Directory.CreateDirectory(userDataDir);
+            
+            return Path.Combine(userDataDir, InteropMarkerFileName);
+        }
+
+        private static bool IsMarkerValid(string markerPath, string melonVersion)
+        {
+            if (!File.Exists(markerPath))
+                return false;
+
+            try
+            {
+                string[] lines = File.ReadAllLines(markerPath);
+                if (lines.Length < 2)
+                    return false;
+
+                string? storedVersion = null;
+                int storedRevision = -1;
+
+                foreach (string line in lines)
+                {
+                    if (line.StartsWith("melonloader=", StringComparison.OrdinalIgnoreCase))
+                        storedVersion = line.Substring("melonloader=".Length).Trim();
+                    else if (line.StartsWith("fixrevision=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string revStr = line.Substring("fixrevision=".Length).Trim();
+                        int.TryParse(revStr, out storedRevision);
+                    }
+                }
+
+                if (string.IsNullOrEmpty(storedVersion))
+                    return false;
+
+                bool versionMatch = storedVersion.Equals(melonVersion, StringComparison.OrdinalIgnoreCase);
+                bool revisionMatch = storedRevision >= InteropFixRevision;
+
+                return versionMatch && revisionMatch;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void WriteMarker(string markerPath, string melonVersion)
+        {
+            try
+            {
+                string content = $"melonloader={melonVersion}{Environment.NewLine}fixrevision={InteropFixRevision}{Environment.NewLine}timestamp={DateTime.UtcNow:O}";
+                File.WriteAllText(markerPath, content);
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning($"[S1APILoader] Failed to write interop fix marker: {ex.Message}");
+            }
+        }
+
+        private static bool HasPreGeneratedIl2CppAssemblies()
+        {
+            try
+            {
+                string il2cppAssembliesDir = MelonEnvironment.Il2CppAssembliesDirectory;
+                if (!Directory.Exists(il2cppAssembliesDir))
+                    return false;
+
+                string[] dllFiles = Directory.GetFiles(il2cppAssembliesDir, "Il2Cpp*.dll", SearchOption.TopDirectoryOnly);
+                return dllFiles.Length > 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool ForceRunIl2CppAssemblyGenerator()
+        {
+            try
+            {
+                Assembly melonAssembly = typeof(MelonPlugin).Assembly;
+
+                try
+                {
+                    Type? loaderConfigType = melonAssembly.GetType("MelonLoader.LoaderConfig");
+                    PropertyInfo? currentProp = loaderConfigType?.GetProperty("Current", BindingFlags.Public | BindingFlags.Static);
+                    object? configCurrent = currentProp?.GetValue(null);
+
+                    if (configCurrent != null)
+                    {
+                        PropertyInfo? unityEngineProp = configCurrent.GetType().GetProperty("UnityEngine", BindingFlags.Public | BindingFlags.Instance);
+                        object? unityEngineConfig = unityEngineProp?.GetValue(configCurrent);
+
+                        if (unityEngineConfig != null)
+                        {
+                            PropertyInfo? forceRegenProp = unityEngineConfig.GetType().GetProperty("ForceRegeneration", BindingFlags.Public | BindingFlags.Instance);
+                            if (forceRegenProp != null && forceRegenProp.CanWrite)
+                            {
+                                forceRegenProp.SetValue(unityEngineConfig, true);
+                                MelonLogger.Msg("[S1APILoader] Set LoaderConfig.Current.UnityEngine.ForceRegeneration=true");
+                            }
+                            else
+                            {
+                                MelonLogger.Warning("[S1APILoader] ForceRegeneration property is read-only or not found.");
+                            }
+                        }
+                        else
+                        {
+                            MelonLogger.Warning("[S1APILoader] UnityEngine config is null.");
+                        }
+                    }
+                    else
+                    {
+                        MelonLogger.Warning("[S1APILoader] LoaderConfig.Current is null.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MelonLogger.Warning($"[S1APILoader] Error setting ForceRegeneration via LoaderConfig: {ex.Message}");
+                }
+
+                Type? genType = melonAssembly.GetType("MelonLoader.InternalUtils.Il2CppAssemblyGenerator");
+                if (genType == null)
+                {
+                    MelonLogger.Warning("[S1APILoader] Could not find Il2CppAssemblyGenerator type.");
+                    return false;
+                }
+
+                MethodInfo? runMethod = genType.GetMethod(
+                    "Run",
+                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+                    null,
+                    Type.EmptyTypes,
+                    null);
+
+                if (runMethod == null)
+                {
+                    MelonLogger.Warning("[S1APILoader] Could not find Il2CppAssemblyGenerator.Run() method.");
+                    return false;
+                }
+
+                object? result = runMethod.Invoke(null, null);
+
+                return result switch
+                {
+                    bool b => b,
+                    int i => i == 0,
+                    null => true,
+                    _ => true
+                };
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning($"[S1APILoader] Failed to invoke Il2CppAssemblyGenerator.Run(): {ex.Message}");
+                return false;
+            }
+        }
+
+        private static void RegisterIl2CppAssemblyResolveFallback()
+        {
+            if (_il2CppAssemblyResolverInstalled)
+                return;
+
+            AppDomain.CurrentDomain.AssemblyResolve += ResolveIl2CppAssemblyFallback;
+            _il2CppAssemblyResolverInstalled = true;
+        }
+
+        private static Assembly? ResolveIl2CppAssemblyFallback(object sender, ResolveEventArgs args)
+        {
+            try
+            {
+                string? requestedName = new AssemblyName(args.Name).Name;
+                if (string.IsNullOrEmpty(requestedName) || !requestedName.StartsWith("Il2Cpp", StringComparison.Ordinal))
+                    return null;
+
+                string strippedName = requestedName.Substring("Il2Cpp".Length);
+                if (string.IsNullOrEmpty(strippedName))
+                    return null;
+
+                Assembly? loadedAssembly = AppDomain.CurrentDomain.GetAssemblies()
+                    .FirstOrDefault(a => string.Equals(a.GetName().Name, strippedName, StringComparison.OrdinalIgnoreCase));
+                if (loadedAssembly != null)
+                    return loadedAssembly;
+
+                return Assembly.Load(new AssemblyName(strippedName));
+            }
+            catch
+            {
+            }
+
+            return null;
         }
 
         private static void NormalizeBuild(string folder, string build, bool shouldBeEnabled, string fileNamePattern)
