@@ -32,14 +32,6 @@
         <TargetFramework>net6.0</TargetFramework>
     </PropertyGroup>
 
-    <PropertyGroup Condition="'$(Configuration)' == 'MonoMelon'">
-        <AssemblyName>S1API.Mono.MelonLoader</AssemblyName>
-    </PropertyGroup>
-
-    <PropertyGroup Condition="'$(Configuration)' == 'Il2CppMelon'">
-        <AssemblyName>S1API.Il2Cpp.MelonLoader</AssemblyName>
-    </PropertyGroup>
-
     <PropertyGroup Condition="'$(Configuration)' == 'MonoBepInEx' or '$(Configuration)' == 'Il2CppBepInEx'">
         <RestoreAdditionalProjectSources>
             https://api.nuget.org/v3/index.json;
@@ -184,21 +176,21 @@
     <!-- Automated local deployment -->
     <Target Name="PostBuildIl2CppMelon" AfterTargets="Build" Condition="'$(AutomateLocalDeployment)' == 'true' and '$(Configuration)' == 'Il2CppMelon'">
         <Message Text="[IL2CPP/MelonLoader] Deploying S1API to local Il2Cpp plugins folder" Importance="high" />
-        <Copy SourceFiles=".\bin\Il2CppMelon\net6.0\S1API.Il2Cpp.MelonLoader.dll" DestinationFiles="$(LocalIl2CppDeploymentPath)\Plugins\S1API\S1API.Il2Cpp.dll" />
+        <Copy SourceFiles=".\bin\Il2CppMelon\net6.0\S1API.dll" DestinationFiles="$(LocalIl2CppDeploymentPath)\Plugins\S1API\S1API.Il2Cpp.MelonLoader.dll" />
     </Target>
 
     <Target Name="PostBuildIl2CppBepInEx" AfterTargets="Build" Condition="'$(AutomateLocalDeployment)' == 'true' and '$(Configuration)' == 'Il2CppBepInEx'">
         <Message Text="[IL2CPP/BepInEx] Deploying S1API to local Il2Cpp plugins folder" Importance="high" />
-        <Copy SourceFiles=".\bin\Il2CppBepInEx\net6.0\S1API.dll" DestinationFiles="$(LocalIl2CppDeploymentPath)\BepInEx\Plugins\S1API\S1API.Il2Cpp.dll" />
+        <Copy SourceFiles=".\bin\Il2CppBepInEx\net6.0\S1API.dll" DestinationFiles="$(LocalIl2CppDeploymentPath)\BepInEx\Plugins\S1API\S1API.Il2Cpp.BepInEx.dll" />
     </Target>
 
     <Target Name="PostBuildMonoMelon" AfterTargets="Build" Condition="'$(AutomateLocalDeployment)' == 'true' and '$(Configuration)' == 'MonoMelon'">
         <Message Text="[Mono/MelonLoader] Deploying S1API to local Mono plugins folder" Importance="high" />
-        <Copy SourceFiles=".\bin\MonoMelon\netstandard2.1\S1API.Mono.MelonLoader.dll" DestinationFiles="$(LocalMonoDeploymentPath)\Plugins\S1API\S1API.Mono.dll" />
+        <Copy SourceFiles=".\bin\MonoMelon\netstandard2.1\S1API.dll" DestinationFiles="$(LocalMonoDeploymentPath)\Plugins\S1API\S1API.Mono.MelonLoader.dll" />
     </Target>
 
     <Target Name="PostBuildMonoBepInEx" AfterTargets="Build" Condition="'$(AutomateLocalDeployment)' == 'true' and '$(Configuration)' == 'MonoBepInEx'">
         <Message Text="[Mono/BepInEx] Deploying S1API to local Mono plugins folder" Importance="high" />
-        <Copy SourceFiles=".\bin\MonoBepInEx\netstandard2.1\S1API.dll" DestinationFiles="$(LocalMonoDeploymentPath)\BepInEx\Plugins\S1API\S1API.Mono.dll" />
+        <Copy SourceFiles=".\bin\MonoBepInEx\netstandard2.1\S1API.dll" DestinationFiles="$(LocalMonoDeploymentPath)\BepInEx\Plugins\S1API\S1API.Mono.BepInEx.dll" />
     </Target>
 </Project>
