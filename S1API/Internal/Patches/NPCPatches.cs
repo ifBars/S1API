@@ -1,7 +1,8 @@
-﻿#if (IL2CPPMELON)
+#if (IL2CPPMELON)
 using S1Relation = Il2CppScheduleOne.NPCs.Relation;
 using S1Loaders = Il2CppScheduleOne.Persistence.Loaders;
 using S1NPCs = Il2CppScheduleOne.NPCs;
+using S1NPCsBehaviour = Il2CppScheduleOne.NPCs.Behaviour;
 using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
 using S1Map = Il2CppScheduleOne.Map;
 using S1Money = Il2CppScheduleOne.Money;
@@ -18,6 +19,7 @@ using Il2CppSystem.Collections.Generic;
 using S1Relation = ScheduleOne.NPCs.Relation;
 using S1Loaders = ScheduleOne.Persistence.Loaders;
 using S1NPCs = ScheduleOne.NPCs;
+using S1NPCsBehaviour = ScheduleOne.NPCs.Behaviour;
 using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
 using FishNet;
 using FishNet.Object;
@@ -641,6 +643,50 @@ namespace S1API.Internal.Patches
             catch (Exception ex)
             {
                 MelonLogger.Warning($"[S1API] NPCInventory.Awake postfix cleanup failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Refresh behaviourStack from GetComponentsInChildren so dynamically added behaviours (e.g. SmokeBreakBehaviour,
+        /// GraffitiBehaviour from NPCPrefabBuilder) are included. Also ensures each Behaviour has beh and Npc set
+        /// (Enable_Server requires beh; prefab build may run before Awake so these can be null on spawn).
+        /// </summary>
+        [HarmonyPatch(typeof(S1NPCsBehaviour.NPCBehaviour), "Start")]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static void NPCBehaviour_Start_Prefix(S1NPCsBehaviour.NPCBehaviour __instance)
+        {
+            try
+            {
+                var behaviours = __instance.GetComponentsInChildren<S1NPCsBehaviour.Behaviour>(true);
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                var list = new Il2CppSystem.Collections.Generic.List<S1NPCsBehaviour.Behaviour>();
+                for (int i = 0; i < behaviours.Length; i++)
+                    list.Add(behaviours[i]);
+#else
+                var list = new System.Collections.Generic.List<S1NPCsBehaviour.Behaviour>(behaviours);
+#endif
+                ReflectionUtils.TrySetFieldOrProperty(__instance, "behaviourStack", list);
+                __instance.SortBehaviourStack();
+
+                var npc = __instance.Npc;
+                if (npc == null)
+                    npc = __instance.GetComponentInParent<S1NPCs.NPC>(true);
+                if (npc != null)
+                    ReflectionUtils.TrySetFieldOrProperty(__instance, "Npc", npc);
+
+                for (int i = 0; i < list.Count; i++)
+                {
+                    var b = list[i];
+                    if (b == null) continue;
+                    var existingBeh = ReflectionUtils.TryGetFieldOrProperty(b, "beh");
+                    if (existingBeh == null)
+                        ReflectionUtils.TrySetFieldOrProperty(b, "beh", __instance);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"NPCBehaviour_Start_Prefix: Failed to refresh behaviourStack: {ex.Message}");
             }
         }
 

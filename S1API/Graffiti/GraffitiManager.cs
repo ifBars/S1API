@@ -1,14 +1,17 @@
 #if (IL2CPPMELON)
 using S1Graffiti = Il2CppScheduleOne.Graffiti;
 using S1DevUtilities = Il2CppScheduleOne.DevUtilities;
+using S1Map = Il2CppScheduleOne.Map;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Graffiti = ScheduleOne.Graffiti;
 using S1DevUtilities = ScheduleOne.DevUtilities;
+using S1Map = ScheduleOne.Map;
 #endif
 
 using System.Collections.Generic;
 using System.Linq;
 using S1API.Internal.Utils;
+using S1API.Map;
 using UnityEngine;
 
 namespace S1API.Graffiti
@@ -116,6 +119,110 @@ namespace S1API.Graffiti
                 }
             }
 
+            return nearest;
+        }
+
+        /// <summary>
+        /// Finds a spray surface by GUID. Returns the raw game surface for use with GraffitiBehaviour.SetSpraySurface_Client.
+        /// </summary>
+        /// <param name="guid">The surface GUID.</param>
+        /// <returns>The raw WorldSpraySurface, or null if not found.</returns>
+        internal static S1Graffiti.WorldSpraySurface FindSurfaceByGuid(System.Guid guid)
+        {
+            var instance = Instance;
+            if (instance?.WorldSpraySurfaces == null)
+                return null;
+
+#if (IL2CPPMELON)
+            for (int i = 0; i < instance.WorldSpraySurfaces.Count; i++)
+            {
+                var s = instance.WorldSpraySurfaces[i];
+                if (s != null && s.GUID.ToString() == guid.ToString())
+                    return s;
+            }
+#else
+            foreach (var s in instance.WorldSpraySurfaces)
+            {
+                if (s != null && s.GUID.ToString() == guid.ToString())
+                    return s;
+            }
+#endif
+            return null;
+        }
+
+        /// <summary>
+        /// Finds spray surfaces available for NPCs in the given region (CanBeSprayedByNPCs, CanBeEdited).
+        /// </summary>
+        /// <param name="region">The map region.</param>
+        /// <returns>List of available raw WorldSpraySurface instances.</returns>
+        internal static List<S1Graffiti.WorldSpraySurface> FindAvailableForNPCInRegion(Region region)
+        {
+            var instance = Instance;
+            var result = new List<S1Graffiti.WorldSpraySurface>();
+            if (instance?.WorldSpraySurfaces == null)
+                return result;
+
+            var gameRegion = (S1Map.EMapRegion)(int)region;
+
+#if (IL2CPPMELON)
+            for (int i = 0; i < instance.WorldSpraySurfaces.Count; i++)
+            {
+                var s = instance.WorldSpraySurfaces[i];
+                if (s != null && s.Region == gameRegion && s.CanBeSprayedByNPCs && s.CanBeEdited(checkEditor: true))
+                    result.Add(s);
+            }
+#else
+            foreach (var s in instance.WorldSpraySurfaces)
+            {
+                if (s != null && s.Region == gameRegion && s.CanBeSprayedByNPCs && s.CanBeEdited(checkEditor: true))
+                    result.Add(s);
+            }
+#endif
+            return result;
+        }
+
+        /// <summary>
+        /// Finds the nearest spray surface available for NPCs to the given position.
+        /// </summary>
+        /// <param name="position">Search from this position.</param>
+        /// <returns>The nearest available raw WorldSpraySurface, or null.</returns>
+        internal static S1Graffiti.WorldSpraySurface FindNearestAvailableForNPC(Vector3 position)
+        {
+            var instance = Instance;
+            if (instance?.WorldSpraySurfaces == null)
+                return null;
+
+            S1Graffiti.WorldSpraySurface nearest = null;
+            float nearestDist = float.MaxValue;
+
+#if (IL2CPPMELON)
+            for (int i = 0; i < instance.WorldSpraySurfaces.Count; i++)
+            {
+                var s = instance.WorldSpraySurfaces[i];
+                if (s == null || !s.CanBeSprayedByNPCs || !s.CanBeEdited(checkEditor: true))
+                    continue;
+                var center = s.CenterPoint;
+                float d = Vector3.Distance(position, center);
+                if (d < nearestDist)
+                {
+                    nearestDist = d;
+                    nearest = s;
+                }
+            }
+#else
+            foreach (var s in instance.WorldSpraySurfaces)
+            {
+                if (s == null || !s.CanBeSprayedByNPCs || !s.CanBeEdited(checkEditor: true))
+                    continue;
+                var center = s.CenterPoint;
+                float d = Vector3.Distance(position, center);
+                if (d < nearestDist)
+                {
+                    nearestDist = d;
+                    nearest = s;
+                }
+            }
+#endif
             return nearest;
         }
     }

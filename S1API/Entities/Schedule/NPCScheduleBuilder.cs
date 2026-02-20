@@ -344,6 +344,23 @@ namespace S1API.Entities.Schedule
         }
 
         /// <summary>
+        /// Starts building a location-based action that moves to a destination, then triggers a typed arrive behavior.
+        /// </summary>
+        /// <param name="destination">The world position where the NPC should walk to.</param>
+        /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>
+        /// <param name="durationMinutes">The duration for this action in minutes. Default is 60.</param>
+        /// <returns>A fluent sub-builder used to configure and finalize the action.</returns>
+        /// <remarks>
+        /// Use the returned <see cref="LocationBasedActionSpecBuilder"/> to configure optional values such as
+        /// destination threshold and warp behavior, then call a terminal method like
+        /// <see cref="LocationBasedActionSpecBuilder.OnArriveSmokeBreak"/> to finalize and add the spec.
+        /// </remarks>
+        public LocationBasedActionSpecBuilder LocationBased(Vector3 destination, int startTime, int durationMinutes = 60)
+        {
+            return new LocationBasedActionSpecBuilder(this, destination, startTime, durationMinutes);
+        }
+
+        /// <summary>
         /// Adds a handle-deal action for dealer-type NPCs.
         /// </summary>
         /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>

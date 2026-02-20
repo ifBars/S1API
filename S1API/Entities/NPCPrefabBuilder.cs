@@ -2,6 +2,7 @@
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
 using S1NPCsBehaviour = Il2CppScheduleOne.NPCs.Behaviour;
+using S1NPCsOther = Il2CppScheduleOne.NPCs.Other;
 using S1Economy = Il2CppScheduleOne.Economy;
 using S1AvatarFramework = Il2CppScheduleOne.AvatarFramework;
 using S1Items = Il2CppScheduleOne.ItemFramework;
@@ -10,6 +11,7 @@ using S1Registry = Il2CppScheduleOne.Registry;
 using S1NPCs = ScheduleOne.NPCs;
 using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
 using S1NPCsBehaviour = ScheduleOne.NPCs.Behaviour;
+using S1NPCsOther = ScheduleOne.NPCs.Other;
 using S1Economy = ScheduleOne.Economy;
 using S1AvatarFramework = ScheduleOne.AvatarFramework;
 using S1Items = ScheduleOne.ItemFramework;
@@ -17,6 +19,7 @@ using S1Registry = ScheduleOne.Registry;
 #endif
 
 using System;
+using S1API.Entities.Equippables;
 using System.Reflection;
 using UnityEngine;
 using S1API.Entities.Schedule;
@@ -27,6 +30,7 @@ using System.Collections.Generic;
 using S1API.Internal.Entities;
 using S1API.Internal.Utils;
 using S1API.Logging;
+using Object = UnityEngine.Object;
 
 namespace S1API.Entities
 {
@@ -330,6 +334,8 @@ namespace S1API.Entities
                 attendDeal = go.AddComponent<S1NPCsBehaviour.DealerAttendDealBehaviour>();
                 go.SetActive(false);
             }
+            var baseNpcForDealer = prefabRoot.GetComponent<S1NPCs.NPC>();
+            SetBehaviourRefs(attendDeal, npcBehaviour, baseNpcForDealer);
 
             // Ensure NPCEvent_StayInBuilding exists for home behavior
             var stayInBuilding = prefabRoot.GetComponentInChildren<S1NPCsSchedules.NPCEvent_StayInBuilding>(true);
@@ -465,6 +471,328 @@ namespace S1API.Entities
         }
 
         /// <summary>
+        /// Adds smoke break behaviour to the NPC. Enables scheduled smoking with cigarette visual and animation.
+        /// </summary>
+        /// <remarks>
+        /// Adds SmokeBreakBehaviour and SmokeCigarette. Requires a cigarette prefab. If cigarettePrefabPath is null,
+        /// tries: (1) Resources "GameObject/Cigarette_Lit", (2) Resources search for "Cigarette_Lit", (3) runtime
+        /// fallback: first SmokeCigarette in scene with non-null CigarettePrefab. Modders can pass a Resources path
+        /// or bundle a cigarette in their mod. Adds a placeholder smoke location.
+        /// </remarks>
+        /// <param name="cigarettePrefabPath">Resources path to the cigarette GameObject prefab. Null to try default paths.</param>
+        /// <param name="debugMode">Whether to enable SmokeBreakBehaviour debug logging. Null leaves the current value unchanged.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public NPCPrefabBuilder EnsureSmokeBreak(string? cigarettePrefabPath = null, bool? debugMode = null)
+        {
+            try
+            {
+                GameObject cigarettePrefab = null;
+                if (!string.IsNullOrEmpty(cigarettePrefabPath))
+                {
+                    cigarettePrefab = Resources.Load<GameObject>(cigarettePrefabPath);
+                }
+                if (cigarettePrefab == null)
+                {
+                    cigarettePrefab = Resources.Load<GameObject>("GameObject/Cigarette_Lit");
+                }
+                if (cigarettePrefab == null)
+                {
+                    try
+                    {
+                        var all = Object.FindObjectsOfType<S1NPCsOther.SmokeCigarette>(true);
+                        if (all != null)
+                        {
+                            for (int i = 0; i < all.Length; i++)
+                            {
+                                var prefab = ReflectionUtils.TryGetFieldOrProperty(all[i], "CigarettePrefab") as GameObject;
+                                if (prefab != null)
+                                {
+                                    cigarettePrefab = prefab;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    catch { /* ignore */ }
+                }
+                if (cigarettePrefab == null)
+                {
+                    Logger.Warning("EnsureSmokeBreak: Could not load cigarette prefab. The base game may not expose it via Resources. Pass a Resources path to a cigarette prefab in your mod (e.g. EnsureSmokeBreak(\"MyMod/Cigarette_Lit\")) or bundle one in your mod's Resources folder.");
+                }
+
+                var mgr = EnsureScheduleManager();
+                var npcBehaviour = prefabRoot.GetComponentInChildren<S1NPCsBehaviour.NPCBehaviour>(true);
+                if (npcBehaviour == null)
+                {
+                    var behGo = new GameObject("NPCBehaviour");
+                    behGo.transform.SetParent(mgr.transform, false);
+                    npcBehaviour = behGo.AddComponent<S1NPCsBehaviour.NPCBehaviour>();
+                }
+
+                var smokeBreak = npcBehaviour.GetComponentInChildren<S1NPCsBehaviour.SmokeBreakBehaviour>(true);
+                if (smokeBreak == null)
+                {
+                    var go = new GameObject("SmokeBreakBehaviour");
+                    go.transform.SetParent(npcBehaviour.gameObject.transform, false);
+                    smokeBreak = go.AddComponent<S1NPCsBehaviour.SmokeBreakBehaviour>();
+                    go.SetActive(false);
+                }
+                smokeBreak.Name = "SmokeBreakBehaviour";
+
+                var smokeCigarette = smokeBreak.GetComponentInChildren<S1NPCsOther.SmokeCigarette>(true);
+                if (smokeCigarette == null)
+                {
+                    var scGo = new GameObject("SmokeCigarette");
+                    scGo.transform.SetParent(smokeBreak.transform, false);
+                    smokeCigarette = scGo.AddComponent<S1NPCsOther.SmokeCigarette>();
+                }
+
+                var baseNpc = prefabRoot.GetComponent<S1NPCs.NPC>();
+                var anim = prefabRoot.GetComponentInChildren<S1AvatarFramework.Animation.AvatarAnimation>(true);
+
+                ReflectionUtils.TrySetFieldOrProperty(smokeCigarette, "Npc", baseNpc);
+                ReflectionUtils.TrySetFieldOrProperty(smokeCigarette, "CigarettePrefab", cigarettePrefab);
+                ReflectionUtils.TrySetFieldOrProperty(smokeCigarette, "Anim", anim);
+                ReflectionUtils.TrySetFieldOrProperty(smokeBreak, "SmokeCigarette", smokeCigarette);
+                if (debugMode.HasValue)
+                {
+                    ReflectionUtils.TrySetFieldOrProperty(smokeBreak, "_debugMode", debugMode.Value);
+                }
+
+                smokeBreak.MinMaxSmokeBreak = new Vector2Int(1, 2);
+                if (smokeBreak.SmokeBreakLocations == null)
+                {
+#if (IL2CPPMELON)
+                    smokeBreak.SmokeBreakLocations = new Il2CppSystem.Collections.Generic.List<Transform>();
+#else
+                    smokeBreak.SmokeBreakLocations = new List<Transform>();
+#endif
+                }
+                if (smokeBreak.SmokeBreakLocations.Count == 0)
+                {
+                    var locGo = new GameObject("SmokeLocation_Default");
+                    locGo.transform.SetParent(smokeBreak.transform, false);
+                    var lookAt = new GameObject("LookAtPoint");
+                    lookAt.transform.SetParent(locGo.transform, false);
+                    lookAt.transform.localPosition = Vector3.forward;
+                    smokeBreak.SmokeBreakLocations.Add(locGo.transform);
+                }
+                SetBehaviourRefs(smokeBreak, npcBehaviour, baseNpc);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"EnsureSmokeBreak failed for {ownerType?.Name ?? "Unknown"}: {ex.Message}");
+            }
+            return this;
+        }
+
+        /// <summary>
+        /// Adds graffiti behaviour to the NPC. Enables spray painting with spray can equip and effects.
+        /// </summary>
+        /// <remarks>
+        /// Adds GraffitiBehaviour and SprayPaint. If sprayPaintEquippablePath is null, tries: (1) Resources
+        /// "Weapons/SprayPaint/SprayPaint_AvatarEquippable", (2) runtime fallback: first SprayPaint in scene with
+        /// non-null _sprayPaintPrefab. Modders can pass a Resources path or bundle a spray paint equippable.
+        /// </remarks>
+        /// <param name="sprayPaintEquippablePath">Resources path. Null for default. Use <see cref="EquippablePath.SprayPaint"/>.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public NPCPrefabBuilder EnsureGraffiti(string? sprayPaintEquippablePath = null) =>
+            EnsureGraffitiInternal(sprayPaintEquippablePath);
+
+        /// <summary>Adds graffiti behaviour. Use <see cref="EquippablePath.SprayPaint"/> or <see cref="EquippablePath.Custom"/> for mod items.</summary>
+        public NPCPrefabBuilder EnsureGraffiti(EquippablePath sprayPaintEquippablePath) =>
+            EnsureGraffitiInternal(string.IsNullOrEmpty(sprayPaintEquippablePath.ResourcePath) ? null : sprayPaintEquippablePath.ResourcePath);
+
+        private NPCPrefabBuilder EnsureGraffitiInternal(string? sprayPaintEquippablePath)
+        {
+            try
+            {
+                var path = sprayPaintEquippablePath ?? "Weapons/SprayPaint/SprayPaint_AvatarEquippable";
+                var sprayPrefab = Resources.Load<GameObject>(path);
+                S1AvatarFramework.Equipping.AvatarEquippable sprayEquippable = null;
+                if (sprayPrefab != null)
+                    sprayEquippable = sprayPrefab.GetComponent<S1AvatarFramework.Equipping.AvatarEquippable>()
+                        ?? sprayPrefab.GetComponentInChildren<S1AvatarFramework.Equipping.AvatarEquippable>(true);
+                if (sprayEquippable == null && !string.IsNullOrEmpty(sprayPaintEquippablePath))
+                {
+                    sprayPrefab = Resources.Load<GameObject>(sprayPaintEquippablePath);
+                    if (sprayPrefab != null)
+                        sprayEquippable = sprayPrefab.GetComponent<S1AvatarFramework.Equipping.AvatarEquippable>()
+                            ?? sprayPrefab.GetComponentInChildren<S1AvatarFramework.Equipping.AvatarEquippable>(true);
+                }
+                if (sprayEquippable == null)
+                {
+                    try
+                    {
+                        var all = Object.FindObjectsOfType<S1NPCsOther.SprayPaint>(true);
+                        if (all != null)
+                        {
+                            for (int i = 0; i < all.Length; i++)
+                            {
+                                var prefab = ReflectionUtils.TryGetFieldOrProperty(all[i], "_sprayPaintPrefab") as S1AvatarFramework.Equipping.AvatarEquippable;
+                                if (prefab != null)
+                                {
+                                    sprayEquippable = prefab;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    catch { /* ignore */ }
+                }
+                if (sprayEquippable == null)
+                    Logger.Warning($"EnsureGraffiti: Could not load spray paint equippable at '{path}'. Spray painting may not work. Supply a valid path or register via AvatarEquippableRegistry.");
+
+                var npcBehaviour = prefabRoot.GetComponentInChildren<S1NPCsBehaviour.NPCBehaviour>(true);
+                if (npcBehaviour == null)
+                {
+                    var behGo = new GameObject("NPCBehaviour");
+                    behGo.transform.SetParent(EnsureScheduleManager().transform, false);
+                    npcBehaviour = behGo.AddComponent<S1NPCsBehaviour.NPCBehaviour>();
+                }
+
+                var graffiti = npcBehaviour.GetComponentInChildren<S1NPCsBehaviour.GraffitiBehaviour>(true);
+                if (graffiti == null)
+                {
+                    var go = new GameObject("GraffitiBehaviour");
+                    go.transform.SetParent(npcBehaviour.gameObject.transform, false);
+                    graffiti = go.AddComponent<S1NPCsBehaviour.GraffitiBehaviour>();
+                    go.SetActive(false);
+                }
+                graffiti.Name = "GraffitiBehaviour";
+
+                var sprayPaint = graffiti.GetComponentInChildren<S1NPCsOther.SprayPaint>(true);
+                if (sprayPaint == null)
+                {
+                    var spGo = new GameObject("SprayPaint");
+                    spGo.transform.SetParent(graffiti.transform, false);
+                    sprayPaint = spGo.AddComponent<S1NPCsOther.SprayPaint>();
+                }
+
+                var baseNpc = prefabRoot.GetComponent<S1NPCs.NPC>();
+
+                ReflectionUtils.TrySetFieldOrProperty(graffiti, "_sprayPaint", sprayPaint);
+                ReflectionUtils.TrySetFieldOrProperty(sprayPaint, "_npc", baseNpc);
+                ReflectionUtils.TrySetFieldOrProperty(sprayPaint, "_sprayPaintPrefab", sprayEquippable);
+                SetBehaviourRefs(graffiti, npcBehaviour, baseNpc);
+                var gradient = new Gradient();
+                gradient.SetKeys(
+                    new[] { new GradientColorKey(Color.red, 0f), new GradientColorKey(Color.blue, 0.5f), new GradientColorKey(Color.green, 1f) },
+                    new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 1f) });
+                ReflectionUtils.TrySetFieldOrProperty(graffiti, "_effectColorGradient", gradient);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"EnsureGraffiti failed for {ownerType?.Name ?? "Unknown"}: {ex.Message}");
+            }
+            return this;
+        }
+
+        /// <summary>
+        /// Adds drinking behaviour to the NPC. Enables equipping a drink and playing the drinking animation.
+        /// </summary>
+        /// <remarks>
+        /// Adds DrinkItem as a standalone component. Use asset paths like "Avatar/Equippables/Beer" or "Avatar/Equippables/Coffee".
+        /// </remarks>
+        /// <param name="drinkEquippablePath">Resources path. Null for default. Use <see cref="EquippablePath.Beer"/>, <see cref="EquippablePath.Coffee"/>, etc.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public NPCPrefabBuilder EnsureDrinking(string? drinkEquippablePath = null)
+        {
+            try
+            {
+                var path = drinkEquippablePath ?? "Avatar/Equippables/Beer";
+                var drinkPrefab = Resources.Load<GameObject>(path);
+                S1AvatarFramework.Equipping.AvatarEquippable drinkEquippable = null;
+                if (drinkPrefab != null)
+                    drinkEquippable = drinkPrefab.GetComponent<S1AvatarFramework.Equipping.AvatarEquippable>()
+                        ?? drinkPrefab.GetComponentInChildren<S1AvatarFramework.Equipping.AvatarEquippable>(true);
+                if (drinkEquippable == null)
+                    Logger.Warning($"EnsureDrinking: Could not load drink equippable at '{path}'.");
+
+                var npcBehaviour = prefabRoot.GetComponentInChildren<S1NPCsBehaviour.NPCBehaviour>(true);
+                if (npcBehaviour == null)
+                {
+                    var behGo = new GameObject("NPCBehaviour");
+                    behGo.transform.SetParent(EnsureScheduleManager().transform, false);
+                    npcBehaviour = behGo.AddComponent<S1NPCsBehaviour.NPCBehaviour>();
+                }
+
+                var drinkItem = npcBehaviour.GetComponentInChildren<S1NPCsOther.DrinkItem>(true);
+                if (drinkItem == null)
+                {
+                    var go = new GameObject("DrinkItem");
+                    go.transform.SetParent(npcBehaviour.transform, false);
+                    drinkItem = go.AddComponent<S1NPCsOther.DrinkItem>();
+                }
+
+                var baseNpc = prefabRoot.GetComponent<S1NPCs.NPC>();
+                ReflectionUtils.TrySetFieldOrProperty(drinkItem, "Npc", baseNpc);
+                ReflectionUtils.TrySetFieldOrProperty(drinkItem, "DrinkPrefab", drinkEquippable);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"EnsureDrinking failed for {ownerType?.Name ?? "Unknown"}: {ex.Message}");
+            }
+            return this;
+        }
+
+        /// <summary>Adds drinking behaviour. Use <see cref="EquippablePath.Beer"/>, <see cref="EquippablePath.Coffee"/>, etc.</summary>
+        public NPCPrefabBuilder EnsureDrinking(EquippablePath drinkEquippablePath) =>
+            EnsureDrinking(string.IsNullOrEmpty(drinkEquippablePath.ResourcePath) ? null : drinkEquippablePath.ResourcePath);
+
+        /// <summary>
+        /// Adds generic item holding behaviour to the NPC. Enables equipping any AvatarEquippable item.
+        /// </summary>
+        /// <remarks>
+        /// Adds HoldItem as a standalone component. Use <see cref="EquippablePath.Phone_Lowered"/>, <see cref="EquippablePath.Flashlight"/>, etc.
+        /// </remarks>
+        /// <param name="equippablePath">Resources path. Null for default. Use <see cref="EquippablePath"/> constants.</param>
+        /// <returns>The builder instance for fluent chaining.</returns>
+        public NPCPrefabBuilder EnsureItemHolding(string? equippablePath = null)
+        {
+            try
+            {
+                var path = equippablePath ?? "Avatar/Equippables/Phone_Lowered";
+                var equippablePrefab = Resources.Load<GameObject>(path);
+                S1AvatarFramework.Equipping.AvatarEquippable equippable = null;
+                if (equippablePrefab != null)
+                    equippable = equippablePrefab.GetComponent<S1AvatarFramework.Equipping.AvatarEquippable>()
+                        ?? equippablePrefab.GetComponentInChildren<S1AvatarFramework.Equipping.AvatarEquippable>(true);
+                if (equippable == null)
+                    Logger.Warning($"EnsureItemHolding: Could not load equippable at '{path}'.");
+
+                var npcBehaviour = prefabRoot.GetComponentInChildren<S1NPCsBehaviour.NPCBehaviour>(true);
+                if (npcBehaviour == null)
+                {
+                    var behGo = new GameObject("NPCBehaviour");
+                    behGo.transform.SetParent(EnsureScheduleManager().transform, false);
+                    npcBehaviour = behGo.AddComponent<S1NPCsBehaviour.NPCBehaviour>();
+                }
+
+                var holdItem = npcBehaviour.GetComponentInChildren<S1NPCsOther.HoldItem>(true);
+                if (holdItem == null)
+                {
+                    var go = new GameObject("HoldItem");
+                    go.transform.SetParent(npcBehaviour.transform, false);
+                    holdItem = go.AddComponent<S1NPCsOther.HoldItem>();
+                }
+
+                var baseNpc = prefabRoot.GetComponent<S1NPCs.NPC>();
+                ReflectionUtils.TrySetFieldOrProperty(holdItem, "Npc", baseNpc);
+                ReflectionUtils.TrySetFieldOrProperty(holdItem, "Equippable", equippable);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"EnsureItemHolding failed for {ownerType?.Name ?? "Unknown"}: {ex.Message}");
+            }
+            return this;
+        }
+
+        /// <summary>Adds item holding behaviour. Use <see cref="EquippablePath.Phone_Lowered"/>, <see cref="EquippablePath.Flashlight"/>, etc.</summary>
+        public NPCPrefabBuilder EnsureItemHolding(EquippablePath equippablePath) =>
+            EnsureItemHolding(string.IsNullOrEmpty(equippablePath.ResourcePath) ? null : equippablePath.ResourcePath);
+
+        /// <summary>
         /// Declares default inventory configuration for this NPC type. Supports startup items (always present) and random cash (varies on each sleep).
         /// </summary>
         /// <remarks>
@@ -539,18 +867,47 @@ namespace S1API.Entities
 
             var mgr = EnsureScheduleManager();
 
-            int walkTo = 0, stayInBuilding = 0, locationDialogue = 0, useVending = 0, driveToCarPark = 0, dealSignal = 0, useATM = 0;
+            int walkTo = 0, stayInBuilding = 0, locationDialogue = 0, locationBasedAction = 0, useVending = 0, driveToCarPark = 0, dealSignal = 0, useATM = 0;
+            bool requiresSmokeBreak = false, requiresGraffiti = false, requiresDrinking = false, requiresHoldItem = false;
             for (int i = 0; i < specs.Count; i++)
             {
                 var s = specs[i];
                 if (s is WalkToSpec) walkTo++;
                 else if (s is StayInBuildingSpec) stayInBuilding++;
                 else if (s is LocationDialogueSpec) locationDialogue++;
+                else if (s is LocationBasedActionSpec locationBasedSpec)
+                {
+                    locationBasedAction++;
+                    switch (locationBasedSpec.ArriveBehaviour)
+                    {
+                        case LocationArriveBehaviour.SmokeBreak:
+                            requiresSmokeBreak = true;
+                            break;
+                        case LocationArriveBehaviour.Graffiti:
+                            requiresGraffiti = true;
+                            break;
+                        case LocationArriveBehaviour.Drinking:
+                            requiresDrinking = true;
+                            break;
+                        case LocationArriveBehaviour.HoldItem:
+                            requiresHoldItem = true;
+                            break;
+                    }
+                }
                 else if (s is UseVendingMachineSpec) useVending++;
                 else if (s is DriveToCarParkSpec) driveToCarPark++;
                 else if (s is EnsureDealSignalSpec) dealSignal = Math.Max(dealSignal, 1);
                 else if (s is UseATMSpec) useATM++;
             }
+
+            if (requiresSmokeBreak)
+                EnsureSmokeBreak();
+            if (requiresGraffiti)
+                EnsureGraffiti();
+            if (requiresDrinking)
+                EnsureDrinking();
+            if (requiresHoldItem)
+                EnsureItemHolding();
 
             if (dealSignal > 0)
             {
@@ -576,6 +933,7 @@ namespace S1API.Entities
             EnsurePrefabAction<S1NPCsSchedules.NPCSignal_WalkToLocation>(walkTo, "WalkTo");
             EnsurePrefabAction<S1NPCsSchedules.NPCEvent_StayInBuilding>(stayInBuilding, "StayInBuilding");
             EnsurePrefabAction<S1NPCsSchedules.NPCEvent_LocationDialogue>(locationDialogue, "LocationDialogue");
+            EnsurePrefabAction<S1NPCsSchedules.NPCEvent_LocationBasedAction>(locationBasedAction, "LocationBasedAction");
             EnsurePrefabAction<S1NPCsSchedules.NPCSignal_UseVendingMachine>(useVending, "UseVending");
             EnsurePrefabAction<S1NPCsSchedules.NPCSignal_DriveToCarPark>(driveToCarPark, "DriveToCarPark");
             EnsurePrefabAction<S1NPCsSchedules.NPCSignal_UseATM>(useATM, "UseATM");
@@ -606,6 +964,17 @@ namespace S1API.Entities
                 go.SetActive(false);
                 comp.enabled = false;
             }
+        }
+
+        /// <summary>
+        /// Sets beh (NPCBehaviour) and ensures NPCBehaviour.Npc on Behaviour instances.
+        /// Required because prefab build may run before Awake; Enable_Server uses beh.
+        /// </summary>
+        private void SetBehaviourRefs(S1NPCsBehaviour.Behaviour behaviour, S1NPCsBehaviour.NPCBehaviour npcBehaviour, S1NPCs.NPC baseNpc)
+        {
+            if (behaviour == null || npcBehaviour == null) return;
+            ReflectionUtils.TrySetFieldOrProperty(behaviour, "beh", npcBehaviour);
+            ReflectionUtils.TrySetFieldOrProperty(npcBehaviour, "Npc", baseNpc);
         }
 
         private NPCPrefabIdentity EnsureIdentityComponent()

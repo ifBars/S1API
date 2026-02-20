@@ -76,6 +76,7 @@ using FishNet.Managing.Object;
 using FishNet.Object;
 #endif
 using MelonLoader;
+using S1API.Entities.Actions;
 using S1API.Entities.Behaviour;
 using S1API.Entities.Interfaces;
 using S1API.Entities.Schedule;
@@ -1825,6 +1826,26 @@ namespace S1API.Entities
         public CombatBehaviour CombatBehaviour => new CombatBehaviour(this);
 
         /// <summary>
+        /// Access to the smoking action for this NPC.
+        /// </summary>
+        public NPCSmoking Smoking => _smoking ?? (_smoking = new NPCSmoking(this));
+
+        /// <summary>
+        /// Access to the spray painting action for this NPC.
+        /// </summary>
+        public NPCSprayPainting SprayPainting => _sprayPainting ?? (_sprayPainting = new NPCSprayPainting(this));
+
+        /// <summary>
+        /// Access to the drinking action for this NPC.
+        /// </summary>
+        public NPCDrinking Drinking => _drinking ?? (_drinking = new NPCDrinking(this));
+
+        /// <summary>
+        /// Access to the item holding action for this NPC.
+        /// </summary>
+        public NPCItemHolding ItemHolding => _itemHolding ?? (_itemHolding = new NPCItemHolding(this));
+
+        /// <summary>
         /// Access to the dialogue system for interactive conversations and dialogue trees.
         /// </summary>
         public NPCDialogue Dialogue => _dialogue ?? (_dialogue = new NPCDialogue(this));
@@ -1916,8 +1937,14 @@ namespace S1API.Entities
         /// <summary>
         /// Sets an equippable item for the NPC.
         /// </summary>
-        /// <param name="assetPath">The asset path to the equippable item. <see cref="Misc"/> can be used here.</param>
+        /// <param name="assetPath">The asset path to the equippable item. Use <see cref="Equippables.EquippablePath"/> or <see cref="Equippables.Misc"/>.</param>
         public void SetEquippable(string assetPath) => S1NPC.SetEquippable_Return(assetPath);
+
+        /// <summary>
+        /// Sets an equippable item for the NPC using a type-safe path.
+        /// </summary>
+        /// <param name="equippablePath">Use <see cref="Equippables.EquippablePath"/> (e.g. <see cref="Equippables.EquippablePath.Phone_Lowered"/>).</param>
+        public void SetEquippable(Equippables.EquippablePath equippablePath) => SetEquippable(equippablePath.ResourcePath);
 
         /// <summary>
         /// Gets the instance of an NPC.
@@ -2727,6 +2754,10 @@ namespace S1API.Entities
         private NPCCustomer _customer;
         private NPCDealer _dealer;
         private NPCRelationship _relationship;
+        private NPCSmoking _smoking;
+        private NPCSprayPainting _sprayPainting;
+        private NPCDrinking _drinking;
+        private NPCItemHolding _itemHolding;
         private bool _wasLoadedFromSave;
         private S1Relation.NPCRelationData.EUnlockType? _loadedUnlockType;
         private bool _relationshipDataAppliedFromPrefab;
@@ -2829,7 +2860,9 @@ namespace S1API.Entities
                 try
                 {
                     var t = GetType();
-                    if (TypeToSchedulePlan.TryGetValue(t, out var planned) && planned != null && planned.Count > 0)
+                    bool hasPlan = TypeToSchedulePlan.TryGetValue(t, out var planned) && planned != null && planned.Count > 0;
+                    Logger.Msg($"[SmokeBreakTrace] FinalizeNetworkSpawn: type={t?.Name ?? "null"}, hasPlan={hasPlan}, planCount={planned?.Count ?? 0}");
+                    if (hasPlan)
                     {
                         for (int i = 0; i < planned.Count; i++)
                         {
