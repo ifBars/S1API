@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
     <!-- Imports the standard GitHub build properties. -->
     <Import Project="../github.build.props" Condition="Exists('../github.build.props')" />
 
@@ -14,10 +14,7 @@
     </PropertyGroup>
     
     <ItemGroup>
-        <Reference Include="0Harmony">
-            <HintPath>$(MelonLoaderAssembliesPath)\0Harmony.dll</HintPath>
-        </Reference>
-      <PackageReference Include="LavaGang.MelonLoader" Version="0.7.0" />
+        <PackageReference Include="LavaGang.MelonLoader" Version="0.7.0" />
     </ItemGroup>
 
     <Target Name="PostBuildIl2Cpp" AfterTargets="Build" Condition=" '$(AutomateLocalDeployment)' == 'true' and '$(Configuration)' == 'Il2CppMelon' ">

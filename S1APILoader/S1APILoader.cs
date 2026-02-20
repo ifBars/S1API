@@ -16,8 +16,7 @@ namespace S1APILoader
         private const int InteropFixRevision = 1;
         private const string InteropMarkerFileName = "S1API.InteropFix.marker";
         private static bool _earlyInteropFixAttempted;
-        private static bool _il2CppAssemblyResolverInstalled;
-        
+
         public override void OnApplicationEarlyStart()
         {
             TryApplyEarlyIl2CppInteropFix();
@@ -25,27 +24,29 @@ namespace S1APILoader
             string? pluginsFolder = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             if (pluginsFolder == null)
                 throw new Exception("Failed to identify plugins folder.");
-            
+
             string modsFolder = Path.GetFullPath(Path.Combine(pluginsFolder, "../Mods"));
             string s1apiPluginsFolder = Path.Combine(pluginsFolder, BuildFolderName);
 
             string activeBuild = MelonUtils.IsGameIl2Cpp() ? "Il2Cpp" : "Mono";
             string inactiveBuild = !MelonUtils.IsGameIl2Cpp() ? "Il2Cpp" : "Mono";
-            
+
             MelonLogger.Msg($"Loading S1API for {activeBuild}...");
-            
+
             // Normalize both builds in Mods folder: keep exactly one file per build
             // - Active build: keep enabled dll (newest by assembly version or write time)
             // - Inactive build: keep disabled dll (newest by assembly version or write time)
-            NormalizeBuild(modsFolder, activeBuild, shouldBeEnabled: true, fileNamePattern: "S1API.{0}.MelonLoader.dll");
-            NormalizeBuild(modsFolder, inactiveBuild, shouldBeEnabled: false, fileNamePattern: "S1API.{0}.MelonLoader.dll");
-            
+            NormalizeBuild(modsFolder, activeBuild, shouldBeEnabled: true,
+                fileNamePattern: "S1API.{0}.MelonLoader.dll");
+            NormalizeBuild(modsFolder, inactiveBuild, shouldBeEnabled: false,
+                fileNamePattern: "S1API.{0}.MelonLoader.dll");
+
             // Normalize both builds in Plugins/S1API folder: keep exactly one file per build
             // - Active build: keep enabled dll (newest by assembly version or write time)
             // - Inactive build: keep disabled dll (newest by assembly version or write time)
             NormalizeBuild(s1apiPluginsFolder, activeBuild, shouldBeEnabled: true, fileNamePattern: "S1API.{0}.dll");
             NormalizeBuild(s1apiPluginsFolder, inactiveBuild, shouldBeEnabled: false, fileNamePattern: "S1API.{0}.dll");
-            
+
             MelonLogger.Msg($"Successfully loaded S1API for {activeBuild}!");
         }
 
@@ -60,15 +61,14 @@ namespace S1APILoader
                 return;
 
             string? melonVersion = GetMelonLoaderVersion();
-            if (string.IsNullOrEmpty(melonVersion) || !melonVersion.StartsWith(ProblematicMelonVersion, StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrEmpty(melonVersion) ||
+                !melonVersion.StartsWith(ProblematicMelonVersion, StringComparison.OrdinalIgnoreCase))
                 return;
 
             MelonLogger.Warning("[S1APILoader] MelonLoader 0.7.1 detected. Applying early Il2CppInterop workaround...");
-            
-            TryForceAssemblyRegenerationIfNeeded(melonVersion);
-            
-            RegisterIl2CppAssemblyResolveFallback();
+            RegisterAssemblyResolveFallback();
             InstallIl2CppInteropFixes();
+            TryForceAssemblyRegenerationIfNeeded(melonVersion);
         }
 
         private static string? GetMelonLoaderVersion()
@@ -77,7 +77,8 @@ namespace S1APILoader
             {
                 Assembly melonAssembly = typeof(MelonPlugin).Assembly;
                 Type? buildInfoType = melonAssembly.GetType("MelonLoader.Properties.BuildInfo");
-                PropertyInfo? versionProp = buildInfoType?.GetProperty("VersionNumber", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                PropertyInfo? versionProp = buildInfoType?.GetProperty("VersionNumber",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
                 object? value = versionProp?.GetValue(null);
                 if (value != null)
                     return value.ToString();
@@ -93,13 +94,35 @@ namespace S1APILoader
             return null;
         }
 
+        /// <summary>
+        /// When Assembly.Load("Il2CppAssembly-CSharp") fails, the CLR fires AssemblyResolve.
+        /// We return the already-loaded "Assembly-CSharp" from GetAssemblies() - we never call Assembly.Load.
+        /// </summary>
+        private static void RegisterAssemblyResolveFallback()
+        {
+            AppDomain.CurrentDomain.AssemblyResolve += (_, args) =>
+            {
+                string? requestedName = new AssemblyName(args.Name).Name;
+                if (string.IsNullOrEmpty(requestedName) || !requestedName.StartsWith("Il2Cpp", StringComparison.Ordinal))
+                    return null;
+
+                string strippedName = requestedName.Substring("Il2Cpp".Length);
+                if (string.IsNullOrEmpty(strippedName))
+                    return null;
+
+                return AppDomain.CurrentDomain.GetAssemblies()
+                    .FirstOrDefault(a => string.Equals(a.GetName().Name, strippedName, StringComparison.OrdinalIgnoreCase));
+            };
+        }
+
         private static void InstallIl2CppInteropFixes()
         {
             try
             {
                 Assembly melonAssembly = typeof(MelonPlugin).Assembly;
                 Type? fixesType = melonAssembly.GetType("MelonLoader.Fixes.Il2CppInteropFixes");
-                MethodInfo? installMethod = fixesType?.GetMethod("Install", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo? installMethod =
+                    fixesType?.GetMethod("Install", BindingFlags.NonPublic | BindingFlags.Static);
                 if (installMethod == null)
                 {
                     MelonLogger.Warning("[S1APILoader] Could not find Il2CppInteropFixes.Install().");
@@ -120,7 +143,7 @@ namespace S1APILoader
             try
             {
                 string markerPath = GetInteropMarkerPath();
-                
+
                 if (IsMarkerValid(markerPath, melonVersion))
                 {
                     MelonLogger.Msg("[S1APILoader] Interop fix marker found. Skipping assembly regeneration.");
@@ -129,13 +152,14 @@ namespace S1APILoader
 
                 if (!HasPreGeneratedIl2CppAssemblies())
                 {
-                    MelonLogger.Msg("[S1APILoader] No pre-generated Il2Cpp assemblies found. MelonLoader will generate them normally.");
+                    MelonLogger.Msg(
+                        "[S1APILoader] No pre-generated Il2Cpp assemblies found. MelonLoader will generate them normally.");
                     WriteMarker(markerPath, melonVersion);
                     return;
                 }
 
                 MelonLogger.Warning("[S1APILoader] Pre-generated Il2Cpp assemblies detected. Forcing regeneration...");
-                
+
                 if (ForceRunIl2CppAssemblyGenerator())
                 {
                     WriteMarker(markerPath, melonVersion);
@@ -143,7 +167,8 @@ namespace S1APILoader
                 }
                 else
                 {
-                    MelonLogger.Warning("[S1APILoader] Il2Cpp assembly regeneration may have failed. Will retry on next launch.");
+                    MelonLogger.Warning(
+                        "[S1APILoader] Il2Cpp assembly regeneration may have failed. Will retry on next launch.");
                 }
             }
             catch (Exception ex)
@@ -157,7 +182,7 @@ namespace S1APILoader
             string userDataDir = MelonEnvironment.UserDataDirectory;
             if (!Directory.Exists(userDataDir))
                 Directory.CreateDirectory(userDataDir);
-            
+
             return Path.Combine(userDataDir, InteropMarkerFileName);
         }
 
@@ -204,7 +229,8 @@ namespace S1APILoader
         {
             try
             {
-                string content = $"melonloader={melonVersion}{Environment.NewLine}fixrevision={InteropFixRevision}{Environment.NewLine}timestamp={DateTime.UtcNow:O}";
+                string content =
+                    $"melonloader={melonVersion}{Environment.NewLine}fixrevision={InteropFixRevision}{Environment.NewLine}timestamp={DateTime.UtcNow:O}";
                 File.WriteAllText(markerPath, content);
             }
             catch (Exception ex)
@@ -221,7 +247,8 @@ namespace S1APILoader
                 if (!Directory.Exists(il2cppAssembliesDir))
                     return false;
 
-                string[] dllFiles = Directory.GetFiles(il2cppAssembliesDir, "Il2Cpp*.dll", SearchOption.TopDirectoryOnly);
+                string[] dllFiles =
+                    Directory.GetFiles(il2cppAssembliesDir, "Il2Cpp*.dll", SearchOption.TopDirectoryOnly);
                 return dllFiles.Length > 0;
             }
             catch
@@ -232,119 +259,52 @@ namespace S1APILoader
 
         private static bool ForceRunIl2CppAssemblyGenerator()
         {
+            Assembly melonAssembly = typeof(MelonPlugin).Assembly;
+
             try
             {
-                Assembly melonAssembly = typeof(MelonPlugin).Assembly;
+                Type? loaderConfigType = melonAssembly.GetType("MelonLoader.LoaderConfig");
+                PropertyInfo? currentProp =
+                    loaderConfigType?.GetProperty("Current", BindingFlags.Public | BindingFlags.Static);
+                object? configCurrent = currentProp?.GetValue(null);
 
-                try
+                if (configCurrent != null)
                 {
-                    Type? loaderConfigType = melonAssembly.GetType("MelonLoader.LoaderConfig");
-                    PropertyInfo? currentProp = loaderConfigType?.GetProperty("Current", BindingFlags.Public | BindingFlags.Static);
-                    object? configCurrent = currentProp?.GetValue(null);
+                    PropertyInfo? unityEngineProp = configCurrent.GetType()
+                        .GetProperty("UnityEngine", BindingFlags.Public | BindingFlags.Instance);
+                    object? unityEngineConfig = unityEngineProp?.GetValue(configCurrent);
 
-                    if (configCurrent != null)
+                    if (unityEngineConfig != null)
                     {
-                        PropertyInfo? unityEngineProp = configCurrent.GetType().GetProperty("UnityEngine", BindingFlags.Public | BindingFlags.Instance);
-                        object? unityEngineConfig = unityEngineProp?.GetValue(configCurrent);
-
-                        if (unityEngineConfig != null)
+                        PropertyInfo? forceRegenProp = unityEngineConfig.GetType()
+                            .GetProperty("ForceRegeneration", BindingFlags.Public | BindingFlags.Instance);
+                        if (forceRegenProp != null && forceRegenProp.CanWrite)
                         {
-                            PropertyInfo? forceRegenProp = unityEngineConfig.GetType().GetProperty("ForceRegeneration", BindingFlags.Public | BindingFlags.Instance);
-                            if (forceRegenProp != null && forceRegenProp.CanWrite)
-                            {
-                                forceRegenProp.SetValue(unityEngineConfig, true);
-                                MelonLogger.Msg("[S1APILoader] Set LoaderConfig.Current.UnityEngine.ForceRegeneration=true");
-                            }
-                            else
-                            {
-                                MelonLogger.Warning("[S1APILoader] ForceRegeneration property is read-only or not found.");
-                            }
+                            forceRegenProp.SetValue(unityEngineConfig, true);
+                            MelonLogger.Msg(
+                                "[S1APILoader] Set LoaderConfig.Current.UnityEngine.ForceRegeneration=true");
                         }
                         else
                         {
-                            MelonLogger.Warning("[S1APILoader] UnityEngine config is null.");
+                            MelonLogger.Warning("[S1APILoader] ForceRegeneration property is read-only or not found.");
                         }
                     }
                     else
                     {
-                        MelonLogger.Warning("[S1APILoader] LoaderConfig.Current is null.");
+                        MelonLogger.Warning("[S1APILoader] UnityEngine config is null.");
                     }
                 }
-                catch (Exception ex)
+                else
                 {
-                    MelonLogger.Warning($"[S1APILoader] Error setting ForceRegeneration via LoaderConfig: {ex.Message}");
+                    MelonLogger.Warning("[S1APILoader] LoaderConfig.Current is null.");
                 }
-
-                Type? genType = melonAssembly.GetType("MelonLoader.InternalUtils.Il2CppAssemblyGenerator");
-                if (genType == null)
-                {
-                    MelonLogger.Warning("[S1APILoader] Could not find Il2CppAssemblyGenerator type.");
-                    return false;
-                }
-
-                MethodInfo? runMethod = genType.GetMethod(
-                    "Run",
-                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
-                    null,
-                    Type.EmptyTypes,
-                    null);
-
-                if (runMethod == null)
-                {
-                    MelonLogger.Warning("[S1APILoader] Could not find Il2CppAssemblyGenerator.Run() method.");
-                    return false;
-                }
-
-                object? result = runMethod.Invoke(null, null);
-
-                return result switch
-                {
-                    bool b => b,
-                    int i => i == 0,
-                    null => true,
-                    _ => true
-                };
             }
             catch (Exception ex)
             {
-                MelonLogger.Warning($"[S1APILoader] Failed to invoke Il2CppAssemblyGenerator.Run(): {ex.Message}");
-                return false;
-            }
-        }
-
-        private static void RegisterIl2CppAssemblyResolveFallback()
-        {
-            if (_il2CppAssemblyResolverInstalled)
-                return;
-
-            AppDomain.CurrentDomain.AssemblyResolve += ResolveIl2CppAssemblyFallback;
-            _il2CppAssemblyResolverInstalled = true;
-        }
-
-        private static Assembly? ResolveIl2CppAssemblyFallback(object sender, ResolveEventArgs args)
-        {
-            try
-            {
-                string? requestedName = new AssemblyName(args.Name).Name;
-                if (string.IsNullOrEmpty(requestedName) || !requestedName.StartsWith("Il2Cpp", StringComparison.Ordinal))
-                    return null;
-
-                string strippedName = requestedName.Substring("Il2Cpp".Length);
-                if (string.IsNullOrEmpty(strippedName))
-                    return null;
-
-                Assembly? loadedAssembly = AppDomain.CurrentDomain.GetAssemblies()
-                    .FirstOrDefault(a => string.Equals(a.GetName().Name, strippedName, StringComparison.OrdinalIgnoreCase));
-                if (loadedAssembly != null)
-                    return loadedAssembly;
-
-                return Assembly.Load(new AssemblyName(strippedName));
-            }
-            catch
-            {
+                MelonLogger.Warning($"[S1APILoader] Error setting ForceRegeneration via LoaderConfig: {ex.Message}");
             }
 
-            return null;
+            return true;
         }
 
         private static void NormalizeBuild(string folder, string build, bool shouldBeEnabled, string fileNamePattern)
@@ -410,7 +370,7 @@ namespace S1APILoader
                     SafeDelete(disabledPath);
                     // Move the enabled file to disabled
                     bool moveSucceeded = SafeMoveReplace(enabledPath, disabledPath);
-                    
+
                     // Verify the disable operation succeeded
                     if (!moveSucceeded || File.Exists(enabledPath))
                     {
@@ -495,7 +455,8 @@ namespace S1APILoader
                 }
                 catch
                 {
-                    MelonLogger.Warning($"Copied '{sourcePath}' to '{destinationPath}' but could not delete source. You may need to manually delete it.");
+                    MelonLogger.Warning(
+                        $"Copied '{sourcePath}' to '{destinationPath}' but could not delete source. You may need to manually delete it.");
                 }
             }
             catch (Exception ex)
