@@ -5,7 +5,7 @@ using System.Reflection;
 using MelonLoader;
 using MelonLoader.Utils;
 
-[assembly: MelonInfo(typeof(S1APILoader.S1APILoader), "S1APILoader", "2.4.4", "KaBooMa")]
+[assembly: MelonInfo(typeof(S1APILoader.S1APILoader), "S1APILoader", "2.5.0", "KaBooMa & Bars")]
 
 namespace S1APILoader
 {
