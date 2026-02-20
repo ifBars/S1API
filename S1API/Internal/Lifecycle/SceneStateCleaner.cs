@@ -103,6 +103,9 @@ namespace S1API.Internal.Lifecycle
                 }
                 else
                 {
+                    // Refresh loading screen patch state (e.g. _hasCustomNpcTypes) before load completes
+                    LoadingScreenPatches.ResetState();
+
                     // Notify NPC bootstrap for readiness and prefab pre-registration
                     try
                     {

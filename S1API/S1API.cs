@@ -5,7 +5,7 @@ using S1API.Internal.Lifecycle;
 using S1API.Lifecycle;
 using S1API.Map;
 
-[assembly: MelonInfo(typeof(S1API.S1API), "S1API (Forked by Bars)", "2.9.7", "KaBooMa")]
+[assembly: MelonInfo(typeof(S1API.S1API), "S1API (Forked by Bars)", "2.9.8", "KaBooMa")]
 [assembly: MelonPriority(Int32.MinValue)]
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 namespace S1API
@@ -15,6 +15,11 @@ namespace S1API
     /// </summary>
     public class S1API : MelonMod
     {
+        public override void OnInitializeMelon()
+        {
+            S1APIPreferences.Initialize();
+        }
+
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)
         {
             if (sceneName == "Main")

@@ -16,6 +16,7 @@ using S1API.Entities;
 using S1API.Internal.Utils;
 using S1API.Logging;
 using System.Collections;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -30,6 +31,7 @@ namespace S1API.Internal.Patches
     {
         private static readonly Log Logger = new Log("LoadingScreenPatches");
         private static bool _isWaitingForMugshots = false;
+        private static bool _hasCustomNpcTypes = false;
 
         /// <summary>
         /// Patch GetLoadStatusText to return our custom text when waiting for mugshots
@@ -53,16 +55,22 @@ namespace S1API.Internal.Patches
         {
             if (!IsGameLoading())
                 return true;
-            
+
+            if (!S1APIPreferences.EnableMugshotLoadingScreen.Value)
+                return true;
+
+            if (!_hasCustomNpcTypes)
+                return true;
+
             if (NPCAppearance.MugshotsProcessingComplete)
                 return true;
-            
+
             if (_isWaitingForMugshots)
                 return false;
-            
+
             _isWaitingForMugshots = true;
             MelonCoroutines.Start(WaitForMugshotsThenClose(__instance));
-            
+
             return false;
         }
 
@@ -205,6 +213,8 @@ namespace S1API.Internal.Patches
         internal static void ResetState()
         {
             _isWaitingForMugshots = false;
+            _hasCustomNpcTypes = ReflectionUtils.GetDerivedClasses<NPC>()
+                .Any(t => t != null && !t.IsAbstract && t.Assembly != typeof(NPC).Assembly);
         }
     }
 }
