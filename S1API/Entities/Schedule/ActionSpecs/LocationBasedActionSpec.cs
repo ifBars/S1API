@@ -111,16 +111,11 @@ namespace S1API.Entities.Schedule
 
         void IScheduleActionSpec.ApplyTo(NPCSchedule schedule)
         {
-            Logger.Msg($"[SmokeBreakTrace] ApplyTo called for LocationBasedActionSpec (StartTime={StartTime}, ArriveBehaviour={ArriveBehaviour}, NPC={schedule?.NPC?.S1NPC?.name ?? "null"})");
-
             var action = schedule.AddActionInternal<S1NPCsSchedules.NPCEvent_LocationBasedAction>(
                 StartTime,
                 string.IsNullOrEmpty(Name) ? "LocationBasedAction" : Name);
             if (action == null)
-            {
-                Logger.Warning("[SmokeBreakTrace] ApplyTo: AddActionInternal returned null - no pre-created NPCEvent_LocationBasedAction on prefab.");
                 return;
-            }
 
             Vector3 markerPosition = Destination;
             NavMeshHit navHit;
@@ -135,10 +130,7 @@ namespace S1API.Entities.Schedule
                 markerPosition);
 
             if (destinationTransform == null)
-            {
-                Logger.Warning("[SmokeBreakTrace] ApplyTo: CreateDestinationMarker returned null.");
                 return;
-            }
 
             action.Destination = destinationTransform;
             action.FaceDestinationDir = FaceDestinationDirection;
@@ -154,7 +146,6 @@ namespace S1API.Entities.Schedule
             switch (ArriveBehaviour)
             {
                 case LocationArriveBehaviour.SmokeBreak:
-                    Logger.Msg("[SmokeBreakTrace] ApplyTo: Adding onStartAction/onEndAction listeners for SmokeBreak.");
                     EventHelper.AddListener(() => ToggleSmoking(schedule, true), action.onStartAction);
                     EventHelper.AddListener(() => ToggleSmoking(schedule, false), action.onEndAction);
                     break;
@@ -195,20 +186,13 @@ namespace S1API.Entities.Schedule
                 return false;
 
             var baseNpc = schedule.NPC.S1NPC;
-            Logger.Msg($"[SmokeBreakTrace] Step 3: Resolving behaviour '{behaviourName}' for NPC '{baseNpc?.name ?? "null"}' (enable={enabled})");
             var npcBehaviour = baseNpc.GetComponentInChildren<S1NPCsBehaviour.NPCBehaviour>(true);
             if (npcBehaviour == null)
-            {
-                Logger.Warning("[SmokeBreakTrace] Step 3 failed: NPCBehaviour component not found.");
                 return false;
-            }
 
             var behaviour = npcBehaviour.GetBehaviour(behaviourName);
             if (behaviour == null)
-            {
-                Logger.Warning($"[SmokeBreakTrace] Step 4 failed: '{behaviourName}' not found on NPCBehaviour.");
                 return false;
-            }
 
             ReflectionUtils.TrySetFieldOrProperty(npcBehaviour, "Npc", baseNpc);
             if (ReflectionUtils.TryGetFieldOrProperty(behaviour, "beh") == null)
@@ -219,7 +203,6 @@ namespace S1API.Entities.Schedule
 
             if (enabled)
             {
-                Logger.Msg($"[SmokeBreakTrace] Step 5: Enabling and activating '{behaviourName}' (index={index}) via networked call.");
                 if (behaviour.gameObject != null && !behaviour.gameObject.activeSelf)
                     behaviour.gameObject.SetActive(true);
                 behaviour.Enable_Networked();
@@ -228,62 +211,35 @@ namespace S1API.Entities.Schedule
             }
             else
             {
-                Logger.Msg($"[SmokeBreakTrace] Step 5: Deactivating and disabling '{behaviourName}' (index={index}) via networked call.");
                 if (index >= 0)
                     npcBehaviour.DeactivateBehaviour_Server(index);
                 behaviour.Disable_Networked(null);
             }
-
-            Logger.Msg("[SmokeBreakTrace] Step 6: Behaviour toggle invoked successfully.");
 
             return true;
         }
 
         private static void ToggleSmoking(NPCSchedule schedule, bool enabled)
         {
-            Logger.Msg($"[SmokeBreakTrace] Step 1: ToggleSmoking invoked (enable={enabled}).");
-
             if (!IsServer())
-            {
-                Logger.Warning("[SmokeBreakTrace] Step 1 failed: Not running on server, skipping smoke toggle.");
                 return;
-            }
 
             if (schedule?.NPC?.S1NPC == null)
-            {
-                Logger.Warning("[SmokeBreakTrace] Step 2 failed: schedule/NPC/S1NPC is null.");
                 return;
-            }
-
-            Logger.Msg($"[SmokeBreakTrace] Step 2: Server + NPC resolved ('{schedule.NPC.S1NPC.name}').");
 
             // Prefer the full SmokeBreakBehaviour path so modders can use its debug logs.
             if (ToggleBehaviourByName(schedule, "SmokeBreakBehaviour", enabled))
-            {
-                Logger.Msg("[SmokeBreakTrace] Step 7: Routed through SmokeBreakBehaviour.");
                 return;
-            }
-
-            Logger.Warning("[SmokeBreakTrace] Step 7 fallback: SmokeBreakBehaviour route failed, trying NPC.Smoking wrapper.");
 
             // Fallback: use API action wrapper (which resolves SmokeCigarette internally).
             var smoking = schedule.NPC.Smoking;
             if (smoking == null)
-            {
-                Logger.Warning("[SmokeBreakTrace] Step 8 failed: NPC.Smoking wrapper is null.");
                 return;
-            }
 
             if (enabled)
-            {
-                Logger.Msg("[SmokeBreakTrace] Step 8: Calling NPC.Smoking.Begin().");
                 smoking.Begin();
-            }
             else
-            {
-                Logger.Msg("[SmokeBreakTrace] Step 8: Calling NPC.Smoking.End().");
                 smoking.End();
-            }
         }
 
         private static void ToggleGraffiti(LocationBasedActionSpec spec, NPCSchedule schedule, Vector3 destinationPosition, bool enabled)

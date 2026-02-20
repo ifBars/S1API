@@ -153,6 +153,62 @@ builder.WithCustomerDefaults(cd => {
 - `WithAffinities(affinities)`: Product type preferences
 - `WithPreferredProperties(properties)`: Property preferences
 
+### EnsureSmokeBreak
+
+Adds the `SmokeBreakBehaviour` component to the NPC. Required before using `.OnArriveSmokeBreak()` in a schedule.
+
+```csharp
+// Default cigarette prefab
+builder.EnsureSmokeBreak();
+
+// With verbose debug logging (useful during development)
+builder.EnsureSmokeBreak(debugMode: true);
+
+// Custom cigarette equippable path
+builder.EnsureSmokeBreak(cigarettePrefabPath: "MyMod/Cigarette_Lit");
+```
+
+### EnsureGraffiti
+
+Adds the `GraffitiBehaviour` component to the NPC. Required before using `.OnArriveGraffiti()` in a schedule.
+
+```csharp
+// Default spray paint equippable
+builder.EnsureGraffiti();
+
+// Explicit spray paint equippable
+builder.EnsureGraffiti(EquippablePath.SprayPaint);
+
+// Custom equippable
+builder.EnsureGraffiti(EquippablePath.Custom("MyMod/SprayPaint_AvatarEquippable"));
+```
+
+### EnsureDrinking
+
+Adds the `DrinkItem` component to the NPC. Required before using `.OnArriveDrinking()` in a schedule. The equippable passed here is the prefab-level default; individual schedule slots can override it with `.WithDrink(...)`.
+
+```csharp
+// Default (Beer)
+builder.EnsureDrinking();
+
+// Prefab-level default drink
+builder.EnsureDrinking(EquippablePath.Coffee);
+```
+
+### EnsureItemHolding
+
+Adds the `HoldItem` component to the NPC. Required before using `.OnArriveHoldItem()` in a schedule. The equippable passed here is the prefab-level default; individual schedule slots can override it with `.WithItem(...)`.
+
+```csharp
+// Default (Phone_Lowered)
+builder.EnsureItemHolding();
+
+// Prefab-level default item
+builder.EnsureItemHolding(EquippablePath.Flashlight);
+```
+
+> See **[Location-Based Actions](location-based-actions.md)** for a complete guide on all four behaviours, the `EquippablePath` constants, and example schedules.
+
 ### WithRelationshipDefaults
 
 Configures relationship parameters using the `NPCRelationshipDataBuilder`.
@@ -529,5 +585,6 @@ Now that you understand prefab configuration, explore:
 
 - **[Appearance Customization](appearance-customization.md)** - Visual customization
 - **[Scheduling System](scheduling-system.md)** - Detailed schedule management
+- **[Location-Based Actions](location-based-actions.md)** - SmokeBreak, Graffiti, Drinking, and HoldItem actions
 - **[Customer Behavior](customer-behavior.md)** - Customer system details
 - **[Relationship Management](relationship-management.md)** - Relationship system

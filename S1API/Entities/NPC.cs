@@ -2861,7 +2861,6 @@ namespace S1API.Entities
                 {
                     var t = GetType();
                     bool hasPlan = TypeToSchedulePlan.TryGetValue(t, out var planned) && planned != null && planned.Count > 0;
-                    Logger.Msg($"[SmokeBreakTrace] FinalizeNetworkSpawn: type={t?.Name ?? "null"}, hasPlan={hasPlan}, planCount={planned?.Count ?? 0}");
                     if (hasPlan)
                     {
                         for (int i = 0; i < planned.Count; i++)

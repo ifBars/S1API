@@ -16,7 +16,7 @@ Create custom NPCs with behaviors, schedules, dialogue, and AI.
 - `NPCCustomer` - Customer behavior
 - `Dealer` - Dealer functionality
 
-**Documentation**: [Custom NPCs](custom-npcs.md) | [Dealer System](dealer-system.md)
+**Documentation**: [Custom NPCs](custom-npcs.md) | [Dealer System](dealer-system.md) | [Scheduling System](scheduling-system.md) | [Location-Based Actions](location-based-actions.md)
 
 ---
 

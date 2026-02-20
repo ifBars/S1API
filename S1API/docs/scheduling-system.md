@@ -206,6 +206,55 @@ plan.EnsureDealSignal();
 - Enables customer behavior
 - Required for customer NPCs
 
+### LocationBased
+
+Walk to a destination and perform an activity on arrival (smoke break, graffiti, drinking, or item holding). This is a **sub-builder** — chain modifier methods then close with an `OnArrive*()` terminal:
+
+```csharp
+plan.LocationBased(destination, startTime, durationMinutes)
+    .Within(1.5f)
+    .Named("MorningSmoke")
+    .OnArriveSmokeBreak();
+```
+
+**Terminals:**
+
+| Terminal | Behaviour |
+|---|---|
+| `.OnArriveSmokeBreak()` | NPC smokes a cigarette |
+| `.OnArriveGraffiti()` | NPC spray-paints a surface |
+| `.OnArriveDrinking()` | NPC drinks a beverage |
+| `.OnArriveHoldItem()` | NPC holds an equippable item |
+| `.OnArriveNone()` | NPC stands idle |
+
+**Behaviour-specific parameters (chain before the terminal):**
+
+```csharp
+// Graffiti — pick a surface in a region
+.WithSpraySurfaceInRegion(Region.Northtown)
+
+// Graffiti — target a specific surface
+.WithSpraySurface(mySurface)           // SpraySurface object
+.WithSpraySurface(new Guid("..."))     // by GUID
+
+// Drinking — override the drink equippable for this slot
+.WithDrink(EquippablePath.Coffee)
+
+// HoldItem — override the held item for this slot
+.WithItem(EquippablePath.Phone_Lowered)
+```
+
+**Required prefab setup** — call the matching `Ensure*` method in `ConfigurePrefab`:
+
+```csharp
+builder.EnsureSmokeBreak()
+       .EnsureGraffiti()
+       .EnsureDrinking()
+       .EnsureItemHolding();
+```
+
+> For the full reference, including the `EquippablePath` constant table and a complete day schedule example, see **[Location-Based Actions](location-based-actions.md)**.
+
 ### SitAtSeatSet
 
 Seat the NPC at a configured seating area:
@@ -578,6 +627,7 @@ For complete schedules (including vending machines, buildings, spec objects, and
 
 Now that you understand the scheduling system, explore:
 
+- **[Location-Based Actions](location-based-actions.md)** - Full reference for SmokeBreak, Graffiti, Drinking, and HoldItem actions with `EquippablePath`
 - **[Dialogue System](dialogue-system.md)** - Interactive conversations
 - **[Customer Behavior](customer-behavior.md)** - Customer system details
 - **[Runtime Management](runtime-management.md)** - NPC lifecycle and properties

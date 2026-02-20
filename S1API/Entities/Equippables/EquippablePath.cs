@@ -1,14 +1,23 @@
 namespace S1API.Entities.Equippables
 {
     /// <summary>
-    /// Type-safe wrapper for AvatarEquippable Resources paths. Use predefined values or <see cref="Custom"/> for mod items.
+    /// Type-safe wrapper for AvatarEquippable Resources paths.
+    /// Use predefined static values (e.g. <see cref="Phone_Lowered"/>, <see cref="Beer"/>, <see cref="Flashlight"/>)
+    /// or <see cref="Custom"/> for mod-specific items.
     /// </summary>
     /// <remarks>
-    /// Pass to <see cref="Entities.Schedule.LocationBasedActionSpecBuilder.WithItem"/>,
-    /// <see cref="Entities.Schedule.LocationBasedActionSpecBuilder.WithDrink"/>,
-    /// <see cref="NPCPrefabBuilder.EnsureItemHolding"/>,
-    /// <see cref="NPCPrefabBuilder.EnsureDrinking"/>,
-    /// and <see cref="NPCPrefabBuilder.EnsureGraffiti"/>.
+    /// <para>Pass to schedule action builders:</para>
+    /// <list type="bullet">
+    ///   <item><see cref="Entities.Schedule.LocationBasedActionSpecBuilder.WithItem"/> — item to hold on arrival</item>
+    ///   <item><see cref="Entities.Schedule.LocationBasedActionSpecBuilder.WithDrink"/> — drink to use on arrival</item>
+    /// </list>
+    /// <para>Pass to prefab builder methods:</para>
+    /// <list type="bullet">
+    ///   <item><see cref="NPCPrefabBuilder.EnsureItemHolding(EquippablePath)"/> — prefab-level default held item</item>
+    ///   <item><see cref="NPCPrefabBuilder.EnsureDrinking(EquippablePath)"/> — prefab-level default drink</item>
+    ///   <item><see cref="NPCPrefabBuilder.EnsureGraffiti(EquippablePath)"/> — spray paint equippable</item>
+    /// </list>
+    /// <para>Strings are implicitly converted to <see cref="EquippablePath"/>, so raw string paths continue to work.</para>
     /// </remarks>
     public readonly struct EquippablePath
     {
