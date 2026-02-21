@@ -706,7 +706,13 @@ namespace S1API.Entities
             }
             catch (Exception ex)
             {
-                Logger.Warning($"[S1API] Failed to pre-register NPC prefab for {npcType?.Name}: {ex.Message}");
+                // Unwrap TargetInvocationException (from reflection) to reveal the actual cause
+                var inner = ex is System.Reflection.TargetInvocationException tie ? tie.InnerException : ex;
+                var msg = inner?.Message ?? ex.Message;
+                var trace = inner?.StackTrace ?? ex.StackTrace;
+                Logger.Warning($"[S1API] Failed to pre-register NPC prefab for {npcType?.Name}: {msg}");
+                if (!string.IsNullOrEmpty(trace))
+                    Logger.Warning($"[S1API] Stack trace: {trace}");
             }
         }
 
