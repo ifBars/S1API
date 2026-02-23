@@ -310,7 +310,7 @@ namespace S1API.UI
             GameObject go = new GameObject(name);
             go.transform.SetParent(parent, false);
             var rt = go.AddComponent<RectTransform>();
-            rt.sizeDelta = new Vector2(Height, Width);
+            rt.sizeDelta = new Vector2(Width, Height);
 
             var img = go.AddComponent<Image>();
             img.color = bgColor;
