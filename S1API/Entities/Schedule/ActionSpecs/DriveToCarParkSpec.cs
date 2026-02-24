@@ -20,6 +20,7 @@ using System.Reflection;
 using UnityEngine;
 using S1API.Map;
 using S1API.Vehicles;
+using S1API.Logging;
 using S1API.Internal.Utils;
 
 namespace S1API.Entities.Schedule
@@ -34,6 +35,8 @@ namespace S1API.Entities.Schedule
     /// </remarks>
     public sealed class DriveToCarParkSpec : IScheduleActionSpec
     {
+        private static readonly Log Logger = new Log("DriveToCarParkSpec");
+
         /// <summary>
         /// Gets or sets the time when this action should start, in minutes from midnight.
         /// </summary>
@@ -177,22 +180,40 @@ namespace S1API.Entities.Schedule
             {
                 // Resolve lot
                 object lotObj = null;
+                S1Map.ParkingLot gameLot = null;
                 if (ParkingLot != null)
                 {
-                    lotObj = ParkingLot.ResolveGameLot();
+                    gameLot = ParkingLot.ResolveGameLot();
+                    lotObj = gameLot;
                 }
                 else if (!string.IsNullOrEmpty(ParkingLotName))
                 {
                     var lotWrap = ParkingLotRegistry.GetByName(ParkingLotName);
-                    lotObj = lotWrap?.ResolveGameLot();
+                    gameLot = lotWrap?.ResolveGameLot();
+                    lotObj = gameLot;
                 }
                 else if (!string.IsNullOrEmpty(ParkingLotGUID))
                 {
                     var lotWrap = ParkingLotRegistry.GetByGUID(ParkingLotGUID);
-                    lotObj = lotWrap?.ResolveGameLot();
+                    gameLot = lotWrap?.ResolveGameLot();
+                    lotObj = gameLot;
                 }
-                if (lotObj != null)
+
+                if (lotObj == null)
+                {
+                    Logger.Warning($"DriveToCarPark: Parking lot could not be resolved (Name='{ParkingLotName}', GUID='{ParkingLotGUID}'). Action will not function correctly.");
+                }
+                else
+                {
                     ReflectionUtils.TrySetFieldOrProperty(action, "ParkingLot", lotObj);
+
+                    // Warn if the lot has no parking spots - vehicles parked here will be hidden by the game
+                    if (gameLot != null && (gameLot.ParkingSpots == null || gameLot.ParkingSpots.Count == 0))
+                    {
+                        Logger.Warning($"DriveToCarPark: Parking lot '{gameLot.gameObject.name}' has no parking spots. " +
+                            "The game will hide (SetVisible=false) any vehicle parked here. Choose a lot with ParkingSpot children.");
+                    }
+                }
 
                 // Resolve vehicle
                 object vehObj = null;
@@ -213,8 +234,15 @@ namespace S1API.Entities.Schedule
                 else if (!string.IsNullOrEmpty(VehicleCode))
                 {
                     var v = VehicleRegistry.CreateVehicle(VehicleCode);
-                    vehObj = v?.S1LandVehicle;
-                    
+                    if (v == null)
+                    {
+                        Logger.Error($"DriveToCarPark: Failed to create vehicle with code '{VehicleCode}'. Verify the code is valid.");
+                    }
+                    else
+                    {
+                        vehObj = v.S1LandVehicle;
+                    }
+
                     // If we're on the server and the vehicle needs spawning, spawn it now
                     if (vehObj != null)
                     {
@@ -228,23 +256,38 @@ namespace S1API.Entities.Schedule
                                 #else
                                 var nm = Il2CppFishNet.InstanceFinder.NetworkManager;
                                 #endif
-                                
+
                                 if (nm != null && nm.IsServer)
                                 {
-                                    // Spawn the vehicle at the specified location and rotation
                                     var spawnRot = VehicleSpawnRotation ?? Quaternion.identity;
                                     wrapper.Spawn(VehicleSpawnPosition, spawnRot);
                                 }
                             }
                             catch (Exception ex)
                             {
-                                UnityEngine.Debug.LogWarning($"[S1API] Failed to spawn created vehicle: {ex.Message}");
+                                Logger.Error($"DriveToCarPark: Failed to spawn created vehicle '{VehicleCode}': {ex.Message}");
+                                Logger.Error($"DriveToCarPark: Stack trace: {ex.StackTrace}");
                             }
                         }
                     }
                 }
-                if (vehObj != null)
+
+                if (vehObj == null)
+                {
+                    Logger.Warning("DriveToCarPark: Vehicle could not be resolved. The NPC will not be able to drive.");
+                }
+                else
+                {
                     ReflectionUtils.TrySetFieldOrProperty(action, "Vehicle", vehObj);
+
+                    // Track vehicles created for lots with no spots so the patch can prevent hiding
+                    if (gameLot != null && (gameLot.ParkingSpots == null || gameLot.ParkingSpots.Count == 0))
+                    {
+                        var gameVeh = vehObj as S1Vehicles.LandVehicle;
+                        if (gameVeh != null)
+                            VehiclesAtNoSpotLots.Add(gameVeh);
+                    }
+                }
 
                 // Flags
                 if (OverrideParkingType.HasValue)
@@ -261,7 +304,18 @@ namespace S1API.Entities.Schedule
                     ReflectionUtils.TrySetFieldOrProperty(action, "ParkingType", boxed);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.Error($"DriveToCarPark: Unexpected error during ApplyTo: {ex.Message}");
+                Logger.Error($"DriveToCarPark: Stack trace: {ex.StackTrace}");
+            }
         }
+
+        /// <summary>
+        /// INTERNAL: Tracks vehicles assigned to parking lots with no spots.
+        /// Used by the LandVehicle.Park patch to prevent the game from hiding these vehicles.
+        /// </summary>
+        internal static readonly System.Collections.Generic.HashSet<S1Vehicles.LandVehicle> VehiclesAtNoSpotLots =
+            new System.Collections.Generic.HashSet<S1Vehicles.LandVehicle>();
     }
 }
