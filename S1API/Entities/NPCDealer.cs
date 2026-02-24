@@ -75,6 +75,20 @@ namespace S1API.Entities
         }
 
         /// <summary>
+        /// Clears stale delegates from the static Dealer.onDealerRecruited field.
+        /// Must be called on scene change to prevent dead wrapper delegates from accumulating.
+        /// </summary>
+        internal static void ClearStaticDelegates()
+        {
+            try
+            {
+                if (DealerRecruitedField != null)
+                    DealerRecruitedField.SetValue(null, null);
+            }
+            catch { }
+        }
+
+        /// <summary>
         /// Returns whether this NPC currently has dealer functionality.
         /// </summary>
         public bool IsDealer => Component != null;
@@ -659,6 +673,23 @@ namespace S1API.Entities
 
                     // Set the Home field/property on the Dealer component
                     Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(Component, "Home", homeBuilding);
+
+                    // Sync HomeEvent.Building — Dealer.Awake() does this but runs before
+                    // Home is set for S1API NPCs, so we must do it here too.
+                    try
+                    {
+#if MONOMELON
+                        var homeEventField = typeof(S1Economy.Dealer).GetField("HomeEvent", BindingFlags.Public | BindingFlags.Instance);
+#else
+                        var homeEventField = typeof(S1Economy.Dealer).GetProperty("HomeEvent", BindingFlags.Public | BindingFlags.Instance);
+#endif
+                        var homeEvent = homeEventField?.GetValue(Component);
+                        if (homeEvent != null)
+                        {
+                            Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(homeEvent, "Building", homeBuilding);
+                        }
+                    }
+                    catch { }
                 }
                 catch (Exception ex)
                 {

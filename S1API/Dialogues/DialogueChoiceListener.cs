@@ -30,6 +30,15 @@ namespace S1API.Dialogues
         /// </summary>
         private static Action? _callback;
 
+        /// <summary>
+        /// Resets static state so the listener works correctly across save loads.
+        /// </summary>
+        internal static void ResetState()
+        {
+            _expectedChoiceLabel = null;
+            _callback = null;
+        }
+
         /// Registers a specific dialogue choice with a callback to be invoked when the choice is selected.
         /// <param name="handlerRef">The reference to the DialogueHandler that manages dialogue choices.</param>
         /// <param name="label">The label identifying the specific dialogue choice to be registered.</param>

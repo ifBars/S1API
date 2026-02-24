@@ -40,6 +40,15 @@ namespace S1API.Internal.Patches
         private static bool? _hasCustomNpcTypesCache;
 
         /// <summary>
+        /// Resets static state so the contacts app initializes correctly across save loads.
+        /// </summary>
+        internal static void ResetState()
+        {
+            _startCalled = false;
+            _hasCustomNpcTypesCache = null;
+        }
+
+        /// <summary>
         /// Checks if any custom NPC types exist (excluding S1API internal types).
         /// Caches the result to avoid repeated reflection calls.
         /// </summary>

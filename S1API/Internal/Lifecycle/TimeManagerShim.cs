@@ -31,6 +31,21 @@ namespace S1API.Internal.Lifecycle
 
         private TimeManagerShim() { }
 
+        /// <summary>
+        /// Clears accumulated delegates so stale references from a previous load don't leak into the next session.
+        /// </summary>
+        internal void ResetDelegates()
+        {
+            onSleepStart = delegate { };
+            onHourPass = delegate { };
+#if IL2CPPMELON
+            il2cppOnSleepStart = null;
+            il2cppOnHourPass = null;
+            _addedSleepStart.Clear();
+            _addedHourPass.Clear();
+#endif
+        }
+
         internal void AddDelegatesToReal()
         {
             try
