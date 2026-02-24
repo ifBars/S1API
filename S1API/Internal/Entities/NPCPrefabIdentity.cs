@@ -662,6 +662,29 @@ namespace S1API.Internal.Entities
                 {
                     Logger.Warning($"[Dealer Home] Failed to set Home property on Dealer component for NPC {npc?.ID ?? "<null>"}");
                 }
+                else
+                {
+                    // Dealer.Awake() runs HomeEvent.Building = Home, but for S1API NPCs
+                    // Home is null at Awake-time (resolved later). We must sync HomeEvent.Building
+                    // so the schedule system knows where to send the dealer.
+                    try
+                    {
+#if MONOMELON
+                        var homeEventField = typeof(S1Economy.Dealer).GetField("HomeEvent", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+#else
+                        var homeEventField = typeof(S1Economy.Dealer).GetProperty("HomeEvent", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+#endif
+                        var homeEvent = homeEventField?.GetValue(dealerComponent);
+                        if (homeEvent != null)
+                        {
+                            ReflectionUtils.TrySetFieldOrProperty(homeEvent, "Building", gameBuilding);
+                        }
+                    }
+                    catch (Exception homeEventEx)
+                    {
+                        Logger.Warning($"[Dealer Home] Failed to sync HomeEvent.Building for NPC {npc?.ID ?? "<null>"}: {homeEventEx.Message}");
+                    }
+                }
             }
             catch (Exception ex)
             {
