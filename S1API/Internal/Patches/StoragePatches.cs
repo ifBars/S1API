@@ -50,6 +50,41 @@ namespace S1API.Internal.Patches
         }
 
         /// <summary>
+        /// Manually parse the custom name from RenamableConfigurationData JSON.
+        /// Handles both compact and pretty-printed formats.
+        /// </summary>
+        private static string ParseConfigurationName(string json)
+        {
+            if (string.IsNullOrEmpty(json))
+                return null;
+
+            try
+            {
+                int valueKeyIdx = json.IndexOf("\"Value\"");
+                if (valueKeyIdx < 0)
+                    return null;
+
+                int colonIdx = json.IndexOf(':', valueKeyIdx + 7);
+                if (colonIdx < 0)
+                    return null;
+
+                int openQuote = json.IndexOf('"', colonIdx + 1);
+                if (openQuote < 0)
+                    return null;
+
+                int closeQuote = json.IndexOf('"', openQuote + 1);
+                if (closeQuote < 0)
+                    return null;
+
+                return json.Substring(openQuote + 1, closeQuote - openQuote - 1);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Manually parse StorageSlotMeta from JSON to avoid IL2CPP generic method issues.
         /// </summary>
         private static StorageSlotMeta ParseStorageSlotMeta(string json)
@@ -335,6 +370,25 @@ namespace S1API.Internal.Patches
                 wrapper.SetSlotCount(targetSlots);
 
                 storageData.Contents.LoadTo(placeableStorage.StorageEntity.ItemSlots);
+
+                // Load the Configuration (custom name) from save data.
+                // The original loader does this deferred via onLoadComplete, but we apply it
+                // directly since Configuration is already initialized after LoadAndCreate.
+                if (data.TryGetData("Configuration", out string configJson) && !string.IsNullOrEmpty(configJson))
+                {
+                    try
+                    {
+                        var configName = ParseConfigurationName(configJson);
+                        if (!string.IsNullOrEmpty(configName) && placeableStorage.Configuration?.Name != null)
+                        {
+                            placeableStorage.Configuration.Name.SetValue(configName, true);
+                        }
+                    }
+                    catch (Exception configEx)
+                    {
+                        Logger.Warning($"Failed to load storage configuration name: {configEx.Message}");
+                    }
+                }
             }
             catch (Exception ex)
             {
