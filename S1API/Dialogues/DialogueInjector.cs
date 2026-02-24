@@ -59,6 +59,15 @@ namespace S1API.Dialogues
         /// This method prevents multiple hookups by checking if the injection system is already active using an internal flag.
         /// If not already hooked, the method initializes a coroutine that processes and injects queued dialogue data into the corresponding NPCs.
         /// </remarks>
+        /// <summary>
+        /// Resets static state so the injector works correctly across save loads.
+        /// </summary>
+        internal static void ResetState()
+        {
+            _pendingInjections.Clear();
+            _isHooked = false;
+        }
+
         private static void HookUpdateLoop()
         {
             if (_isHooked)

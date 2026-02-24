@@ -75,6 +75,15 @@ namespace S1API.Internal.Patches
             = new System.Collections.Generic.Dictionary<S1Economy.Customer, float>();
 
         /// <summary>
+        /// Resets static state that can leak across save loads.
+        /// </summary>
+        internal static void ResetState()
+        {
+            _savedCurrentAddiction.Clear();
+            _loadingDealers.Clear();
+        }
+
+        /// <summary>
         /// Comparison function for sorting NPCAction by StartTime, with signals coming before non-signals when times are equal.
         /// </summary>
         private static int CompareNPCActions(S1NPCsSchedules.NPCAction a, S1NPCsSchedules.NPCAction b)

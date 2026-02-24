@@ -1,4 +1,5 @@
 using System;
+using S1API.Dialogues;
 using S1API.Entities;
 using S1API.Avatar;
 using S1API.Logging;
@@ -100,6 +101,22 @@ namespace S1API.Internal.Lifecycle
                     
                     // Reset loading screen patch state to prevent stuck flags
                     LoadingScreenPatches.ResetState();
+
+                    // Reset dialogue system static state to prevent stale injections/callbacks
+                    DialogueInjector.ResetState();
+                    DialogueChoiceListener.ResetState();
+
+                    // Reset contacts app state so it re-initializes properly on next load
+                    ContactsAppPatches.ResetState();
+
+                    // Clear stale NPC patch state (dangling Customer references, loading guards)
+                    NPCPatches.ResetState();
+
+                    // Clear stale delegates from Dealer.onDealerRecruited static field
+                    NPCDealer.ClearStaticDelegates();
+
+                    // Clear accumulated shim delegates to prevent stale references on next load
+                    TimeManagerShim.Instance.ResetDelegates();
                 }
                 else
                 {

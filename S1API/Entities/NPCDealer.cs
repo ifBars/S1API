@@ -75,6 +75,20 @@ namespace S1API.Entities
         }
 
         /// <summary>
+        /// Clears stale delegates from the static Dealer.onDealerRecruited field.
+        /// Must be called on scene change to prevent dead wrapper delegates from accumulating.
+        /// </summary>
+        internal static void ClearStaticDelegates()
+        {
+            try
+            {
+                if (DealerRecruitedField != null)
+                    DealerRecruitedField.SetValue(null, null);
+            }
+            catch { }
+        }
+
+        /// <summary>
         /// Returns whether this NPC currently has dealer functionality.
         /// </summary>
         public bool IsDealer => Component != null;
