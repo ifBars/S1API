@@ -2,7 +2,6 @@
 
 [![IL2CPP Build Check](https://github.com/ifBars/S1API/actions/workflows/il2cpp-build-check.yml/badge.svg?branch=stable)](https://github.com/ifBars/S1API/actions/workflows/il2cpp-build-check.yml)
 [![Build and Deploy Documentation](https://github.com/ifBars/S1API/actions/workflows/docs.yml/badge.svg)](https://github.com/ifBars/S1API/actions/workflows/docs.yml)
-[![GitHub release](https://img.shields.io/github/v/release/ifBars/S1API?include_prereleases&sort=semver)](https://github.com/ifBars/S1API/releases)
 [![GitHub stars](https://img.shields.io/github/stars/ifBars/S1API)](https://github.com/ifBars/S1API/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/ifBars/S1API)](https://github.com/ifBars/S1API/network/members)
 [![GitHub issues](https://img.shields.io/github/issues/ifBars/S1API)](https://github.com/ifBars/S1API/issues)
@@ -21,11 +20,6 @@ Track S1API's progress in wrapping Schedule One's game types:
 
 S1API is an open source collaboration project to help standardize Schedule One modding processes.
 The goal is to provide a standard place for common functionalities so you can focus on making content versus reverse engineering the game.
-
-## MelonLoader 0.7.1+ has issues with the API, please use 0.7.0 to ensure compatibility
-
-> **This GitHub repository is intended for developers.**
-> If you are just looking to mod your game, please refer to the releases / mod repositories such as Thunderstore and Nexus Mods.
 
 ## Release Channels
 
