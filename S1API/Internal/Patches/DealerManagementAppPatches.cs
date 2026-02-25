@@ -33,16 +33,9 @@ namespace S1API.Internal.Patches
             var selectedDealer = instance.SelectedDealer;
 
 #if (IL2CPPMELON)
-            try
-            {
-                instance.RefreshDropdown();
-            }
-            catch
-            {
-                var method = typeof(S1DealerManagementApp).GetMethod("RefreshDropdown",
-                    BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
-                method?.Invoke(instance, null);
-            }
+            var method = typeof(S1DealerManagementApp).GetMethod("RefreshDropdown",
+                BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
+            method?.Invoke(instance, null);
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
             var method = typeof(S1DealerManagementApp).GetMethod("RefreshDropdown",
                 BindingFlags.NonPublic | BindingFlags.Instance);
