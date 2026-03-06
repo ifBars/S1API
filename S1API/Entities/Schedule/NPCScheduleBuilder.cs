@@ -64,7 +64,8 @@ namespace S1API.Entities.Schedule
         /// Adds a seating action that moves the NPC to an available seat within the specified seat set.
         /// </summary>
         /// <param name="seatSetName">The GameObject name of the <c>AvatarSeatSet</c> to use.</param>
-        /// <param name="startTime">The time when this action should start, in minutes from midnight (0-1439).</param>
+        /// <param name="startTime">The time when this action should start, in 24-hour time (e.g. 830 for 8:30 AM).</param>
+        /// <param name="durationMinutes">Duration of the sit action in minutes. Defaults to 60.</param>
         /// <param name="warpIfSkipped">Whether the NPC should be warped to the seat if the action is skipped. Default is <c>false</c>.</param>
         /// <param name="name">Optional custom name for this action; defaults to "Sit".</param>
         /// <returns>This builder instance for method chaining.</returns>
@@ -73,7 +74,7 @@ namespace S1API.Entities.Schedule
         /// lookup scenarios (GUIDs, transform paths, direct references) instantiate <see cref="SitSpec"/> manually and
         /// add it via <see cref="Add(IScheduleActionSpec)"/>.
         /// </remarks>
-        public PrefabScheduleBuilder SitAtSeatSet(string seatSetName, int startTime, bool warpIfSkipped = false, string name = null)
+        public PrefabScheduleBuilder SitAtSeatSet(string seatSetName, int startTime, int durationMinutes = 60, bool warpIfSkipped = false, string name = null)
         {
             if (!string.IsNullOrEmpty(seatSetName))
             {
@@ -81,6 +82,7 @@ namespace S1API.Entities.Schedule
                 {
                     SeatSetName = seatSetName,
                     StartTime = startTime,
+                    DurationMinutes = durationMinutes,
                     WarpIfSkipped = warpIfSkipped,
                     Name = name
                 });

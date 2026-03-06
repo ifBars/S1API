@@ -867,7 +867,7 @@ namespace S1API.Entities
 
             var mgr = EnsureScheduleManager();
 
-            int walkTo = 0, stayInBuilding = 0, locationDialogue = 0, locationBasedAction = 0, useVending = 0, driveToCarPark = 0, dealSignal = 0, useATM = 0;
+            int walkTo = 0, stayInBuilding = 0, locationDialogue = 0, locationBasedAction = 0, useVending = 0, driveToCarPark = 0, dealSignal = 0, useATM = 0, sit = 0;
             bool requiresSmokeBreak = false, requiresGraffiti = false, requiresDrinking = false, requiresHoldItem = false;
             for (int i = 0; i < specs.Count; i++)
             {
@@ -898,6 +898,7 @@ namespace S1API.Entities
                 else if (s is DriveToCarParkSpec) driveToCarPark++;
                 else if (s is EnsureDealSignalSpec) dealSignal = Math.Max(dealSignal, 1);
                 else if (s is UseATMSpec) useATM++;
+                else if (s is SitSpec) sit++;
             }
 
             if (requiresSmokeBreak)
@@ -937,6 +938,7 @@ namespace S1API.Entities
             EnsurePrefabAction<S1NPCsSchedules.NPCSignal_UseVendingMachine>(useVending, "UseVending");
             EnsurePrefabAction<S1NPCsSchedules.NPCSignal_DriveToCarPark>(driveToCarPark, "DriveToCarPark");
             EnsurePrefabAction<S1NPCsSchedules.NPCSignal_UseATM>(useATM, "UseATM");
+            EnsurePrefabAction<S1NPCsSchedules.NPCEvent_Sit>(sit, "Sit");
         }
 
         private void EnsurePrefabAction<T>(int count, string namePrefix) where T : S1NPCsSchedules.NPCAction
