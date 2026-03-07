@@ -925,58 +925,5 @@ namespace S1API.Internal.Patches
             indicator.gameObject.SetActive(isDealer);
         }
 
-        [HarmonyPatch(typeof(S1ContactsApp.ContactsDetailPanel), "Open")]
-        [HarmonyPostfix]
-        private static void ContactsDetailPanel_Open_Postfix(S1ContactsApp.ContactsDetailPanel __instance)
-        {
-            if (__instance == null) return;
-            if (__instance.transform == null) return;
-            if (__instance.TypeLabel.font == null) return;
-            var gameObject = __instance.transform.Find("Connections")?.gameObject;
-            if (gameObject == null)
-            {
-                gameObject = new GameObject("Connections");
-                gameObject.transform.SetParent(__instance.transform, false);
-                var text = gameObject.AddComponent<Text>();
-                text.font = __instance.TypeLabel.font;
-            }
-
-            var textComp = gameObject.GetComponent<Text>();
-            if (textComp == null)
-            {
-                Debug.LogWarning("Connections Text Component not found!");
-                return;
-            }
-
-            var npcConnections = __instance.SelectedNPC?.RelationData?.Connections;
-            if (npcConnections == null || npcConnections.Count == 0)
-            {
-                textComp.text = "Connections: None";
-                return;
-            }
-#if MONOMELON
-            var connsText = string.Join(", ", npcConnections.Where(c => c != null).Select(c =>
-#elif IL2CPPMELON
-            var connsText = string.Join(", ", npcConnections._items.Where(c => c != null).Select(c =>
-#endif
-            {
-                if (c.RelationData == null)
-                    return "???";
-                var isCustomer = NPC.IsCustomerType(c.GetType());
-
-                // Dealers/Suppliers have to be unlocked to see the name
-                if (!isCustomer)
-                {
-                    return c.RelationData.Unlocked
-                        ? c.fullName
-                        : "???";
-                }
-                // Customers can be known via mutual connections
-                return c.RelationData.IsKnown()
-                    ? c.fullName
-                    : "???";
-            }));
-            textComp.text = $"Connections: {connsText}";
-        }
     }
 }
