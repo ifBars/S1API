@@ -26,9 +26,15 @@ namespace S1API.Entities.Schedule
     public sealed class SitSpec : IScheduleActionSpec
     {
         /// <summary>
-        /// Gets or sets the start time for this action, in minutes from midnight.
+        /// Gets or sets the start time for this action, in 24-hour time (e.g. 830 for 8:30 AM).
         /// </summary>
         public int StartTime { get; set; }
+
+        /// <summary>
+        /// Gets or sets the duration of the sit action in minutes.
+        /// If not set (0 or negative), defaults to the time remaining until the next scheduled action.
+        /// </summary>
+        public int DurationMinutes { get; set; }
 
         /// <summary>
         /// Gets or sets the optional display name for this action. Defaults to "Sit".
@@ -98,6 +104,7 @@ namespace S1API.Entities.Schedule
             }
 
             action.WarpIfSkipped = WarpIfSkipped;
+            action.Duration = DurationMinutes > 0 ? DurationMinutes : 60;
         }
 
         private S1AvatarAnimation.AvatarSeatSet ResolveSeatSet(NPCSchedule schedule)
