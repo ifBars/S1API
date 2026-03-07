@@ -257,21 +257,30 @@ builder.EnsureSmokeBreak()
 
 ### SitAtSeatSet
 
-Seat the NPC at a configured seating area:
+Seat the NPC at a configured seating area. The NPC will walk to the seat and sit down for the specified duration.
 
 ```csharp
-plan.SitAtSeatSet("OutdoorBench", 900, warpIfSkipped: true);
+// By name — finds the first AvatarSeatSet with this GameObject name
+plan.SitAtSeatSet("Fast Food Booth", 900, durationMinutes: 60);
+
+// By path — use when multiple seat sets share the same name
+plan.SitAtSeatSet(null, 1650, durationMinutes: 130,
+    seatSetPath: "Map/Hyland Point/Region_Docks/WaterFront/OutdoorBench (1)");
 ```
 
 **Parameters:**
-- `seatSetName`: GameObject name of the `AvatarSeatSet`
-- `startTime`: Time to begin the seating action (24h format)
-- `warpIfSkipped`: Whether to warp the NPC to the seat if missed (default: false)
+- `seatSetName`: GameObject name of the `AvatarSeatSet`. Can be `null` if `seatSetPath` is provided.
+- `startTime`: Time to begin the seating action (24h HHMM format)
+- `durationMinutes`: How long the NPC sits in minutes (default: 60). **Must be positive** — with duration 0 the action will never trigger.
+- `warpIfSkipped`: Whether to warp the NPC to the seat if the action is skipped (default: false)
 - `name`: Optional action name; defaults to "Sit"
+- `seatSetPath`: Optional full hierarchy path to the seat set GameObject (e.g. `"Map/Hyland Point/Region_Docks/WaterFront/OutdoorBench (1)"`). Use this when multiple seat sets share the same name.
 
-**Notes:**
-- Seat sets can be located in the Unity hierarchy (inactive objects are supported)
-- For complex lookups (path or direct reference), create a `SitSpec` manually and add it via `plan.Add`
+**Important notes:**
+- Name lookups are case-insensitive and return the first match. Use `seatSetPath` when you need a specific seat set among duplicates.
+- If the seat set cannot be resolved, the action is automatically disabled and a warning is logged. This prevents the NPC's schedule from breaking permanently.
+- The NPC must be able to reach the seat — ensure a preceding action (e.g. `LocationBased`) gets the NPC close enough before the sit starts, or give enough travel time in the duration of the previous action.
+- For complex lookups (direct object reference, custom search settings), create a `SitSpec` manually and add it via `plan.Add`
 
 ## Action Specs
 
@@ -375,26 +384,47 @@ plan.Add(new LocationDialogueSpec {
 
 ### SitSpec
 
-Seat an NPC using an existing `AvatarSeatSet`:
+Seat an NPC using an existing `AvatarSeatSet`. Use the spec directly when you need advanced lookup options beyond what `SitAtSeatSet()` provides.
 
 ```csharp
+// By name
 plan.Add(new SitSpec {
     StartTime = 900,
-    SeatSetName = "OutdoorBench",
-    WarpIfSkipped = true,
+    DurationMinutes = 60,
+    SeatSetName = "Fast Food Booth",
+    Name = "Breakfast"
+});
+
+// By path (for ambiguous names)
+plan.Add(new SitSpec {
+    StartTime = 1650,
+    DurationMinutes = 130,
+    SeatSetPath = "Map/Hyland Point/Region_Docks/WaterFront/OutdoorBench (1)",
+    Name = "WatchSunset"
+});
+
+// By direct reference
+plan.Add(new SitSpec {
+    StartTime = 900,
+    DurationMinutes = 60,
+    SeatSetReference = mySeatSetGameObject,
     Name = "MorningCoffee"
 });
 ```
 
 **Properties:**
-- `StartTime`: Time to begin the action
-- `SeatSetName`: GameObject name of the target `AvatarSeatSet`
-- `SeatSetPath`: Optional transform path (supports inactive objects)
-- `SeatSetReference`: Optional direct reference to the seat set or any component within it
-- `WarpIfSkipped`: Whether to warp the NPC directly to the seat when skipped
+- `StartTime`: Time to begin the action (24h HHMM format)
+- `DurationMinutes`: How long the NPC sits in minutes. **Must be positive** — with duration 0 the action has a zero-width time range and will never be matched by the schedule manager. Defaults to 60 if not set.
+- `SeatSetName`: GameObject name of the target `AvatarSeatSet` (case-insensitive, returns first match)
+- `SeatSetPath`: Full hierarchy path to the seat set (e.g. `"Map/Hyland Point/Region_Docks/WaterFront/OutdoorBench (1)"`). Use when multiple seat sets share the same name. Supports suffix matching.
+- `SeatSetReference`: Direct Unity object reference — can be an `AvatarSeatSet`, `GameObject`, or any `Component` in the seat set hierarchy
+- `WarpIfSkipped`: Whether to warp the NPC directly to the seat when the action is skipped
 - `Name`: Optional custom name for the action
 - `IncludeInactiveSearch`: Include inactive seat sets during lookup (default: true)
-- Use the seating registry (`S1API.Avatar.Seat`) to gather scene-specific seat metadata when authoring schedules
+
+**Resolution order:** Direct reference → path lookup → name lookup → NPC child search.
+
+**Failure handling:** If no seat set can be resolved, the action is disabled and a warning is logged. This prevents `NPCEvent_Sit.Started()` from throwing a NullReferenceException which would permanently break the NPC's schedule.
 
 ### DriveToCarParkSpec
 

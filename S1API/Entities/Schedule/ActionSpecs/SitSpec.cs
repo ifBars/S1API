@@ -19,9 +19,21 @@ namespace S1API.Entities.Schedule
     /// Specifies an action that seats an NPC at an <see cref="S1AvatarAnimation.AvatarSeatSet"/>.
     /// </summary>
     /// <remarks>
-    /// The specification resolves an <see cref="S1AvatarAnimation.AvatarSeatSet"/> using one of the provided
+    /// <para>The specification resolves an <see cref="S1AvatarAnimation.AvatarSeatSet"/> using one of the provided
     /// lookup mechanisms and configures a <see cref="S1NPCsSchedules.NPCEvent_Sit"/> instance on the target
-    /// schedule. This allows mods to declaratively schedule seating behaviour through the S1API builder.
+    /// schedule. This allows mods to declaratively schedule seating behaviour through the S1API builder.</para>
+    ///
+    /// <para><strong>Important:</strong> When multiple seat sets share the same name (e.g. "outdoorbench"),
+    /// use <see cref="SeatSetPath"/> to target a specific one by its full hierarchy path
+    /// (e.g. "Map/Hyland Point/Region_Docks/WaterFront/OutdoorBench (1)"). Name lookups return the first match found.</para>
+    ///
+    /// <para><strong>Duration:</strong> You must set <see cref="DurationMinutes"/> to a positive value.
+    /// The game's <c>NPCEvent_Sit</c> uses Duration to calculate its end time. With Duration=0 the action
+    /// has a zero-width time range and will never be matched by the schedule manager.</para>
+    ///
+    /// <para><strong>Seat set resolution failure:</strong> If the seat set cannot be resolved, the action
+    /// is disabled to prevent a NullReferenceException in <c>NPCEvent_Sit.Started()</c> which would
+    /// permanently break the NPC's schedule. A warning is logged to help diagnose the issue.</para>
     /// </remarks>
     public sealed class SitSpec : IScheduleActionSpec
     {
@@ -32,7 +44,7 @@ namespace S1API.Entities.Schedule
 
         /// <summary>
         /// Gets or sets the duration of the sit action in minutes.
-        /// If not set (0 or negative), defaults to the time remaining until the next scheduled action.
+        /// If not set (0 or negative), defaults to 60 minutes. Must be positive for the action to trigger.
         /// </summary>
         public int DurationMinutes { get; set; }
 
@@ -100,7 +112,10 @@ namespace S1API.Entities.Schedule
             else
             {
                 var npcName = schedule.NPC?.gameObject != null ? schedule.NPC.gameObject.name : "Unknown";
-                Debug.LogWarning($"[S1API] SitSpec could not resolve a seat set (Name={SeatSetName}, Path={SeatSetPath}) for NPC '{npcName}'.");
+                Debug.LogWarning($"[S1API] SitSpec could not resolve a seat set (Name={SeatSetName}, Path={SeatSetPath}) for NPC '{npcName}'. Disabling action to prevent crash.");
+                action.enabled = false;
+                action.gameObject.SetActive(false);
+                return;
             }
 
             action.WarpIfSkipped = WarpIfSkipped;
