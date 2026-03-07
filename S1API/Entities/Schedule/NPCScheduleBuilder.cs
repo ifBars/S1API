@@ -63,24 +63,35 @@ namespace S1API.Entities.Schedule
         /// <summary>
         /// Adds a seating action that moves the NPC to an available seat within the specified seat set.
         /// </summary>
-        /// <param name="seatSetName">The GameObject name of the <c>AvatarSeatSet</c> to use.</param>
-        /// <param name="startTime">The time when this action should start, in 24-hour time (e.g. 830 for 8:30 AM).</param>
-        /// <param name="durationMinutes">Duration of the sit action in minutes. Defaults to 60.</param>
+        /// <param name="seatSetName">The GameObject name of the <c>AvatarSeatSet</c> to use. Can be <c>null</c> if <paramref name="seatSetPath"/> is provided.</param>
+        /// <param name="startTime">The time when this action should start, in 24-hour HHMM format (e.g. 830 for 8:30 AM, 1400 for 2:00 PM).</param>
+        /// <param name="durationMinutes">Duration of the sit action in minutes. Defaults to 60. Must be positive for the action to trigger.</param>
         /// <param name="warpIfSkipped">Whether the NPC should be warped to the seat if the action is skipped. Default is <c>false</c>.</param>
         /// <param name="name">Optional custom name for this action; defaults to "Sit".</param>
+        /// <param name="seatSetPath">Optional full hierarchy path to the seat set GameObject (e.g. "Map/Hyland Point/Region_Docks/WaterFront/OutdoorBench (1)"). Use this when multiple seat sets share the same name to target a specific one.</param>
         /// <returns>This builder instance for method chaining.</returns>
         /// <remarks>
-        /// This convenience overload creates a <see cref="SitSpec"/> that resolves a seat set by name. For more advanced
-        /// lookup scenarios (GUIDs, transform paths, direct references) instantiate <see cref="SitSpec"/> manually and
-        /// add it via <see cref="Add(IScheduleActionSpec)"/>.
+        /// <para>This method creates a <see cref="SitSpec"/> that resolves a seat set by name, path, or both.
+        /// When multiple seat sets share the same name (e.g. "outdoorbench"), use <paramref name="seatSetPath"/>
+        /// to target a specific one. The path is matched case-insensitively against the full transform hierarchy.</para>
+        ///
+        /// <para><strong>Example — by name:</strong></para>
+        /// <code>plan.SitAtSeatSet("Fast Food Booth", 900, durationMinutes: 60)</code>
+        ///
+        /// <para><strong>Example — by path (when name is ambiguous):</strong></para>
+        /// <code>plan.SitAtSeatSet(null, 1650, durationMinutes: 130, seatSetPath: "Map/Hyland Point/Region_Docks/WaterFront/OutdoorBench (1)")</code>
+        ///
+        /// <para>If the seat set cannot be resolved at runtime, the action is disabled and a warning is logged.
+        /// This prevents a NullReferenceException that would permanently break the NPC's schedule.</para>
         /// </remarks>
-        public PrefabScheduleBuilder SitAtSeatSet(string seatSetName, int startTime, int durationMinutes = 60, bool warpIfSkipped = false, string name = null)
+        public PrefabScheduleBuilder SitAtSeatSet(string seatSetName, int startTime, int durationMinutes = 60, bool warpIfSkipped = false, string name = null, string seatSetPath = null)
         {
-            if (!string.IsNullOrEmpty(seatSetName))
+            if (!string.IsNullOrEmpty(seatSetName) || !string.IsNullOrEmpty(seatSetPath))
             {
                 _specs.Add(new SitSpec
                 {
                     SeatSetName = seatSetName,
+                    SeatSetPath = seatSetPath,
                     StartTime = startTime,
                     DurationMinutes = durationMinutes,
                     WarpIfSkipped = warpIfSkipped,
