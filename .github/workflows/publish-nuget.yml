@@ -2,7 +2,7 @@ name: Publish NuGet Package
 
 on:
   push:
-    branches: [ master, main, stable, npc-prefabs ]
+    branches: [ 'release/**', 'releases/**' ]
     paths:
       - S1API/S1API.csproj
   workflow_dispatch:
