@@ -20,6 +20,7 @@
         <Platforms>AnyCPU</Platforms>
         <RootNamespace>S1API</RootNamespace>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <LangVersion>latest</LangVersion>
         <Version>2.9.9</Version>
     </PropertyGroup>
