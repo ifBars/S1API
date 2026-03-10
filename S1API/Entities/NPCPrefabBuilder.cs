@@ -27,7 +27,6 @@ using S1API.Entities.Customer;
 using S1API.Entities.Dealer;
 using S1API.Entities.Relation;
 using System.Collections.Generic;
-using Il2CppScheduleOne.AvatarFramework.Equipping;
 using S1API.Internal.Entities;
 using S1API.Internal.Utils;
 using S1API.Logging;
@@ -688,7 +687,7 @@ namespace S1API.Entities
             {
                 var path = drinkEquippablePath ?? "Avatar/Equippables/Beer";
                 var drinkPrefab = Resources.Load<GameObject>(path);
-                AvatarEquippable? drinkEquippable = null;
+                S1AvatarFramework.Equipping.AvatarEquippable? drinkEquippable = null;
                 if (drinkPrefab != null)
                     drinkEquippable = drinkPrefab.GetComponent<S1AvatarFramework.Equipping.AvatarEquippable>()
                         ?? drinkPrefab.GetComponentInChildren<S1AvatarFramework.Equipping.AvatarEquippable>(true);
@@ -741,7 +740,7 @@ namespace S1API.Entities
             {
                 var path = equippablePath ?? "Avatar/Equippables/Phone_Lowered";
                 var equippablePrefab = Resources.Load<GameObject>(path);
-                AvatarEquippable? equippable = null;
+                S1AvatarFramework.Equipping.AvatarEquippable? equippable = null;
                 if (equippablePrefab != null)
                     equippable = equippablePrefab.GetComponent<S1AvatarFramework.Equipping.AvatarEquippable>()
                         ?? equippablePrefab.GetComponentInChildren<S1AvatarFramework.Equipping.AvatarEquippable>(true);
