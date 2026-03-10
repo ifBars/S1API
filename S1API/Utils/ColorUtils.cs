@@ -14,7 +14,7 @@ namespace S1API.Utils
         /// <param name="hexColor"></param>
         /// <returns></returns>
         public static Color ToColor(this uint hexColor) =>
-            Internal.Utils.ColorUtils.ToColor(hexColor);
+            Internal.Utils.ColorUtils.ToColorInternal(hexColor);
     }
 }
 

@@ -7,6 +7,7 @@ using S1API.Map;
 using S1API.Quests;
 using S1API.Shops;
 using S1API.GameTime;
+using S1API.Internal.Entities;
 using S1API.Internal.Map;
 using S1API.Internal.Patches;
 using UnityEngine;
@@ -20,6 +21,19 @@ namespace S1API.Internal.Lifecycle
     internal static class SceneStateCleaner
     {
         private static readonly Log Logger = new Log("Lifecycle");
+
+        private static void TryRun(Action action, string warningMessage = null)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                if (!string.IsNullOrEmpty(warningMessage))
+                    Logger.Warning($"[S1API] {warningMessage}: {ex.Message}");
+            }
+        }
 
         /// <summary>
         /// Determines whether S1API should reset internal state for the given scene.
@@ -48,115 +62,54 @@ namespace S1API.Internal.Lifecycle
             {
                 if (afterUnload)
                 {
-                    // Only clear registries when actually unloading a scene
-                    // NPCs: try to destroy custom NPC game objects to ensure full cleanup,
-                    // then clear the wrapper registry.
-                    int npcCount = NPC.All.Count;
                     for (int i = 0; i < NPC.All.Count; i++)
                     {
                         var npc = NPC.All[i];
                         if (npc != null && npc.gameObject != null)
                         {
-                            // Best-effort cleanup for custom NPCs; base NPCs are destroyed by scene unload.
-                            try { UnityEngine.Object.Destroy(npc.gameObject); } catch { /* ignore */ }
+                            TryRun(() => UnityEngine.Object.Destroy(npc.gameObject));
                         }
                     }
                     NPC.All.Clear();
                     NPCPatches.CustomNpcsReady = false; // Reset flag for next scene load
-
-                    // Quests: clear S1API quest registry. The base game manages its own instances.
-                    int questCount = QuestManager.Quests.Count;
-                    QuestManager.Quests.Clear();
-
-                    // Buildings: clear S1API building registry. Objects are destroyed by scene unload.
-                    int buildingCount = global::S1API.Map.Building.All.Count;
-                    global::S1API.Map.Building.All.Clear();
-
-                    // Delivery Locations: clear S1API delivery location registry. Objects are destroyed by scene unload.
-                    int deliveryLocationCount = DeliveryLocation.All.Count;
-                    DeliveryLocation.All.Clear();
-
-                    // Seats: clear the avatar seat registry to avoid stale references across loads.
-                    int seatCount = Seat.Count;
-                    Seat.Clear();
-
-                    // Parking Lots: clear S1API parking lot registry.
-                    int parkingLotCount = ParkingLotRegistry.All.Count;
-                    ParkingLotRegistry.All.Clear();
-
-                    // Shops: invalidate the shop cache
-                    ShopManager.InvalidateCache();
-
-                    // Clear deferred lookups
-                    DeferredMapResolver.Clear();
-
-                    // Drop bindings to the previous TimeManager so the next scene can rebind cleanly.
-                    TimeManager.ResetBindings();
-
-                    // Re-arm HomeScreen scroll setup for the next gameplay session.
-                    HomeScreenScrollPatch.ResetInitializationState();
-
-                    // Reset mugshot queue so warmup runs fresh on next scene load
-                    NPCAppearance.ResetMugshotState();
                     
-                    // Reset loading screen patch state to prevent stuck flags
+                    QuestManager.Quests.Clear();
+                    global::S1API.Map.Building.All.Clear();
+                    DeliveryLocation.All.Clear();
+                    Seat.Clear();
+                    ParkingLotRegistry.All.Clear();
+                    ShopManager.InvalidateCache();
+                    DeferredMapResolver.Clear();
+                    TimeManager.ResetBindings();
+                    HomeScreenScrollPatch.ResetInitializationState();
+                    NPCAppearance.ResetMugshotState();
                     LoadingScreenPatches.ResetState();
-
-                    // Reset dialogue system static state to prevent stale injections/callbacks
                     DialogueInjector.ResetState();
                     DialogueChoiceListener.ResetState();
-
-                    // Reset contacts app state so it re-initializes properly on next load
                     ContactsAppPatches.ResetState();
-
-                    // Clear stale NPC patch state (dangling Customer references, loading guards)
                     NPCPatches.ResetState();
-
-                    // Clear stale delegates from Dealer.onDealerRecruited static field
                     NPCDealer.ClearStaticDelegates();
-
-                    // Clear accumulated shim delegates to prevent stale references on next load
                     TimeManagerShim.Instance.ResetDelegates();
                 }
                 else
                 {
-                    // Refresh loading screen patch state (e.g. _hasCustomNpcTypes) before load completes
                     LoadingScreenPatches.ResetState();
+                    NPCNetworkBootstrap.EnsurePrefabsWarmup();
 
-                    // Notify NPC bootstrap for readiness and prefab pre-registration
-                    try
+                    if (string.Equals(sceneName, "Main", StringComparison.OrdinalIgnoreCase))
                     {
-                        NPCNetworkBootstrap.EnsurePrefabsWarmup();
-
-                        if (string.Equals(sceneName, "Main", StringComparison.OrdinalIgnoreCase))
-                        {
-                            NPCNetworkBootstrap.OnMainSceneInitialized();
-                            // Kick off delayed seating scan once Main initializes to avoid early Awake crashes
-                            try { Internal.SeatBootstrap.OnMainSceneInitialized(); } catch { }
-                            
-                            // Resolve all deferred map entity lookups now that Main scene is loaded
-                            try 
-                            { 
-                                DeferredMapResolver.ResolveAll(); 
-                            } 
-                            catch (Exception ex) 
-                            { 
-                                Logger.Warning($"[S1API] Failed to resolve deferred map lookups: {ex.Message}"); 
-                            }
-
-                            // Try to migrate any delegates from TimeManagerShim into the real TimeManager now that Main is initialized
-                            try { TimeManagerShim.Instance.AddDelegatesToReal(); } catch { }
-                        }
-                        else
-                        {
-                            NPCNetworkBootstrap.ResetFlags();
-                            TimeManagerShim.Instance.DeleteDelegatesFromReal();
-                        }
+                        NPCNetworkBootstrap.OnMainSceneInitialized();
+                        TryRun(SeatBootstrap.OnMainSceneInitialized);
+                        TryRun(DeferredMapResolver.ResolveAll, "Failed to resolve deferred map lookups");
+                        TryRun(TimeManagerShim.Instance.AddDelegatesToReal);
                     }
-                    catch { }
+                    else
+                    {
+                        NPCNetworkBootstrap.ResetFlags();
+                        TryRun(TimeManagerShim.Instance.DeleteDelegatesFromReal);
+                    }
 
-                    // Attempt to bind S1API events to the fresh TimeManager instance for the new scene.
-                    try { TimeManager.TryBindToCurrentInstance(); } catch { }
+                    TryRun(TimeManager.TryBindToCurrentInstance);
                 }
             }
             catch (Exception ex)

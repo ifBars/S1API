@@ -11,36 +11,29 @@ namespace S1API.Internal.Utils
     {
         private const BindingFlags InstanceFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
+        private static bool TryInvokeSetter(MethodInfo setter, object target, object value)
+        {
+            try
+            {
+                setter.Invoke(target, new[] { value });
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         internal static bool TrySet(object target, string propertyName, object value)
         {
-            if (target == null)
-                return false;
             if (string.IsNullOrWhiteSpace(propertyName))
                 return false;
 
             var type = target.GetType();
-
-            try
-            {
-                var property = type.GetProperty(propertyName, InstanceFlags);
-                var setter = property?.GetSetMethod(nonPublic: true);
-                if (setter != null)
-                {
-                    try
-                    {
-                        setter.Invoke(target, new[] { value });
-                        return true;
-                    }
-                    catch
-                    {
-                        // Fallback below
-                    }
-                }
-            }
-            catch
-            {
-                // ignored; fallback below
-            }
+            var property = type.GetProperty(propertyName, InstanceFlags);
+            var setter = property?.GetSetMethod(nonPublic: true);
+            if (setter != null && TryInvokeSetter(setter, target, value))
+                return true;
 
             try
             {

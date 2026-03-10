@@ -109,7 +109,7 @@ namespace S1API.Internal.Patches
                 return;
 
             var registered = ChemistryStationRecipes.GetAllNative();
-            if (registered == null || registered.Count == 0)
+            if (registered.Count == 0)
                 return;
 
             var recipes = canvas.Recipes;
@@ -159,7 +159,7 @@ namespace S1API.Internal.Patches
             }
 
             var registered = ChemistryStationRecipes.GetAllNative();
-            if (registered == null || registered.Count == 0)
+            if (registered.Count == 0)
                 return;
 
             var state = GetCanvasState(canvas);
@@ -212,7 +212,7 @@ namespace S1API.Internal.Patches
 #endif
             string recipeId)
         {
-            if (recipes == null || string.IsNullOrWhiteSpace(recipeId))
+            if (string.IsNullOrWhiteSpace(recipeId))
                 return null;
 
             for (int i = 0; i < recipes.Count; i++)
@@ -243,7 +243,7 @@ namespace S1API.Internal.Patches
 #endif
             string recipeId)
         {
-            if (entries == null || string.IsNullOrWhiteSpace(recipeId))
+            if (string.IsNullOrWhiteSpace(recipeId))
                 return null;
 
             for (int i = 0; i < entries.Count; i++)

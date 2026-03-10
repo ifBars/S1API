@@ -8,7 +8,7 @@ using S1AvatarAnimation = ScheduleOne.AvatarFramework.Animation;
 using S1API.Avatar;
 using UnityEngine;
 
-namespace S1API.Internal
+namespace S1API.Internal.Map
 {
     /// <summary>
     /// INTERNAL: Performs delayed scanning/registration of AvatarSeat components after the Main scene initializes.

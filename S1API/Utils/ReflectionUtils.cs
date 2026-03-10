@@ -42,7 +42,7 @@ namespace S1API.Utils
         /// <param name="memberName">The name of the field or property.</param>
         /// <param name="value">The value to set.</param>
         /// <returns><c>true</c> if the member was successfully set; otherwise, <c>false</c>.</returns>
-        public static bool TrySetFieldOrProperty(object target, string memberName, object value) =>
+        public static bool TrySetFieldOrProperty(object target, string memberName, object? value) =>
             Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(target, memberName, value);
 
         /// <summary>

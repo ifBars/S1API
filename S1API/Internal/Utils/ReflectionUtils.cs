@@ -39,12 +39,10 @@ namespace S1API.Internal.Utils
                     catch (TypeLoadException)
                     {
                         // Ideally, we'd log this, but can be noisy and we've got no logger elsewhere
-                        continue;
                     }
                     catch (Exception)
                     {
                         // Catch-all for anything else (e.g., MissingMethodException)
-                        continue;
                     }
                 }
             return derivedClasses;
@@ -101,7 +99,7 @@ namespace S1API.Internal.Utils
         /// </summary>
         /// <param name="assembly">The assembly to check.</param>
         /// <returns>Whether to skip the assembly or not.</returns>
-        internal static bool ShouldSkipAssembly(Assembly assembly)
+        private static bool ShouldSkipAssembly(Assembly assembly)
         {
             string? fullName = assembly.FullName;
             if (string.IsNullOrEmpty(fullName))
@@ -122,7 +120,7 @@ namespace S1API.Internal.Utils
         /// </summary>
         /// <param name="asm">The assembly to get types from.</param>
         /// <returns>The types that were successfully loaded from the assembly.</returns>
-        internal static IEnumerable<Type> SafeGetTypes(Assembly asm)
+        private static IEnumerable<Type> SafeGetTypes(Assembly asm)
         {
             try
             {
@@ -162,8 +160,7 @@ namespace S1API.Internal.Utils
         /// <param name="methodName">The name of the method you're searching for.</param>
         /// <param name="bindingFlags">The binding flags to apply during the search.</param>
         /// <returns>The method info if found, otherwise null.</returns>
-        [Obsolete("Use S1API.Utils.ReflectionUtils.GetMethod instead. This method will be made internal in a future version.")]
-        public static MethodInfo? GetMethod(Type? type, string methodName, BindingFlags bindingFlags)
+        internal static MethodInfo? GetMethod(Type? type, string methodName, BindingFlags bindingFlags)
         {
             while (type != null && type != typeof(object))
             {
@@ -180,7 +177,7 @@ namespace S1API.Internal.Utils
         /// <summary>
         /// INTERNAL: The different ValueTuple types.
         /// </summary>
-        private static readonly HashSet<Type> _valueTupleTypes = new HashSet<Type>()
+        private static readonly HashSet<Type> ValueTupleTypes = new HashSet<Type>()
         {
             typeof(ValueTuple<>),
             typeof(ValueTuple<,>),
@@ -197,8 +194,7 @@ namespace S1API.Internal.Utils
         /// </summary>
         /// <param name="obj">The object type to check</param>
         /// <returns>Whether the type is a ValueTuple or not</returns>
-        [Obsolete("Use S1API.Utils.ReflectionUtils.IsValueTuple instead. This method will be made internal in a future version.")]
-        public static bool IsValueTuple(this object obj)
+        internal static bool IsValueTuple(this object obj)
         {
             if (obj == null)
                 return false;
@@ -208,7 +204,7 @@ namespace S1API.Internal.Utils
                 return false;
 
             var genericType = type.GetGenericTypeDefinition();
-            return _valueTupleTypes.Contains(genericType);
+            return ValueTupleTypes.Contains(genericType);
         }
 
         /// <summary>
@@ -216,8 +212,7 @@ namespace S1API.Internal.Utils
         /// </summary>
         /// <param name="obj">The ValueTuple instance</param>
         /// <returns>The items in the ValueTuple instance.</returns>
-        [Obsolete("Use S1API.Utils.ReflectionUtils.GetValueTupleItems instead. This method will be made internal in a future version.")]
-        public static object[]? GetValueTupleItems(this object obj)
+        internal static object[]? GetValueTupleItems(this object obj)
         {
             if (!obj.IsValueTuple())
                 return null;
@@ -233,7 +228,7 @@ namespace S1API.Internal.Utils
         /// <summary>
         /// INTERNAL: Shared cache for const string field retrieval across appearance classes.
         /// </summary>
-        private static readonly Dictionary<Type, List<string>> _constStringFieldsCache = new Dictionary<Type, List<string>>();
+        private static readonly Dictionary<Type, List<string>> ConstStringFieldsCache = new Dictionary<Type, List<string>>();
 
         /// <summary>
         /// INTERNAL: Retrieves and caches all public <c>const string</c> fields defined in the specified type.
@@ -248,10 +243,7 @@ namespace S1API.Internal.Utils
         /// </remarks>
         internal static List<string> GetConstStringFields(Type type)
         {
-            if (type == null)
-                return new List<string>();
-
-            if (_constStringFieldsCache.TryGetValue(type, out var cached))
+            if (ConstStringFieldsCache.TryGetValue(type, out var cached))
                 return cached;
 
             var consts = new List<string>();
@@ -262,7 +254,7 @@ namespace S1API.Internal.Utils
                     consts.Add((string)field.GetRawConstantValue());
             }
 
-            _constStringFieldsCache[type] = consts;
+            ConstStringFieldsCache[type] = consts;
             return consts;
         }
 
@@ -276,7 +268,6 @@ namespace S1API.Internal.Utils
         /// <returns><c>true</c> if the member was successfully set; otherwise, <c>false</c>.</returns>
         internal static bool TrySetFieldOrProperty(object target, string memberName, object value)
         {
-            if (target == null) return false;
             var type = target.GetType();
             const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
             
@@ -286,30 +277,34 @@ namespace S1API.Internal.Utils
             {
                 try
                 {
-                    if (value == null || fi.FieldType.IsInstanceOfType(value))
+                    if (fi.FieldType.IsInstanceOfType(value))
                     {
                         fi.SetValue(target, value);
                         return true;
                     }
                 }
-                catch { }
+                catch
+                {
+                    // ignored
+                }
             }
             
             // Try property
             var pi = type.GetProperty(memberName, flags);
-            if (pi != null && pi.CanWrite)
+            if (pi == null || !pi.CanWrite) return false;
+            try
             {
-                try
+                if (pi.PropertyType.IsInstanceOfType(value))
                 {
-                    if (value == null || pi.PropertyType.IsInstanceOfType(value))
-                    {
-                        pi.SetValue(target, value);
-                        return true;
-                    }
+                    pi.SetValue(target, value);
+                    return true;
                 }
-                catch { }
             }
-            
+            catch
+            {
+                // ignored
+            }
+
             return false;
         }
 
@@ -320,9 +315,8 @@ namespace S1API.Internal.Utils
         /// <param name="target">The target object to get the member from.</param>
         /// <param name="memberName">The name of the field or property.</param>
         /// <returns>The value of the member, or <c>null</c> if not found or inaccessible.</returns>
-        internal static object TryGetFieldOrProperty(object target, string memberName)
+        internal static object? TryGetFieldOrProperty(object target, string memberName)
         {
-            if (target == null) return null;
             var type = target.GetType();
             const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
             
@@ -334,20 +328,24 @@ namespace S1API.Internal.Utils
                 {
                     return fi.GetValue(target);
                 }
-                catch { }
+                catch
+                {
+                    // ignored
+                }
             }
             
             // Try property
             var pi = type.GetProperty(memberName, flags);
-            if (pi != null && pi.CanRead)
+            if (pi == null || !pi.CanRead) return null;
+            try
             {
-                try
-                {
-                    return pi.GetValue(target);
-                }
-                catch { }
+                return pi.GetValue(target);
             }
-            
+            catch
+            {
+                // ignored
+            }
+
             return null;
         }
 
@@ -359,9 +357,8 @@ namespace S1API.Internal.Utils
         /// <param name="type">The type to get the static member from.</param>
         /// <param name="memberName">The name of the field or property.</param>
         /// <returns>The value of the member, or <c>null</c> if not found or inaccessible.</returns>
-        internal static object TryGetStaticFieldOrProperty(Type type, string memberName)
+        internal static object? TryGetStaticFieldOrProperty(Type type, string memberName)
         {
-            if (type == null) return null;
             const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
             
             // Try field first
@@ -372,20 +369,24 @@ namespace S1API.Internal.Utils
                 {
                     return fi.GetValue(null);
                 }
-                catch { }
+                catch
+                {
+                    // ignored
+                }
             }
             
             // Try property
             var pi = type.GetProperty(memberName, flags);
-            if (pi != null && pi.CanRead)
+            if (pi == null || !pi.CanRead) return null;
+            try
             {
-                try
-                {
-                    return pi.GetValue(null);
-                }
-                catch { }
+                return pi.GetValue(null);
             }
-            
+            catch
+            {
+                // ignored
+            }
+
             return null;
         }
 
@@ -398,9 +399,8 @@ namespace S1API.Internal.Utils
         /// <param name="memberName">The name of the field or property.</param>
         /// <param name="value">The value to set.</param>
         /// <returns><c>true</c> if the member was successfully set; otherwise, <c>false</c>.</returns>
-        internal static bool TrySetStaticFieldOrProperty(Type type, string memberName, object value)
+        internal static void TrySetStaticFieldOrProperty(Type type, string memberName, object value)
         {
-            if (type == null) return false;
             const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
             
             // Try field first
@@ -409,31 +409,32 @@ namespace S1API.Internal.Utils
             {
                 try
                 {
-                    if (value == null || fi.FieldType.IsInstanceOfType(value))
+                    if (fi.FieldType.IsInstanceOfType(value))
                     {
                         fi.SetValue(null, value);
-                        return true;
+                        return;
                     }
                 }
-                catch { }
+                catch
+                {
+                    // ignored
+                }
             }
             
             // Try property
             var pi = type.GetProperty(memberName, flags);
-            if (pi != null && pi.CanWrite)
+            if (pi == null || !pi.CanWrite) return;
+            try
             {
-                try
+                if (pi.PropertyType.IsInstanceOfType(value))
                 {
-                    if (value == null || pi.PropertyType.IsInstanceOfType(value))
-                    {
-                        pi.SetValue(null, value);
-                        return true;
-                    }
+                    pi.SetValue(null, value);
                 }
-                catch { }
             }
-            
-            return false;
+            catch
+            {
+                // ignored
+            }
         }
     }
 }

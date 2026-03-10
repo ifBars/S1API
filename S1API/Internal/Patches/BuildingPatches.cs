@@ -43,12 +43,13 @@ namespace S1API.Internal.Patches
 
                 // Check for storage component
                 var placeableStorage = __result.GetComponent<S1ObjectScripts.PlaceableStorageEntity>();
-                StorageEntity storageWrapper = null;
+                StorageEntity? storageWrapper = null;
                 if (placeableStorage?.StorageEntity != null)
                 {
                     storageWrapper = new StorageEntity(placeableStorage.StorageEntity, placeableStorage);
                 }
 
+                if (storageWrapper == null) return;
                 var args = new BuildEventArgs(itemInstance, __result.gameObject, storageWrapper);
                 BuildEvents.RaiseGridItemCreated(args);
             }
@@ -74,12 +75,13 @@ namespace S1API.Internal.Patches
 
                 // Check for storage component
                 var placeableStorage = __result.GetComponent<S1ObjectScripts.PlaceableStorageEntity>();
-                StorageEntity storageWrapper = null;
+                StorageEntity? storageWrapper = null;
                 if (placeableStorage?.StorageEntity != null)
                 {
                     storageWrapper = new StorageEntity(placeableStorage.StorageEntity, placeableStorage);
                 }
 
+                if (storageWrapper == null) return;
                 var args = new BuildEventArgs(itemInstance, __result.gameObject, storageWrapper);
                 BuildEvents.RaiseSurfaceItemCreated(args);
             }
@@ -105,12 +107,13 @@ namespace S1API.Internal.Patches
 
                 // Check for storage component
                 var placeableStorage = __instance.GetComponent<S1ObjectScripts.PlaceableStorageEntity>();
-                StorageEntity storageWrapper = null;
+                StorageEntity? storageWrapper = null;
                 if (placeableStorage?.StorageEntity != null)
                 {
                     storageWrapper = new StorageEntity(placeableStorage.StorageEntity, placeableStorage);
                 }
 
+                if (storageWrapper == null) return;
                 var args = new BuildEventArgs(itemInstance, __instance.gameObject, storageWrapper);
                 BuildEvents.RaiseBuildableItemInitialized(args);
             }

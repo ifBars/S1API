@@ -27,6 +27,7 @@ using S1API.Entities.Customer;
 using S1API.Entities.Dealer;
 using S1API.Entities.Relation;
 using System.Collections.Generic;
+using Il2CppScheduleOne.AvatarFramework.Equipping;
 using S1API.Internal.Entities;
 using S1API.Internal.Utils;
 using S1API.Logging;
@@ -61,12 +62,10 @@ namespace S1API.Entities
         private S1NPCs.NPCScheduleManager EnsureScheduleManager()
         {
             var mgr = prefabRoot.GetComponentInChildren<S1NPCs.NPCScheduleManager>(true);
-            if (mgr == null)
-            {
-                var go = new GameObject("NPCSchedule");
-                go.transform.SetParent(prefabRoot.transform, false);
-                mgr = go.AddComponent<S1NPCs.NPCScheduleManager>();
-            }
+            if (mgr != null) return mgr;
+            var go = new GameObject("NPCSchedule");
+            go.transform.SetParent(prefabRoot.transform, false);
+            mgr = go.AddComponent<S1NPCs.NPCScheduleManager>();
             return mgr;
         }
 
@@ -105,7 +104,11 @@ namespace S1API.Entities
                 // Register to static cache for Il2Cpp network spawn support
                 identity.RegisterToStaticCache(prefabRoot.name);
             }
-            catch { }
+            catch
+            {
+                // ignored
+            }
+
             return this;
         }
 
@@ -116,7 +119,7 @@ namespace S1API.Entities
         /// </summary>
         /// <param name="icon">Optional sprite for UI elements. Uses default if null.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
-        public NPCPrefabBuilder WithIcon(Sprite? icon)
+        public NPCPrefabBuilder WithIcon(Sprite icon)
         {
             try
             {
@@ -125,7 +128,11 @@ namespace S1API.Entities
                 // Register to static cache for Il2Cpp network spawn support
                 identity.RegisterToStaticCache(prefabRoot.name);
             }
-            catch { }
+            catch
+            {
+                // ignored
+            }
+
             return this;
         }
 
@@ -135,9 +142,6 @@ namespace S1API.Entities
         /// </summary>
         public NPCPrefabBuilder WithAppearanceDefaults(Action<AvatarDefaultsBuilder> configure)
         {
-            if (configure == null)
-                return this;
-
             try
             {
                 var builder = new AvatarDefaultsBuilder();
@@ -177,34 +181,28 @@ namespace S1API.Entities
                 var faceList = new List<S1AvatarFramework.AvatarSettings.LayerSetting>();
                 var bodyList = new List<S1AvatarFramework.AvatarSettings.LayerSetting>();
                 var accessoryList = new List<S1AvatarFramework.AvatarSettings.AccessorySetting>();
-                if (settings.FaceLayerSettings == null)
-                    settings.FaceLayerSettings = ToIl2CppList(faceList);
-                if (settings.BodyLayerSettings == null)
-                    settings.BodyLayerSettings = ToIl2CppList(bodyList);
-                if (settings.AccessorySettings == null)
-                    settings.AccessorySettings = ToIl2CppList(accessoryList);
+                settings.FaceLayerSettings ??= ToIl2CppList(faceList);
+                settings.BodyLayerSettings ??= ToIl2CppList(bodyList);
+                settings.AccessorySettings ??= ToIl2CppList(accessoryList);
 
-                for (int i = 0; i < builder.FaceLayers.Count; i++)
+                foreach (var l in builder.FaceLayers)
                 {
-                    var l = builder.FaceLayers[i];
                     settings.FaceLayerSettings.Add(new S1AvatarFramework.AvatarSettings.LayerSetting
                     {
                         layerPath = l.path,
                         layerTint = l.color
                     });
                 }
-                for (int i = 0; i < builder.BodyLayers.Count; i++)
+                foreach (var l in builder.BodyLayers)
                 {
-                    var l = builder.BodyLayers[i];
                     settings.BodyLayerSettings.Add(new S1AvatarFramework.AvatarSettings.LayerSetting
                     {
                         layerPath = l.path,
                         layerTint = l.color
                     });
                 }
-                for (int i = 0; i < builder.AccessoryLayers.Count; i++)
+                foreach (var l in builder.AccessoryLayers)
                 {
-                    var l = builder.AccessoryLayers[i];
                     settings.AccessorySettings.Add(new S1AvatarFramework.AvatarSettings.AccessorySetting
                     {
                         path = l.path,
@@ -221,7 +219,10 @@ namespace S1API.Entities
                 // Apply settings directly to Avatar component on prefab to prevent destruction issues
                 ApplyAvatarSettingsToPrefab(settings);
             }
-            catch { }
+            catch
+            {
+                // ignored
+            }
 
             return this;
         }
@@ -237,9 +238,6 @@ namespace S1API.Entities
         /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithSchedule(Action<PrefabScheduleBuilder> configure)
         {
-            if (configure == null)
-                return this;
-
             try
             {
                 var planner = new PrefabScheduleBuilder();
@@ -262,9 +260,6 @@ namespace S1API.Entities
         /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithSchedule(IEnumerable<IScheduleActionSpec> specs)
         {
-            if (specs == null)
-                return this;
-
             try
             {
                 // Materialize once to avoid multiple enumeration and allow counting for precreation
@@ -292,7 +287,7 @@ namespace S1API.Entities
         /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithSchedule(params IScheduleActionSpec[] specs)
         {
-            if (specs == null || specs.Length == 0)
+            if (specs.Length == 0)
                 return this;
             return WithSchedule((IEnumerable<IScheduleActionSpec>)specs);
         }
@@ -339,14 +334,14 @@ namespace S1API.Entities
 
             // Ensure NPCEvent_StayInBuilding exists for home behavior
             var stayInBuilding = prefabRoot.GetComponentInChildren<S1NPCsSchedules.NPCEvent_StayInBuilding>(true);
-            if (stayInBuilding == null)
+            if (stayInBuilding != null) return this;
             {
                 var go = new GameObject("StayInBuilding");
                 go.transform.SetParent(mgr.transform, false);
                 stayInBuilding = go.AddComponent<S1NPCsSchedules.NPCEvent_StayInBuilding>();
                 go.SetActive(false);
             }
-            
+
             return this;
         }
 
@@ -361,9 +356,6 @@ namespace S1API.Entities
         /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithCustomerDefaults(Action<CustomerDataBuilder> configure)
         {
-            if (configure == null)
-                return this;
-
             EnsureCustomer();
             var customer = prefabRoot.GetComponent<S1Economy.Customer>();
             if (customer != null)
@@ -380,7 +372,10 @@ namespace S1API.Entities
                     customer.customerData = data;
 #endif
                 }
-                catch { }
+                catch
+                {
+                    // ignored
+                }
             }
 
             NPC.RegisterCustomerDefaultsForType(ownerType, configure);
@@ -399,22 +394,19 @@ namespace S1API.Entities
         /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithRelationshipDefaults(Action<NPCRelationshipDataBuilder> configure)
         {
-            if (configure != null)
-            {
-                NPC.RegisterRelationshipDefaultsForType(ownerType, configure);
+            NPC.RegisterRelationshipDefaultsForType(ownerType, configure);
                 
-                // Register relationship data to NPCPrefabIdentity for Il2Cpp compatibility
-                try
-                {
-                    var builder = new NPCRelationshipDataBuilder();
-                    configure(builder);
+            // Register relationship data to NPCPrefabIdentity for Il2Cpp compatibility
+            try
+            {
+                var builder = new NPCRelationshipDataBuilder();
+                configure(builder);
                     
-                    NPCPrefabIdentity.RegisterRelationshipDataToStaticCache(prefabRoot.name, builder);
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error($"[Relationship Data] WithRelationshipDefaults: Exception registering relationship data for prefab '{prefabRoot.name}': {ex.Message}");
-                }
+                NPCPrefabIdentity.RegisterRelationshipDataToStaticCache(prefabRoot.name, builder);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"[Relationship Data] WithRelationshipDefaults: Exception registering relationship data for prefab '{prefabRoot.name}': {ex.Message}");
             }
             return this;
         }
@@ -455,9 +447,6 @@ namespace S1API.Entities
         /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithDealerDefaults(Action<DealerDataBuilder> configure)
         {
-            if (configure == null)
-                return this;
-
             EnsureDealer();
             
             // Register dealer defaults for type-level application
@@ -486,7 +475,7 @@ namespace S1API.Entities
         {
             try
             {
-                GameObject cigarettePrefab = null;
+                GameObject? cigarettePrefab = null;
                 if (!string.IsNullOrEmpty(cigarettePrefabPath))
                 {
                     cigarettePrefab = Resources.Load<GameObject>(cigarettePrefabPath);
@@ -502,14 +491,12 @@ namespace S1API.Entities
                         var all = Object.FindObjectsOfType<S1NPCsOther.SmokeCigarette>(true);
                         if (all != null)
                         {
-                            for (int i = 0; i < all.Length; i++)
+                            foreach (var t in all)
                             {
-                                var prefab = ReflectionUtils.TryGetFieldOrProperty(all[i], "CigarettePrefab") as GameObject;
-                                if (prefab != null)
-                                {
-                                    cigarettePrefab = prefab;
-                                    break;
-                                }
+                                var prefab = ReflectionUtils.TryGetFieldOrProperty(t, "CigarettePrefab") as GameObject;
+                                if (prefab == null) continue;
+                                cigarettePrefab = prefab;
+                                break;
                             }
                         }
                     }
@@ -551,7 +538,8 @@ namespace S1API.Entities
                 var anim = prefabRoot.GetComponentInChildren<S1AvatarFramework.Animation.AvatarAnimation>(true);
 
                 ReflectionUtils.TrySetFieldOrProperty(smokeCigarette, "Npc", baseNpc);
-                ReflectionUtils.TrySetFieldOrProperty(smokeCigarette, "CigarettePrefab", cigarettePrefab);
+                if (cigarettePrefab != null)
+                    ReflectionUtils.TrySetFieldOrProperty(smokeCigarette, "CigarettePrefab", cigarettePrefab);
                 ReflectionUtils.TrySetFieldOrProperty(smokeCigarette, "Anim", anim);
                 ReflectionUtils.TrySetFieldOrProperty(smokeBreak, "SmokeCigarette", smokeCigarette);
                 if (debugMode.HasValue)
@@ -627,14 +615,12 @@ namespace S1API.Entities
                         var all = Object.FindObjectsOfType<S1NPCsOther.SprayPaint>(true);
                         if (all != null)
                         {
-                            for (int i = 0; i < all.Length; i++)
+                            foreach (var t in all)
                             {
-                                var prefab = ReflectionUtils.TryGetFieldOrProperty(all[i], "_sprayPaintPrefab") as S1AvatarFramework.Equipping.AvatarEquippable;
-                                if (prefab != null)
-                                {
-                                    sprayEquippable = prefab;
-                                    break;
-                                }
+                                var prefab = ReflectionUtils.TryGetFieldOrProperty(t, "_sprayPaintPrefab") as S1AvatarFramework.Equipping.AvatarEquippable;
+                                if (prefab == null) continue;
+                                sprayEquippable = prefab;
+                                break;
                             }
                         }
                     }
@@ -702,7 +688,7 @@ namespace S1API.Entities
             {
                 var path = drinkEquippablePath ?? "Avatar/Equippables/Beer";
                 var drinkPrefab = Resources.Load<GameObject>(path);
-                S1AvatarFramework.Equipping.AvatarEquippable drinkEquippable = null;
+                AvatarEquippable? drinkEquippable = null;
                 if (drinkPrefab != null)
                     drinkEquippable = drinkPrefab.GetComponent<S1AvatarFramework.Equipping.AvatarEquippable>()
                         ?? drinkPrefab.GetComponentInChildren<S1AvatarFramework.Equipping.AvatarEquippable>(true);
@@ -727,7 +713,8 @@ namespace S1API.Entities
 
                 var baseNpc = prefabRoot.GetComponent<S1NPCs.NPC>();
                 ReflectionUtils.TrySetFieldOrProperty(drinkItem, "Npc", baseNpc);
-                ReflectionUtils.TrySetFieldOrProperty(drinkItem, "DrinkPrefab", drinkEquippable);
+                if (drinkEquippable != null)
+                    ReflectionUtils.TrySetFieldOrProperty(drinkItem, "DrinkPrefab", drinkEquippable);
             }
             catch (Exception ex)
             {
@@ -754,7 +741,7 @@ namespace S1API.Entities
             {
                 var path = equippablePath ?? "Avatar/Equippables/Phone_Lowered";
                 var equippablePrefab = Resources.Load<GameObject>(path);
-                S1AvatarFramework.Equipping.AvatarEquippable equippable = null;
+                AvatarEquippable? equippable = null;
                 if (equippablePrefab != null)
                     equippable = equippablePrefab.GetComponent<S1AvatarFramework.Equipping.AvatarEquippable>()
                         ?? equippablePrefab.GetComponentInChildren<S1AvatarFramework.Equipping.AvatarEquippable>(true);
@@ -779,7 +766,7 @@ namespace S1API.Entities
 
                 var baseNpc = prefabRoot.GetComponent<S1NPCs.NPC>();
                 ReflectionUtils.TrySetFieldOrProperty(holdItem, "Npc", baseNpc);
-                ReflectionUtils.TrySetFieldOrProperty(holdItem, "Equippable", equippable);
+                if (equippable != null) ReflectionUtils.TrySetFieldOrProperty(holdItem, "Equippable", equippable);
             }
             catch (Exception ex)
             {
@@ -802,9 +789,6 @@ namespace S1API.Entities
         /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithInventoryDefaults(Action<RandomInventoryItemsBuilder> configure)
         {
-            if (configure == null)
-                return this;
-
             try
             {
                 NPC.RegisterRandomInventoryDefaultsForType(ownerType, configure);
@@ -829,7 +813,7 @@ namespace S1API.Entities
 
         private void ApplyInventoryDefaultsToComponent(S1NPCs.NPCInventory inventory, RandomInventoryItemsBuilder.InventoryDefaultsData data)
         {
-            if (inventory == null || data == null)
+            if (inventory == null)
                 return;
 
             try
@@ -862,43 +846,61 @@ namespace S1API.Entities
 
         private void PrecreateActionsForSpecs(List<IScheduleActionSpec> specs)
         {
-            if (specs == null || specs.Count == 0)
+            if (specs.Count == 0)
                 return;
 
-            var mgr = EnsureScheduleManager();
+            EnsureScheduleManager();
 
             int walkTo = 0, stayInBuilding = 0, locationDialogue = 0, locationBasedAction = 0, useVending = 0, driveToCarPark = 0, dealSignal = 0, useATM = 0, sit = 0;
             bool requiresSmokeBreak = false, requiresGraffiti = false, requiresDrinking = false, requiresHoldItem = false;
-            for (int i = 0; i < specs.Count; i++)
+            foreach (var s in specs)
             {
-                var s = specs[i];
-                if (s is WalkToSpec) walkTo++;
-                else if (s is StayInBuildingSpec) stayInBuilding++;
-                else if (s is LocationDialogueSpec) locationDialogue++;
-                else if (s is LocationBasedActionSpec locationBasedSpec)
+                switch (s)
                 {
-                    locationBasedAction++;
-                    switch (locationBasedSpec.ArriveBehaviour)
-                    {
-                        case LocationArriveBehaviour.SmokeBreak:
-                            requiresSmokeBreak = true;
-                            break;
-                        case LocationArriveBehaviour.Graffiti:
-                            requiresGraffiti = true;
-                            break;
-                        case LocationArriveBehaviour.Drinking:
-                            requiresDrinking = true;
-                            break;
-                        case LocationArriveBehaviour.HoldItem:
-                            requiresHoldItem = true;
-                            break;
-                    }
+                    case WalkToSpec:
+                        walkTo++;
+                        break;
+                    case StayInBuildingSpec:
+                        stayInBuilding++;
+                        break;
+                    case LocationDialogueSpec:
+                        locationDialogue++;
+                        break;
+                    case LocationBasedActionSpec locationBasedSpec:
+                        locationBasedAction++;
+                        switch (locationBasedSpec.ArriveBehaviour)
+                        {
+                            case LocationArriveBehaviour.SmokeBreak:
+                                requiresSmokeBreak = true;
+                                break;
+                            case LocationArriveBehaviour.Graffiti:
+                                requiresGraffiti = true;
+                                break;
+                            case LocationArriveBehaviour.Drinking:
+                                requiresDrinking = true;
+                                break;
+                            case LocationArriveBehaviour.HoldItem:
+                                requiresHoldItem = true;
+                                break;
+                        }
+
+                        break;
+                    case UseVendingMachineSpec:
+                        useVending++;
+                        break;
+                    case DriveToCarParkSpec:
+                        driveToCarPark++;
+                        break;
+                    case EnsureDealSignalSpec:
+                        dealSignal = Math.Max(dealSignal, 1);
+                        break;
+                    case UseATMSpec:
+                        useATM++;
+                        break;
+                    case SitSpec:
+                        sit++;
+                        break;
                 }
-                else if (s is UseVendingMachineSpec) useVending++;
-                else if (s is DriveToCarParkSpec) driveToCarPark++;
-                else if (s is EnsureDealSignalSpec) dealSignal = Math.Max(dealSignal, 1);
-                else if (s is UseATMSpec) useATM++;
-                else if (s is SitSpec) sit++;
             }
 
             if (requiresSmokeBreak)
@@ -946,7 +948,7 @@ namespace S1API.Entities
             if (count <= 0)
                 return;
             var mgr = EnsureScheduleManager();
-            for (int i = 0; i < count; i++)
+            for (var i = 0; i < count; i++)
             {
                 var go = new GameObject(string.IsNullOrEmpty(namePrefix) ? typeof(T).Name : ($"{namePrefix}_{i + 1}"));
                 go.transform.SetParent(mgr.transform, false);
@@ -1020,17 +1022,19 @@ namespace S1API.Entities
                 // Try CurrentSettings as last resort
                 ReflectionUtils.TrySetFieldOrProperty(avatar, "CurrentSettings", settings);
             }
-            catch { }
+            catch
+            {
+                // ignored
+            }
         }
 
 #if (IL2CPPMELON)
         private static Il2CppSystem.Collections.Generic.List<T> ToIl2CppList<T>(System.Collections.Generic.List<T> source)
         {
             var list = new Il2CppSystem.Collections.Generic.List<T>();
-            if (source == null)
-                return list;
-            for (int i = 0; i < source.Count; i++)
-                list.Add(source[i]);
+            foreach (var t in source)
+                list.Add(t);
+
             return list;
         }
 #else

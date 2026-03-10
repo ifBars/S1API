@@ -19,7 +19,7 @@ namespace S1API.Entities
         /// <summary>
         /// INTERNAL: Reference to the NPC on API side.
         /// </summary>
-        internal readonly NPC NPC;
+        private readonly NPC NPC;
 
         /// <summary>
         /// INTERNAL: Constructor used for assigning the NPC instance.
@@ -151,11 +151,9 @@ namespace S1API.Entities
         /// <param name="speed">Movement speed multiplier.</param>
         public void AddSpeedControl(string id, int priority, float speed)
         {
-            if (SpeedController != null)
-            {
-                var control = new S1NPCs.NPCSpeedController.SpeedControl(id, priority, speed);
-                SpeedController.AddSpeedControl(control);
-            }
+            if (SpeedController == null) return;
+            var control = new S1NPCs.NPCSpeedController.SpeedControl(id, priority, speed);
+            SpeedController.AddSpeedControl(control);
         }
 
         /// <summary>
@@ -180,7 +178,7 @@ namespace S1API.Entities
         /// <summary>
         /// INTERNAL: Gets the speed controller component from the NPC.
         /// </summary>
-        internal S1NPCs.NPCSpeedController? SpeedController =>
+        private S1NPCs.NPCSpeedController? SpeedController =>
             NPC.S1NPC.Movement?.SpeedController;
 
         #endregion

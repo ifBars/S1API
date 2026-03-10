@@ -11,7 +11,6 @@ using S1Registry = ScheduleOne.Registry;
 #endif
 
 using System;
-using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.Events;
@@ -26,7 +25,7 @@ namespace S1API.Entities
     public sealed class NPCInventory
     {
         private static readonly Logging.Log Logger = new Logging.Log("NPCInventory");
-        internal readonly NPC NPC;
+        private readonly NPC NPC;
 
         internal NPCInventory(NPC npc)
         {
@@ -41,8 +40,6 @@ namespace S1API.Entities
             if (string.IsNullOrEmpty(itemId) || quantity <= 0)
                 return false;
             var temp = BuildTempItem(itemId, quantity);
-            if (temp == null)
-                return false;
             return CanItemFitInternal(temp);
         }
 
@@ -54,8 +51,6 @@ namespace S1API.Entities
             if (string.IsNullOrEmpty(itemId) || quantity <= 0)
                 return 0;
             var temp = BuildTempItem(itemId, quantity);
-            if (temp == null)
-                return 0;
             return GetCapacityForItemInternal(temp);
         }
 
@@ -68,8 +63,6 @@ namespace S1API.Entities
             if (string.IsNullOrEmpty(itemId) || quantity <= 0)
                 return false;
             var temp = BuildTempItem(itemId, quantity);
-            if (temp == null)
-                return false;
             if (!CanItemFitInternal(temp))
                 return false;
             InsertItemInternal(temp, network);
@@ -84,16 +77,17 @@ namespace S1API.Entities
         /// </summary>
         public void EnsureInitialized()
         {
-            string npcId = NPC?.S1NPC?.ID ?? "<null>";
+            var npcId = NPC?.S1NPC?.ID ?? "<null>";
             var inv = Component;
-            if (inv == null)
+            if (inv == null && NPC != null)
             {
-                // Attach inventory if missing
                 var comp = NPC.gameObject.GetComponent<S1NPCs.NPCInventory>() ?? NPC.gameObject.AddComponent<S1NPCs.NPCInventory>();
                 inv = comp;
             }
 
-            // Ensure ItemSlots list exists
+            if (inv == null)
+                return;
+            
             if (inv.ItemSlots == null)
             {
 #if (IL2CPPMELON || IL2CPPBEPINEX)
@@ -102,47 +96,47 @@ namespace S1API.Entities
                 inv.ItemSlots = new System.Collections.Generic.List<S1Items.ItemSlot>();
 #endif
             }
-
-            // Remove duplicate slots (same instance appearing multiple times)
-            int duplicatesRemoved = DeduplicateSlots(inv);
-
-            // Ensure we have the correct number of slots
-            int currentCount = inv.ItemSlots.Count;
-            int targetCount = inv.SlotCount;
-
-            // Remove excess slots if we have too many
+            
+            var currentCount = inv.ItemSlots.Count;
+            var targetCount = inv.SlotCount;
+            
             if (currentCount > targetCount)
             {
-                int trimmed = currentCount - targetCount;
-                for (int i = currentCount - 1; i >= targetCount; i--)
+                for (var i = currentCount - 1; i >= targetCount; i--)
                 {
                     var slot = inv.ItemSlots[i];
                     if (slot != null)
                     {
-                        try { slot.ClearStoredInstance(true); } catch { }
+                        try { slot.ClearStoredInstance(true); }
+                        catch
+                        {
+                            // ignored
+                        }
                     }
                     inv.ItemSlots.RemoveAt(i);
                 }
                 currentCount = inv.ItemSlots.Count;
             }
-
-            // CRITICAL: Unlock all existing slots before creating new ones
-            // Base game NPCs may have locked slots, which prevents AddCash/InsertItem from working
-            for (int i = 0; i < inv.ItemSlots.Count; i++)
+            
+            foreach (var slot in inv.ItemSlots)
             {
-                var slot = inv.ItemSlots[i];
-                if (slot != null)
+                if (slot == null) continue;
+                try 
+                { 
+                    ReflectionUtils.TrySetFieldOrProperty(slot, "ActiveLock", null); 
+                }
+                catch
                 {
-                    try 
-                    { 
-                        ReflectionUtils.TrySetFieldOrProperty(slot, "ActiveLock", null); 
-                    } 
-                    catch { }
-                    try 
-                    { 
-                        ReflectionUtils.TrySetFieldOrProperty(slot, "IsAddLocked", false); 
-                    } 
-                    catch { }
+                    // ignored
+                }
+
+                try 
+                { 
+                    ReflectionUtils.TrySetFieldOrProperty(slot, "IsAddLocked", false); 
+                }
+                catch
+                {
+                    // ignored
                 }
             }
 
@@ -150,16 +144,19 @@ namespace S1API.Entities
             // Note: SetSlotOwner automatically adds the slot to ItemSlots, so we don't call Add() manually
             if (currentCount < targetCount)
             {
-                int slotsToCreate = targetCount - currentCount;
-                for (int i = 0; i < slotsToCreate; i++)
+                var slotsToCreate = targetCount - currentCount;
+                for (var i = 0; i < slotsToCreate; i++)
                 {
                     var slot = new S1Items.ItemSlot();
                     
-                    // Set up event handler before SetSlotOwner (which adds to list)
 #if (IL2CPPMELON || IL2CPPBEPINEX)
-                    System.Action handler = new System.Action(() =>
+                    var handler = new System.Action(() =>
                     {
-                        try { inv.onContentsChanged?.Invoke(); } catch { }
+                        try { inv.onContentsChanged?.Invoke(); }
+                        catch
+                        {
+                            // ignored
+                        }
                     });
                     slot.onItemDataChanged = (Il2CppSystem.Action)Il2CppSystem.Delegate.Combine(
                         slot.onItemDataChanged,
@@ -184,8 +181,7 @@ namespace S1API.Entities
                         })
                     );
 #endif
-
-                    // SetSlotOwner automatically adds slot to inv.ItemSlots - DO NOT call Add() manually
+                    
 #if MONOMELON
                     slot.SetSlotOwner(inv);
 #else
@@ -193,18 +189,27 @@ namespace S1API.Entities
 #endif
 
                     // Ensure slot is unlocked
-                    try { ReflectionUtils.TrySetFieldOrProperty(slot, "ActiveLock", null); } catch { }
-                    try { ReflectionUtils.TrySetFieldOrProperty(slot, "IsAddLocked", false); } catch { }
+                    try { ReflectionUtils.TrySetFieldOrProperty(slot, "ActiveLock", null); }
+                    catch
+                    {
+                        // ignored
+                    }
+
+                    try { ReflectionUtils.TrySetFieldOrProperty(slot, "IsAddLocked", false); }
+                    catch
+                    {
+                        // ignored
+                    }
                 }
             }
 
-            if (inv.PickpocketIntObj == null)
+            if (inv.PickpocketIntObj == null && NPC != null)
             {
                 var talk = NPC.GetType().GetMethod("GetPrimaryInteractable", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                 var primary = talk?.Invoke(NPC, null) as S1Interaction.InteractableObject;
                 var interactables = NPC.gameObject.GetComponentsInChildren<S1Interaction.InteractableObject>(true);
-                S1Interaction.InteractableObject pick = null;
-                for (int i = 0; i < interactables.Length; i++)
+                S1Interaction.InteractableObject? pick = null;
+                for (var i = 0; i < interactables.Length; i++)
                 {
                     if (interactables[i] != null && interactables[i] != primary)
                     {
@@ -221,13 +226,12 @@ namespace S1API.Entities
 
             try
             {
-                ReflectionUtils.TrySetFieldOrProperty(inv, "npc", NPC.S1NPC);
-
-                // NOTE: Do NOT add listeners here - the game's NPCInventory.Awake() already adds
-                // onHovered and onInteractStart listeners. Adding them again causes duplicate
-                // event firing which breaks the pickpocket screen.
+                ReflectionUtils.TrySetFieldOrProperty(inv, "npc", NPC?.S1NPC);
             }
-            catch { }
+            catch
+            {
+                // ignored
+            }
 
             try
             {
@@ -237,14 +241,17 @@ namespace S1API.Entities
                     ReflectionUtils.TrySetFieldOrProperty(inv, "onContentsChanged", new UnityEvent());
                 }
             }
-            catch { }
+            catch
+            {
+                // ignored
+            }
 
             try { inv.NetworkInitializeIfDisabled(); } catch (Exception ex) { Logger.Warning($"[NPCInventory] EnsureInitialized: NetworkInitializeIfDisabled threw for '{npcId}': {ex.Message}"); }
         }
 
-        internal S1NPCs.NPCInventory Component => NPC.gameObject.GetComponent<S1NPCs.NPCInventory>();
+        private S1NPCs.NPCInventory Component => NPC.gameObject.GetComponent<S1NPCs.NPCInventory>();
 
-        private S1Items.ItemInstance BuildTempItem(string itemId, int quantity)
+        private S1Items.ItemInstance? BuildTempItem(string itemId, int quantity)
         {
             try
             {
@@ -261,81 +268,24 @@ namespace S1API.Entities
             }
         }
 
-        internal bool CanItemFitInternal(S1Items.ItemInstance item)
+        private bool CanItemFitInternal(S1Items.ItemInstance item)
         {
-            if (item == null) return false;
             EnsureInitialized();
             var inv = Component;
             return inv != null && inv.CanItemFit(item);
         }
 
-        internal int GetCapacityForItemInternal(S1Items.ItemInstance item)
+        private int GetCapacityForItemInternal(S1Items.ItemInstance item)
         {
-            if (item == null) return 0;
             EnsureInitialized();
             var inv = Component;
             return inv != null ? inv.GetCapacityForItem(item) : 0;
         }
 
-        internal void InsertItemInternal(S1Items.ItemInstance item, bool network = true)
+        private void InsertItemInternal(S1Items.ItemInstance item, bool network = true)
         {
-            if (item == null) return;
             EnsureInitialized();
             Component?.InsertItem(item, network);
-        }
-
-        /// <summary>
-        /// Removes duplicate slot instances from the inventory's ItemSlots list.
-        /// Duplicates can occur if slots are added manually after SetSlotOwner (which already adds them).
-        /// </summary>
-        private int DeduplicateSlots(S1NPCs.NPCInventory inv)
-        {
-            if (inv?.ItemSlots == null)
-                return 0;
-
-            try
-            {
-                // Use a set to track seen slot instances (by reference equality)
-                var seen = new HashSet<object>();
-                var toRemove = new List<int>();
-
-                for (int i = 0; i < inv.ItemSlots.Count; i++)
-                {
-                    var slot = inv.ItemSlots[i];
-                    if (slot == null)
-                    {
-                        toRemove.Add(i);
-                        continue;
-                    }
-
-                    // Check if we've seen this exact slot instance before
-                    if (seen.Contains(slot))
-                    {
-                        // This is a duplicate - clear it and mark for removal
-                        try { slot.ClearStoredInstance(true); } catch { }
-                        toRemove.Add(i);
-                    }
-                    else
-                    {
-                        seen.Add(slot);
-                    }
-                }
-
-                // Remove duplicates from the end to preserve indices
-                for (int i = toRemove.Count - 1; i >= 0; i--)
-                {
-                    inv.ItemSlots.RemoveAt(toRemove[i]);
-                }
-
-                return toRemove.Count;
-            }
-            catch (Exception ex)
-            {
-                // If deduplication fails, continue - better to have duplicates than crash
-                Logger.Warning($"[NPCInventory] DeduplicateSlots: Failed with exception: {ex.Message}");
-                Logger.Warning($"[NPCInventory] DeduplicateSlots: Stack trace: {ex.StackTrace}");
-                return 0;
-            }
         }
     }
 }

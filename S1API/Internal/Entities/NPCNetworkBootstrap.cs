@@ -23,7 +23,7 @@ using S1API.Entities;
 using S1API.Logging;
 using UnityEngine;
 
-namespace S1API.Internal
+namespace S1API.Internal.Entities
 {
     /// <summary>
     /// INTERNAL: Centralizes network readiness tracking for NPC spawning and pre-registers NPC prefabs
@@ -55,7 +55,7 @@ namespace S1API.Internal
             connectionObjectsReady &&
             clientsReady;
 
-        public static void ResetFlags()
+        internal static void ResetFlags()
         {
             mainSceneInitialized = false;
             networkObserved = false;
@@ -68,7 +68,7 @@ namespace S1API.Internal
             pendingSpawnBlockedLogged = false;
         }
 
-        public static void EnsurePrefabsWarmup()
+        internal static void EnsurePrefabsWarmup()
         {
             if (NPC.PrefabsConfiguredForLocalProcess)
                 return;
@@ -80,7 +80,7 @@ namespace S1API.Internal
             MelonCoroutines.Start(PrefabWarmupCoroutine());
         }
 
-        internal static void RegisterPendingNetworkSpawn(NPC owner, NetworkObject netObject, float activationDelay, float spawnDelay)
+        internal static void RegisterPendingNetworkSpawn(NPC? owner, NetworkObject netObject, float activationDelay, float spawnDelay)
         {
             if (owner == null || netObject == null)
                 return;
@@ -93,18 +93,17 @@ namespace S1API.Internal
 
                 EnsurePrefabsWarmup();
 
-                for (int i = PendingSpawns.Count - 1; i >= 0; i--)
+                for (var i = PendingSpawns.Count - 1; i >= 0; i--)
                 {
                     var entry = PendingSpawns[i];
                     if (entry == null || entry.NetObject == null || entry.NetObject == netObject)
                         PendingSpawns.RemoveAt(i);
                 }
 
-                float now = Time.realtimeSinceStartup;
-                float activateAt = now + Math.Max(0f, activationDelay);
-                float spawnAt = now + Math.Max(spawnDelay, activationDelay);
+                var now = Time.realtimeSinceStartup;
+                var activateAt = now + Math.Max(0f, activationDelay);
+                var spawnAt = now + Math.Max(spawnDelay, activationDelay);
                 PendingSpawns.Add(new PendingSpawn(owner, netObject, activateAt, spawnAt));
-                var ownerId = owner?.S1NPC?.ID ?? owner?.gameObject?.name ?? "<unknown>";
 
                 TryProcessPendingSpawns();
             }
@@ -146,8 +145,8 @@ namespace S1API.Internal
 
         private static IEnumerator PrefabWarmupCoroutine()
         {
-            float start = Time.realtimeSinceStartup;
-            float timeout = 20f;
+            var start = Time.realtimeSinceStartup;
+            var timeout = 20f;
 
             while (!NPC.PrefabsConfiguredForLocalProcess && (Time.realtimeSinceStartup - start) < timeout)
             {
@@ -184,7 +183,7 @@ namespace S1API.Internal
         private static IEnumerator ReadinessMonitor()
         {
             NetworkManager nm = null;
-            float start = Time.realtimeSinceStartup;
+            var start = Time.realtimeSinceStartup;
             // Wait for NetworkManager
             while (nm == null)
             {
@@ -204,10 +203,6 @@ namespace S1API.Internal
                 networkObserved = true;
                 try
                 {
-                    var cm = nm.ClientManager;
-                    var sm = nm.ServerManager;
-                    var scened = nm.SceneManager;
-
                     // Periodically evaluate readiness
                     MelonCoroutines.Start(PeriodicEvaluate());
                 }
@@ -215,7 +210,7 @@ namespace S1API.Internal
             }
 
             // Fallback: timeout-based readiness (server-only)
-            float maxWait = 12f;
+            var maxWait = 12f;
             while (!clientsReady && (Time.realtimeSinceStartup - start) < maxWait)
             {
                 EvaluateReadiness();
@@ -238,30 +233,23 @@ namespace S1API.Internal
         private static void EvaluateReadiness()
         {
             var nm = InstanceFinder.NetworkManager;
-            if (nm == null)
+            if (nm == null || !NPC.PrefabsConfiguredForLocalProcess)
             {
                 clientsReady = false;
                 connectionObjectsReady = false;
                 return;
             }
 
-            if (!NPC.PrefabsConfiguredForLocalProcess)
-            {
-                clientsReady = false;
-                connectionObjectsReady = false;
-                return;
-            }
-
-            bool remoteConnectionsReady = AreRemoteConnectionsReady(nm, out bool hasRemoteClients);
+            var remoteConnectionsReady = AreRemoteConnectionsReady(nm, out var hasRemoteClients);
             connectionObjectsReady = remoteConnectionsReady;
 
-            bool inMain = false;
+            var inMain = false;
             try { inMain = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "Main"; } catch { }
 
             // Heuristic: consider clients ready once transport is running, online scene is Main,
             // and any remote connections have finished loading their initial object.
-            bool serverUp = nm.IsServer && nm.ServerManager != null && nm.ServerManager.Started;
-            bool clientUpIfHost = !nm.IsServer || nm.IsClient || hasRemoteClients;
+            var serverUp = nm.IsServer && nm.ServerManager != null && nm.ServerManager.Started;
+            var clientUpIfHost = !nm.IsServer || nm.IsClient || hasRemoteClients;
 
             clientsReady = inMain && serverUp && clientUpIfHost && remoteConnectionsReady;
             LogReadinessState(inMain, serverUp, clientUpIfHost, remoteConnectionsReady, hasRemoteClients);
@@ -276,7 +264,7 @@ namespace S1API.Internal
                 if (!nm.IsServer) return false;
                 var conns = nm.ServerManager?.Clients;
                 if (conns == null) return false;
-                int count = 0;
+                var count = 0;
                 foreach (var kvp in conns)
                 {
                     var c = kvp.Value;
@@ -325,14 +313,9 @@ namespace S1API.Internal
 
                 // Additional delay to ensure all clients have completed prefab configuration
                 // This prevents server from spawning before clients finish ConfigurePrefab
-                if (hasRemoteClients)
-                {
-                    float timeSinceMainScene = Time.realtimeSinceStartup - mainSceneInitTime;
-                    if (timeSinceMainScene < 5f) // Wait at least 5 seconds after main scene init
-                        return false;
-                }
-
-                return true;
+                if (!hasRemoteClients) return true;
+                var timeSinceMainScene = Time.realtimeSinceStartup - mainSceneInitTime;
+                return !(timeSinceMainScene < 5f); // Wait at least 5 seconds after main scene init
             }
             catch
             {
@@ -367,9 +350,9 @@ namespace S1API.Internal
             if (serverManager == null)
                 return;
                 
-            float now = Time.realtimeSinceStartup;
+            var now = Time.realtimeSinceStartup;
 
-            for (int i = PendingSpawns.Count - 1; i >= 0; i--)
+            for (var i = PendingSpawns.Count - 1; i >= 0; i--)
             {
                 var pending = PendingSpawns[i];
                 if (pending == null)
@@ -389,13 +372,7 @@ namespace S1API.Internal
                 }
 
                 var go = netObject.gameObject;
-                if (go == null)
-                {
-                    PendingSpawns.RemoveAt(i);
-                    continue;
-                }
-
-                if (netObject.IsSpawned)
+                if (go == null || netObject.IsSpawned)
                 {
                     PendingSpawns.RemoveAt(i);
                     continue;
@@ -442,59 +419,26 @@ namespace S1API.Internal
             }
         }
 
-        private static NetworkConnection GetHostConnection(NetworkManager nm)
-        {
-            try
-            {
-                if (nm == null)
-                    return null;
-
-                var serverManager = nm.ServerManager;
-                if (serverManager == null)
-                    return null;
-
-                var clients = serverManager.Clients;
-                if (clients == null)
-                    return null;
-
-                foreach (var kvp in clients)
-                {
-                    var conn = kvp.Value;
-                    if (conn == null)
-                        continue;
-                    if (!conn.IsValid)
-                        continue;
-                    if (conn.IsLocalClient)
-                        return conn;
-                }
-            }
-            catch { }
-
-            return null;
-        }
-
         private static void LogReadinessState(bool inMain, bool serverUp, bool clientUpIfHost, bool remoteConnectionsReady, bool hasRemoteClients)
         {
-            float now = Time.realtimeSinceStartup;
-            bool stateChanged = !readinessLogInitialized ||
-                                lastLogInMain != inMain ||
-                                lastLogServerUp != serverUp ||
-                                lastLogClientUp != clientUpIfHost ||
-                                lastLogRemoteReady != remoteConnectionsReady ||
-                                lastLogHasRemote != hasRemoteClients ||
-                                lastLogClientsReady != clientsReady;
+            var now = Time.realtimeSinceStartup;
+            var stateChanged = !readinessLogInitialized ||
+                               lastLogInMain != inMain ||
+                               lastLogServerUp != serverUp ||
+                               lastLogClientUp != clientUpIfHost ||
+                               lastLogRemoteReady != remoteConnectionsReady ||
+                               lastLogHasRemote != hasRemoteClients ||
+                               lastLogClientsReady != clientsReady;
 
-            if (stateChanged || (!clientsReady && (now - lastStateLogTime) >= 5f))
-            {
-                readinessLogInitialized = true;
-                lastLogInMain = inMain;
-                lastLogServerUp = serverUp;
-                lastLogClientUp = clientUpIfHost;
-                lastLogRemoteReady = remoteConnectionsReady;
-                lastLogHasRemote = hasRemoteClients;
-                lastLogClientsReady = clientsReady;
-                lastStateLogTime = now;
-            }
+            if (!stateChanged && (clientsReady || !((now - lastStateLogTime) >= 5f))) return;
+            readinessLogInitialized = true;
+            lastLogInMain = inMain;
+            lastLogServerUp = serverUp;
+            lastLogClientUp = clientUpIfHost;
+            lastLogRemoteReady = remoteConnectionsReady;
+            lastLogHasRemote = hasRemoteClients;
+            lastLogClientsReady = clientsReady;
+            lastStateLogTime = now;
         }
 
         private sealed class PendingSpawn

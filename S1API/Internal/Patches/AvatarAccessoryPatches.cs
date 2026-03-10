@@ -30,7 +30,7 @@ namespace S1API.Internal.Patches
         [HarmonyPatch]
         internal static class AvatarApplyAccessorySettingsPatch
         {
-            static MethodBase TargetMethod()
+            static MethodBase? TargetMethod()
             {
                 return typeof(S1AvatarFramework.Avatar).GetMethod("ApplyAccessorySettings",
                     BindingFlags.Public | BindingFlags.Instance);
@@ -58,16 +58,16 @@ namespace S1API.Internal.Patches
 
                         // Get the AssetPath to check if this is a custom accessory
                         // On IL2CPP, fields are exposed as properties, so use TryGetFieldOrProperty
-                        string assetPath = ReflectionUtils.TryGetFieldOrProperty(accessory, "AssetPath") as string;
+                        string? assetPath = ReflectionUtils.TryGetFieldOrProperty(accessory, "AssetPath") as string;
                         if (string.IsNullOrEmpty(assetPath)) continue;
 
                         // Check if we have texture replacements for this accessory
                         var textureReplacements = AccessoryFactory.GetTextureReplacements(assetPath);
-                        if (textureReplacements == null || textureReplacements.Count == 0) continue;
+                        if (textureReplacements.Count == 0) continue;
 
                         // Get the GameObject - accessory is a Component (MonoBehaviour)
                         // Cast to Component to access gameObject reliably on IL2CPP
-                        GameObject accessoryObj = null;
+                        GameObject? accessoryObj = null;
                         if (accessory is Component component)
                         {
                             accessoryObj = component.gameObject;
@@ -88,7 +88,7 @@ namespace S1API.Internal.Patches
                 GameObject accessoryObj,
                 Dictionary<string, Texture2D> textureReplacements)
             {
-                if (accessoryObj == null || textureReplacements == null || textureReplacements.Count == 0)
+                if (accessoryObj == null || textureReplacements.Count == 0)
                     return;
 
                 // Apply texture to all renderers (including inactive ones)

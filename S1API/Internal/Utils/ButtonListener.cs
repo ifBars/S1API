@@ -9,13 +9,12 @@ namespace S1API.Internal.Utils
     /// INTERNAL: Utility helpers for managing Unity UI <see cref="Button"/>s.
     /// This class is intended for internal API use only. Mod developers should use <see cref="S1API.Utils.ButtonUtils"/> instead.
     /// </summary>
-    [Obsolete("This class is for internal API use only. Mod developers should use S1API.Utils.ButtonUtils instead. This class will be made internal in a future version.")]
-    public static class ButtonUtils
+    internal static class ButtonUtils
     {
         /// <summary>
         /// Adds a click listener to the specified button, ensuring compatibility with IL2CPP and Mono.
         /// </summary>
-        public static void AddListener(Button button, Action action)
+        internal static void AddListener(Button button, Action action)
         {
             if (button == null || action == null) return;
             EventHelper.AddListener(action, button.onClick);
@@ -24,7 +23,7 @@ namespace S1API.Internal.Utils
         /// <summary>
         /// Removes a previously added click listener from the specified button.
         /// </summary>
-        public static void RemoveListener(Button button, Action action)
+        internal static void RemoveListener(Button button, Action action)
         {
             if (button == null || action == null) return;
             EventHelper.RemoveListener(action, button.onClick);
@@ -33,7 +32,7 @@ namespace S1API.Internal.Utils
         /// <summary>
         /// Removes all listeners from the specified button safely.
         /// </summary>
-        public static void ClearListeners(Button button)
+        internal static void ClearListeners(Button button)
         {
             if (button == null) return;
             button.onClick.RemoveAllListeners();
@@ -42,7 +41,7 @@ namespace S1API.Internal.Utils
         /// <summary>
         /// Enables the button and optionally updates the label.
         /// </summary>
-        public static void Enable(Button button, Text? label = null, string? text = null)
+        internal static void Enable(Button button, Text? label = null, string? text = null)
         {
             if (button != null) button.interactable = true;
             if (label != null && !string.IsNullOrEmpty(text)) label.text = text;
@@ -51,7 +50,7 @@ namespace S1API.Internal.Utils
         /// <summary>
         /// Disables the button and optionally updates the label.
         /// </summary>
-        public static void Disable(Button button, Text? label = null, string? text = null)
+        internal static void Disable(Button button, Text? label = null, string? text = null)
         {
             if (button != null) button.interactable = false;
             if (label != null && !string.IsNullOrEmpty(text)) label.text = text;
@@ -60,14 +59,15 @@ namespace S1API.Internal.Utils
         /// <summary>
         /// Sets the label text of a button with a known Text child.
         /// </summary>
-        public static void SetLabel(Text label, string text)
+        internal static void SetLabel(Text label, string text)
         {
             if (label != null) label.text = text;
         }
+        
         /// <summary>
         /// Sets the button label and background color.
         /// </summary>
-        public static void SetStyle(Button button, Text label, string text, Color bg)
+        internal static void SetStyle(Button button, Text label, string text, Color bg)
         {
             if (button == null || label == null) return;
             label.text = text;

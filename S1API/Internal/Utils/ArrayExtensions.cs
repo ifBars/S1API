@@ -10,8 +10,7 @@ namespace S1API.Internal.Utils
     /// INTERNAL: Extensions for Arrays.
     /// This class is intended for internal API use only. Mod developers should use <see cref="S1API.Utils.ArrayExtensions"/> instead.
     /// </summary>
-    [Obsolete("This class is for internal API use only. Mod developers should use S1API.Utils.ArrayExtensions instead. This class will be made internal in a future version.")]
-    public static class ArrayExtensions
+    internal static class ArrayExtensions
     {
         /// <summary>
         /// Add's an item to an existing array
@@ -19,7 +18,7 @@ namespace S1API.Internal.Utils
         /// <param name="array"></param>
         /// <param name="item"></param>
         /// <typeparam name="T"></typeparam>
-        public static T[] AddItemToArray<T>(this T[]? array, T item)
+        internal static T[] AddItemToArray<T>(this T[]? array, T item)
         {
             array ??= Array.Empty<T>();
 
@@ -36,7 +35,7 @@ namespace S1API.Internal.Utils
         /// <param name="array"></param>
         /// <param name="itemsToAdd"></param>
         /// <typeparam name="T"></typeparam>
-        public static Il2CppReferenceArray<T> AddItemToArray<T>(this Il2CppReferenceArray<T>? array, params T[]? itemsToAdd) where T : Il2CppSystem.Object
+        internal static Il2CppReferenceArray<T> AddItemToArray<T>(this Il2CppReferenceArray<T>? array, params T[]? itemsToAdd) where T : Il2CppSystem.Object
         {
             var originalLength = array?.Length ?? 0;
             var additionalLength = itemsToAdd?.Length ?? 0;

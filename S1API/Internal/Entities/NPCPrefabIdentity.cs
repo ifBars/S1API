@@ -32,24 +32,24 @@ namespace S1API.Internal.Entities
 #if IL2CPPMELON
     [RegisterTypeInIl2Cpp]
 #endif
-    public sealed class NPCPrefabIdentity : MonoBehaviour
+    internal sealed class NPCPrefabIdentity : MonoBehaviour
     {
         private static readonly Log Logger = new Log("NPCPrefabIdentity");
         
-        // Public fields for Mono compatibility (auto-serialized there)
-        public string Id;
-        public string FirstName;
-        public string LastName;
-        public Sprite Icon;
-        public S1AvatarFramework.AvatarSettings AppearanceDefaults;
-        public string DealerHomeBuildingName;
-        public string PrefabName;
+        // fields for Mono compatibility (auto-serialized there)
+        internal string Id;
+        internal string FirstName;
+        internal string LastName;
+        internal Sprite Icon;
+        internal S1AvatarFramework.AvatarSettings AppearanceDefaults;
+        internal string DealerHomeBuildingName;
+        private string PrefabName;
 
         // Relationship data fields for Mono compatibility
-        public float? RelationDelta;
-        public bool? Unlocked;
-        public NPCRelationship.UnlockType? UnlockType;
-        public List<string> ConnectionIDs;
+        private float? RelationDelta;
+        private bool? Unlocked;
+        private NPCRelationship.UnlockType? UnlockType;
+        private List<string> ConnectionIDs;
 
         // Static registry to preserve data across network instantiation on Il2Cpp
         private static readonly Dictionary<string, IdentityData> _registry = new Dictionary<string, IdentityData>();
@@ -58,17 +58,17 @@ namespace S1API.Internal.Entities
 
         private struct IdentityData
         {
-            public string Id;
-            public string FirstName;
-            public string LastName;
-            public Sprite Icon;
-            public AvatarSettingsData AppearanceDefaults;
-            public string DealerHomeBuildingName;
-            public float? RelationDelta;
-            public bool? Unlocked;
-            public int? UnlockType; // Stored as int (0=Recommendation, 1=DirectApproach) to avoid enum dependency
-            public List<string> ConnectionIDs;
-            public string PrefabName;
+            internal string Id;
+            internal string FirstName;
+            internal string LastName;
+            internal Sprite Icon;
+            internal AvatarSettingsData AppearanceDefaults;
+            internal string DealerHomeBuildingName;
+            internal float? RelationDelta;
+            internal bool? Unlocked;
+            internal int? UnlockType; // Stored as int (0=Recommendation, 1=DirectApproach) to avoid enum dependency
+            internal List<string> ConnectionIDs;
+            internal string PrefabName;
         }
 
         private void Awake()
@@ -464,7 +464,7 @@ namespace S1API.Internal.Entities
         /// Apply stored relationship defaults to a base-game NPC's relation data.
         /// Safe to call on both server and clients.
         /// </summary>
-        public void ApplyRelationshipDataTo(S1NPCs.NPC npc, bool preserveUnlockState = false)
+        internal void ApplyRelationshipDataTo(S1NPCs.NPC npc, bool preserveUnlockState = false)
         {
             if (npc == null)
                 return;
@@ -506,7 +506,7 @@ namespace S1API.Internal.Entities
         /// Apply stored defaults to a base-game NPC instance.
         /// Safe to call on both server and clients.
         /// </summary>
-        public void ApplyTo(S1NPCs.NPC npc)
+        internal void ApplyTo(S1NPCs.NPC npc)
         {
             if (npc == null)
                 return;
@@ -1039,44 +1039,44 @@ namespace S1API.Internal.Entities
 
         private sealed class AvatarSettingsData
         {
-            public float Gender;
-            public float Height;
-            public float Weight;
-            public Color32 SkinColor;
-            public Color EyeBallTint;
-            public float PupilDilation;
-            public float EyebrowScale;
-            public float EyebrowThickness;
-            public float EyebrowRestingHeight;
-            public float EyebrowRestingAngle;
-            public string HairPath;
-            public Color HairColor;
-            public Color LeftEyeLidColor;
-            public Color RightEyeLidColor;
-            public string EyeballMaterialIdentifier;
-            public EyeStateData LeftEye = new EyeStateData();
-            public EyeStateData RightEye = new EyeStateData();
-            public List<LayerSettingData> FaceLayers = new List<LayerSettingData>();
-            public List<LayerSettingData> BodyLayers = new List<LayerSettingData>();
-            public List<AccessorySettingData> Accessories = new List<AccessorySettingData>();
+            internal float Gender;
+            internal float Height;
+            internal float Weight;
+            internal Color32 SkinColor;
+            internal Color EyeBallTint;
+            internal float PupilDilation;
+            internal float EyebrowScale;
+            internal float EyebrowThickness;
+            internal float EyebrowRestingHeight;
+            internal float EyebrowRestingAngle;
+            internal string HairPath;
+            internal Color HairColor;
+            internal Color LeftEyeLidColor;
+            internal Color RightEyeLidColor;
+            internal string EyeballMaterialIdentifier;
+            internal EyeStateData LeftEye = new EyeStateData();
+            internal EyeStateData RightEye = new EyeStateData();
+            internal List<LayerSettingData> FaceLayers = new List<LayerSettingData>();
+            internal List<LayerSettingData> BodyLayers = new List<LayerSettingData>();
+            internal List<AccessorySettingData> Accessories = new List<AccessorySettingData>();
         }
 
         private sealed class EyeStateData
         {
-            public float TopLidOpen;
-            public float BottomLidOpen;
+            internal float TopLidOpen;
+            internal float BottomLidOpen;
         }
 
         private sealed class LayerSettingData
         {
-            public string Path;
-            public Color Color;
+            internal string Path;
+            internal Color Color;
         }
 
         private sealed class AccessorySettingData
         {
-            public string Path;
-            public Color Color;
+            internal string Path;
+            internal Color Color;
         }
     }
 }

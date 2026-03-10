@@ -12,8 +12,7 @@ namespace S1API.Internal.Utils
     /// Toggle.onValueChanged is exposed as either a field or a property.
     /// This class is intended for internal API use only. Mod developers should use <see cref="S1API.Utils.ToggleUtils"/> instead.
     /// </summary>
-    [Obsolete("This class is for internal API use only. Mod developers should use S1API.Utils.ToggleUtils instead. This class will be made internal in a future version.")]
-    public static class ToggleUtils
+    internal static class ToggleUtils
     {
         private static FieldInfo? _onValueChangedField;
         private static PropertyInfo? _onValueChangedProperty;
@@ -23,9 +22,9 @@ namespace S1API.Internal.Utils
         /// <summary>
         /// Adds a listener to a Toggle's onValueChanged event in an IL2CPP-safe manner.
         /// </summary>
-        public static void AddListener(Toggle toggle, Action<bool> listener)
+        internal static void AddListener(Toggle toggle, Action<bool> listener)
         {
-            if (toggle == null || listener == null)
+            if (toggle == null)
                 return;
 
             if (!TryGetOnValueChanged(toggle, out UnityEvent<bool>? evt) || evt == null)
@@ -37,9 +36,9 @@ namespace S1API.Internal.Utils
         /// <summary>
         /// Removes a previously added listener from a Toggle's onValueChanged event.
         /// </summary>
-        public static void RemoveListener(Toggle toggle, Action<bool> listener)
+        internal static void RemoveListener(Toggle toggle, Action<bool> listener)
         {
-            if (toggle == null || listener == null)
+            if (toggle == null)
                 return;
 
             if (!TryGetOnValueChanged(toggle, out UnityEvent<bool>? evt) || evt == null)
@@ -51,7 +50,7 @@ namespace S1API.Internal.Utils
         /// <summary>
         /// Removes all listeners from a Toggle's onValueChanged event.
         /// </summary>
-        public static void ClearListeners(Toggle toggle)
+        internal static void ClearListeners(Toggle toggle)
         {
             if (!TryGetOnValueChanged(toggle, out UnityEvent<bool>? evt) || evt == null)
                 return;
@@ -89,7 +88,7 @@ namespace S1API.Internal.Utils
         /// <summary>
         /// Sets the Toggle's checkmark graphic in a version-agnostic manner (field or property).
         /// </summary>
-        public static void SetGraphic(Toggle toggle, Graphic graphic)
+        internal static void SetGraphic(Toggle toggle, Graphic graphic)
         {
             if (toggle == null)
                 return;
@@ -111,7 +110,7 @@ namespace S1API.Internal.Utils
         /// <summary>
         /// Gets the Toggle's checkmark graphic in a version-agnostic manner.
         /// </summary>
-        public static Graphic? GetGraphic(Toggle toggle)
+        internal static Graphic? GetGraphic(Toggle toggle)
         {
             if (toggle == null)
                 return null;

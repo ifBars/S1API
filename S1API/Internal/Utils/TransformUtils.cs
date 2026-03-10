@@ -14,7 +14,7 @@ namespace S1API.Internal.Utils
         /// <param name="root">Root transform to search under.</param>
         /// <param name="name">Name of the transform to find.</param>
         /// <returns>The first matching transform, or null if not found.</returns>
-        internal static Transform FindDescendant(Transform root, string name)
+        internal static Transform? FindDescendant(Transform root, string name)
         {
             if (root == null || string.IsNullOrEmpty(name))
                 return null;

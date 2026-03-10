@@ -1,6 +1,7 @@
 using System;
 using MelonLoader;
 using S1API.Internal;
+using S1API.Internal.Entities;
 using S1API.Internal.Lifecycle;
 using S1API.Lifecycle;
 using S1API.Map;

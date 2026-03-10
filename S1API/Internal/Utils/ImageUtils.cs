@@ -11,10 +11,9 @@ namespace S1API.Internal.Utils
     /// Useful for icons such as on phone apps, custom NPCs, quests, etc.
     /// This class is intended for internal API use only. Mod developers should use <see cref="S1API.Utils.ImageUtils"/> instead.
     /// </summary>
-    [Obsolete("This class is for internal API use only. Mod developers should use S1API.Utils.ImageUtils instead. This class will be made internal in a future version.")]
-    public static class ImageUtils
+    internal static class ImageUtils
     {
-        private static readonly Log _loggerInstance = new Log("ImageUtils");
+        private static readonly Log LoggerInstance = new Log("ImageUtils");
 
         /// <summary>
         /// Loads an image from the specified file path and converts it into a Sprite object.
@@ -23,23 +22,23 @@ namespace S1API.Internal.Utils
         /// <returns>
         /// A Sprite object representing the loaded image, or null if the image could not be loaded or the file does not exist.
         /// </returns>
-        public static Sprite? LoadImage(string fileName)
+        internal static Sprite? LoadImage(string fileName)
         {
-            string fullPath = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? string.Empty, fileName);
+            var fullPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty, fileName);
             if (!File.Exists(fullPath))
             {
-                _loggerInstance.Error($"❌ Icon file not found: {fullPath}");
+                LoggerInstance.Error($"❌ Icon file not found: {fullPath}");
                 return null;
             }
 
             try
             {
-                byte[] data = File.ReadAllBytes(fullPath);
+                var data = File.ReadAllBytes(fullPath);
                 return LoadImageRaw(data);
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
-                _loggerInstance.Error("❌ Failed to load sprite: " + ex);
+                LoggerInstance.Error("❌ Failed to load sprite: " + ex);
             }
 
             return null;
@@ -52,19 +51,19 @@ namespace S1API.Internal.Utils
         /// <returns>
         /// A Sprite object representing the loaded image, or null if the image could not be loaded.
         /// </returns>
-        public static Sprite? LoadImageRaw(byte[] data)
+        internal static Sprite? LoadImageRaw(byte[] data)
         {
             try
             {
-                Texture2D tex = new Texture2D(2, 2);
+                var tex = new Texture2D(2, 2);
                 if (tex.LoadImage(data))
                 {
                     return TextureToSprite(tex);
                 }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
-                _loggerInstance.Error("❌ Failed to load sprite: " + ex);
+                LoggerInstance.Error("❌ Failed to load sprite: " + ex);
             }
             return null;
         }
@@ -75,7 +74,7 @@ namespace S1API.Internal.Utils
         /// <param name="texture">The texture to convert.</param>
         /// <param name="pixelsPerUnit">The pixels per unit for the sprite. Defaults to 100f.</param>
         /// <returns>A Sprite object, or null if texture is null.</returns>
-        public static Sprite? TextureToSprite(Texture2D? texture, float pixelsPerUnit = 100f)
+        internal static Sprite? TextureToSprite(Texture2D? texture, float pixelsPerUnit = 100f)
         {
             if (texture == null) return null;
             return Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f), pixelsPerUnit);
@@ -91,43 +90,39 @@ namespace S1API.Internal.Utils
         /// <returns>
         /// A Sprite object representing the loaded image, or null if the resource could not be found or loaded.
         /// </returns>
-        public static Sprite? LoadImageFromResource(Assembly assembly, string resourceName, float pixelsPerUnit = 100f, FilterMode filterMode = FilterMode.Bilinear)
+        internal static Sprite? LoadImageFromResource(Assembly assembly, string resourceName, float pixelsPerUnit = 100f, FilterMode filterMode = FilterMode.Bilinear)
         {
-            if (assembly == null)
-            {
-                _loggerInstance.Error($"❌ Assembly is null when loading resource: {resourceName}");
-                return null;
-            }
-
             try
             {
-                using (var stream = assembly.GetManifestResourceStream(resourceName))
+                using var stream = assembly.GetManifestResourceStream(resourceName);
+                if (stream == null)
                 {
-                    if (stream == null)
-                    {
-                        _loggerInstance.Error($"❌ Resource not found: {resourceName}");
-                        return null;
-                    }
+                    LoggerInstance.Error($"❌ Resource not found: {resourceName}");
+                    return null;
+                }
 
-                    byte[] imageData = new byte[stream.Length];
-                    stream.Read(imageData, 0, imageData.Length);
+                byte[] imageData;
+                using (var memoryStream = new MemoryStream())
+                {
+                    stream.CopyTo(memoryStream);
+                    imageData = memoryStream.ToArray();
+                }
 
-                    Texture2D texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-                    if (UnityEngine.ImageConversion.LoadImage(texture, imageData, markNonReadable: false))
-                    {
-                        texture.filterMode = filterMode;
-                        return Sprite.Create(
-                            texture,
-                            new Rect(0, 0, texture.width, texture.height),
-                            new Vector2(0.5f, 0.5f),
-                            pixelsPerUnit
-                        );
-                    }
+                var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                if (texture.LoadImage(imageData, markNonReadable: false))
+                {
+                    texture.filterMode = filterMode;
+                    return Sprite.Create(
+                        texture,
+                        new Rect(0, 0, texture.width, texture.height),
+                        new Vector2(0.5f, 0.5f),
+                        pixelsPerUnit
+                    );
                 }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
-                _loggerInstance.Error($"❌ Failed to load sprite from resource '{resourceName}': {ex}");
+                LoggerInstance.Error($"❌ Failed to load sprite from resource '{resourceName}': {ex}");
             }
 
             return null;

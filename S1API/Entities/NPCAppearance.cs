@@ -22,7 +22,7 @@ using S1API.Entities.Appearances.Base;
 using S1API.Entities.Appearances.BodyLayerFields;
 using S1API.Entities.Appearances.CustomizationFields;
 using S1API.Entities.Appearances.FaceLayerFields;
-using S1API.Internal.Utils;
+using S1API.Utils;
 using S1API.Logging;
 using MelonLoader;
 

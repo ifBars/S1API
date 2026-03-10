@@ -1,10 +1,8 @@
 #if (IL2CPPMELON)
 using S1UIShop = Il2CppScheduleOne.UI.Shop;
-using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using Il2CppSystem;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1UIShop = ScheduleOne.UI.Shop;
-using S1ItemFramework = ScheduleOne.ItemFramework;
 using System;
 #endif
 
@@ -41,18 +39,9 @@ namespace S1API.Internal.Shops
 
             try
             {
-                // Create the listing
                 var listing = CreateListing(storable, customPrice);
-                if (listing == null)
-                    return false;
-
-                // Add to shop's listings collection
                 shop.S1ShopInterface.Listings.Add(listing);
-
-                // Initialize the listing with the shop
                 listing.Initialize(shop.S1ShopInterface);
-
-                // Create and bind UI
                 CreateListingUI(shop.S1ShopInterface, listing);
 
                 return true;
@@ -74,7 +63,7 @@ namespace S1API.Internal.Shops
 
             try
             {
-                S1UIShop.ShopListing listingToRemove = null;
+                S1UIShop.ShopListing? listingToRemove = null;
 
                 // Find the listing
                 foreach (var listing in shop.S1ShopInterface.Listings)
@@ -168,37 +157,25 @@ namespace S1API.Internal.Shops
             var entryHoveredMethod = GetShopMethod(shop, "EntryHovered");
             var entryUnhoveredMethod = GetShopMethod(shop, "EntryUnhovered");
 
-            if (listingClickedMethod != null)
-            {
-                listingUI.onClicked = (Action)System.Delegate.Combine(
-                    listingUI.onClicked,
-                    (Action)(() => listingClickedMethod.Invoke(shop, new object[] { listingUI }))
-                );
-            }
+            listingUI.onClicked = (Action)System.Delegate.Combine(
+                listingUI.onClicked,
+                (Action)(() => listingClickedMethod.Invoke(shop, new object[] { listingUI }))
+            );
 
-            if (dropdownClickedMethod != null)
-            {
-                listingUI.onDropdownClicked = (Action)System.Delegate.Combine(
-                    listingUI.onDropdownClicked,
-                    (Action)(() => dropdownClickedMethod.Invoke(shop, new object[] { listingUI }))
-                );
-            }
+            listingUI.onDropdownClicked = (Action)System.Delegate.Combine(
+                listingUI.onDropdownClicked,
+                (Action)(() => dropdownClickedMethod.Invoke(shop, new object[] { listingUI }))
+            );
 
-            if (entryHoveredMethod != null)
-            {
-                listingUI.hoverStart = (Action)System.Delegate.Combine(
-                    listingUI.hoverStart,
-                    (Action)(() => entryHoveredMethod.Invoke(shop, new object[] { listingUI }))
-                );
-            }
+            listingUI.hoverStart = (Action)System.Delegate.Combine(
+                listingUI.hoverStart,
+                (Action)(() => entryHoveredMethod.Invoke(shop, new object[] { listingUI }))
+            );
 
-            if (entryUnhoveredMethod != null)
-            {
-                listingUI.hoverEnd = (Action)System.Delegate.Combine(
-                    listingUI.hoverEnd,
-                    (Action)(() => entryUnhoveredMethod.Invoke(shop, null))
-                );
-            }
+            listingUI.hoverEnd = (Action)System.Delegate.Combine(
+                listingUI.hoverEnd,
+                (Action)(() => entryUnhoveredMethod.Invoke(shop, null))
+            );
 #endif
         }
 
@@ -358,7 +335,7 @@ namespace S1API.Internal.Shops
         }
 
 #if (MONOMELON || MONOBEPINEX)
-        private static MethodInfo GetShopMethod(S1UIShop.ShopInterface shop, string methodName)
+        private static MethodInfo? GetShopMethod(S1UIShop.ShopInterface shop, string methodName)
         {
             return typeof(S1UIShop.ShopInterface).GetMethod(
                 methodName,
