@@ -1,0 +1,129 @@
+name: Publish NuGet Package
+
+on:
+  push:
+    branches: [ master, main, stable, npc-prefabs ]
+    paths:
+      - S1API/S1API.csproj
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout S1API
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect Version Bump
+        id: version
+        shell: bash
+        run: |
+          NEW_VERSION=$(grep -oPm1 '(?<=<Version>)[^<]+' S1API/S1API.csproj)
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+            echo "Publishing version $NEW_VERSION from manual dispatch"
+            exit 0
+          fi
+
+          OLD_VERSION=$(git show "${{ github.event.before }}:S1API/S1API.csproj" 2>/dev/null | grep -oPm1 '(?<=<Version>)[^<]+' || true)
+
+          if [[ -z "$NEW_VERSION" ]]; then
+            echo "Unable to read current package version"
+            exit 1
+          fi
+
+          if [[ "$OLD_VERSION" == "$NEW_VERSION" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+            echo "Version unchanged at $NEW_VERSION; skipping publish"
+            exit 0
+          fi
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "old_version=$OLD_VERSION" >> "$GITHUB_OUTPUT"
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version bump detected: ${OLD_VERSION:-none} -> $NEW_VERSION"
+
+      - name: Setup .NET
+        if: steps.version.outputs.changed == 'true'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Checkout Game Assemblies
+        if: steps.version.outputs.changed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.GAME_ASSEMBLIES_REPO }}
+          token: ${{ secrets.GAME_ASSEMBLIES_TOKEN }}
+          path: game-assemblies
+          fetch-depth: 1
+
+      - name: Prepare Build Inputs
+        if: steps.version.outputs.changed == 'true'
+        shell: bash
+        run: |
+          mkdir -p S1API/ScheduleOneAssemblies/Managed
+          mkdir -p S1API/ScheduleOneAssemblies/MelonLoader
+
+          cp -r game-assemblies/Managed/* S1API/ScheduleOneAssemblies/Managed/
+          cp -r game-assemblies/MelonLoader/* S1API/ScheduleOneAssemblies/MelonLoader/
+
+          if [[ ! -f "S1API/ScheduleOneAssemblies/Managed/Unity.TextMeshPro.dll" ]]; then
+            TMPRO_PATH=$(find game-assemblies -name "Unity.TextMeshPro.dll" -type f | head -1)
+            if [[ -n "$TMPRO_PATH" ]]; then
+              cp "$TMPRO_PATH" S1API/ScheduleOneAssemblies/Managed/
+            fi
+          fi
+
+          cat > ci.build.props << 'EOF'
+          <Project>
+              <PropertyGroup>
+                  <AutomateLocalDeployment>false</AutomateLocalDeployment>
+                  <MelonLoaderAssembliesPath>../ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
+                  <LocalMonoDeploymentPath>null</LocalMonoDeploymentPath>
+                  <MonoAssembliesPath>../ScheduleOneAssemblies/Managed</MonoAssembliesPath>
+              </PropertyGroup>
+          </Project>
+          EOF
+
+      - name: Restore Dependencies
+        if: steps.version.outputs.changed == 'true'
+        run: dotnet restore S1API/S1API.csproj -p:Configuration=MonoMelon
+
+      - name: Pack NuGet Package
+        if: steps.version.outputs.changed == 'true'
+        run: dotnet pack S1API/S1API.csproj --no-restore -c MonoMelon -o artifacts/nuget /p:ContinuousIntegrationBuild=true
+
+      - name: Publish to NuGet
+        if: steps.version.outputs.changed == 'true'
+        shell: bash
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          shopt -s nullglob
+          PACKAGES=(artifacts/nuget/*.nupkg)
+
+          if [[ ${#PACKAGES[@]} -eq 0 ]]; then
+            echo "No NuGet packages were produced"
+            exit 1
+          fi
+
+          for PACKAGE in "${PACKAGES[@]}"; do
+            if [[ "$PACKAGE" == *.snupkg ]]; then
+              continue
+            fi
+
+            echo "Publishing $PACKAGE"
+            dotnet nuget push "$PACKAGE" \
+              --api-key "$NUGET_API_KEY" \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
+          done
