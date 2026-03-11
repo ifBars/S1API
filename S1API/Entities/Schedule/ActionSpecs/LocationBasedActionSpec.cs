@@ -211,8 +211,6 @@ namespace S1API.Entities.Schedule
             }
             else
             {
-                if (index >= 0)
-                    npcBehaviour.DeactivateBehaviour_Server(index);
                 behaviour.Disable_Networked(null);
             }
 
@@ -271,6 +269,12 @@ namespace S1API.Entities.Schedule
                 return;
             }
 
+            if (surface.NetworkObject == null)
+            {
+                Logger.Warning("[LocationBasedActionSpec] Graffiti: Spray surface has no NetworkObject, cannot assign behaviour.");
+                return;
+            }
+
             var baseNpc = schedule.NPC.S1NPC;
             var npcBehaviour = baseNpc.GetComponentInChildren<S1NPCsBehaviour.NPCBehaviour>(true);
             var behaviour = npcBehaviour?.GetBehaviour("GraffitiBehaviour");
@@ -281,8 +285,13 @@ namespace S1API.Entities.Schedule
             }
 
             var graffitiBehaviour = behaviour as S1NPCsBehaviour.GraffitiBehaviour;
-            if (graffitiBehaviour != null && surface.NetworkObject != null)
-                graffitiBehaviour.SetSpraySurface_Client(null, surface.NetworkObject);
+            if (graffitiBehaviour == null)
+            {
+                Logger.Warning("[LocationBasedActionSpec] Graffiti: GraffitiBehaviour could not be cast to the concrete type.");
+                return;
+            }
+
+            graffitiBehaviour.SetSpraySurface_Client(null, surface.NetworkObject);
 
             ToggleBehaviourByName(schedule, "GraffitiBehaviour", true);
         }
