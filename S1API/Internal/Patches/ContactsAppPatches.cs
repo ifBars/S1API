@@ -25,7 +25,6 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;
-using Random = UnityEngine.Random;
 
 namespace S1API.Internal.Patches
 {
@@ -103,7 +102,6 @@ namespace S1API.Internal.Patches
                 if (physicalCustomNPCs.Count == 0)
                     return true;
             }
-            
 
             if (!_startCalled)
             {
@@ -112,16 +110,6 @@ namespace S1API.Internal.Patches
                 return false;
             }
             
-            return true;
-        }
-
-        /// <summary>
-        /// Allows Update to run while waiting - no blocking needed
-        /// </summary>
-        [HarmonyPrefix]
-        [HarmonyPatch(typeof(S1ContactsApp.ContactsApp), "Update")]
-        private static bool ContactsApp_Update_Prefix(S1ContactsApp.ContactsApp __instance)
-        {
             return true;
         }
 
@@ -216,12 +204,11 @@ namespace S1API.Internal.Patches
                 .ToList();
 
             var regionUIs = contactsApp.RegionUIs.ToDictionary(r => r.Region, r => r);
-            var placeholders = new System.Collections.Generic.Dictionary<NPC, S1Relations.RelationCircle>();
 
             // Track IDs of circles we create so we don't use them as templates
             var createdCircleIds = new System.Collections.Generic.HashSet<string>();
 
-            // create circle game objects for all custom NPCs
+            // Create circle game objects for all custom NPCs
             foreach (var npc in customNPCs)
             {
                 // Validate NPC is fully initialized
@@ -283,7 +270,6 @@ namespace S1API.Internal.Patches
                 };
 
                 EnableDealerIndicator(circle, npc);
-                placeholders[npc] = circle;
             }
 
             var regionCircles =
@@ -297,42 +283,101 @@ namespace S1API.Internal.Patches
                 regionCircles[regionUI.Region] = list;
             }
 
-            // placement order
-            var graph = BuildGraph(customNPCs);
-            var nativeIds = new System.Collections.Generic.HashSet<string>();
+            // Precompute stable grid parameters from native circles only
+            var customNpcIds = new System.Collections.Generic.HashSet<string>(
+                customNPCs.Where(n => n.S1NPC != null).Select(n => n.S1NPC.ID));
+            var regionGridParams = new System.Collections.Generic.Dictionary<S1Map.EMapRegion,
+                (float spacing, Vector2 center, Vector2 right, Vector2 up, Vector4 nativeBounds)>();
             foreach (var kv in regionCircles)
-            foreach (var circ in kv.Value)
-                if (!string.IsNullOrEmpty(circ.AssignedNPC_ID))
-                    nativeIds.Add(circ.AssignedNPC_ID);
-
-            var order = ComputeInsertionOrder(customNPCs, graph, nativeIds);
-
-            foreach (var regionGroup in order.GroupBy(n => n.S1NPC.Region))
             {
-                if (!regionUIs.TryGetValue(regionGroup.Key, out var regionUI) || regionUI?.Container == null)
-                    continue;
-
-                var circlesInRegion = regionUI.Container.GetComponentsInChildren<S1Relations.RelationCircle>(true);
-                var circleById = circlesInRegion
-                    .Where(c => !string.IsNullOrEmpty(c.AssignedNPC_ID))
-                    .ToDictionary(c => c.AssignedNPC_ID, c => c);
-
-                var rectTransforms = circlesInRegion.ToDictionary(
-                    c => c,
-                    c => c.GetComponent<RectTransform>()
-                );
-
-                foreach (var npc in regionGroup)
+                var nativePositions = kv.Value
+                    .Where(c => !string.IsNullOrEmpty(c.AssignedNPC_ID) && !customNpcIds.Contains(c.AssignedNPC_ID))
+                    .Select(c => c.GetComponent<RectTransform>().anchoredPosition)
+                    .ToList();
+                if (nativePositions.Count >= 2)
                 {
-                    var circle = circlesInRegion.FirstOrDefault(c => c.AssignedNPC_ID == npc.S1NPC.ID);
-                    if (circle == null)
+                    var sp = EstimateGridSpacing(nativePositions);
+                    var origin = nativePositions[0];
+
+                    // Compute native bounding box (minX, maxX, minY, maxY) with 1 grid-cell padding
+                    var nMinX = nativePositions.Min(p => p.x) - sp;
+                    var nMaxX = nativePositions.Max(p => p.x) + sp;
+                    var nMinY = nativePositions.Min(p => p.y) - sp;
+                    var nMaxY = nativePositions.Max(p => p.y) + sp;
+                    var bounds = new Vector4(nMinX, nMaxX, nMinY, nMaxY);
+
+                    regionGridParams[kv.Key] = (sp, origin, Vector2.right, Vector2.up, bounds);
+                }
+                else
+                {
+                    regionGridParams[kv.Key] = (200f, Vector2.zero, Vector2.right, Vector2.up, new Vector4(-1000, 1000, -1000, 1000));
+                }
+            }
+
+            // placement order
+            try
+            {
+                var graph = BuildGraph(customNPCs);
+                var nativeIds = new System.Collections.Generic.HashSet<string>();
+                foreach (var kv in regionCircles)
+                foreach (var circ in kv.Value)
+                    if (!string.IsNullOrEmpty(circ.AssignedNPC_ID) && !customNpcIds.Contains(circ.AssignedNPC_ID))
+                        nativeIds.Add(circ.AssignedNPC_ID);
+
+                var order = ComputeInsertionOrder(customNPCs, graph, nativeIds);
+
+                foreach (var regionGroup in order.GroupBy(n => n.S1NPC.Region))
+                {
+                    if (!regionUIs.TryGetValue(regionGroup.Key, out var regionUI) || regionUI?.Container == null)
                         continue;
 
-                    // rebuild edges each time (necessary - graph is dynamic)
-                    var existingEdges = GetAllEdges(circlesInRegion, rectTransforms);
-                    var newPos = ComputePlacement(circle, circlesInRegion, circleById, rectTransforms, existingEdges);
-                    rectTransforms[circle].anchoredPosition = newPos;
+                    var circlesInRegion = regionUI.Container.GetComponentsInChildren<S1Relations.RelationCircle>(true);
+                    var circleById = circlesInRegion
+                        .Where(c => !string.IsNullOrEmpty(c.AssignedNPC_ID))
+                        .GroupBy(c => c.AssignedNPC_ID)
+                        .ToDictionary(g => g.Key, g => g.First());
+
+                    var rectTransforms = new System.Collections.Generic.Dictionary<S1Relations.RelationCircle, RectTransform>();
+                    foreach (var c in circlesInRegion)
+                    {
+                        if (!rectTransforms.ContainsKey(c))
+                            rectTransforms[c] = c.GetComponent<RectTransform>();
+                    }
+
+                    var placedIds = new System.Collections.Generic.HashSet<string>();
+                    // All native circles are already placed
+                    foreach (var c in circlesInRegion)
+                        if (!string.IsNullOrEmpty(c.AssignedNPC_ID) && !customNpcIds.Contains(c.AssignedNPC_ID))
+                            placedIds.Add(c.AssignedNPC_ID);
+
+                    foreach (var npc in regionGroup)
+                    {
+                        try
+                        {
+                            var circle = circlesInRegion.FirstOrDefault(c => c.AssignedNPC_ID == npc.S1NPC.ID);
+                            if (circle == null)
+                            {
+                                Logger.Warning($"  No circle found for {npc.S1NPC.ID}");
+                                continue;
+                            }
+
+                            var existingEdges = GetAllEdges(circlesInRegion, rectTransforms);
+                            var gp = regionGridParams[regionGroup.Key];
+                            var newPos = ComputePlacement(circle, circlesInRegion, circleById, rectTransforms, existingEdges,
+                                gp.spacing, gp.center, gp.right, gp.up, gp.nativeBounds, placedIds);
+                            rectTransforms[circle].anchoredPosition = newPos;
+                            placedIds.Add(npc.S1NPC.ID);
+                        }
+                        catch (System.Exception ex)
+                        {
+                            Logger.Error($"Error placing {npc.S1NPC?.ID}: {ex.Message}\n{ex.StackTrace}");
+                        }
+                    }
                 }
+            }
+            catch (System.Exception ex)
+            {
+                Logger.Error($"Error in placement phase: {ex.Message}\n{ex.StackTrace}");
             }
 
             // Create connection lines for custom NPCs
@@ -461,7 +506,17 @@ namespace S1API.Internal.Patches
         private static System.Collections.Generic.Dictionary<NPC, System.Collections.Generic.List<NPC>> BuildGraph(
             System.Collections.Generic.List<NPC> customs)
         {
-            var byId = customs.ToDictionary(n => n.S1NPC.ID, n => n);
+            var byId = new System.Collections.Generic.Dictionary<string, NPC>();
+            foreach (var n in customs)
+            {
+                if (n.S1NPC?.ID == null) continue;
+                if (byId.ContainsKey(n.S1NPC.ID))
+                {
+                    Logger.Warning($"Duplicate custom NPC ID '{n.S1NPC.ID}' - each mod should use unique IDs. Skipping duplicate.");
+                    continue;
+                }
+                byId[n.S1NPC.ID] = n;
+            }
             var graph = customs.ToDictionary(n => n, n => new System.Collections.Generic.List<NPC>());
             foreach (var n in customs)
             {
@@ -528,22 +583,21 @@ namespace S1API.Internal.Patches
 
         /// <summary>
         /// Computes the optimal placement position for a custom NPC's relation circle.
-        /// Uses a scoring system to evaluate candidate positions based on:
-        /// - Edge crossings (heavily penalized at 1000x weight)
-        /// - Lines passing through other NPC circles (1.5x weight)
-        /// - Connection edge lengths (0.5x weight - prefers shorter)
-        /// - Crowding near other NPCs (2x weight)
-        /// For connected NPCs, generates candidates in multiple directions around their connection anchors.
-        /// For unconnected NPCs, places them in rows above the existing layout.
+        /// Connected NPCs are placed on grid points near their anchors, scored by edge length,
+        /// crossings, crowding, and out-of-bounds penalties to prefer visible horizontal space.
+        /// Unconnected NPCs fill available grid cells within native bounds first.
         /// </summary>
         private static Vector2 ComputePlacement(
             S1Relations.RelationCircle circle,
             S1Relations.RelationCircle[] regionCircles,
             System.Collections.Generic.Dictionary<string, S1Relations.RelationCircle> circleById,
             System.Collections.Generic.Dictionary<S1Relations.RelationCircle, RectTransform> rectTransforms,
-            System.Collections.Generic.List<(Vector2, Vector2)> existingEdges)
+            System.Collections.Generic.List<(Vector2, Vector2)> existingEdges,
+            float spacing, Vector2 gridCenter, Vector2 right, Vector2 up,
+            Vector4 nativeBounds,
+            System.Collections.Generic.HashSet<string> placedIds = null)
         {
-            var anchors = GetConnectionPositions(circle, circleById, rectTransforms);
+            var anchors = GetConnectionPositions(circle, circleById, rectTransforms, placedIds);
 
             var allPositions = regionCircles
                 .Select(c => rectTransforms[c].anchoredPosition)
@@ -552,69 +606,83 @@ namespace S1API.Internal.Patches
             if (allPositions.Count == 0)
                 return Vector2.zero;
 
-            var spacing = EstimateGridSpacing(allPositions);
-            var center = Mean(allPositions);
-            var (right, up) = EstimateLocalBasis(allPositions, center);
+            var rn = right.normalized;
+            var un = up.normalized;
+            var minSpacing = spacing * 0.7f;
 
             if (anchors.Count > 0)
             {
                 var targetCenter = Mean(anchors);
                 var candidates = new System.Collections.Generic.List<Vector2>();
 
-                var dirs = new[]
-                {
-                    right, -right, up, -up,
-                    right + up, right - up, -right + up, -right - up,
-                    (right + up * 2f).normalized, (right * 2f + up).normalized,
-                    (-right + up * 2f).normalized, (-right * 2f + up).normalized,
-                    (right - up * 2f).normalized, (right * 2f - up).normalized,
-                    (-right - up * 2f).normalized, (-right * 2f - up).normalized
-                };
+                // Project targetCenter onto grid coordinates relative to gridCenter
+                var relTarget = targetCenter - gridCenter;
+                var targetGx = Mathf.Round(Vector2.Dot(relTarget, rn) / spacing);
+                var targetGy = Mathf.Round(Vector2.Dot(relTarget, un) / spacing);
 
-                var minSpacing = spacing * 0.7f;
-
-                for (var r = spacing * 0.8f; r <= spacing * 3.5f; r += spacing * 0.2f)
+                // Wider horizontal search (6) to use available space to the right/left
+                const int searchRadiusX = 6;
+                const int searchRadiusY = 3;
+                var seen = new System.Collections.Generic.HashSet<long>();
+                for (var gx = -searchRadiusX; gx <= searchRadiusX; gx++)
                 {
-                    foreach (var d in dirs)
+                    for (var gy = -searchRadiusY; gy <= searchRadiusY; gy++)
                     {
-                        var candidate = targetCenter + d * r;
-                        candidate = SnapToLattice(candidate, targetCenter, spacing, right, up);
+                        var ix = (long)(targetGx + gx);
+                        var iy = (long)(targetGy + gy);
+                        var key = ix * 100000L + iy;
+                        if (!seen.Add(key))
+                            continue;
 
-                        // small jitter for variation
-                        var jittered = candidate + Random.insideUnitCircle * 5f;
-
-                        if (IsPositionFree(jittered, allPositions, minSpacing))
-                        {
-                            candidates.Add(jittered);
-                        }
+                        var candidate = gridCenter + (targetGx + gx) * spacing * rn + (targetGy + gy) * spacing * un;
+                        if (IsPositionFree(candidate, allPositions, minSpacing))
+                            candidates.Add(candidate);
                     }
                 }
 
                 if (candidates.Count > 0)
                 {
-                    return PickBestPosition(candidates, anchors, allPositions, existingEdges, spacing);
+                    return PickBestPosition(candidates, anchors, allPositions, existingEdges, spacing, nativeBounds);
                 }
 
-                return targetCenter + new Vector2(0, -spacing * 1.5f);
+                // Fallback: snap targetCenter to nearest free grid point
+                var fallback = SnapToLattice(targetCenter, gridCenter, spacing, right, up);
+                return fallback;
             }
 
-            // unconnected NPCs
-            var maxY = allPositions.Max(p => p.y);
-            var xCenter = center.x;
-            var minSpacingUnconnected = spacing * 0.8f;
+            // Unconnected NPCs - fill available grid cells, prefer within native bounds
+            // Scan all grid positions within native bounds first, then expand outward
+            var boundsMinGx = Mathf.FloorToInt((nativeBounds.x - gridCenter.x) / spacing);
+            var boundsMaxGx = Mathf.CeilToInt((nativeBounds.y - gridCenter.x) / spacing);
+            var boundsMinGy = Mathf.FloorToInt((nativeBounds.z - gridCenter.y) / spacing);
+            var boundsMaxGy = Mathf.CeilToInt((nativeBounds.w - gridCenter.y) / spacing);
 
-            for (var attempt = 0; attempt < 20; attempt++)
+            // First pass: within native bounds
+            for (var gy = boundsMaxGy; gy >= boundsMinGy; gy--)
             {
-                var y = maxY + spacing * 2f + (attempt / 3) * spacing * 1.2f;
-                var xOffset = (attempt % 3 - 1) * spacing * 0.8f;
-                var candidate = new Vector2(xCenter + xOffset, y);
-                candidate = SnapToLattice(candidate, new Vector2(xCenter, y), spacing, right, up);
-
-                if (IsPositionFree(candidate, allPositions, minSpacingUnconnected))
-                    return candidate;
+                for (var gx = boundsMinGx; gx <= boundsMaxGx; gx++)
+                {
+                    var candidate = gridCenter + gx * spacing * rn + gy * spacing * un;
+                    if (IsPositionFree(candidate, allPositions, minSpacing))
+                        return candidate;
+                }
             }
 
-            return new Vector2(xCenter, maxY + spacing * 2f);
+            // Second pass: expand outward by 1 row at a time
+            for (var expand = 1; expand <= 5; expand++)
+            {
+                for (var gy = boundsMaxGy + expand; gy >= boundsMinGy - expand; gy--)
+                {
+                    for (var gx = boundsMinGx - expand; gx <= boundsMaxGx + expand; gx++)
+                    {
+                        var candidate = gridCenter + gx * spacing * rn + gy * spacing * un;
+                        if (IsPositionFree(candidate, allPositions, minSpacing))
+                            return candidate;
+                    }
+                }
+            }
+
+            return gridCenter;
         }
 
         /// <summary>
@@ -623,22 +691,57 @@ namespace S1API.Internal.Patches
         private static System.Collections.Generic.List<Vector2> GetConnectionPositions(
             S1Relations.RelationCircle circle,
             System.Collections.Generic.Dictionary<string, S1Relations.RelationCircle> circleById,
-            System.Collections.Generic.Dictionary<S1Relations.RelationCircle, RectTransform> rectTransforms)
+            System.Collections.Generic.Dictionary<S1Relations.RelationCircle, RectTransform> rectTransforms,
+            System.Collections.Generic.HashSet<string> placedIds = null)
         {
             var positions = new System.Collections.Generic.List<Vector2>();
+            var seen = new System.Collections.Generic.HashSet<string>();
+            var myId = circle.AssignedNPC_ID;
+
+            // Outgoing connections: NPCs this circle connects to (only if already placed)
             var conns = circle.AssignedNPC?.RelationData?.Connections;
-
-            if (conns == null || conns.Count == 0)
-                return positions;
-
-            foreach (var conn in conns)
+            if (conns != null)
             {
-                if (conn == null || string.IsNullOrEmpty(conn.ID))
-                    continue;
-
-                if (circleById.TryGetValue(conn.ID, out var circ))
+                foreach (var conn in conns)
                 {
-                    positions.Add(rectTransforms[circ].anchoredPosition);
+                    if (conn == null || string.IsNullOrEmpty(conn.ID))
+                        continue;
+
+                    // Only use as anchor if the target has been placed (or no tracking)
+                    if (placedIds != null && !placedIds.Contains(conn.ID))
+                        continue;
+
+                    if (circleById.TryGetValue(conn.ID, out var circ) && seen.Add(conn.ID))
+                    {
+                        positions.Add(rectTransforms[circ].anchoredPosition);
+                    }
+                }
+            }
+
+            // Reverse connections: NPCs that connect TO this circle (only if already placed)
+            if (!string.IsNullOrEmpty(myId))
+            {
+                foreach (var kv in circleById)
+                {
+                    if (kv.Key == myId || seen.Contains(kv.Key))
+                        continue;
+
+                    // Only use as anchor if the other NPC has been placed
+                    if (placedIds != null && !placedIds.Contains(kv.Key))
+                        continue;
+
+                    var otherConns = kv.Value.AssignedNPC?.RelationData?.Connections;
+                    if (otherConns == null)
+                        continue;
+
+                    foreach (var c in otherConns)
+                    {
+                        if (c != null && c.ID == myId && seen.Add(kv.Key))
+                        {
+                            positions.Add(rectTransforms[kv.Value].anchoredPosition);
+                            break;
+                        }
+                    }
                 }
             }
 
@@ -667,43 +770,29 @@ namespace S1API.Internal.Patches
         }
 
         /// <summary>
-        /// Estimates the grid spacing based on distances between points.
+        /// Estimates the grid spacing by finding the smallest axis-aligned step between points.
+        /// Only considers horizontal and vertical distances to avoid inflated diagonal measurements.
         /// </summary>
         private static float EstimateGridSpacing(System.Collections.Generic.List<Vector2> pts)
         {
             if (pts.Count < 2) return 200f;
-            var dists = new System.Collections.Generic.List<float>();
+            var steps = new System.Collections.Generic.List<float>();
             for (var i = 0; i < pts.Count; i++)
             {
-                var p = pts[i];
-                var others = pts.Where((q, idx) => idx != i).OrderBy(q => Vector2.Distance(p, q)).Take(3);
-                dists.AddRange(others.Select(q => Vector2.Distance(p, q)));
+                for (var j = i + 1; j < pts.Count; j++)
+                {
+                    var dx = Mathf.Abs(pts[i].x - pts[j].x);
+                    var dy = Mathf.Abs(pts[i].y - pts[j].y);
+                    // Only consider axis-aligned pairs (one axis differs, the other is close to zero)
+                    if (dx > 50f && dy < 10f) steps.Add(dx);
+                    if (dy > 50f && dx < 10f) steps.Add(dy);
+                }
             }
 
-            dists.Sort();
-            var median = dists.Count > 0 ? dists[dists.Count / 2] : 200f;
-            return Mathf.Clamp(median, 150f, 250f);
-        }
-
-        /// <summary>
-        /// Estimates the local coordinate system basis vectors from point distribution.
-        /// </summary>
-        private static (Vector2, Vector2) EstimateLocalBasis(System.Collections.Generic.List<Vector2> pts,
-            Vector2 center)
-        {
-            float xx = 0, yy = 0, xy = 0;
-            foreach (var p in pts)
-            {
-                var d = p - center;
-                xx += d.x * d.x;
-                yy += d.y * d.y;
-                xy += d.x * d.y;
-            }
-
-            var theta = 0.5f * Mathf.Atan2(2f * xy, xx - yy);
-            var right = new Vector2(Mathf.Cos(theta), Mathf.Sin(theta));
-            var up = new Vector2(-right.y, right.x);
-            return (right, up);
+            if (steps.Count == 0) return 200f;
+            steps.Sort();
+            // The smallest axis-aligned step is the grid spacing
+            return Mathf.Clamp(steps[0], 100f, 300f);
         }
 
         /// <summary>
@@ -825,7 +914,8 @@ namespace S1API.Internal.Patches
             System.Collections.Generic.List<Vector2> anchors,
             System.Collections.Generic.List<Vector2> allPositions,
             System.Collections.Generic.List<(Vector2, Vector2)> existingEdges,
-            float spacing)
+            float spacing,
+            Vector4 nativeBounds)
         {
             var bestScore = float.MaxValue;
             var bestPos = candidates[0];
@@ -836,13 +926,15 @@ namespace S1API.Internal.Patches
                 var avgEdgeLength = anchors.Average(a => Vector2.Distance(candidate, a));
                 var crowding = CalculateCrowdingPenalty(candidate, allPositions, spacing);
                 var circleIntersections = CalculateCircleIntersectionPenalty(candidate, anchors, allPositions, spacing);
+                var outOfBounds = CalculateOutOfBoundsPenalty(candidate, nativeBounds, spacing);
 
                 // Combined score (lower is better)
                 var score =
-                    crossings * 50000f + // Heavy penalty - line crossings
-                    circleIntersections * 4.8f + // Penalty - lines through circles
-                    avgEdgeLength * 0.35f + // Prefer shorter connections
-                    crowding * 0.65f; // Penalty - tight clusters
+                    avgEdgeLength * 10f + // Primary: prefer short connections
+                    crossings * 200f + // Light penalty for line crossings
+                    circleIntersections * 1f + // Minor: lines through circles
+                    crowding * 0.5f + // Minor: tight clusters
+                    outOfBounds; // Strong penalty for going outside visible area
 
                 if (!(score < bestScore)) continue;
                 bestScore = score;
@@ -850,6 +942,28 @@ namespace S1API.Internal.Patches
             }
 
             return bestPos;
+        }
+
+        /// <summary>
+        /// Penalizes positions that extend beyond the native circle bounding box.
+        /// nativeBounds = (minX, maxX, minY, maxY) with 1 grid-cell padding already applied.
+        /// </summary>
+        private static float CalculateOutOfBoundsPenalty(Vector2 pos, Vector4 nativeBounds, float spacing)
+        {
+            var penalty = 0f;
+
+            // How far outside native bounds in each direction (in grid-cell units)
+            if (pos.x < nativeBounds.x)
+                penalty += Mathf.Pow((nativeBounds.x - pos.x) / spacing, 2);
+            else if (pos.x > nativeBounds.y)
+                penalty += Mathf.Pow((pos.x - nativeBounds.y) / spacing, 2);
+
+            if (pos.y < nativeBounds.z)
+                penalty += Mathf.Pow((nativeBounds.z - pos.y) / spacing, 2) * 2f; // Extra penalty for going below
+            else if (pos.y > nativeBounds.w)
+                penalty += Mathf.Pow((pos.y - nativeBounds.w) / spacing, 2);
+
+            return penalty * 500f;
         }
 
         /// <summary>
