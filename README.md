@@ -25,6 +25,8 @@ Track S1API's progress in wrapping Schedule One's game types:
 
 S1API is available through multiple release channels:
 
+See [VERSIONING.md](VERSIONING.md) for the branch and hotfix versioning policy.
+
 ### **Stable Releases** (Recommended)
 The recommended way to get S1API is through official releases:
 - **[GitHub Releases](https://github.com/ifBars/S1API/releases)** - Tagged releases with changelogs
