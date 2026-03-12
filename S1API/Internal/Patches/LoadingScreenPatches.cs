@@ -63,7 +63,7 @@ namespace S1API.Internal.Patches
             if (!_hasCustomNpcTypes)
                 return true;
 
-            if (!HasOutstandingMugshotWork())
+            if (!HasCustomNpcInstances() && !HasOutstandingMugshotWork())
                 return true;
 
             if (NPCAppearance.MugshotsProcessingComplete)
@@ -77,6 +77,9 @@ namespace S1API.Internal.Patches
 
             return false;
         }
+
+        private static bool HasCustomNpcInstances() =>
+            NPC.All.Any(npc => npc != null && npc.IsCustomNPC);
 
         /// <summary>
         /// Check if we're currently in the final phase of game loading where NPC mugshots should complete.
@@ -147,8 +150,23 @@ namespace S1API.Internal.Patches
         /// </summary>
         private static IEnumerator WaitForMugshotsThenClose(S1UI.LoadingScreen loadingScreen)
         {
+            const float START_TIMEOUT = 5f;
             const float TIMEOUT = 90f;
+            float startTimer = 0f;
             float timer = 0f;
+
+            while (!HasOutstandingMugshotWork() && !NPCAppearance.MugshotsProcessingComplete && startTimer < START_TIMEOUT)
+            {
+                yield return new WaitForSeconds(0.1f);
+                startTimer += 0.1f;
+            }
+
+            if (!HasOutstandingMugshotWork() && !NPCAppearance.MugshotsProcessingComplete)
+            {
+                _isWaitingForMugshots = false;
+                CloseLoadingScreenDirectly(loadingScreen);
+                yield break;
+            }
 
             while (!NPCAppearance.MugshotsProcessingComplete && timer < TIMEOUT)
             {
