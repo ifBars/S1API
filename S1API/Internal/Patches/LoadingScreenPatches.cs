@@ -15,6 +15,7 @@ using MelonLoader;
 using S1API.Entities;
 using S1API.Internal.Utils;
 using S1API.Logging;
+using System;
 using System.Collections;
 using System.Linq;
 using UnityEngine;
@@ -62,6 +63,9 @@ namespace S1API.Internal.Patches
             if (!_hasCustomNpcTypes)
                 return true;
 
+            if (!HasOutstandingMugshotWork())
+                return true;
+
             if (NPCAppearance.MugshotsProcessingComplete)
                 return true;
 
@@ -95,7 +99,7 @@ namespace S1API.Internal.Patches
                     return false;
                 
                 string sceneName = SceneManager.GetActiveScene().name;
-                if (sceneName != "Main" && sceneName != "Tutorial")
+                if (!string.Equals(sceneName, "Main", StringComparison.OrdinalIgnoreCase))
                     return false;
                 
                 return loadManager.LoadStatus == S1Persistence.LoadManager.ELoadStatus.None ||
@@ -105,6 +109,37 @@ namespace S1API.Internal.Patches
             {
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Returns true only if mugshot generation has actually started and still has queued or active work.
+        /// </summary>
+        private static bool HasOutstandingMugshotWork()
+        {
+            try
+            {
+                bool hasQueuedMugshots = TryReadStaticBool("_hasQueuedMugshots");
+                bool isProcessingMugshots = TryReadStaticBool("_isProcessingMugshots");
+                int queueCount = GetMugshotQueueCount();
+
+                if (!hasQueuedMugshots)
+                    return false;
+
+                return isProcessingMugshots || queueCount > 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool TryReadStaticBool(string memberName)
+        {
+            object value = ReflectionUtils.TryGetStaticFieldOrProperty(typeof(NPCAppearance), memberName);
+            if (value is bool boolValue)
+                return boolValue;
+
+            return value != null && bool.TryParse(value.ToString(), out bool parsed) && parsed;
         }
 
         /// <summary>
