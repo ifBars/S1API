@@ -266,7 +266,7 @@ namespace S1API.Internal.Utils
         /// <param name="memberName">The name of the field or property.</param>
         /// <param name="value">The value to set.</param>
         /// <returns><c>true</c> if the member was successfully set; otherwise, <c>false</c>.</returns>
-        internal static bool TrySetFieldOrProperty(object target, string memberName, object value)
+        internal static bool TrySetFieldOrProperty(object target, string memberName, object? value)
         {
             var type = target.GetType();
             const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
@@ -277,7 +277,7 @@ namespace S1API.Internal.Utils
             {
                 try
                 {
-                    if (fi.FieldType.IsInstanceOfType(value))
+                    if (CanAssignValue(fi.FieldType, value))
                     {
                         fi.SetValue(target, value);
                         return true;
@@ -294,7 +294,7 @@ namespace S1API.Internal.Utils
             if (pi == null || !pi.CanWrite) return false;
             try
             {
-                if (pi.PropertyType.IsInstanceOfType(value))
+                if (CanAssignValue(pi.PropertyType, value))
                 {
                     pi.SetValue(target, value);
                     return true;
@@ -398,8 +398,7 @@ namespace S1API.Internal.Utils
         /// <param name="type">The type to set the static member on.</param>
         /// <param name="memberName">The name of the field or property.</param>
         /// <param name="value">The value to set.</param>
-        /// <returns><c>true</c> if the member was successfully set; otherwise, <c>false</c>.</returns>
-        internal static void TrySetStaticFieldOrProperty(Type type, string memberName, object value)
+        internal static void TrySetStaticFieldOrProperty(Type type, string memberName, object? value)
         {
             const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
             
@@ -409,7 +408,7 @@ namespace S1API.Internal.Utils
             {
                 try
                 {
-                    if (fi.FieldType.IsInstanceOfType(value))
+                    if (CanAssignValue(fi.FieldType, value))
                     {
                         fi.SetValue(null, value);
                         return;
@@ -426,7 +425,7 @@ namespace S1API.Internal.Utils
             if (pi == null || !pi.CanWrite) return;
             try
             {
-                if (pi.PropertyType.IsInstanceOfType(value))
+                if (CanAssignValue(pi.PropertyType, value))
                 {
                     pi.SetValue(null, value);
                 }
@@ -435,6 +434,14 @@ namespace S1API.Internal.Utils
             {
                 // ignored
             }
+        }
+
+        private static bool CanAssignValue(Type memberType, object? value)
+        {
+            if (value != null)
+                return memberType.IsInstanceOfType(value);
+
+            return !memberType.IsValueType || Nullable.GetUnderlyingType(memberType) != null;
         }
     }
 }
