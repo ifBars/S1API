@@ -1056,9 +1056,6 @@ namespace S1API.Entities
 
             if (identity != null)
             {
-                // On Mono, fields are auto-serialized and available directly
-                // On Il2Cpp, fields may not be populated yet, so check registry
-#if IL2CPPMELON
                 string prefabName = gameObject.name;
                 if (NPCPrefabIdentity.TryGetIdentityFromRegistry(prefabName, out string regId, out string regFirstName, out string regLastName, out Sprite regIcon))
                 {
@@ -1069,18 +1066,12 @@ namespace S1API.Entities
                 }
                 else
                 {
-                    // Fallback to component fields if registry lookup fails
+                    // Fallback to component-backed values if the registry is unavailable.
                     id = identity.Id;
                     firstName = identity.FirstName;
                     lastName = identity.LastName;
                     icon = identity.Icon;
                 }
-#else
-                id = identity.Id;
-                firstName = identity.FirstName;
-                lastName = identity.LastName;
-                icon = identity.Icon;
-#endif
             }
 
             // Apply identity values

@@ -35,26 +35,96 @@ namespace S1API.Internal.Entities
     internal sealed class NPCPrefabIdentity : MonoBehaviour
     {
         private static readonly Log Logger = new Log("NPCPrefabIdentity");
-        
-        // fields for Mono compatibility (auto-serialized there)
-        internal string Id;
-        internal string FirstName;
-        internal string LastName;
-        internal Sprite Icon;
-        internal S1AvatarFramework.AvatarSettings AppearanceDefaults;
-        internal string DealerHomeBuildingName;
-        private string PrefabName;
 
-        // Relationship data fields for Mono compatibility
-        private float? RelationDelta;
-        private bool? Unlocked;
-        private NPCRelationship.UnlockType? UnlockType;
-        private List<string> ConnectionIDs;
+        // Mono prefab cloning relies on Unity serialization for these backing fields.
+#if IL2CPPMELON
+        private string? _id;
+        private string? _firstName;
+        private string? _lastName;
+        private Sprite? _icon;
+        private S1AvatarFramework.AvatarSettings? _appearanceDefaults;
+        private string? _dealerHomeBuildingName;
+        private string? _prefabName;
+        private List<string>? _connectionIds;
+#else
+        [SerializeField] private string? _id;
+        [SerializeField] private string? _firstName;
+        [SerializeField] private string? _lastName;
+        [SerializeField] private Sprite? _icon;
+        [SerializeField] private S1AvatarFramework.AvatarSettings? _appearanceDefaults;
+        [SerializeField] private string? _dealerHomeBuildingName;
+        [SerializeField] private string? _prefabName;
+        [SerializeField] private List<string>? _connectionIds;
+#endif
+
+        private float? _relationDelta;
+        private bool? _unlocked;
+        private NPCRelationship.UnlockType? _unlockType;
 
         // Static registry to preserve data across network instantiation on Il2Cpp
         private static readonly Dictionary<string, IdentityData> _registry = new Dictionary<string, IdentityData>();
         private bool _applied;
         private AvatarSettingsData _cachedAppearanceDefaults;
+
+        internal string? Id
+        {
+            get => _id;
+            set => _id = value;
+        }
+
+        internal string? FirstName
+        {
+            get => _firstName;
+            set => _firstName = value;
+        }
+
+        internal string? LastName
+        {
+            get => _lastName;
+            set => _lastName = value;
+        }
+
+        internal Sprite? Icon
+        {
+            get => _icon;
+            set => _icon = value;
+        }
+
+        internal S1AvatarFramework.AvatarSettings? AppearanceDefaults
+        {
+            get => _appearanceDefaults;
+            set => _appearanceDefaults = value;
+        }
+
+        internal string? DealerHomeBuildingName
+        {
+            get => _dealerHomeBuildingName;
+            set => _dealerHomeBuildingName = value;
+        }
+
+        internal string? PrefabName
+        {
+            get => _prefabName;
+            set => _prefabName = value;
+        }
+
+        private float? RelationDelta
+        {
+            get => _relationDelta;
+            set => _relationDelta = value;
+        }
+
+        private bool? Unlocked
+        {
+            get => _unlocked;
+            set => _unlocked = value;
+        }
+
+        private NPCRelationship.UnlockType? UnlockType
+        {
+            get => _unlockType;
+            set => _unlockType = value;
+        }
 
         private struct IdentityData
         {
@@ -190,7 +260,7 @@ namespace S1API.Internal.Entities
             PrefabName = normalizedName;
             
             // CRITICAL: Always check registry FIRST for connection IDs since they're set via RegisterRelationshipDataToStaticCache
-            // Component field (this.ConnectionIDs) is never set during prefab configuration in Menu scene
+            // Component field (_connectionIds) is never set during prefab configuration in Menu scene
             // Connection IDs are only stored via RegisterRelationshipDataToStaticCache, so we must preserve them from registry
             List<string> connectionIDs = null;
             string dealerHomeBuildingName = this.DealerHomeBuildingName;
@@ -220,9 +290,9 @@ namespace S1API.Internal.Entities
             
             // Only use component field if registry doesn't have connection IDs
             // (Component field is typically empty during prefab configuration, but check it as fallback)
-            if ((connectionIDs == null || connectionIDs.Count == 0) && this.ConnectionIDs != null && this.ConnectionIDs.Count > 0)
+            if ((connectionIDs == null || connectionIDs.Count == 0) && _connectionIds != null && _connectionIds.Count > 0)
             {
-                connectionIDs = new List<string>(this.ConnectionIDs);
+                connectionIDs = new List<string>(_connectionIds);
             }
 
             var identityData = new IdentityData
@@ -340,7 +410,7 @@ namespace S1API.Internal.Entities
                 this.RelationDelta = dataRef.RelationDelta;
                 this.Unlocked = dataRef.Unlocked;
                 this.UnlockType = dataRef.UnlockType.HasValue ? (NPCRelationship.UnlockType?)dataRef.UnlockType.Value : null;
-                this.ConnectionIDs = dataRef.ConnectionIDs != null ? new List<string>(dataRef.ConnectionIDs) : null;
+                _connectionIds = dataRef.ConnectionIDs != null ? new List<string>(dataRef.ConnectionIDs) : null;
                 PrefabName = dataRef.PrefabName ?? PrefabName;
                 
                 // Debug log for connection restoration
@@ -383,7 +453,7 @@ namespace S1API.Internal.Entities
         private void EnsureRelationshipDataFromRegistry()
         {
             // Always try to restore to ensure fields are populated (Il2Cpp wipes component fields).
-            if (ConnectionIDs == null || ConnectionIDs.Count == 0 || !Unlocked.HasValue || !RelationDelta.HasValue || !UnlockType.HasValue)
+            if (_connectionIds == null || _connectionIds.Count == 0 || !Unlocked.HasValue || !RelationDelta.HasValue || !UnlockType.HasValue)
             {
                 TryRestoreFromRegistry();
             }
@@ -489,9 +559,9 @@ namespace S1API.Internal.Entities
                 if (UnlockType.HasValue)
                     builder.SetUnlockType(UnlockType.Value);
 
-                if (ConnectionIDs != null && ConnectionIDs.Count > 0)
+                if (_connectionIds != null && _connectionIds.Count > 0)
                 {
-                    builder.WithConnectionsById(ConnectionIDs);
+                    builder.WithConnectionsById(_connectionIds);
                 }
 
                 builder.ApplyTo(relationData, npc, preserveUnlockState);
@@ -732,11 +802,46 @@ namespace S1API.Internal.Entities
 #endif
         private bool TryGetRegistryData(out IdentityData data)
         {
-            string prefabName = gameObject.name;
+            string? prefabName = PrefabName;
+            if (string.IsNullOrEmpty(prefabName))
+                prefabName = gameObject.name;
+
+            if (string.IsNullOrEmpty(prefabName))
+            {
+                data = default;
+                return false;
+            }
+
             if (prefabName.EndsWith("(Clone)"))
                 prefabName = prefabName.Substring(0, prefabName.Length - 7);
 
-            return _registry.TryGetValue(prefabName, out data);
+            if (_registry.TryGetValue(prefabName, out data))
+                return true;
+
+            try
+            {
+                var npc = GetComponent<S1NPCs.NPC>();
+                if (npc != null && !string.IsNullOrEmpty(npc.ID))
+                {
+                    foreach (var kvp in _registry)
+                    {
+                        var entry = kvp.Value;
+                        if (!string.IsNullOrEmpty(entry.Id) && string.Equals(entry.Id, npc.ID, StringComparison.OrdinalIgnoreCase))
+                        {
+                            data = entry;
+                            PrefabName = entry.PrefabName ?? kvp.Key;
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // ignored
+            }
+
+            data = default;
+            return false;
         }
 
         /// <summary>

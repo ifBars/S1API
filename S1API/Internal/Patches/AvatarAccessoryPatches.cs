@@ -53,29 +53,39 @@ namespace S1API.Internal.Patches
 
                     for (int i = 0; i < length; i++)
                     {
-                        var accessory = ((Array)appliedAccessories).GetValue(i);
-                        if (accessory == null) continue;
+                        string? assetPath = null;
 
-                        // Get the AssetPath to check if this is a custom accessory
-                        // On IL2CPP, fields are exposed as properties, so use TryGetFieldOrProperty
-                        string? assetPath = ReflectionUtils.TryGetFieldOrProperty(accessory, "AssetPath") as string;
-                        if (string.IsNullOrEmpty(assetPath)) continue;
-
-                        // Check if we have texture replacements for this accessory
-                        var textureReplacements = AccessoryFactory.GetTextureReplacements(assetPath);
-                        if (textureReplacements.Count == 0) continue;
-
-                        // Get the GameObject - accessory is a Component (MonoBehaviour)
-                        // Cast to Component to access gameObject reliably on IL2CPP
-                        GameObject? accessoryObj = null;
-                        if (accessory is Component component)
+                        try
                         {
-                            accessoryObj = component.gameObject;
-                        }
-                        if (accessoryObj == null) continue;
+                            var accessory = ((Array)appliedAccessories).GetValue(i);
+                            if (accessory == null) continue;
 
-                        // Apply custom textures to all renderers
-                        ApplyTexturesToAccessoryInstance(accessoryObj, textureReplacements);
+                            // Get the AssetPath to check if this is a custom accessory
+                            // On IL2CPP, fields are exposed as properties, so use TryGetFieldOrProperty
+                            assetPath = ReflectionUtils.TryGetFieldOrProperty(accessory, "AssetPath") as string;
+                            if (string.IsNullOrEmpty(assetPath)) continue;
+
+                            // Check if we have texture replacements for this accessory
+                            var textureReplacements = AccessoryFactory.GetTextureReplacements(assetPath);
+                            if (textureReplacements == null || textureReplacements.Count == 0) continue;
+
+                            // Get the GameObject - accessory is a Component (MonoBehaviour)
+                            // Cast to Component to access gameObject reliably on IL2CPP
+                            GameObject? accessoryObj = null;
+                            if (accessory is Component component)
+                            {
+                                accessoryObj = component.gameObject;
+                            }
+
+                            if (accessoryObj == null) continue;
+
+                            // Apply custom textures to all renderers
+                            ApplyTexturesToAccessoryInstance(accessoryObj, textureReplacements);
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Warning($"Error applying custom textures to accessory '{assetPath ?? "<unknown>"}': {ex.Message}");
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -88,7 +98,7 @@ namespace S1API.Internal.Patches
                 GameObject accessoryObj,
                 Dictionary<string, Texture2D> textureReplacements)
             {
-                if (accessoryObj == null || textureReplacements.Count == 0)
+                if (accessoryObj == null || textureReplacements == null || textureReplacements.Count == 0)
                     return;
 
                 // Apply texture to all renderers (including inactive ones)
