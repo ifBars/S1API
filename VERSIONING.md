@@ -50,11 +50,21 @@ Revision numbers start at `r2` because the original shipped release is already `
 
 ### Hotfix release for an existing line
 
-1. Checkout `releases/X.Y.Z`.
+1. Create a short-lived branch from `releases/X.Y.Z`, such as `hotfix/X.Y.Z/fix-name`.
 2. Apply only the fixes intended for that shipped line.
-3. Validate the branch for the supported targets.
-4. Tag the result as the next revision, such as `vX.Y.Zr2` or `vX.Y.Zr3`.
-5. Cherry-pick the same fix back to `stable` if it still applies there.
+3. Open a PR back into `releases/X.Y.Z` and merge it after validation.
+4. Tag the updated release branch as the next revision, such as `vX.Y.Zr2` or `vX.Y.Zr3`.
+5. Cherry-pick the merged fix back to `stable` if it still applies there, or open a matching PR if adaptation is needed.
+
+Using PRs for hotfixes keeps review history attached to the release line and improves GitHub auto-generated release notes by linking each fix to its PR and author.
+
+## Pull Request Guidance
+
+- Prefer a dedicated hotfix branch and PR for each maintenance fix.
+- Keep hotfix PRs narrowly scoped so release notes stay easy to read.
+- Merge hotfix PRs into `releases/x.y.z` before tagging the next `rN` release.
+- Backport the merged change to `stable` with a cherry-pick when possible.
+- If `stable` has diverged too far for a clean cherry-pick, use a separate PR into `stable` that references the release-branch PR.
 
 ## Backporting Rules
 
