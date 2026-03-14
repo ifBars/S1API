@@ -1,10 +1,12 @@
 #if (IL2CPPMELON)
 using S1Growing = Il2CppScheduleOne.Growing;
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
+using S1CoreItemFramework = Il2CppScheduleOne.Core.Items.Framework;
 using S1Registry = Il2CppScheduleOne.Registry;
 #elif  (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Growing = ScheduleOne.Growing;
 using S1ItemFramework = ScheduleOne.ItemFramework;
+using S1CoreItemFramework = ScheduleOne.Core.Items.Framework;
 using S1Registry = ScheduleOne.Registry;
 #endif
 
@@ -32,7 +34,7 @@ namespace S1API.Growing
             seed.Name = name;
             seed.Description = description;
             seed.StackLimit = stackLimit;
-            seed.Category = S1ItemFramework.EItemCategory.Agriculture;
+            seed.Category = S1CoreItemFramework.EItemCategory.Agriculture;
 
            // if (icon != null)
            // {

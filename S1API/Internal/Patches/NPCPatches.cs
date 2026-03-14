@@ -1579,8 +1579,29 @@ namespace S1API.Internal.Patches
             if (apiNpc == null || !apiNpc.IsCustomNPC)
                 return true; // use original for base NPCs
 
-            // Skip S1API NPCs for now
-            return false;
+            try
+            {
+                // Local-only revive: set state flags via reflection (read-only properties)
+                Utils.ReflectionUtils.TrySetFieldOrProperty(__instance, "IsDead", false);
+                Utils.ReflectionUtils.TrySetFieldOrProperty(__instance, "IsKnockedOut", false);
+
+                // Set health backing field directly to bypass SyncVar setter
+                Utils.ReflectionUtils.TrySetFieldOrProperty(
+                    __instance, "<Health>k__BackingField", __instance.MaxHealth);
+
+                // Disable behaviours locally (non-networked equivalent of Disable_Server)
+                baseNpc.Behaviour.DeadBehaviour?.Disable();
+                baseNpc.Behaviour.UnconsciousBehaviour?.Disable();
+
+                // Fire revive event so downstream listeners still react
+                __instance.onRevive?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning($"[S1API] Revive guard failed for custom NPC: {ex.Message}");
+            }
+
+            return false; // skip original to avoid SyncVar/networking calls
         }
 
         /// <summary>

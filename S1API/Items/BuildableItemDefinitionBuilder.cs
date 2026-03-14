@@ -1,8 +1,10 @@
 #if (IL2CPPMELON)
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
+using S1CoreItemFramework = Il2CppScheduleOne.Core.Items.Framework;
 using S1Registry = Il2CppScheduleOne.Registry;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1ItemFramework = ScheduleOne.ItemFramework;
+using S1CoreItemFramework = ScheduleOne.Core.Items.Framework;
 using S1Registry = ScheduleOne.Registry;
 #endif
 
@@ -30,11 +32,10 @@ namespace S1API.Items
             _definition.StackLimit = 10;
             _definition.BasePurchasePrice = 10f;
             _definition.ResellMultiplier = 0.5f;
-            _definition.Category = S1ItemFramework.EItemCategory.Furniture;
-            _definition.legalStatus = S1ItemFramework.ELegalStatus.Legal;
+            _definition.Category = S1CoreItemFramework.EItemCategory.Furniture;
+            _definition.legalStatus = S1CoreItemFramework.ELegalStatus.Legal;
             _definition.AvailableInDemo = true;
             _definition.UsableInFilters = true;
-            _definition.LabelDisplayColor = Color.white;
             _definition.BuildSoundType = S1ItemFramework.BuildableItemDefinition.EBuildSoundType.Wood;
         }
 
@@ -57,10 +58,8 @@ namespace S1API.Items
             _definition.Description = source.Description;
             _definition.Category = source.Category;
             _definition.StackLimit = source.StackLimit;
-            _definition.Keywords = source.Keywords;
             _definition.AvailableInDemo = source.AvailableInDemo;
             _definition.UsableInFilters = source.UsableInFilters;
-            _definition.LabelDisplayColor = source.LabelDisplayColor;
             _definition.Icon = source.Icon;
             _definition.legalStatus = source.legalStatus;
             _definition.PickpocketDifficultyMultiplier = source.PickpocketDifficultyMultiplier;
@@ -144,7 +143,7 @@ namespace S1API.Items
         /// <returns>The builder instance for fluent chaining.</returns>
         public BuildableItemDefinitionBuilder WithCategory(ItemCategory category)
         {
-            _definition.Category = (S1ItemFramework.EItemCategory)category;
+            _definition.Category = (S1CoreItemFramework.EItemCategory)category;
             return this;
         }
 
@@ -160,35 +159,13 @@ namespace S1API.Items
         }
 
         /// <summary>
-        /// Sets keywords used for filtering and searching this item.
-        /// </summary>
-        /// <param name="keywords">Array of keywords.</param>
-        /// <returns>The builder instance for fluent chaining.</returns>
-        public BuildableItemDefinitionBuilder WithKeywords(params string[] keywords)
-        {
-            _definition.Keywords = keywords;
-            return this;
-        }
-
-        /// <summary>
-        /// Sets the color of the label displayed in UI.
-        /// </summary>
-        /// <param name="color">The color to use for the item label.</param>
-        /// <returns>The builder instance for fluent chaining.</returns>
-        public BuildableItemDefinitionBuilder WithLabelColor(Color color)
-        {
-            _definition.LabelDisplayColor = color;
-            return this;
-        }
-
-        /// <summary>
         /// Sets the legal status of the item.
         /// </summary>
         /// <param name="status">Whether the item is legal or illegal.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
         public BuildableItemDefinitionBuilder WithLegalStatus(LegalStatus status)
         {
-            _definition.legalStatus = (S1ItemFramework.ELegalStatus)status;
+            _definition.legalStatus = (S1CoreItemFramework.ELegalStatus)status;
             return this;
         }
 
