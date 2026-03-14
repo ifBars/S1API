@@ -117,8 +117,10 @@ namespace S1API.Dialogues
                     _pendingInjections.RemoveAt(i);
                 }
 
-                yield return null; // Wait one frame
+                yield return new UnityEngine.WaitForSeconds(0.5f);
             }
+
+            _isHooked = false;
         }
 
         /// <summary>
@@ -128,15 +130,14 @@ namespace S1API.Dialogues
         /// <param name="npc">The NPC that will have the dialogue choice injected.</param>
         private static void TryInject(DialogueInjection injection, S1NPC npc)
         {
-            DialogueHandler handler = npc.GetComponent<DialogueHandler>();
-            NPCEvent_LocationDialogue dialogueEvent = npc.GetComponentInChildren<NPCEvent_LocationDialogue>(true);
-            if (!dialogueEvent || !dialogueEvent.DialogueOverride)
+            DialogueHandler handler = npc.GetComponentInChildren<DialogueHandler>(true);
+            if (handler == null)
                 return;
 
-            if (dialogueEvent.DialogueOverride.name != injection.ContainerName)
+            DialogueContainer container = ResolveContainer(handler, injection.ContainerName);
+            if (container == null)
                 return;
 
-            DialogueContainer container = dialogueEvent.DialogueOverride;
             if (container.DialogueNodeData == null)
                 return;
 
@@ -187,6 +188,44 @@ namespace S1API.Dialogues
 
             // TODO (@omar-akermi): Can you convert this to the new logger pls?
             // MelonLogger.Msg($"[DialogueInjector] Injected '{injection.ChoiceLabel}' into NPC '{npc.name}'");
+        }
+
+        private static DialogueContainer ResolveContainer(DialogueHandler handler, string containerName)
+        {
+            if (handler == null || string.IsNullOrEmpty(containerName))
+                return null;
+
+            DialogueController controller = handler.GetComponent<DialogueController>();
+            if (controller != null)
+            {
+                if (controller.GenericDialogue != null && controller.GenericDialogue.name == containerName)
+                    return controller.GenericDialogue;
+
+                if (controller.OverrideContainer != null && controller.OverrideContainer.name == containerName)
+                    return controller.OverrideContainer;
+            }
+
+            NPCEvent_LocationDialogue dialogueEvent = handler.GetComponentInParent<S1NPC>()?.GetComponentInChildren<NPCEvent_LocationDialogue>(true);
+            if (dialogueEvent != null && dialogueEvent.DialogueOverride != null && dialogueEvent.DialogueOverride.name == containerName)
+                return dialogueEvent.DialogueOverride;
+
+#if IL2CPPMELON || IL2CPPBEPINEX
+            var containers = handler.dialogueContainers;
+#else
+            var field = typeof(DialogueHandler).GetField("dialogueContainers", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var containers = field?.GetValue(handler) as List<DialogueContainer>;
+#endif
+            if (containers == null)
+                return null;
+
+            for (int i = 0; i < containers.Count; i++)
+            {
+                DialogueContainer candidate = containers.ToArray()[i];
+                if (candidate != null && candidate.name == containerName)
+                    return candidate;
+            }
+
+            return null;
         }
     }
 }
