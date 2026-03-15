@@ -5,9 +5,9 @@ env:
 
 on:
   push:
-    branches: [ master, main, stable, npc-prefabs ]
+    branches: [ master, main, stable, beta, npc-prefabs ]
   pull_request:
-    branches: [ master, main, stable, npc-prefabs ]
+    branches: [ master, main, stable, beta, npc-prefabs ]
   workflow_dispatch:
     inputs:
       assembly_branch:
@@ -42,6 +42,9 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && [[ -n "${{ inputs.assembly_branch }}" ]]; then
             echo "branch=${{ inputs.assembly_branch }}" >> $GITHUB_OUTPUT
             echo "Using ${{ inputs.assembly_branch }} assemblies (manual trigger)"
+          elif [[ "${{ github.ref_name }}" == "beta" ]] || [[ "${{ github.base_ref }}" == "beta" ]]; then
+            echo "branch=beta" >> $GITHUB_OUTPUT
+            echo "Using beta assemblies for beta branch workflow"
           elif [[ "${{ github.event_name }}" == "pull_request" ]] && [[ "${{ contains(github.event.pull_request.labels.*.name, 'beta') }}" == "true" ]]; then
             echo "branch=beta" >> $GITHUB_OUTPUT
             echo "Using beta assemblies for PR with beta label"
@@ -404,7 +407,7 @@ jobs:
       # Save on PR events AND on pushes to main branches (to update cache after assembly updates)
       - name: Save IL2CPP Game Assemblies to Cache
         uses: actions/cache/save@v4
-        if: always() && (github.event_name == 'pull_request' || (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable' || github.ref == 'refs/heads/npc-prefabs'))) && steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true'
+        if: always() && (github.event_name == 'pull_request' || (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable' || github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/npc-prefabs'))) && steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true'
         with:
           path: S1API/ScheduleOneAssemblies
           key: il2cpp-game-assemblies-${{ env.IL2CPP_ASSEMBLIES_CACHE_VERSION }}-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
