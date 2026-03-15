@@ -79,6 +79,62 @@ foreach (var prop in def.Properties)
 }
 ```
 
+## Overriding product effect behavior with callbacks
+
+You can register callbacks for both player and NPC product effects.
+
+### Player callbacks
+
+By default, callbacks replace the base effect behavior:
+
+```csharp
+using S1API.Products;
+using S1API.Properties;
+
+ProductManager.SetEffectCallback(Property.Euphoric, player =>
+{
+    // Custom behavior instead of the base effect
+    player.Heal(10);
+});
+
+// Optional: run callback AND keep default effect behavior
+ProductManager.SetEffectCallback(Property.Euphoric, player =>
+{
+    player.Heal(5);
+}, allowDefaultEffect: true);
+
+// Remove later if needed
+ProductManager.RemoveEffectCallback(Property.Euphoric);
+```
+
+Use `ProductManager.ClearEffectCallbacks()` to remove all registered overrides.
+
+### NPC callbacks
+
+You can also intercept effects applied through `ApplyEffectsToNPC`:
+
+```csharp
+using S1API.Products;
+using S1API.Properties;
+
+ProductManager.SetNpcEffectCallback(Property.Sneaky, npc =>
+{
+    // Custom NPC effect behavior
+    npc.Heal(5f);
+});
+
+// Optional: run callback AND keep default effect behavior
+ProductManager.SetNpcEffectCallback(Property.Sneaky, npc =>
+{
+    npc.Heal(2f);
+}, allowDefaultEffect: true);
+
+// Remove later if needed
+ProductManager.RemoveNpcEffectCallback(Property.Sneaky);
+```
+
+Use `ProductManager.ClearNpcEffectCallbacks()` to remove all registered NPC overrides.
+
 ## Creating product instances
 
 ### Unpackaged

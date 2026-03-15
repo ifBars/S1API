@@ -38,6 +38,13 @@ namespace S1API.Entities.Customer
             _data.DefaultAffinityData = new S1Economy.CustomerAffinityData();
         }
 
+        /// <summary>
+        /// Sets the customer's weekly spending range.
+        /// The minimum is clamped to 0, and the maximum is clamped so it cannot be lower than the minimum.
+        /// </summary>
+        /// <param name="minWeekly">Minimum weekly spend target.</param>
+        /// <param name="maxWeekly">Maximum weekly spend target.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder WithSpending(float minWeekly, float maxWeekly)
         {
             _data.MinWeeklySpend = Mathf.Max(0f, minWeekly);
@@ -45,6 +52,13 @@ namespace S1API.Entities.Customer
             return this;
         }
 
+        /// <summary>
+        /// Sets how many orders this customer may place per week.
+        /// Both values are clamped to the game's 0..7 range, and the maximum cannot be lower than the minimum.
+        /// </summary>
+        /// <param name="min">Minimum orders per week.</param>
+        /// <param name="max">Maximum orders per week.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder WithOrdersPerWeek(int min, int max)
         {
             _data.MinOrdersPerWeek = Mathf.Clamp(min, 0, 7);
@@ -53,8 +67,11 @@ namespace S1API.Entities.Customer
         }
 
         /// <summary>
-        /// Sets the preferred order day using names like "Monday", "Tuesday", ... or numeric 0..6.
+        /// Sets the preferred order day using names like "Monday", "Tuesday", and so on.
+        /// Invalid values are ignored.
         /// </summary>
+        /// <param name="day">Day name to parse.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder WithPreferredOrderDay(string day)
         {
             if (!string.IsNullOrEmpty(day) && Enum.TryParse(typeof(S1GameTime.EDay), day, true, out var parsed))
@@ -65,6 +82,8 @@ namespace S1API.Entities.Customer
         /// <summary>
         /// Sets the preferred order day using the API Day enum.
         /// </summary>
+        /// <param name="day">Preferred order day.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder WithPreferredOrderDay(Day day)
         {
             _data.PreferredOrderDay = (S1GameTime.EDay)(int)day;
@@ -74,6 +93,8 @@ namespace S1API.Entities.Customer
         /// <summary>
         /// Sets the order time in 24h integer format (e.g., 930 for 9:30AM, 1745 for 5:45PM).
         /// </summary>
+        /// <param name="hhmm">24-hour time in HHMM form.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder WithOrderTime(int hhmm)
         {
             _data.OrderTime = Mathf.Clamp(hhmm, 0, 2359);
@@ -81,8 +102,11 @@ namespace S1API.Entities.Customer
         }
 
         /// <summary>
-        /// Sets standards from string (e.g., "VeryLow", "Low", "Moderate", "High", "VeryHigh").
+        /// Sets customer standards from a string such as "VeryLow", "Low", "Moderate", "High", or "VeryHigh".
+        /// Invalid values are ignored.
         /// </summary>
+        /// <param name="standards">Standards name to parse.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder WithStandards(string standards)
         {
             if (!string.IsNullOrEmpty(standards) && Enum.TryParse(typeof(S1Economy.ECustomerStandard), standards, true, out var parsed))
@@ -93,24 +117,48 @@ namespace S1API.Entities.Customer
         /// <summary>
         /// Sets standards using the strongly-typed enum.
         /// </summary>
+        /// <param name="standards">Customer standards value.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder WithStandards(CustomerStandard standards)
         {
             _data.Standards = (S1Economy.ECustomerStandard)(int)standards;
             return this;
         }
 
+        /// <summary>
+        /// Controls whether the player can attempt to introduce themselves through a direct sample offer.
+        /// </summary>
+        /// <param name="allow">True to allow direct approach attempts; otherwise false.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder AllowDirectApproach(bool allow)
         {
             _data.CanBeDirectlyApproached = allow;
             return this;
         }
 
+        /// <summary>
+        /// Forces the first sample attempt to succeed, bypassing the normal mutual-relation chance check.
+        /// </summary>
+        /// <param name="guarantee">True to guarantee first-sample success.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder GuaranteeFirstSample(bool guarantee)
         {
             _data.GuaranteeFirstSampleSuccess = guarantee;
             return this;
         }
 
+        /// <summary>
+        /// Sets the mutual-relationship thresholds used when a customer is approached directly for the first time.
+        /// The game checks the NPC's average relationship with mutual contacts and converts that value into a success chance.
+        /// Values at or below <paramref name="minAt50"/> behave as the low end of the chance curve, and values at or above
+        /// <paramref name="maxAt100"/> guarantee success. Values between them scale linearly.
+        /// </summary>
+        /// <param name="minAt50">
+        /// Lower bound of the mutual-relationship success curve.
+        /// Despite the historical name, this is better thought of as the point where the curve starts rather than a literal 50% threshold.
+        /// </param>
+        /// <param name="maxAt100">Mutual-relationship value that guarantees success.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder WithMutualRelationRequirement(float minAt50, float maxAt100)
         {
             _data.MinMutualRelationRequirement = Mathf.Clamp(minAt50, 0f, 5f);
@@ -118,12 +166,23 @@ namespace S1API.Entities.Customer
             return this;
         }
 
+        /// <summary>
+        /// Sets the chance that the customer calls the police after rejecting a direct approach.
+        /// </summary>
+        /// <param name="chance">Chance from 0 to 1.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder WithCallPoliceChance(float chance)
         {
             _data.CallPoliceChance = Mathf.Clamp01(chance);
             return this;
         }
 
+        /// <summary>
+        /// Sets the customer's starting addiction level and how quickly dependence builds over time.
+        /// </summary>
+        /// <param name="baseAddiction">Starting addiction level in the 0..1 range.</param>
+        /// <param name="dependenceMultiplier">Dependence growth multiplier in the 0..2 range.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder WithDependence(float baseAddiction, float dependenceMultiplier = 1f)
         {
             _data.BaseAddiction = Mathf.Clamp01(baseAddiction);
@@ -135,6 +194,8 @@ namespace S1API.Entities.Customer
         /// Sets product type affinities by drug-type name. e.g., ("Weed", 0.3f), ("Cocaine", -0.5f).
         /// Ensures all drug types are initialized (unspecified ones default to neutral affinity).
         /// </summary>
+        /// <param name="entries">Drug-type names and affinity values to apply.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder WithAffinities(IEnumerable<(string drugType, float affinity)> entries)
         {
             _data.DefaultAffinityData = new S1Economy.CustomerAffinityData();
@@ -185,6 +246,8 @@ namespace S1API.Entities.Customer
         /// Replaces any existing default affinity data.
         /// Ensures all drug types are initialized (unspecified ones default to neutral affinity).
         /// </summary>
+        /// <param name="entries">Drug-type values and affinity values to apply.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder WithAffinities(IEnumerable<(DrugType drugType, float affinity)> entries)
         {
             _data.DefaultAffinityData = new S1Economy.CustomerAffinityData();
@@ -228,6 +291,9 @@ namespace S1API.Entities.Customer
         /// <summary>
         /// Adds or overrides a single product type affinity entry.
         /// </summary>
+        /// <param name="drugType">Drug type to add or update.</param>
+        /// <param name="affinity">Affinity value in the -1..1 range.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder WithAffinity(DrugType drugType, float affinity)
         {
             if (_data.DefaultAffinityData == null)
@@ -260,6 +326,8 @@ namespace S1API.Entities.Customer
         /// Tries to assign preferred properties by asset name using in-game Resources.
         /// Names must match existing property assets.
         /// </summary>
+        /// <param name="propertyNames">Property asset names to resolve.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder WithPreferredPropertiesByName(params string[] propertyNames)
         {
             if (propertyNames == null || propertyNames.Length == 0)
@@ -297,6 +365,8 @@ namespace S1API.Entities.Customer
         /// Tries to assign preferred properties by ID using in-game Resources.
         /// IDs must match existing property assets.
         /// </summary>
+        /// <param name="propertyIds">Property IDs to resolve.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder WithPreferredPropertiesById(params string[] propertyIds)
         {
             if (propertyIds == null || propertyIds.Length == 0)
@@ -333,6 +403,8 @@ namespace S1API.Entities.Customer
         /// <summary>
         /// Assigns preferred properties from wrappers.
         /// </summary>
+        /// <param name="wrappers">Wrapped properties to assign.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder WithPreferredProperties(params ProductPropertyWrapper[] wrappers)
         {
             if (wrappers == null || wrappers.Length == 0)
@@ -355,6 +427,8 @@ namespace S1API.Entities.Customer
         /// Assigns preferred properties from API property abstractions (tokens or wrappers).
         /// Does not expose game types to mod developers.
         /// </summary>
+        /// <param name="properties">Property abstractions to resolve and assign.</param>
+        /// <returns>The current builder for chaining.</returns>
         public CustomerDataBuilder WithPreferredProperties(params PropertyBase[] properties)
         {
             if (properties == null || properties.Length == 0)
