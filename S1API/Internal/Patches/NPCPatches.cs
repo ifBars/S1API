@@ -1581,13 +1581,18 @@ namespace S1API.Internal.Patches
 
             try
             {
-                // Local-only revive: set state flags via reflection (read-only properties)
-                Utils.ReflectionUtils.TrySetFieldOrProperty(__instance, "IsDead", false);
-                Utils.ReflectionUtils.TrySetFieldOrProperty(__instance, "IsKnockedOut", false);
-
-                // Set health backing field directly to bypass SyncVar setter
-                Utils.ReflectionUtils.TrySetFieldOrProperty(
+                bool healthSet = Utils.ReflectionUtils.TrySetFieldOrProperty(
                     __instance, "<Health>k__BackingField", __instance.MaxHealth);
+                bool isDeadSet = Utils.ReflectionUtils.TrySetFieldOrProperty(__instance, "IsDead", false);
+                bool isKnockedOutSet = Utils.ReflectionUtils.TrySetFieldOrProperty(__instance, "IsKnockedOut", false);
+
+                if (!healthSet || !isDeadSet || !isKnockedOutSet)
+                {
+                    MelonLogger.Warning(
+                        $"[S1API] Revive guard reflection failed for custom NPC '{baseNpc?.ID ?? "<unknown>"}' " +
+                        $"(Health={healthSet}, IsDead={isDeadSet}, IsKnockedOut={isKnockedOutSet}); falling back to original revive.");
+                    return true;
+                }
 
                 // Disable behaviours locally (non-networked equivalent of Disable_Server)
                 baseNpc.Behaviour.DeadBehaviour?.Disable();
@@ -1595,13 +1600,15 @@ namespace S1API.Internal.Patches
 
                 // Fire revive event so downstream listeners still react
                 __instance.onRevive?.Invoke();
+
+                return false; // skip original to avoid SyncVar/networking calls
             }
             catch (Exception ex)
             {
-                MelonLogger.Warning($"[S1API] Revive guard failed for custom NPC: {ex.Message}");
+                MelonLogger.Warning(
+                    $"[S1API] Revive guard failed for custom NPC '{baseNpc?.ID ?? "<unknown>"}': {ex.Message}. Falling back to original revive.");
+                return true;
             }
-
-            return false; // skip original to avoid SyncVar/networking calls
         }
 
         /// <summary>

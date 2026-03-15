@@ -55,7 +55,9 @@
         <Reference Include="$(BepInExAssembliesPath)\Il2CppInterop.Generator.dll" Condition="'$(Configuration)' == 'Il2CppBepInEx'" />
 
         <Reference Include="$(Il2CppAssembliesPath)\Assembly-CSharp.dll" />
-        <Reference Include="$(Il2CppAssembliesPath)\Il2CppScheduleOne.Core.dll" />
+        <Reference Include="Il2CppScheduleOne.Core">
+            <HintPath>$(Il2CppAssembliesPath)\Il2CppScheduleOne.Core.dll</HintPath>
+        </Reference>
         <Reference Include="$(Il2CppAssembliesPath)\Il2Cppmscorlib.dll" />
         <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.dll" />
         <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.CoreModule.dll" />
