@@ -1579,8 +1579,36 @@ namespace S1API.Internal.Patches
             if (apiNpc == null || !apiNpc.IsCustomNPC)
                 return true; // use original for base NPCs
 
-            // Skip S1API NPCs for now
-            return false;
+            try
+            {
+                bool healthSet = Utils.ReflectionUtils.TrySetFieldOrProperty(
+                    __instance, "<Health>k__BackingField", __instance.MaxHealth);
+                bool isDeadSet = Utils.ReflectionUtils.TrySetFieldOrProperty(__instance, "IsDead", false);
+                bool isKnockedOutSet = Utils.ReflectionUtils.TrySetFieldOrProperty(__instance, "IsKnockedOut", false);
+
+                if (!healthSet || !isDeadSet || !isKnockedOutSet)
+                {
+                    MelonLogger.Warning(
+                        $"[S1API] Revive guard reflection failed for custom NPC '{baseNpc?.ID ?? "<unknown>"}' " +
+                        $"(Health={healthSet}, IsDead={isDeadSet}, IsKnockedOut={isKnockedOutSet}); falling back to original revive.");
+                    return true;
+                }
+
+                // Disable behaviours locally (non-networked equivalent of Disable_Server)
+                baseNpc.Behaviour.DeadBehaviour?.Disable();
+                baseNpc.Behaviour.UnconsciousBehaviour?.Disable();
+
+                // Fire revive event so downstream listeners still react
+                __instance.onRevive?.Invoke();
+
+                return false; // skip original to avoid SyncVar/networking calls
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning(
+                    $"[S1API] Revive guard failed for custom NPC '{baseNpc?.ID ?? "<unknown>"}': {ex.Message}. Falling back to original revive.");
+                return true;
+            }
         }
 
         /// <summary>

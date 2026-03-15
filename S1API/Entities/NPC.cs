@@ -1719,8 +1719,13 @@ namespace S1API.Entities
         /// <summary>
         /// Causes the NPC to become panicked.
         /// </summary>
-        public void Panic() =>
-            S1NPC.SetPanicked();
+        public void Panic()
+        {
+            if (!SafeIsServer())
+                return;
+
+            S1NPC.SetPanicked_Server();
+        }
 
         /// <summary>
         /// Causes the NPC to stop panicking, if they are currently.

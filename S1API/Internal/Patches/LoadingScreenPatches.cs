@@ -211,7 +211,7 @@ namespace S1API.Internal.Patches
             {
                 ReflectionUtils.TrySetFieldOrProperty(loadingScreen, "IsOpen", false);
 
-                var musicPlayer = S1DevUtilities.Singleton<S1Audio.MusicPlayer>.Instance;
+                var musicPlayer = S1DevUtilities.Singleton<S1Audio.MusicManager>.Instance;
                 if (musicPlayer != null)
                 {
                     musicPlayer.SetTrackEnabled("Loading Screen", enabled: false);

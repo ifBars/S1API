@@ -1,10 +1,12 @@
 #if (IL2CPPMELON)
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
+using S1CoreItemFramework = Il2CppScheduleOne.Core.Items.Framework;
 using S1Registry = Il2CppScheduleOne.Registry;
 using S1StationFramework = Il2CppScheduleOne.StationFramework;
 using S1Storage = Il2CppScheduleOne.Storage;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1ItemFramework = ScheduleOne.ItemFramework;
+using S1CoreItemFramework = ScheduleOne.Core.Items.Framework;
 using S1Registry = ScheduleOne.Registry;
 using S1StationFramework = ScheduleOne.StationFramework;
 using S1Storage = ScheduleOne.Storage;
@@ -50,11 +52,10 @@ namespace S1API.Items
             _definition.StackLimit = 10;
             _definition.BasePurchasePrice = 10f;
             _definition.ResellMultiplier = 0.5f;
-            _definition.Category = S1ItemFramework.EItemCategory.Tools;
-            _definition.legalStatus = S1ItemFramework.ELegalStatus.Legal;
+            _definition.Category = S1CoreItemFramework.EItemCategory.Tools;
+            _definition.legalStatus = S1CoreItemFramework.ELegalStatus.Legal;
             _definition.AvailableInDemo = true;
             _definition.UsableInFilters = true;
-            _definition.LabelDisplayColor = Color.white;
 
             // Provide a minimal StoredItem placeholder so the field is never null in tooling/inspectors.
             _storedItemPlaceholder = new GameObject("S1API_DefaultStoredItem");
@@ -78,7 +79,7 @@ namespace S1API.Items
             _definition.ID = id;
             _definition.Name = name;
             _definition.Description = description;
-            _definition.Category = (S1ItemFramework.EItemCategory)category;
+            _definition.Category = (S1CoreItemFramework.EItemCategory)category;
 
             // Update the underlying ScriptableObject name for clarity in inspectors/debuggers.
             var displayName = string.IsNullOrEmpty(name) ? id : name;
@@ -135,29 +136,7 @@ namespace S1API.Items
         /// <returns>The builder instance for fluent chaining.</returns>
         public StorableItemDefinitionBuilder WithLegalStatus(LegalStatus status)
         {
-            _definition.legalStatus = (S1ItemFramework.ELegalStatus)status;
-            return this;
-        }
-
-        /// <summary>
-        /// Sets the color of the label displayed in UI.
-        /// </summary>
-        /// <param name="color">The color to use for the item label.</param>
-        /// <returns>The builder instance for fluent chaining.</returns>
-        public StorableItemDefinitionBuilder WithLabelColor(Color color)
-        {
-            _definition.LabelDisplayColor = color;
-            return this;
-        }
-
-        /// <summary>
-        /// Sets keywords used for filtering and searching this item.
-        /// </summary>
-        /// <param name="keywords">Array of keywords.</param>
-        /// <returns>The builder instance for fluent chaining.</returns>
-        public StorableItemDefinitionBuilder WithKeywords(params string[] keywords)
-        {
-            _definition.Keywords = keywords;
+            _definition.legalStatus = (S1CoreItemFramework.ELegalStatus)status;
             return this;
         }
 
