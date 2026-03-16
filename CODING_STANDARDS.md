@@ -6,6 +6,8 @@ They are to keep the project consistent and predictable.
 ## General Best Practice
 * Please review the codebase thoroughly before doing a PR.
 
+See [VERSIONING.md](VERSIONING.md) for the branch and hotfix versioning policy.
+
 ## File and Namespace Structure
 * All classes must exist in a logical namespace matching the folder structure.
 * Internal API code should be placed in `S1API.Internal` sub-namespaces.
