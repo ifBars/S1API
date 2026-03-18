@@ -23,6 +23,8 @@
       href: delivery-location-registry.md
     - name: Dialogue System
       href: dialogue-system.md
+    - name: Dialogue Injection
+      href: dialogue-injection.md
     - name: Customer Behavior
       href: customer-behavior.md
     - name: Relationship Management
