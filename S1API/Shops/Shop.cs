@@ -1,9 +1,11 @@
 #if (IL2CPPMELON)
 using S1UIShop = Il2CppScheduleOne.UI.Shop;
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
+using S1CoreItemFramework = Il2CppScheduleOne.Core.Items.Framework;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1UIShop = ScheduleOne.UI.Shop;
 using S1ItemFramework = ScheduleOne.ItemFramework;
+using S1CoreItemFramework = ScheduleOne.Core.Items.Framework;
 #endif
 
 using System.Collections.Generic;
@@ -63,7 +65,7 @@ namespace S1API.Shops
         /// <returns>True if the shop sells at least one item in this category.</returns>
         public bool SellsCategory(ItemCategory category)
         {
-            var s1Category = (S1ItemFramework.EItemCategory)category;
+            var s1Category = (S1CoreItemFramework.EItemCategory)category;
 
             foreach (var listing in S1ShopInterface.Listings)
             {

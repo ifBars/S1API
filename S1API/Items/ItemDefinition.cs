@@ -1,7 +1,9 @@
 #if (IL2CPPMELON)
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
+using S1CoreItemFramework = Il2CppScheduleOne.Core.Items.Framework;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1ItemFramework = ScheduleOne.ItemFramework;
+using S1CoreItemFramework = ScheduleOne.Core.Items.Framework;
 #endif
 
 using UnityEngine;
@@ -74,7 +76,7 @@ namespace S1API.Items
         public ItemCategory Category
         {
             get => (ItemCategory)S1ItemDefinition.Category;
-            set => S1ItemDefinition.Category = (S1ItemFramework.EItemCategory)value;
+            set => S1ItemDefinition.Category = (S1CoreItemFramework.EItemCategory)value;
         }
 
         /// <summary>
@@ -101,27 +103,9 @@ namespace S1API.Items
         public LegalStatus LegalStatus
         {
             get => (LegalStatus)S1ItemDefinition.legalStatus;
-            set => S1ItemDefinition.legalStatus = (S1ItemFramework.ELegalStatus)value;
+            set => S1ItemDefinition.legalStatus = (S1CoreItemFramework.ELegalStatus)value;
         }
 
-
-        /// <summary>
-        /// The color of the label shown in UI.
-        /// </summary>
-        public Color LabelDisplayColor
-        {
-            get => S1ItemDefinition.LabelDisplayColor;
-            set => S1ItemDefinition.LabelDisplayColor = value;
-        }
-
-        /// <summary>
-        /// Any keywords used to filter/search this item.
-        /// </summary>
-        public string[] Keywords
-        {
-            get => S1ItemDefinition.Keywords;
-            set => S1ItemDefinition.Keywords = value;
-        }
 
         /// <summary>
         /// Creates a new item instance with the specified quantity.

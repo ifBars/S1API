@@ -41,14 +41,6 @@ namespace S1API.Items
             set => S1BuildableItemDefinition.BuildSoundType = (S1ItemFramework.BuildableItemDefinition.EBuildSoundType)value;
         }
 
-        /// <summary>
-        /// The color displayed on the item's label in the UI.
-        /// </summary>
-        public new Color LabelDisplayColor
-        {
-            get => S1BuildableItemDefinition.LabelDisplayColor;
-            set => S1BuildableItemDefinition.LabelDisplayColor = value;
-        }
     }
 
     /// <summary>

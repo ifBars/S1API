@@ -71,8 +71,6 @@ var myItem = ItemCreator.CreateBuilder()
     .WithStackLimit(10)
     .WithPricing(50f, 0.5f)
     .WithLegalStatus(LegalStatus.Legal)
-    .WithLabelColor(Color.green)
-    .WithKeywords("custom", "special", "rare")
     .Build();
 ```
 
@@ -114,7 +112,6 @@ public class MyMod : MelonMod
             )
             .WithStackLimit(10)
             .WithPricing(basePurchasePrice: 150f, resellMultiplier: 0.5f)
-            .WithLabelColor(new Color(0.4f, 0.2f, 0.6f, 1f))
             .WithEffects(
                 yieldMultiplier: 1.5f,
                 instantGrowth: 0.5f,
@@ -503,8 +500,6 @@ var item = ItemCreator.CreateBuilder()
 - `WithIcon(sprite)` - Sets the item icon
 - `WithPricing(basePrice, resellMultiplier)` - Configures economic properties
 - `WithLegalStatus(status)` - Sets legal or illegal status
-- `WithLabelColor(color)` - Sets UI label color
-- `WithKeywords(keywords)` - Sets search/filter keywords
 - `WithEquippable(equippable)` - Attaches equippable component
 - `WithStoredItem(prefab)` - Assigns a custom StoredItem prefab (optional)
 - `WithDemoAvailability(available)` - Sets demo availability

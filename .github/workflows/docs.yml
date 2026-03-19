@@ -256,7 +256,7 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./S1API/_site
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref != 'refs/heads/beta'
 
       # Save cache even if build fails (to enable beta cache priming)
       # Save on PR events AND on pushes to main branches (to update cache after assembly updates)
@@ -273,7 +273,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable' || github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/npc-prefabs'
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable' || github.ref == 'refs/heads/npc-prefabs'
     steps:
       - name: Deploy to GitHub Pages
         id: deployment

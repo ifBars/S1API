@@ -1,11 +1,13 @@
 #if (IL2CPPMELON)
 using S1Clothing = Il2CppScheduleOne.Clothing;
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
+using S1CoreItemFramework = Il2CppScheduleOne.Core.Items.Framework;
 using S1Registry = Il2CppScheduleOne.Registry;
 using Il2CppCollections = Il2CppSystem.Collections.Generic;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Clothing = ScheduleOne.Clothing;
 using S1ItemFramework = ScheduleOne.ItemFramework;
+using S1CoreItemFramework = ScheduleOne.Core.Items.Framework;
 using S1Registry = ScheduleOne.Registry;
 using Il2CppCollections = System.Collections.Generic;
 #endif
@@ -34,12 +36,11 @@ namespace S1API.Items
             _definition.StackLimit = 10;
             _definition.BasePurchasePrice = 10f;
             _definition.ResellMultiplier = 0.5f;
-            _definition.Category = S1ItemFramework.EItemCategory.Clothing;
-            _definition.legalStatus = S1ItemFramework.ELegalStatus.Legal;
+            _definition.Category = S1CoreItemFramework.EItemCategory.Clothing;
+            _definition.legalStatus = S1CoreItemFramework.ELegalStatus.Legal;
             _definition.AvailableInDemo = true;
             _definition.UsableInFilters = true;
-            _definition.LabelDisplayColor = Color.white;
-            
+
             // Clothing-specific defaults
             _definition.Slot = S1Clothing.EClothingSlot.Head;
             _definition.ApplicationType = S1Clothing.EClothingApplicationType.Accessory;
@@ -72,8 +73,6 @@ namespace S1API.Items
             _definition.legalStatus = source.legalStatus;
             _definition.AvailableInDemo = source.AvailableInDemo;
             _definition.UsableInFilters = source.UsableInFilters;
-            _definition.LabelDisplayColor = source.LabelDisplayColor;
-            _definition.Keywords = source.Keywords;
             _definition.StoredItem = source.StoredItem;
             _definition.Equippable = source.Equippable;
             
@@ -212,28 +211,6 @@ namespace S1API.Items
         {
             _definition.BasePurchasePrice = Mathf.Max(0f, basePurchasePrice);
             _definition.ResellMultiplier = Mathf.Clamp01(resellMultiplier);
-            return this;
-        }
-
-        /// <summary>
-        /// Sets keywords used for filtering and searching this item.
-        /// </summary>
-        /// <param name="keywords">Array of keywords.</param>
-        /// <returns>The builder instance for fluent chaining.</returns>
-        public ClothingItemDefinitionBuilder WithKeywords(params string[] keywords)
-        {
-            _definition.Keywords = keywords;
-            return this;
-        }
-
-        /// <summary>
-        /// Sets the color of the label displayed in UI.
-        /// </summary>
-        /// <param name="color">The color to use for the item label.</param>
-        /// <returns>The builder instance for fluent chaining.</returns>
-        public ClothingItemDefinitionBuilder WithLabelColor(Color color)
-        {
-            _definition.LabelDisplayColor = color;
             return this;
         }
 
