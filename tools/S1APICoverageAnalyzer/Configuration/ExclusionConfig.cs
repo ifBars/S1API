@@ -28,6 +28,7 @@ public static class ExclusionConfig
         "ScheduleOne.Audio",
         "ScheduleOne.VoiceOver",
         "ScheduleOne.Noise",
+        "ScheduleOne.Core.Audio", // Internal audio configuration enums
         
         // Visuals / Rendering / FX (internal implementation)
         "ScheduleOne.FX",
@@ -66,6 +67,10 @@ public static class ExclusionConfig
         
         // Calling internals (CallManager is wrapped, but PayPhone etc are not)
         "ScheduleOne.Calling",
+
+        // Core settings/configuration assets are internal tuning/editor plumbing
+        "ScheduleOne.Core.Deliveries",
+        "ScheduleOne.Core.Settings",
         
         // NPC Character Classes - empty network stubs that just inherit from NPC
         // The base NPC type is wrapped, and S1API has its own named NPC wrappers
@@ -77,6 +82,7 @@ public static class ExclusionConfig
         
         // Player Tasks (Mini-games internals)
         "ScheduleOne.PlayerTasks",
+        "ScheduleOne.Experimental", // Prototype/tuning data, not stable modding surface
         "Casino.UI",
         "ScheduleOne.Console",
     ];
@@ -105,10 +111,54 @@ public static class ExclusionConfig
         "CanvasScaler",
         "GraphicRaycaster",
         "LayoutGroup",
-        
+        "UIScreen",
+        "UIScreenManager",
+        "UIPanel",
+        "UISelectable",
+        "UIPopupScreen",
+        "UIOption",
+        "UITab",
+        "UIToggle",
+        "UISlider",
+        "UITrigger",
+        "UIMap",
+        "UIDropdown",
+        "UIHorizontalSelector",
+        "UIContentPanel",
+        "UISwitchInputModeDetector",
+        "UIInputDetectBehaviour",
+
         // Specific types that shouldn't count toward coverage
         "AchievementManager", // Internal achievement system
         "IGUIDRegisterable", // Internal interface
+        "ExitListener",
+        "TransformData",
+        "TransformExtensions",
+        "XPAmounts",
+        "BuildStart_",
+        "BuildStop_",
+        "BuildUpdate_",
+        "ActivateDuringBuild",
+        "CornerObstacle",
+        "OverrideGhostMaterial",
+        "TileIntersection",
+        "BrickPressContainer",
+        "BrickPressHandle",
+        "CauldronDisplayTub",
+        "CashStackVisuals",
+        "DebugInterface",
+        "CommandListScreen",
+        "CustomUIUtils",
+        "OnScreenKeyboard",
+        "OnScreenMouse",
+        "INonNavigablePanel",
+        "InputDescriptor",
+        "InputDescriptorData",
+        "JukeboxInterface",
+        "LabOvenButton",
+        "LabOvenDoor",
+        "LabOvenHammer",
+        "LabOvenWireTray",
         "Stan",
         "Meg",
         "Jerry",
@@ -123,6 +173,9 @@ public static class ExclusionConfig
         "BranchNodeData",
         "BranchOptionData",
         "EClothingColor",
+        "ButtonAttribute",
+        "ConditionalAttribute",
+        "EMaterialType",
         "SlotReel",
         "AvatarLayer",
         "Eyebrow",
@@ -133,6 +186,7 @@ public static class ExclusionConfig
         "IStorageEntity",
         "CosmeticPowerLine",
         "AvatarLODBoundsUpdater",
+        "ThirdPersonEquippableAlignmentHelper",
     ];
     
     /// <summary>

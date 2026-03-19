@@ -239,6 +239,11 @@ public sealed class ApiAssemblyAnalyzer : AssemblyAnalyzer
                 apiTypeInfo.WrappedGameTypes.Add(normalizedName);
                 TrackTypeAccess(normalizedName, apiType);
             }
+
+            if (type.DeclaringType != null && IsGameType(type.DeclaringType))
+            {
+                RegisterGameTypeReference(type.DeclaringType, apiType, apiTypeInfo);
+            }
         }
         
         // Also check generic type arguments
@@ -449,6 +454,11 @@ public sealed class ApiAssemblyAnalyzer : AssemblyAnalyzer
                         var member = module.ResolveMethod(token);
                         if (member is MethodInfo method)
                         {
+                            if (method.DeclaringType != null)
+                            {
+                                RegisterGameTypeReference(method.DeclaringType, apiType, apiTypeInfo);
+                            }
+
                             // Check if this is a generic method with game type arguments
                             if (method.IsGenericMethod && !method.IsGenericMethodDefinition)
                             {
