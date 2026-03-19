@@ -234,34 +234,46 @@
       "note": null
     },
     {
-      "timestamp": "2026-03-19T00:40:32.7904947Z",
-      "classCoveragePercentage": 30.43032786885246,
+      "timestamp": "2026-03-19T10:24:14.0870273Z",
+      "classCoveragePercentage": 28.383458646616543,
       "memberCoveragePercentage": 0,
-      "totalClasses": 976,
-      "coveredClasses": 297,
-      "totalMembers": 24871,
+      "totalClasses": 1064,
+      "coveredClasses": 302,
+      "totalMembers": 25935,
       "coveredMembers": 0,
-      "excludedClasses": 1064,
+      "excludedClasses": 1078,
       "gameAssemblyVersion": "0.0.0.0",
-      "gameAssemblyHash": "6FCB32C8026D6AA006467AD776CBD089BABCDC5357D7DEBB04A1B91C6DF0193E",
+      "gameAssemblyHash": "E28704D4B29A546ED14B1AD6CD47614511CEFC901C1C271E0189B960219D26F3",
       "analyzerVersion": "1.0.0.0",
-      "events": [],
+      "events": [
+        {
+          "type": 1,
+          "description": "Game updated: \u002B88 types (\u002B9.0%)",
+          "details": "Hash: 6FCB32C8 \u2192 E28704D4"
+        }
+      ],
       "note": null
     }
   ],
   "latestEntry": {
-    "timestamp": "2026-03-19T00:40:32.7904947Z",
-    "classCoveragePercentage": 30.43032786885246,
+    "timestamp": "2026-03-19T10:24:14.0870273Z",
+    "classCoveragePercentage": 28.383458646616543,
     "memberCoveragePercentage": 0,
-    "totalClasses": 976,
-    "coveredClasses": 297,
-    "totalMembers": 24871,
+    "totalClasses": 1064,
+    "coveredClasses": 302,
+    "totalMembers": 25935,
     "coveredMembers": 0,
-    "excludedClasses": 1064,
+    "excludedClasses": 1078,
     "gameAssemblyVersion": "0.0.0.0",
-    "gameAssemblyHash": "6FCB32C8026D6AA006467AD776CBD089BABCDC5357D7DEBB04A1B91C6DF0193E",
+    "gameAssemblyHash": "E28704D4B29A546ED14B1AD6CD47614511CEFC901C1C271E0189B960219D26F3",
     "analyzerVersion": "1.0.0.0",
-    "events": [],
+    "events": [
+      {
+        "type": 1,
+        "description": "Game updated: \u002B88 types (\u002B9.0%)",
+        "details": "Hash: 6FCB32C8 \u2192 E28704D4"
+      }
+    ],
     "note": null
   }
 }
