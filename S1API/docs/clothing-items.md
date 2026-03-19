@@ -7,7 +7,7 @@ Clothing content bridges the avatar rendering system, runtime resource registry,
 1. Wait for the `Main` scene before touching registries (`OnSceneWasLoaded`).
 2. (Optional) Clone an existing accessory prefab and override its materials/textures via `AccessoryFactory`.
 3. Build or clone the clothing definition with `ClothingItemCreator`, pointing `WithClothingAsset` at your custom accessory path.
-4. Register icons, keywords, pricing, and label colors just like other items.
+4. Register icons and pricing just like other items.
 5. Add the new clothing item to compatible shops once initialization succeeds.
 
 ## Workflow Walkthrough (Custom Cap Example)
@@ -46,7 +46,7 @@ Tips:
 
 ### 2. Build the Clothing Definition
 
-Clone the base `cap` definition and override only what matters—metadata, asset path, pricing, keywords, and optional icon:
+Clone the base `cap` definition and override only what matters - metadata, asset path, pricing, and optional icon:
 
 ```csharp
 // Load icon from embedded resources (optional)
@@ -64,8 +64,6 @@ var customCap = ClothingItemCreator.CloneFrom("cap")
     .WithColorable(false)  // Custom textures, not colorable
     .WithDefaultColor(ClothingColor.White)
     .WithPricing(75f, 0.5f)
-    .WithKeywords("cap", "hat", "custom", "mymod")
-    .WithLabelColor(new Color(1f, 0.8f, 0.2f))
     .Build();
 
 // Set icon if custom one was loaded
@@ -190,8 +188,6 @@ public class MyMod : MelonMod
             .WithColorable(false)
             .WithDefaultColor(ClothingColor.White)
             .WithPricing(75f, 0.5f)
-            .WithKeywords("cap", "hat", "custom")
-            .WithLabelColor(new Color(1f, 0.8f, 0.2f))
             .Build();
 
         if (icon != null)

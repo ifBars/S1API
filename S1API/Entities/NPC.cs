@@ -1664,6 +1664,8 @@ namespace S1API.Entities
 
         /// <summary>
         /// Revives the NPC.
+        /// Note: custom NPC revive currently routes through a temporary NPCHealth patch with a reflective fallback meant
+        /// for pre-network-init safety; live multiplayer calls should eventually stay on the authoritative network path.
         /// </summary>
         public void Revive() =>
             S1NPC.Health.Revive();
@@ -1718,9 +1720,13 @@ namespace S1API.Entities
 
         /// <summary>
         /// Causes the NPC to become panicked.
+        /// Currently host/server-only: non-host clients hit the SafeIsServer guard below and this becomes a silent no-op,
+        /// which is inconsistent with other server-RPC-style wrappers in the API and with the runtime docs.
         /// </summary>
         public void Panic()
         {
+            // TODO: Revisit this guard. Unlike wrappers such as Cartel.SetStatus and CombatBehaviour.SetAndAttackTarget,
+            // Panic() can no longer be invoked meaningfully from multiplayer clients because non-host callers return here.
             if (!SafeIsServer())
                 return;
 

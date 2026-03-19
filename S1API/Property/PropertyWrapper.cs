@@ -1,5 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
+using S1API.Logging;
 using UnityEngine;
 using S1API.Internal.Utils;
 #if IL2CPPMELON
@@ -17,6 +19,8 @@ namespace S1API.Property
     /// </summary>
     public class PropertyWrapper : BaseProperty
     {
+        private static readonly Log Logger = new Log("PropertyWrapper");
+
         /// <summary>
         /// A readonly backing field encapsulating the core property instance
         /// used within the PropertyWrapper class. This field provides access
@@ -168,7 +172,68 @@ namespace S1API.Property
         /// Gets the number of buildable items currently placed in this property.
         /// </summary>
         public int BuildableItemCount =>
-            (ReflectionUtils.TryGetFieldOrProperty(InnerProperty, "BuildableItems") as IList)?.Count ?? 0;
+            GetCollectionCount(ReflectionUtils.TryGetFieldOrProperty(InnerProperty, "BuildableItems"), "BuildableItems");
+
+        private int GetCollectionCount(object collectionValue, string memberName)
+        {
+            if (collectionValue == null)
+                return 0;
+
+            if (collectionValue is IList list)
+                return list.Count;
+
+            Logger.Warning(
+                $"{GetType().Name}.{memberName}: value of type '{collectionValue.GetType().FullName}' does not implement IList; using fallback count path.");
+
+            var type = collectionValue.GetType();
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public;
+
+            try
+            {
+                var countProperty = type.GetProperty("Count", flags);
+                if (countProperty != null)
+                {
+                    var countValue = countProperty.GetValue(collectionValue, null);
+                    if (countValue is int count)
+                        return count;
+                }
+
+                var lengthProperty = type.GetProperty("Length", flags);
+                if (lengthProperty != null)
+                {
+                    var lengthValue = lengthProperty.GetValue(collectionValue, null);
+                    if (lengthValue is int length)
+                        return length;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Logger.Warning(
+                    $"{GetType().Name}.{memberName}: failed reading Count/Length via reflection from '{type.FullName}': {ex.Message}");
+            }
+
+            if (collectionValue is IEnumerable enumerable)
+            {
+                int count = 0;
+                var enumerator = enumerable.GetEnumerator();
+                try
+                {
+                    while (enumerator.MoveNext())
+                        count++;
+                }
+                finally
+                {
+                    if (enumerator is System.IDisposable disposable)
+                        disposable.Dispose();
+                }
+
+                return count;
+            }
+
+            Logger.Warning(
+                $"{GetType().Name}.{memberName}: unable to determine count for value of type '{type.FullName}'; returning 0.");
+            return 0;
+        }
 
         /// <summary>
         /// Gets the position of the NPC spawn point for this property.
