@@ -2,6 +2,8 @@
 
 A tool to analyze how much of the Schedule One game's public API is covered by the S1API modding framework.
 
+If the game splits public `ScheduleOne.*` types across multiple assemblies, pass each assembly with `--game-assembly`.
+
 ## Features
 
 - **Type Coverage Analysis**: Identifies which game types are wrapped by S1API
@@ -18,6 +20,7 @@ A tool to analyze how much of the Schedule One game's public API is covered by t
 ```bash
 dotnet run --project S1APICoverageAnalyzer.csproj \
   --game-assembly "path/to/Assembly-CSharp.dll" \
+  --game-assembly "path/to/ScheduleOne.Core.dll" \
   --api-assembly "path/to/S1API.dll" \
   --output "coverage-report.json" \
   --text-output "coverage-report.txt" \
@@ -27,7 +30,7 @@ dotnet run --project S1APICoverageAnalyzer.csproj \
 
 ### Options
 
-- `-g, --game-assembly` (required): Path to the game assembly (Assembly-CSharp.dll)
+- `-g, --game-assembly` (required, repeatable): Path to a game assembly to analyze
 - `-a, --api-assembly` (required): Path to the S1API assembly (S1API.dll)
 - `-o, --output`: Path to write JSON coverage report
 - `-t, --text-output`: Path to write plain text coverage report
@@ -118,8 +121,8 @@ Shields.io badge for README files:
 
 ### Analysis Flow
 
-1. **Load Assemblies**: Load both game and API assemblies using shared load context
-2. **Extract Game Types**: Scan game assembly for eligible ScheduleOne types
+1. **Load Assemblies**: Load all game assemblies and the API assembly using a shared load context
+2. **Extract Game Types**: Scan each game assembly for eligible ScheduleOne types and merge them
 3. **Analyze API Types**: Scan API assembly for wrapped game types using multiple strategies
 4. **Calculate Coverage**: Match game types to API types using multi-strategy matching
 5. **Generate Reports**: Output results in requested formats
@@ -147,6 +150,7 @@ Run against actual assemblies:
 ```bash
 dotnet run -- \
   -g "path/to/game/Assembly-CSharp.dll" \
+  -g "path/to/game/ScheduleOne.Core.dll" \
   -a "path/to/S1API.dll" \
   -v
 ```

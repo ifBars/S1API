@@ -26,6 +26,17 @@ public sealed class VersionTracker
             return "Unknown";
         }
     }
+
+    /// <summary>
+    /// Get combined versions for multiple assemblies.
+    /// </summary>
+    public string GetAssemblyVersion(IEnumerable<string> assemblyPaths)
+    {
+        return string.Join(", ",
+            assemblyPaths
+                .Select(Path.GetFileName)
+                .Zip(assemblyPaths.Select(GetAssemblyVersion), (name, version) => $"{name}:{version}"));
+    }
     
     /// <summary>
     /// Get a hash of an assembly file for change detection.
@@ -44,6 +55,29 @@ public sealed class VersionTracker
             // Fallback to file modification time if hash fails
             var fileInfo = new FileInfo(assemblyPath);
             return fileInfo.LastWriteTimeUtc.Ticks.ToString();
+        }
+    }
+
+    /// <summary>
+    /// Get a combined hash for multiple assembly files for change detection.
+    /// </summary>
+    public string GetAssemblyHash(IEnumerable<string> assemblyPaths)
+    {
+        var normalizedPaths = assemblyPaths
+            .Select(Path.GetFullPath)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        try
+        {
+            using var sha256 = SHA256.Create();
+            var combined = string.Join("\n", normalizedPaths.Select(path => $"{Path.GetFileName(path)}:{GetAssemblyHash(path)}"));
+            var bytes = Encoding.UTF8.GetBytes(combined);
+            return Convert.ToHexString(sha256.ComputeHash(bytes));
+        }
+        catch
+        {
+            return string.Join("|", normalizedPaths.Select(GetAssemblyHash));
         }
     }
     
@@ -71,7 +105,7 @@ public sealed class VersionTracker
     public List<HistoryEvent> DetectChanges(
         CoverageHistoryEntry? previous,
         CoverageResult current,
-        string gameAssemblyPath)
+        IReadOnlyList<string> gameAssemblyPaths)
     {
         var events = new List<HistoryEvent>();
         
@@ -82,7 +116,7 @@ public sealed class VersionTracker
         }
         
         var currentAnalyzerVersion = GetAnalyzerVersion();
-        var currentGameHash = GetAssemblyHash(gameAssemblyPath);
+        var currentGameHash = GetAssemblyHash(gameAssemblyPaths);
         
         // 1. Detect analyzer update
         if (previous.AnalyzerVersion != currentAnalyzerVersion)

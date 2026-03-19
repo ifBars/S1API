@@ -85,8 +85,8 @@ jobs:
           echo "=== Game Assemblies Repository Structure ==="
           find game-assemblies -type f -name "*.dll" | head -20
           echo ""
-          echo "=== Looking for Assembly-CSharp.dll ==="
-          find game-assemblies -name "Assembly-CSharp.dll" -type f
+          echo "=== Looking for coverage assemblies ==="
+          find game-assemblies \( -name "Assembly-CSharp.dll" -o -name "ScheduleOne.Core.dll" \) -type f
         if: steps.cache-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
 
       - name: Copy Game Assemblies
@@ -128,12 +128,14 @@ jobs:
           ls -la S1API/ScheduleOneAssemblies/ || echo "ScheduleOneAssemblies directory not found"
           echo ""
           echo "=== Critical Assembly Check ==="
-          if [ -f S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll ]; then
+          if [ -f S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll ] && [ -f S1API/ScheduleOneAssemblies/Managed/ScheduleOne.Core.dll ]; then
             echo "✓ Found Assembly-CSharp.dll"
             ls -l S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll
+            echo "✓ Found ScheduleOne.Core.dll"
+            ls -l S1API/ScheduleOneAssemblies/Managed/ScheduleOne.Core.dll
             echo "has_assemblies=true" >> $GITHUB_OUTPUT
           else
-            echo "✗ Missing Assembly-CSharp.dll - Coverage analysis will be skipped"
+            echo "✗ Missing Assembly-CSharp.dll and/or ScheduleOne.Core.dll - Coverage analysis will be skipped"
             echo "has_assemblies=false" >> $GITHUB_OUTPUT
           fi
           echo ""
@@ -179,6 +181,7 @@ jobs:
         run: |
           dotnet run --project tools/S1APICoverageAnalyzer/S1APICoverageAnalyzer.csproj --no-build -c Release -- \
             --game-assembly S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll \
+            --game-assembly S1API/ScheduleOneAssemblies/Managed/ScheduleOne.Core.dll \
             --api-assembly S1API/bin/MonoMelon/netstandard2.1/S1API.dll \
             --output coverage-report.json \
             --badge-output coverage-badge.md \

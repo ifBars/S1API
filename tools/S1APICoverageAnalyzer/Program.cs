@@ -10,7 +10,7 @@ namespace S1APICoverageAnalyzer;
 public class Program
 {
     private sealed record AnalysisOptions(
-        FileInfo GameAssembly,
+        IReadOnlyList<FileInfo> GameAssemblies,
         FileInfo ApiAssembly,
         FileInfo? Output,
         FileInfo? BadgeOutput,
@@ -25,12 +25,13 @@ public class Program
     
     public static async Task<int> Main(string[] args)
     {
-        var gameAssemblyOption = new Option<FileInfo>(
+        var gameAssemblyOption = new Option<FileInfo[]>(
             aliases: ["--game-assembly", "-g"],
-            description: "Path to the game assembly (Assembly-CSharp.dll)")
+            description: "Path to a game assembly to analyze. Repeat for multiple assemblies (for example Assembly-CSharp.dll and ScheduleOne.Core.dll)")
         {
             IsRequired = true
         };
+        gameAssemblyOption.AllowMultipleArgumentsPerToken = true;
         
         var apiAssemblyOption = new Option<FileInfo>(
             aliases: ["--api-assembly", "-a"],
@@ -119,7 +120,7 @@ public class Program
     
     private static async Task RunAnalysis(AnalysisOptions options)
     {
-        var (gameAssemblyFile, apiAssemblyFile, outputFile, badgeOutputFile, textOutputFile, verbose,
+        var (gameAssemblyFiles, apiAssemblyFile, outputFile, badgeOutputFile, textOutputFile, verbose,
             historyFile, skipHistory, annotation, chartOutput, chartFormat, deduplicateHistory) = options;
         
         Console.WriteLine("S1API Coverage Analyzer");
@@ -153,10 +154,19 @@ public class Program
         Console.WriteLine();
         
         // Validate input files
-        if (!gameAssemblyFile.Exists)
+        if (gameAssemblyFiles.Count == 0)
         {
-            Console.Error.WriteLine($"Error: Game assembly not found: {gameAssemblyFile.FullName}");
+            Console.Error.WriteLine("Error: At least one game assembly is required.");
             Environment.Exit(1);
+        }
+
+        foreach (var gameAssemblyFile in gameAssemblyFiles)
+        {
+            if (!gameAssemblyFile.Exists)
+            {
+                Console.Error.WriteLine($"Error: Game assembly not found: {gameAssemblyFile.FullName}");
+                Environment.Exit(1);
+            }
         }
         
         if (!apiAssemblyFile.Exists)
@@ -165,7 +175,11 @@ public class Program
             Environment.Exit(1);
         }
         
-        Console.WriteLine($"Game Assembly: {gameAssemblyFile.FullName}");
+        Console.WriteLine("Game Assemblies:");
+        foreach (var gameAssemblyFile in gameAssemblyFiles)
+        {
+            Console.WriteLine($"  - {gameAssemblyFile.FullName}");
+        }
         Console.WriteLine($"API Assembly:  {apiAssemblyFile.FullName}");
         Console.WriteLine();
         
@@ -173,19 +187,39 @@ public class Program
         {
             // Create shared load context with both assembly directories
             using var loadContext = new SharedLoadContext(
-                gameAssemblyFile.FullName,
-                apiAssemblyFile.FullName);
+                [.. gameAssemblyFiles.Select(file => file.FullName), apiAssemblyFile.FullName]);
             
-            // Load both assemblies through the shared context
-            var gameAssembly = loadContext.LoadAssembly(gameAssemblyFile.FullName);
+            // Load all assemblies through the shared context
+            var gameAssemblies = gameAssemblyFiles
+                .Select(file => new
+                {
+                    File = file,
+                    Assembly = loadContext.LoadAssembly(file.FullName)
+                })
+                .ToList();
             var apiAssembly = loadContext.LoadAssembly(apiAssemblyFile.FullName);
             
-            // Analyze game assembly
-            Console.WriteLine("Analyzing game assembly...");
-            var gameAnalyzer = new GameAssemblyAnalyzer(gameAssembly, gameAssemblyFile.FullName);
-            var gameTypes = gameAnalyzer.ExtractGameTypes();
-            var excludedTypeCount = gameAnalyzer.CountExcludedTypes();
-            Console.WriteLine($"  Found {gameTypes.Count} eligible game types ({excludedTypeCount} excluded)");
+            // Analyze game assemblies
+            Console.WriteLine("Analyzing game assemblies...");
+            var gameTypesByName = new Dictionary<string, GameType>(StringComparer.Ordinal);
+            int excludedTypeCount = 0;
+
+            foreach (var gameAssembly in gameAssemblies)
+            {
+                var gameAnalyzer = new GameAssemblyAnalyzer(gameAssembly.Assembly, gameAssembly.File.FullName);
+                var assemblyGameTypes = gameAnalyzer.ExtractGameTypes();
+                excludedTypeCount += gameAnalyzer.CountExcludedTypes();
+
+                foreach (var gameType in assemblyGameTypes)
+                {
+                    gameTypesByName.TryAdd(gameType.FullName, gameType);
+                }
+
+                Console.WriteLine($"  {gameAssembly.File.Name}: {assemblyGameTypes.Count} eligible game types");
+            }
+
+            var gameTypes = gameTypesByName.Values.ToList();
+            Console.WriteLine($"  Total unique eligible game types: {gameTypes.Count} ({excludedTypeCount} excluded)");
             
             // Analyze API assembly
             Console.WriteLine("Analyzing S1API assembly...");
@@ -223,7 +257,7 @@ public class Program
                     Path.Combine(Path.GetDirectoryName(outputFile?.FullName ?? ".") ?? ".", "coverage-history.json");
                 
                 Console.WriteLine("Updating coverage history...");
-                coverageChanged = await UpdateCoverageHistory(historyPath, result, gameAssemblyFile.FullName, annotation, verbose);
+                coverageChanged = await UpdateCoverageHistory(historyPath, result, gameAssemblyFiles.Select(file => file.FullName).ToArray(), annotation, verbose);
                 Console.WriteLine($"History updated: {historyPath}");
                 Console.WriteLine($"Coverage changed: {coverageChanged}");
                 Console.WriteLine();
@@ -316,7 +350,7 @@ public class Program
     private static Task<bool> UpdateCoverageHistory(
         string historyFilePath,
         CoverageResult result,
-        string gameAssemblyPath,
+        IReadOnlyList<string> gameAssemblyPaths,
         string? annotation,
         bool verbose)
     {
@@ -328,7 +362,7 @@ public class Program
             var previousEntry = historyManager.GetLatestEntry();
             
             // Detect changes
-            var events = versionTracker.DetectChanges(previousEntry, result, gameAssemblyPath);
+            var events = versionTracker.DetectChanges(previousEntry, result, gameAssemblyPaths);
             
             // Add manual annotation if provided
             if (!string.IsNullOrEmpty(annotation))
@@ -351,8 +385,8 @@ public class Program
                 TotalMembers = result.TotalGameMembers,
                 CoveredMembers = result.CoveredGameMembers,
                 ExcludedClasses = result.ExcludedTypeCount,
-                GameAssemblyVersion = versionTracker.GetAssemblyVersion(gameAssemblyPath),
-                GameAssemblyHash = versionTracker.GetAssemblyHash(gameAssemblyPath),
+                GameAssemblyVersion = versionTracker.GetAssemblyVersion(gameAssemblyPaths),
+                GameAssemblyHash = versionTracker.GetAssemblyHash(gameAssemblyPaths),
                 AnalyzerVersion = versionTracker.GetAnalyzerVersion(),
                 Events = events,
                 Note = annotation
