@@ -52,7 +52,8 @@ namespace S1API.Input
         Holster = 29,
         VehicleResetCamera = 30,
         SkateboardDismount = 31,
-        SkateboardMount = 32
+        SkateboardMount = 32,
+        TogglePauseMenu = 33
     }
 
     /// <summary>
@@ -104,6 +105,17 @@ namespace S1API.Input
         public static Vector2 CameraAxis => S1GameInput.CameraAxis;
 
         /// <summary>
+        /// Gets the current mouse delta input.
+        /// This mirrors the game's mouse delta convenience property.
+        /// </summary>
+        public static Vector2 MouseDelta => S1GameInput.MouseDelta;
+
+        /// <summary>
+        /// Gets the current cursor position, accounting for controller-driven virtual cursor mode.
+        /// </summary>
+        public static Vector3 MousePosition => S1GameInput.MousePosition;
+
+        /// <summary>
         /// Gets the current mouse scroll wheel delta.
         /// Positive values indicate scrolling up, negative values indicate scrolling down.
         /// </summary>
@@ -120,6 +132,61 @@ namespace S1API.Input
         /// Used for controller-specific input combinations.
         /// </summary>
         public static bool ControllerComboActive => S1GameInput.ControllerComboActive;
+
+        /// <summary>
+        /// Gets the current vehicle drive axis value.
+        /// </summary>
+        public static float VehicleDriveAxis => S1GameInput.VehicleDriveAxis;
+
+        /// <summary>
+        /// Gets the current UI navigation direction.
+        /// </summary>
+        public static Vector2 UINavigationDirection => S1GameInput.UINavigationDirection;
+
+        /// <summary>
+        /// Gets the current UI panel cycling direction.
+        /// </summary>
+        public static Vector2 UICyclePanelDirection => S1GameInput.UICyclePanelDirection;
+
+        /// <summary>
+        /// Gets the primary UI tab navigation axis.
+        /// </summary>
+        public static float UITabNavigationPrimaryAxis => S1GameInput.UITabNavigationPrimaryAxis;
+
+        /// <summary>
+        /// Gets the secondary UI tab navigation axis.
+        /// </summary>
+        public static float UITabNavigationSecondaryAxis => S1GameInput.UITabNavigationSecondaryAxis;
+
+        /// <summary>
+        /// Gets the current UI scrollbar axis.
+        /// </summary>
+        public static float UIScrollbarAxis => S1GameInput.UIScrollbarAxis;
+
+        /// <summary>
+        /// Gets the current UI map navigation direction.
+        /// </summary>
+        public static Vector2 UIMapNavigationDirection => S1GameInput.UIMapNavigationDirection;
+
+        /// <summary>
+        /// Gets the current UI map zoom axis.
+        /// </summary>
+        public static float UIMapZoomAxis => S1GameInput.UIMapZoomAxis;
+
+        /// <summary>
+        /// Gets the small-step modify amount UI axis.
+        /// </summary>
+        public static float UIModifyAmountIncrementTierOneAxis => S1GameInput.UIModifyAmountIncrementTierOneAxis;
+
+        /// <summary>
+        /// Gets the medium-step modify amount UI axis.
+        /// </summary>
+        public static float UIModifyAmountIncrementTierTwoAxis => S1GameInput.UIModifyAmountIncrementTierTwoAxis;
+
+        /// <summary>
+        /// Gets the large-step modify amount UI axis.
+        /// </summary>
+        public static float UIModifyAmountIncrementTierThreeAxis => S1GameInput.UIModifyAmountIncrementTierThreeAxis;
 
         /// <summary>
         /// Registers a callback for when the active input device changes (e.g., from keyboard to gamepad).
@@ -180,5 +247,17 @@ namespace S1API.Input
         /// <returns>True if the button was released this frame.</returns>
         public static bool GetButtonUp(ButtonCode button) =>
             S1GameInput.GetButtonUp((S1ButtonCode)(int)button);
+
+        /// <summary>
+        /// Gets whether the active input device is keyboard and mouse.
+        /// </summary>
+        public static bool GetCurrentInputDeviceIsKeyboardMouse() =>
+            S1GameInput.GetCurrentInputDeviceIsKeyboardMouse();
+
+        /// <summary>
+        /// Gets whether the active input device is a gamepad.
+        /// </summary>
+        public static bool GetCurrentInputDeviceIsGamepad() =>
+            S1GameInput.GetCurrentInputDeviceIsGamepad();
     }
 }
