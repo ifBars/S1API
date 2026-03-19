@@ -1,5 +1,7 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using S1API.Internal.Utils;
 #if IL2CPPMELON
 using Il2CppTMPro;
 using Il2CppScheduleOne.Money;
@@ -166,7 +168,7 @@ namespace S1API.Property
         /// Gets the number of buildable items currently placed in this property.
         /// </summary>
         public int BuildableItemCount =>
-            InnerProperty.BuildableItems.Count;
+            (ReflectionUtils.TryGetFieldOrProperty(InnerProperty, "BuildableItems") as IList)?.Count ?? 0;
 
         /// <summary>
         /// Gets the position of the NPC spawn point for this property.
