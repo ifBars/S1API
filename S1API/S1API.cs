@@ -1,6 +1,7 @@
 using System;
 using MelonLoader;
 using S1API.Internal;
+using S1API.Internal.Diagnostics;
 using S1API.Internal.Entities;
 using S1API.Internal.Lifecycle;
 using S1API.Lifecycle;
@@ -19,6 +20,16 @@ namespace S1API
         public override void OnInitializeMelon()
         {
             S1APIPreferences.Initialize();
+
+            if (S1APIPreferences.EnableUnityNullReferenceTraceLogging.Value)
+            {
+                UnityExceptionTraceHook.Install();
+            }
+        }
+
+        public override void OnDeinitializeMelon()
+        {
+            UnityExceptionTraceHook.Remove();
         }
 
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)
