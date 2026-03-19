@@ -1576,21 +1576,6 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// UNCONFIRMED: How long the NPC will panic for.
-        /// If you confirm this, please let us know so we can update the documentation!
-        /// </summary>
-        public float PanicDuration
-        {
-#if (IL2CPPMELON || IL2CPPBEPINEX)
-            get => DefaultPanicDuration;
-            set { /* no-op under IL2CPP; constant in base game so non accessible */ }
-#else
-            get => _panicField != null ? (float)_panicField.GetValue(S1NPC)! : DefaultPanicDuration;
-            set { _panicField?.SetValue(S1NPC, value); }
-#endif
-        }
-
-        /// <summary>
         /// Sets the scale of the NPC.
         /// </summary>
         public float Scale
@@ -1703,8 +1688,7 @@ namespace S1API.Entities
 
         /// <summary>
         /// Causes the NPC to become unsettled.
-        /// UNCONFIRMED: Will panic them for PanicDuration amount of time.
-        /// If you confirm this, please let us know so we can update the documentation!
+        /// UNCONFIRMED: Will panic them for a short duration.
         /// </summary>
         /// <param name="duration">Length of time they should stay unsettled.</param>
         public void Unsettle(float duration) =>
@@ -2743,13 +2727,10 @@ namespace S1API.Entities
 
         internal readonly bool IsCustomNPC;
 
-        private static readonly float DefaultPanicDuration = 20f;
         private static readonly bool DefaultRequiresRegionUnlocked = true;
 #if (MONOMELON || MONOBEPINEX)
-        private readonly FieldInfo _panicField = AccessTools.Field(typeof(S1NPCs.NPC), "PANIC_DURATION");
         private readonly FieldInfo _requiresRegionUnlockedField = AccessTools.Field(typeof(S1NPCs.NPC), "RequiresRegionUnlocked");
 #else
-        private readonly FieldInfo _panicField = null;
         private readonly FieldInfo _requiresRegionUnlockedField = null;
 #endif
 
