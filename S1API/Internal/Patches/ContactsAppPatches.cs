@@ -650,36 +650,86 @@ namespace S1API.Internal.Patches
                 return fallback;
             }
 
-            // Unconnected NPCs - fill available grid cells, prefer within native bounds
-            // Scan all grid positions within native bounds first, then expand outward
+            // Unconnected NPCs - place on grid edge so they don't look connected to neighbors
+            // Prefer positions just outside the cluster (1 cell beyond native bounds)
             var boundsMinGx = Mathf.FloorToInt((nativeBounds.x - gridCenter.x) / spacing);
             var boundsMaxGx = Mathf.CeilToInt((nativeBounds.y - gridCenter.x) / spacing);
             var boundsMinGy = Mathf.FloorToInt((nativeBounds.z - gridCenter.y) / spacing);
             var boundsMaxGy = Mathf.CeilToInt((nativeBounds.w - gridCenter.y) / spacing);
 
-            // First pass: within native bounds
-            for (var gy = boundsMaxGy; gy >= boundsMinGy; gy--)
+            var centroid = Mean(allPositions);
+            var unconnectedCandidates = new System.Collections.Generic.List<Vector2>();
+
+            // Scan native bounds + 2 cell padding to find all free positions
+            const int padding = 2;
+            for (var gy = boundsMinGy - padding; gy <= boundsMaxGy + padding; gy++)
             {
-                for (var gx = boundsMinGx; gx <= boundsMaxGx; gx++)
+                for (var gx = boundsMinGx - padding; gx <= boundsMaxGx + padding; gx++)
                 {
                     var candidate = gridCenter + gx * spacing * rn + gy * spacing * un;
                     if (IsPositionFree(candidate, allPositions, minSpacing))
-                        return candidate;
+                        unconnectedCandidates.Add(candidate);
                 }
             }
 
-            // Second pass: expand outward by 1 row at a time
-            for (var expand = 1; expand <= 5; expand++)
+            if (unconnectedCandidates.Count > 0)
             {
-                for (var gy = boundsMaxGy + expand; gy >= boundsMinGy - expand; gy--)
+                // Score all candidates, then pick randomly from the top-scoring ones
+                // to spread unconnected NPCs around different edges
+                var scored = new System.Collections.Generic.List<(Vector2 pos, float score)>();
+
+                foreach (var candidate in unconnectedCandidates)
                 {
-                    for (var gx = boundsMinGx - expand; gx <= boundsMaxGx + expand; gx++)
+                    var adjacentCount = 0;
+                    foreach (var pos in allPositions)
                     {
-                        var candidate = gridCenter + gx * spacing * rn + gy * spacing * un;
-                        if (IsPositionFree(candidate, allPositions, minSpacing))
-                            return candidate;
+                        var dist = Vector2.Distance(candidate, pos);
+                        if (dist < spacing * 1.2f && dist > 0.01f)
+                            adjacentCount++;
                     }
+
+                    // Must have exactly 1 adjacent neighbor — skip positions with 0 (isolated) or 3+ (interior)
+                    if (adjacentCount == 0)
+                        continue;
+
+                    // Penalize positions surrounded by neighbors (they look connected)
+                    var neighborPenalty = adjacentCount <= 1 ? 0f : adjacentCount * 100f;
+
+                    // Penalize positions near existing connection lines (they look connected)
+                    var linePenalty = 0f;
+                    var circleRadius = spacing * 0.4f;
+                    foreach (var (from, to) in existingEdges)
+                    {
+                        // Point-to-segment distance
+                        var ab = to - from;
+                        var ac = candidate - from;
+                        var t = Mathf.Clamp01(Vector2.Dot(ac, ab) / Vector2.Dot(ab, ab));
+                        var closest = from + t * ab;
+                        var distToLine = Vector2.Distance(candidate, closest);
+                        if (distToLine < circleRadius)
+                            linePenalty += (circleRadius - distToLine) / circleRadius * 500f;
+                    }
+
+                    // Prefer closer edge positions over far-flung ones
+                    var distToCentroid = Vector2.Distance(candidate, centroid);
+
+                    var score = neighborPenalty + linePenalty + distToCentroid * 2f;
+                    scored.Add((candidate, score));
                 }
+
+                scored.Sort((a, b) => a.score.CompareTo(b.score));
+
+                // Gather all candidates within a small tolerance of the best score
+                var bestScore = scored[0].score;
+                var topCandidates = scored
+                    .Where(s => s.score <= bestScore + 50f)
+                    .Select(s => s.pos)
+                    .ToList();
+
+                // Use a deterministic seed based on circle ID so placement is stable per-NPC
+                var hash = circle.AssignedNPC_ID?.GetHashCode() ?? 0;
+                var idx = Mathf.Abs(hash) % topCandidates.Count;
+                return topCandidates[idx];
             }
 
             return gridCenter;
