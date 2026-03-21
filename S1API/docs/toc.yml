@@ -60,6 +60,18 @@
 - name: Items
   href: items.md
   items:
+    - name: Item Registration & Basics
+      href: item-registration-basics.md
+    - name: Runtime Additives
+      href: runtime-additives.md
+    - name: Item Icons
+      href: item-icons.md
+    - name: Equippable Items
+      href: equippable-items.md
+    - name: Avatar Equippable Prefabs
+      href: avatar-equippable-prefabs.md
+    - name: Builder API Reference
+      href: item-builder-reference.md
     - name: Creating Custom Clothing Items
       href: clothing-items.md
 - name: Phone Apps
