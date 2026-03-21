@@ -71,7 +71,6 @@ namespace S1API.Dialogues
         private static void OnChoice()
         {
             _callback?.Invoke();
-            _callback = null; // optional: remove if one-time use
         }
     }
 }
