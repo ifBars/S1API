@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
 
@@ -97,6 +98,28 @@ namespace S1API.Internal.Abstraction
             var entry = new EventTrigger.Entry { eventID = eventType };
             AddListener(listener, entry.callback);
             trigger.triggers.Add(entry);
+        }
+
+        /// <summary>
+        /// Removes an EventTrigger entry from the trigger.
+        /// </summary>
+        /// <param name="trigger">Target EventTrigger component</param>
+        /// <param name="eventType">The EventTriggerType to remove</param>
+        /// <param name="listener">BaseEventData callback to remove from the trigger</param>
+        public static void RemoveEventTrigger(EventTrigger trigger, EventTriggerType eventType,
+            Action<BaseEventData> listener)
+        {
+            if (trigger == null || listener == null || !SubscribedGenericActions.ContainsKey(listener)) 
+                return;
+            // We don't store the entry, so we need to find it
+            var entry = trigger.triggers.
+#if IL2CPPMELON
+                _items.
+#endif
+                FirstOrDefault(e => e.eventID == eventType);
+            if (entry == null) return;
+            RemoveListener(listener, entry.callback);
+            trigger.triggers.Remove(entry);
         }
 
         /// <summary>
