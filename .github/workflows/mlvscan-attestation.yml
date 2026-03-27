@@ -1,0 +1,344 @@
+name: MLVScan Attestation
+
+on:
+  workflow_dispatch:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+
+env:
+  MLVSCAN_API_BASE_URL: https://api.mlvscan.com
+
+jobs:
+  attest-package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve checkout ref
+        id: ref
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            target_ref="${{ github.event.release.target_commitish }}"
+          else
+            target_ref="${{ github.ref_name }}"
+          fi
+
+          if [[ -z "$target_ref" ]]; then
+            echo "::error::Unable to determine checkout ref"
+            exit 1
+          fi
+
+          echo "target_ref=${target_ref}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout S1API
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ref: ${{ steps.ref.outputs.target_ref }}
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          missing=0
+
+          for secret_name in GAME_ASSEMBLIES_REPO GAME_ASSEMBLIES_TOKEN MLVSCAN_API_KEY; do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "::error::Missing required secret: ${secret_name}"
+              missing=1
+            fi
+          done
+
+          if [[ "$missing" -ne 0 ]]; then
+            exit 1
+          fi
+        env:
+          GAME_ASSEMBLIES_REPO: ${{ secrets.GAME_ASSEMBLIES_REPO }}
+          GAME_ASSEMBLIES_TOKEN: ${{ secrets.GAME_ASSEMBLIES_TOKEN }}
+          MLVSCAN_API_KEY: ${{ secrets.MLVSCAN_API_KEY }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Checkout game assemblies
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.GAME_ASSEMBLIES_REPO }}
+          token: ${{ secrets.GAME_ASSEMBLIES_TOKEN }}
+          path: game-assemblies
+          fetch-depth: 1
+
+      - name: Prepare CI build inputs
+        shell: bash
+        run: |
+          mkdir -p S1API/ScheduleOneAssemblies/Managed
+          mkdir -p S1API/ScheduleOneAssemblies/MelonLoader
+
+          cp -r game-assemblies/Managed/* S1API/ScheduleOneAssemblies/Managed/
+          cp -r game-assemblies/MelonLoader/* S1API/ScheduleOneAssemblies/MelonLoader/
+
+          if [[ ! -f "S1API/ScheduleOneAssemblies/Managed/Unity.TextMeshPro.dll" ]]; then
+            TMPRO_PATH=$(find game-assemblies -name "Unity.TextMeshPro.dll" -type f | head -1)
+            if [[ -n "$TMPRO_PATH" ]]; then
+              cp "$TMPRO_PATH" S1API/ScheduleOneAssemblies/Managed/
+            fi
+          fi
+
+          cat > ci.build.props << 'EOF'
+          <Project>
+              <PropertyGroup>
+                  <AutomateLocalDeployment>false</AutomateLocalDeployment>
+                  <MelonLoaderAssembliesPath>../ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
+                  <LocalMonoDeploymentPath>null</LocalMonoDeploymentPath>
+                  <MonoAssembliesPath>../ScheduleOneAssemblies/Managed</MonoAssembliesPath>
+              </PropertyGroup>
+          </Project>
+          EOF
+
+      - name: Restore dependencies
+        run: dotnet restore S1API/S1API.csproj -p:Configuration=MonoMelon
+
+      - name: Build Mono DLL
+        run: dotnet build S1API/S1API.csproj --no-restore -c MonoMelon /p:ContinuousIntegrationBuild=true
+
+      - name: Resolve Mono artifact
+        id: artifact
+        shell: bash
+        run: |
+          artifact_path="S1API/bin/MonoMelon/netstandard2.1/S1API.dll"
+
+          if [[ ! -f "$artifact_path" ]]; then
+            echo "::error::Mono DLL artifact was not produced at ${artifact_path}"
+            exit 1
+          fi
+
+          artifact_name=$(basename "$artifact_path")
+          version=$(grep -oPm1 '(?<=<Version>)[^<]+' S1API/S1API.csproj)
+          display_name="S1API MonoMelon ${version}"
+
+          echo "path=${artifact_path}" >> "$GITHUB_OUTPUT"
+          echo "name=${artifact_name}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "display_name=${display_name}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Mono artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: ${{ steps.artifact.outputs.path }}
+
+      - name: Derive attestation metadata
+        id: metadata
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            canonical_source_url="${{ github.event.release.html_url }}"
+          else
+            canonical_source_url="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+          fi
+
+          echo "canonical_source_url=${canonical_source_url}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Mono DLL for scanning
+        id: upload
+        shell: bash
+        env:
+          MLVSCAN_API_KEY: ${{ secrets.MLVSCAN_API_KEY }}
+        run: |
+          response=$(curl --silent --show-error --fail \
+            -X POST "${MLVSCAN_API_BASE_URL}/files" \
+            -H "X-API-Key: ${MLVSCAN_API_KEY}" \
+            -F "file=@${{ steps.artifact.outputs.path }}")
+
+          submission_id=$(echo "$response" | jq -r '.data.id // empty')
+
+          if [[ -z "$submission_id" ]]; then
+            echo "::error::Upload response did not include a submission id"
+            echo "$response"
+            exit 1
+          fi
+
+          echo "submission_id=${submission_id}" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for scan report
+        id: report
+        shell: bash
+        env:
+          MLVSCAN_API_KEY: ${{ secrets.MLVSCAN_API_KEY }}
+        run: |
+          submission_id="${{ steps.upload.outputs.submission_id }}"
+
+          for attempt in $(seq 1 60); do
+            response=$(curl --silent --show-error --fail \
+              -H "X-API-Key: ${MLVSCAN_API_KEY}" \
+              "${MLVSCAN_API_BASE_URL}/reports/${submission_id}")
+
+            status=$(echo "$response" | jq -r '.status // empty')
+
+            if [[ "$status" == "completed" ]]; then
+              echo "$response" > report.json
+              report_id=$(echo "$response" | jq -r '.reportId')
+              echo "report_id=${report_id}" >> "$GITHUB_OUTPUT"
+              echo "status=${status}" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            if [[ "$status" == "failed" ]]; then
+              echo "::error::Scan failed for submission ${submission_id}"
+              echo "$response"
+              exit 1
+            fi
+
+            echo "Report status is ${status:-unknown}; waiting..."
+            sleep 10
+          done
+
+          echo "::error::Timed out waiting for scan report"
+          exit 1
+
+      - name: Create draft attestation
+        id: draft
+        shell: bash
+        env:
+          MLVSCAN_API_KEY: ${{ secrets.MLVSCAN_API_KEY }}
+        run: |
+          payload=$(jq -n \
+            --arg submissionId "${{ steps.upload.outputs.submission_id }}" \
+            --arg publicDisplayName "${{ steps.artifact.outputs.display_name }}" \
+            --arg canonicalSourceUrl "${{ steps.metadata.outputs.canonical_source_url }}" \
+            '{
+              submissionId: $submissionId,
+              publicDisplayName: $publicDisplayName,
+              canonicalSourceUrl: $canonicalSourceUrl
+            }')
+
+          response=$(curl --silent --show-error --fail \
+            -X POST "${MLVSCAN_API_BASE_URL}/automation/attestations" \
+            -H "X-API-Key: ${MLVSCAN_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "$payload")
+
+          echo "$response" > draft-attestation.json
+
+          attestation_id=$(echo "$response" | jq -r '.id // empty')
+          public_url=$(echo "$response" | jq -r '.publicUrl // empty')
+          badge_url=$(echo "$response" | jq -r '.badgeUrl // empty')
+          publication_status=$(echo "$response" | jq -r '.publicationStatus // empty')
+
+          if [[ -z "$attestation_id" ]]; then
+            echo "::error::Draft attestation response did not include an id"
+            echo "$response"
+            exit 1
+          fi
+
+          echo "attestation_id=${attestation_id}" >> "$GITHUB_OUTPUT"
+          echo "public_url=${public_url}" >> "$GITHUB_OUTPUT"
+          echo "badge_url=${badge_url}" >> "$GITHUB_OUTPUT"
+          echo "publication_status=${publication_status}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish attestation
+        id: publish
+        shell: bash
+        env:
+          MLVSCAN_API_KEY: ${{ secrets.MLVSCAN_API_KEY }}
+        run: |
+          response=$(curl --silent --show-error --fail \
+            -X POST "${MLVSCAN_API_BASE_URL}/automation/attestations/${{ steps.draft.outputs.attestation_id }}/publish" \
+            -H "X-API-Key: ${MLVSCAN_API_KEY}")
+
+          echo "$response" > published-attestation.json
+
+          public_url=$(echo "$response" | jq -r '.publicUrl // empty')
+          badge_url=$(echo "$response" | jq -r '.badgeUrl // empty')
+          publication_status=$(echo "$response" | jq -r '.publicationStatus // empty')
+
+          echo "public_url=${public_url}" >> "$GITHUB_OUTPUT"
+          echo "badge_url=${badge_url}" >> "$GITHUB_OUTPUT"
+          echo "publication_status=${publication_status}" >> "$GITHUB_OUTPUT"
+
+      - name: Update README attestation badge
+        shell: bash
+        run: |
+          badge_markdown="[![MLVScan Attestation](${{ steps.publish.outputs.badge_url }})](${{ steps.publish.outputs.public_url }})"
+
+          if grep -q '^\[!\[MLVScan Attestation\]' README.md; then
+            badge_line=$(grep -n '^\[!\[MLVScan Attestation\]' README.md | head -1 | cut -d: -f1)
+            awk -v line="$badge_line" -v new_badge="$badge_markdown" 'NR==line {print new_badge; next} {print}' README.md > README.md.tmp
+            mv README.md.tmp README.md
+          else
+            insert_after=$(awk '
+              NR == 1 { next }
+              /^[[:space:]]*$/ {
+                if (last_badge > 0) {
+                  print last_badge
+                  exit
+                }
+                next
+              }
+              /^\[!\[/ {
+                last_badge = NR
+                next
+              }
+              {
+                if (last_badge > 0) {
+                  print last_badge
+                } else {
+                  print 1
+                }
+                exit
+              }
+              END {
+                if (last_badge > 0) {
+                  print last_badge
+                } else {
+                  print 1
+                }
+              }
+            ' README.md | head -1)
+
+            awk -v line="$insert_after" -v new_badge="$badge_markdown" '
+              { print }
+              NR == line { print new_badge }
+            ' README.md > README.md.tmp
+            mv README.md.tmp README.md
+          fi
+
+      - name: Commit README badge update
+        shell: bash
+        run: |
+          if git diff --quiet README.md; then
+            echo "README badge already up to date"
+            exit 0
+          fi
+
+          if ! git ls-remote --exit-code --heads origin "${{ steps.ref.outputs.target_ref }}" >/dev/null 2>&1; then
+            echo "::warning::Skipping README push because origin/${{ steps.ref.outputs.target_ref }} does not exist as a branch"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "chore: update MLVScan attestation badge [skip ci]"
+          git push origin "HEAD:${{ steps.ref.outputs.target_ref }}"
+
+      - name: Write workflow summary
+        shell: bash
+        run: |
+          {
+            echo "## MLVScan Attestation"
+            echo ""
+            echo "- Package: \`${{ steps.artifact.outputs.name }}\`"
+            echo "- Version: \`${{ steps.artifact.outputs.version }}\`"
+            echo "- Submission ID: \`${{ steps.upload.outputs.submission_id }}\`"
+            echo "- Report ID: \`${{ steps.report.outputs.report_id }}\`"
+            echo "- Attestation ID: \`${{ steps.draft.outputs.attestation_id }}\`"
+            echo "- Publication Status: \`${{ steps.publish.outputs.publication_status }}\`"
+            echo "- Public URL: ${{ steps.publish.outputs.public_url }}"
+            echo "- Badge URL: ${{ steps.publish.outputs.badge_url }}"
+          } >> "$GITHUB_STEP_SUMMARY"
