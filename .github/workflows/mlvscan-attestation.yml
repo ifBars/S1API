@@ -321,7 +321,7 @@ jobs:
       - name: Update README attestation badge
         shell: bash
         run: |
-          badge_markdown="[![MLVScan Attestation](${{ steps.publish.outputs.badge_url }})](${{ steps.publish.outputs.public_url }})"
+          badge_markdown="[![MLVScan Attestation](${{ steps.publish.outputs.badge_url }}?style=split-pill)](${{ steps.publish.outputs.public_url }})"
 
           if grep -q '^\[!\[MLVScan Attestation\]' README.md; then
             badge_line=$(grep -n '^\[!\[MLVScan Attestation\]' README.md | head -1 | cut -d: -f1)
