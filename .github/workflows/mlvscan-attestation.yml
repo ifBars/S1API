@@ -150,10 +150,20 @@ jobs:
         env:
           MLVSCAN_API_KEY: ${{ secrets.MLVSCAN_API_KEY }}
         run: |
-          response=$(curl --silent --show-error --fail \
+          status_code=$(curl --silent --show-error \
+            -o mlvscan-upload-response.json \
+            -w "%{http_code}" \
             -X POST "${MLVSCAN_API_BASE_URL}/files" \
             -H "X-API-Key: ${MLVSCAN_API_KEY}" \
             -F "file=@${{ steps.artifact.outputs.path }}")
+
+          response=$(cat mlvscan-upload-response.json)
+
+          if [[ "$status_code" -lt 200 || "$status_code" -ge 300 ]]; then
+            echo "::error::MLVScan upload failed with HTTP ${status_code}"
+            echo "$response"
+            exit 1
+          fi
 
           submission_id=$(echo "$response" | jq -r '.data.id // empty')
 
@@ -174,9 +184,19 @@ jobs:
           submission_id="${{ steps.upload.outputs.submission_id }}"
 
           for attempt in $(seq 1 60); do
-            response=$(curl --silent --show-error --fail \
+            status_code=$(curl --silent --show-error \
+              -o mlvscan-report-response.json \
+              -w "%{http_code}" \
               -H "X-API-Key: ${MLVSCAN_API_KEY}" \
               "${MLVSCAN_API_BASE_URL}/reports/${submission_id}")
+
+            response=$(cat mlvscan-report-response.json)
+
+            if [[ "$status_code" -lt 200 || "$status_code" -ge 300 ]]; then
+              echo "::error::MLVScan report lookup failed with HTTP ${status_code}"
+              echo "$response"
+              exit 1
+            fi
 
             status=$(echo "$response" | jq -r '.status // empty')
 
@@ -217,11 +237,21 @@ jobs:
               canonicalSourceUrl: $canonicalSourceUrl
             }')
 
-          response=$(curl --silent --show-error --fail \
+          status_code=$(curl --silent --show-error \
+            -o mlvscan-draft-response.json \
+            -w "%{http_code}" \
             -X POST "${MLVSCAN_API_BASE_URL}/automation/attestations" \
             -H "X-API-Key: ${MLVSCAN_API_KEY}" \
             -H "Content-Type: application/json" \
             -d "$payload")
+
+          response=$(cat mlvscan-draft-response.json)
+
+          if [[ "$status_code" -lt 200 || "$status_code" -ge 300 ]]; then
+            echo "::error::MLVScan draft creation failed with HTTP ${status_code}"
+            echo "$response"
+            exit 1
+          fi
 
           echo "$response" > draft-attestation.json
 
@@ -247,9 +277,19 @@ jobs:
         env:
           MLVSCAN_API_KEY: ${{ secrets.MLVSCAN_API_KEY }}
         run: |
-          response=$(curl --silent --show-error --fail \
+          status_code=$(curl --silent --show-error \
+            -o mlvscan-publish-response.json \
+            -w "%{http_code}" \
             -X POST "${MLVSCAN_API_BASE_URL}/automation/attestations/${{ steps.draft.outputs.attestation_id }}/publish" \
             -H "X-API-Key: ${MLVSCAN_API_KEY}")
+
+          response=$(cat mlvscan-publish-response.json)
+
+          if [[ "$status_code" -lt 200 || "$status_code" -ge 300 ]]; then
+            echo "::error::MLVScan publish failed with HTTP ${status_code}"
+            echo "$response"
+            exit 1
+          fi
 
           echo "$response" > published-attestation.json
 
