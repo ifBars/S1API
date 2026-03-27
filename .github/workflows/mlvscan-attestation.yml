@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 env:
-  MLVSCAN_API_BASE_URL: https://api.mlvscan.com
+  MLVSCAN_API_BASE_URL: ${{ vars.MLVSCAN_API_BASE_URL }}
 
 jobs:
   attest-package:
@@ -59,6 +59,14 @@ jobs:
           GAME_ASSEMBLIES_REPO: ${{ secrets.GAME_ASSEMBLIES_REPO }}
           GAME_ASSEMBLIES_TOKEN: ${{ secrets.GAME_ASSEMBLIES_TOKEN }}
           MLVSCAN_API_KEY: ${{ secrets.MLVSCAN_API_KEY }}
+
+      - name: Resolve MLVScan API base URL
+        id: api-base
+        shell: bash
+        run: |
+          resolved_base_url="${MLVSCAN_API_BASE_URL:-https://api.mlvscan.com}"
+          echo "base_url=${resolved_base_url}" >> "$GITHUB_OUTPUT"
+          echo "Using MLVScan API base URL: ${resolved_base_url}"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -153,7 +161,7 @@ jobs:
           status_code=$(curl --silent --show-error \
             -o mlvscan-upload-response.json \
             -w "%{http_code}" \
-            -X POST "${MLVSCAN_API_BASE_URL}/files" \
+            -X POST "${{ steps.api-base.outputs.base_url }}/files" \
             -H "X-API-Key: ${MLVSCAN_API_KEY}" \
             -F "file=@${{ steps.artifact.outputs.path }}")
 
@@ -188,9 +196,18 @@ jobs:
               -o mlvscan-report-response.json \
               -w "%{http_code}" \
               -H "X-API-Key: ${MLVSCAN_API_KEY}" \
-              "${MLVSCAN_API_BASE_URL}/reports/${submission_id}")
+              "${{ steps.api-base.outputs.base_url }}/reports/${submission_id}")
 
             response=$(cat mlvscan-report-response.json)
+
+            if [[ "$status_code" == "404" ]]; then
+              error_message=$(echo "$response" | jq -r '.error // empty' 2>/dev/null || true)
+              if [[ "$error_message" == "Submission not found" || "$error_message" == "Report not found" ]]; then
+                echo "Report is not materialized yet; waiting..."
+                sleep 10
+                continue
+              fi
+            fi
 
             if [[ "$status_code" -lt 200 || "$status_code" -ge 300 ]]; then
               echo "::error::MLVScan report lookup failed with HTTP ${status_code}"
@@ -240,7 +257,7 @@ jobs:
           status_code=$(curl --silent --show-error \
             -o mlvscan-draft-response.json \
             -w "%{http_code}" \
-            -X POST "${MLVSCAN_API_BASE_URL}/automation/attestations" \
+            -X POST "${{ steps.api-base.outputs.base_url }}/automation/attestations" \
             -H "X-API-Key: ${MLVSCAN_API_KEY}" \
             -H "Content-Type: application/json" \
             -d "$payload")
@@ -280,7 +297,7 @@ jobs:
           status_code=$(curl --silent --show-error \
             -o mlvscan-publish-response.json \
             -w "%{http_code}" \
-            -X POST "${MLVSCAN_API_BASE_URL}/automation/attestations/${{ steps.draft.outputs.attestation_id }}/publish" \
+            -X POST "${{ steps.api-base.outputs.base_url }}/automation/attestations/${{ steps.draft.outputs.attestation_id }}/publish" \
             -H "X-API-Key: ${MLVSCAN_API_KEY}")
 
           response=$(cat mlvscan-publish-response.json)
@@ -375,6 +392,7 @@ jobs:
             echo ""
             echo "- Package: \`${{ steps.artifact.outputs.name }}\`"
             echo "- Version: \`${{ steps.artifact.outputs.version }}\`"
+            echo "- API Base URL: \`${{ steps.api-base.outputs.base_url }}\`"
             echo "- Submission ID: \`${{ steps.upload.outputs.submission_id }}\`"
             echo "- Report ID: \`${{ steps.report.outputs.report_id }}\`"
             echo "- Attestation ID: \`${{ steps.draft.outputs.attestation_id }}\`"
