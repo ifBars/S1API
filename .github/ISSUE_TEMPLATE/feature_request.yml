@@ -1,0 +1,152 @@
+name: Feature Request
+description: Suggest a new feature, API addition, or improvement for S1API
+title: "[FEATURE] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Before you submit...
+
+        Please ensure you have:
+        - Read the [installation guide](https://ifbars.github.io/S1API/docs/getting-started.html#installation-guide)
+        - Checked existing issues for similar requests
+        - Confirmed your request is related to S1API (not a general modding question)
+
+        If this is mainly a support question, use the **#support** channel in the [S1 modding Discord](https://discord.gg/UD4K4chKaki).
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A clear and concise description of the feature or improvement you want.
+      placeholder: "Example: Add an event for when a dealer inventory refresh completes, or expose a safer NPC registration helper..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: request-type
+    attributes:
+      label: Request Type
+      description: What kind of feature request is this?
+      options:
+        - New API surface
+        - Improvement to an existing API
+        - Documentation or examples
+        - Tooling or developer experience
+        - Breaking-change proposal
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: s1api-version
+    attributes:
+      label: Current S1API Version
+      description: Which version are you currently using?
+      placeholder: "e.g., 2.9.6"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime Environment
+      description: Which runtime(s) would this request affect?
+      multiple: true
+      options:
+        - Mono (Alternate)
+        - IL2CPP (Regular)
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: |
+        What limitation are you running into today?
+        Describe the missing capability, friction, or pain point this request would solve.
+      placeholder: |
+        I need to detect when a custom property changes after load, but there is no reliable callback for that lifecycle point.
+        Right now I have to poll state manually, which is fragile and hard to maintain.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: |
+        Describe the API, hook, behavior, or documentation change you want.
+        If helpful, include rough method names, event signatures, or example usage.
+      placeholder: |
+        Add an event such as `PropertyManager.OnPropertyChanged(Property property, object oldValue, object newValue)`.
+
+        Example usage:
+        ```csharp
+        PropertyManager.OnPropertyChanged += HandlePropertyChanged;
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-cases
+    attributes:
+      label: Use Cases
+      description: |
+        Explain who would use this and what it would unlock.
+        Concrete gameplay or modding scenarios are much more useful than abstract requests.
+      placeholder: |
+        - Keep a UI panel in sync with dealer inventory changes
+        - Trigger custom quest logic when a property state changes
+        - Avoid Harmony patches for common lifecycle hooks
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or Workarounds
+      description: |
+        Have you tried another approach already?
+        List existing APIs, Harmony patches, polling, or manual workarounds and why they are insufficient.
+      placeholder: |
+        - Patched the underlying game method with Harmony, but that is brittle across updates
+        - Polled the value every frame, but it is inefficient and easy to miss edge cases
+
+  - type: input
+    id: related-area
+    attributes:
+      label: Related Area
+      description: Which namespace, system, or docs area does this relate to?
+      placeholder: "e.g., S1API.Entities, Quests, PhoneApp, docs examples, loader bootstrap"
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: |
+        Include anything else that would help evaluate the request:
+        - Links to related issues
+        - Example mods affected
+        - Screenshots, sketches, or sample APIs
+        - Notes about compatibility or migration concerns
+      placeholder: |
+        Add any extra context, examples, or references here...
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following before submitting
+      options:
+        - label: I have checked existing issues for similar feature requests
+          required: true
+        - label: I have verified this request is related to S1API rather than general modding support
+          required: true
+        - label: I have described the problem this feature would solve
+          required: true
+        - label: I have included concrete use cases or examples
+          required: true
