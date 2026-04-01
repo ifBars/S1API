@@ -6,147 +6,43 @@ body:
   - type: markdown
     attributes:
       value: |
-        ## Before you submit...
+        ## Feature Request
 
-        Please ensure you have:
-        - Read the [installation guide](https://ifbars.github.io/S1API/docs/getting-started.html#installation-guide)
-        - Checked existing issues for similar requests
-        - Confirmed your request is related to S1API (not a general modding question)
+        Keep this short if you want.
 
-        If this is mainly a support question, use the **#support** channel in the [S1 modding Discord](https://discord.gg/UD4K4chKaki).
+        You do **not** need to know how the API should be implemented. If you're not technical, just describe:
+        - what you want to do
+        - what is blocking you today
+        - why it would help
+
+        If you have extra detail, examples, or a proposed API shape, include it below.
 
   - type: textarea
-    id: summary
+    id: request
     attributes:
-      label: Summary
-      description: A clear and concise description of the feature or improvement you want.
-      placeholder: "Example: Add an event for when a dealer inventory refresh completes, or expose a safer NPC registration helper..."
-    validations:
-      required: true
-
-  - type: dropdown
-    id: request-type
-    attributes:
-      label: Request Type
-      description: What kind of feature request is this?
-      options:
-        - New API surface
-        - Improvement to an existing API
-        - Documentation or examples
-        - Tooling or developer experience
-        - Breaking-change proposal
-        - Other
-    validations:
-      required: true
-
-  - type: input
-    id: s1api-version
-    attributes:
-      label: Current S1API Version
-      description: Which version are you currently using?
-      placeholder: "e.g., 2.9.6"
-    validations:
-      required: true
-
-  - type: dropdown
-    id: runtime
-    attributes:
-      label: Runtime Environment
-      description: Which runtime(s) would this request affect?
-      multiple: true
-      options:
-        - Mono (Alternate)
-        - IL2CPP (Regular)
-        - Not sure
+      label: What would you like to see?
+      description: Describe the feature, improvement, or capability you want.
+      placeholder: "Example: I'd like an easier way to detect when a dealer inventory refreshes."
     validations:
       required: true
 
   - type: textarea
-    id: problem
+    id: motivation
     attributes:
-      label: Problem Statement
+      label: Why would this help?
+      description: What are you trying to do, and what is difficult about it today?
+      placeholder: "Example: Right now I have to patch game methods manually, which is brittle and hard to maintain."
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra-context
+    attributes:
+      label: Extra Context (Optional)
       description: |
-        What limitation are you running into today?
-        Describe the missing capability, friction, or pain point this request would solve.
-      placeholder: |
-        I need to detect when a custom property changes after load, but there is no reliable callback for that lifecycle point.
-        Right now I have to poll state manually, which is fragile and hard to maintain.
-    validations:
-      required: true
-
-  - type: textarea
-    id: proposed-solution
-    attributes:
-      label: Proposed Solution
-      description: |
-        Describe the API, hook, behavior, or documentation change you want.
-        If helpful, include rough method names, event signatures, or example usage.
-      placeholder: |
-        Add an event such as `PropertyManager.OnPropertyChanged(Property property, object oldValue, object newValue)`.
-
-        Example usage:
-        ```csharp
-        PropertyManager.OnPropertyChanged += HandlePropertyChanged;
-        ```
-    validations:
-      required: true
-
-  - type: textarea
-    id: use-cases
-    attributes:
-      label: Use Cases
-      description: |
-        Explain who would use this and what it would unlock.
-        Concrete gameplay or modding scenarios are much more useful than abstract requests.
-      placeholder: |
-        - Keep a UI panel in sync with dealer inventory changes
-        - Trigger custom quest logic when a property state changes
-        - Avoid Harmony patches for common lifecycle hooks
-    validations:
-      required: true
-
-  - type: textarea
-    id: alternatives
-    attributes:
-      label: Alternatives or Workarounds
-      description: |
-        Have you tried another approach already?
-        List existing APIs, Harmony patches, polling, or manual workarounds and why they are insufficient.
-      placeholder: |
-        - Patched the underlying game method with Harmony, but that is brittle across updates
-        - Polled the value every frame, but it is inefficient and easy to miss edge cases
-
-  - type: input
-    id: related-area
-    attributes:
-      label: Related Area
-      description: Which namespace, system, or docs area does this relate to?
-      placeholder: "e.g., S1API.Entities, Quests, PhoneApp, docs examples, loader bootstrap"
-
-  - type: textarea
-    id: additional-context
-    attributes:
-      label: Additional Context
-      description: |
-        Include anything else that would help evaluate the request:
-        - Links to related issues
-        - Example mods affected
-        - Screenshots, sketches, or sample APIs
-        - Notes about compatibility or migration concerns
-      placeholder: |
-        Add any extra context, examples, or references here...
-
-  - type: checkboxes
-    id: checklist
-    attributes:
-      label: Pre-submission Checklist
-      description: Please confirm the following before submitting
-      options:
-        - label: I have checked existing issues for similar feature requests
-          required: true
-        - label: I have verified this request is related to S1API rather than general modding support
-          required: true
-        - label: I have described the problem this feature would solve
-          required: true
-        - label: I have included concrete use cases or examples
-          required: true
+        Add anything else that might help:
+        - example use cases
+        - screenshots or mockups
+        - related APIs, namespaces, or issues
+        - a proposed solution or rough API design
+      placeholder: "Anything else you'd like to add..."
