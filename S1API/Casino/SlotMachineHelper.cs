@@ -12,7 +12,9 @@ using S1Items = ScheduleOne.ItemFramework;
 
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using S1API.Entities;
+using S1API.Lifecycle;
 using S1API.Logging;
 using S1API.Utils;
 using UnityEngine;
@@ -29,6 +31,20 @@ namespace S1API.Casino
     public static class SlotMachineHelper
     {
         private static readonly Log Logger = new Log("SlotMachineHelper");
+        private static bool _lifecycleHooksRegistered;
+        private static bool _isSceneChangeInProgress;
+
+        private sealed class ActiveSpin
+        {
+            public S1Casino.SlotMachine Machine { get; set; }
+#if (IL2CPPMELON)
+            public object CoroutineHandle { get; set; }
+#else
+            public Coroutine CoroutineHandle { get; set; }
+#endif
+        }
+
+        private static readonly List<ActiveSpin> ActiveSpins = new();
 
         /// <summary>
         /// Outcome categories for slot machine spins.
@@ -257,6 +273,11 @@ namespace S1API.Casino
 
             try
             {
+                EnsureLifecycleHooks();
+
+                if (_isSceneChangeInProgress)
+                    return false;
+
                 var machine = FindNearestSlotMachine(machinePosition, maxSearchDistance);
                 if (machine == null)
                 {
@@ -283,12 +304,27 @@ namespace S1API.Casino
                     symbols[i] = S1Casino.SlotMachine.GetRandomSymbol();
                 }
 
+                var activeSpin = new ActiveSpin
+                {
+                    Machine = machine
+                };
+
 #if (IL2CPPMELON)
-                MelonCoroutines.Start(SpinSlotMachineForNPC(npc, machine, symbols, betAmount));
+                activeSpin.CoroutineHandle = MelonCoroutines.Start(SpinSlotMachineForNPC(npc, machine, symbols, betAmount, activeSpin));
 #else
-                S1DevUtilities.Singleton<S1DevUtilities.CoroutineService>.Instance.StartCoroutine(
-                    SpinSlotMachineForNPC(npc, machine, symbols, betAmount));
+                var coroutineService = S1DevUtilities.Singleton<S1DevUtilities.CoroutineService>.Instance;
+                if (coroutineService == null)
+                {
+                    Logger.Warning("CoroutineService is not available to start slot machine spin");
+                    AddNPCCash(npc, betAmount);
+                    return false;
+                }
+
+                activeSpin.CoroutineHandle = coroutineService.StartCoroutine(
+                    SpinSlotMachineForNPC(npc, machine, symbols, betAmount, activeSpin));
 #endif
+
+                RegisterActiveSpin(activeSpin);
 
                 return true;
             }
@@ -338,74 +374,222 @@ namespace S1API.Casino
             }
         }
 
-        private static IEnumerator SpinSlotMachineForNPC(NPC npc, S1Casino.SlotMachine machine, S1Casino.SlotMachine.ESymbol[] symbols, int betAmount)
+        internal static bool IsSceneTransitionInProgress => _isSceneChangeInProgress;
+
+        private static IEnumerator SpinSlotMachineForNPC(
+            NPC npc,
+            S1Casino.SlotMachine machine,
+            S1Casino.SlotMachine.ESymbol[] symbols,
+            int betAmount,
+            ActiveSpin activeSpin)
         {
-            var isSpinningProp = typeof(S1Casino.SlotMachine).GetProperty("IsSpinning");
-            
-            if (isSpinningProp != null && isSpinningProp.CanWrite)
-                isSpinningProp.SetValue(machine, true);
-
-            for (int i = 0; i < machine.Reels.Length; i++)
+            try
             {
-                yield return new WaitForSeconds(0.2f);
-                machine.Reels[i].Spin();
-                if (i == 0 && machine.SpinLoop != null)
-                {
-                    machine.SpinLoop.Play();
-                }
-            }
+                SetMachineSpinning(machine, true);
 
-            yield return new WaitForSeconds(0.5f);
-
-            var outcome = EvaluateOutcome(machine, symbols);
-
-            for (int i = 0; i < machine.Reels.Length; i++)
-            {
-                if (i == machine.Reels.Length - 1 && outcome != S1Casino.SlotMachine.EOutcome.Jackpot && 
-                    symbols.Length >= 3 && symbols[i - 1] == symbols[i - 2])
+                for (int i = 0; i < machine.Reels.Length; i++)
                 {
-                    yield return new WaitForSeconds(0.3f);
-                }
-                yield return new WaitForSeconds(0.6f);
-                
-                if (outcome == S1Casino.SlotMachine.EOutcome.Jackpot)
-                {
-                    if (i == 0 && machine.JackpotSound != null)
+                    yield return new WaitForSeconds(0.2f);
+                    if (ShouldAbortSpin(npc, machine))
+                        yield break;
+
+                    if (!TryInvokeMachineStep(machine, () => machine.Reels[i].Spin(), $"spin reel {i}"))
+                        yield break;
+
+                    if (i == 0 && machine.SpinLoop != null &&
+                        !TryInvokeMachineStep(machine, () => machine.SpinLoop.Play(), "start spin loop"))
                     {
-                        machine.JackpotSound.Play();
-                    }
-                    else
-                    {
-                        yield return new WaitForSeconds(0.35f);
+                        yield break;
                     }
                 }
-                
-                machine.Reels[i].Stop(symbols[i]);
-            }
 
-            if (machine.SpinLoop != null)
+                yield return new WaitForSeconds(0.5f);
+                if (ShouldAbortSpin(npc, machine))
+                    yield break;
+
+                var outcome = EvaluateOutcome(machine, symbols);
+
+                for (int i = 0; i < machine.Reels.Length; i++)
+                {
+                    if (i == machine.Reels.Length - 1 && outcome != S1Casino.SlotMachine.EOutcome.Jackpot &&
+                        symbols.Length >= 3 && symbols[i - 1] == symbols[i - 2])
+                    {
+                        yield return new WaitForSeconds(0.3f);
+                        if (ShouldAbortSpin(npc, machine))
+                            yield break;
+                    }
+
+                    yield return new WaitForSeconds(0.6f);
+                    if (ShouldAbortSpin(npc, machine))
+                        yield break;
+
+                    if (outcome == S1Casino.SlotMachine.EOutcome.Jackpot)
+                    {
+                        if (i == 0)
+                        {
+                            if (machine.JackpotSound != null &&
+                                !TryInvokeMachineStep(machine, () => machine.JackpotSound.Play(), "play jackpot sound"))
+                            {
+                                yield break;
+                            }
+                        }
+                        else
+                        {
+                            yield return new WaitForSeconds(0.35f);
+                            if (ShouldAbortSpin(npc, machine))
+                                yield break;
+                        }
+                    }
+
+                    if (!TryInvokeMachineStep(machine, () => machine.Reels[i].Stop(symbols[i]), $"stop reel {i}"))
+                        yield break;
+                }
+
+                if (machine.SpinLoop != null &&
+                    !TryInvokeMachineStep(machine, () => machine.SpinLoop.Stop(), "stop spin loop"))
+                {
+                    yield break;
+                }
+
+                int winAmount = GetWinAmount(outcome, betAmount);
+                if (winAmount > 0 && npc != null && npc.gameObject != null)
+                    AddNPCCash(npc, winAmount);
+
+                try
+                {
+                    var displayMethod = typeof(S1Casino.SlotMachine).GetMethod("DisplayOutcome",
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    if (displayMethod != null && !ShouldAbortSpin(npc, machine))
+                        displayMethod.Invoke(machine, new object[] { outcome, winAmount });
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"Failed to display outcome: {ex.Message}");
+                }
+            }
+            finally
             {
-                machine.SpinLoop.Stop();
-            }
+                if (machine != null && machine.SpinLoop != null)
+                {
+                    TryInvokeMachineStep(machine, () => machine.SpinLoop.Stop(), "final spin loop stop");
+                }
 
-            int winAmount = GetWinAmount(outcome, betAmount);
-            if (winAmount > 0)
-                AddNPCCash(npc, winAmount);
+                SetMachineSpinning(machine, false);
+                UnregisterActiveSpin(activeSpin);
+            }
+        }
+
+        private static void EnsureLifecycleHooks()
+        {
+            if (_lifecycleHooksRegistered)
+                return;
+
+            GameLifecycle.OnPreSceneChange += HandlePreSceneChange;
+            GameLifecycle.OnLoadComplete += HandleLoadComplete;
+            _lifecycleHooksRegistered = true;
+        }
+
+        private static void HandlePreSceneChange()
+        {
+            _isSceneChangeInProgress = true;
+            CancelAllActiveSpins();
+        }
+
+        private static void HandleLoadComplete()
+        {
+            _isSceneChangeInProgress = false;
+        }
+
+        private static void RegisterActiveSpin(ActiveSpin activeSpin)
+        {
+            ActiveSpins.Add(activeSpin);
+        }
+
+        private static void UnregisterActiveSpin(ActiveSpin activeSpin)
+        {
+            ActiveSpins.Remove(activeSpin);
+        }
+
+        private static void CancelAllActiveSpins()
+        {
+            if (ActiveSpins.Count == 0)
+                return;
+
+            var activeSpins = ActiveSpins.ToArray();
+            ActiveSpins.Clear();
+
+            foreach (var activeSpin in activeSpins)
+            {
+                try
+                {
+#if (IL2CPPMELON)
+                    if (activeSpin.CoroutineHandle != null)
+                        MelonCoroutines.Stop(activeSpin.CoroutineHandle);
+#else
+                    var coroutineService = S1DevUtilities.Singleton<S1DevUtilities.CoroutineService>.Instance;
+                    if (coroutineService != null && activeSpin.CoroutineHandle != null)
+                        coroutineService.StopCoroutine(activeSpin.CoroutineHandle);
+#endif
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"Failed to stop active slot machine coroutine during scene change: {ex.Message}");
+                }
+
+                SetMachineSpinning(activeSpin.Machine, false);
+            }
+        }
+
+        private static bool ShouldAbortSpin(NPC npc, S1Casino.SlotMachine machine)
+        {
+            if (_isSceneChangeInProgress)
+                return true;
+
+            if (npc == null || npc.gameObject == null)
+                return true;
+
+            if (machine == null || machine.gameObject == null || machine.Reels == null)
+                return true;
+
+            return false;
+        }
+
+        private static bool TryInvokeMachineStep(S1Casino.SlotMachine machine, Action action, string stepName)
+        {
+            if (_isSceneChangeInProgress || machine == null || machine.gameObject == null)
+                return false;
 
             try
             {
-                var displayMethod = typeof(S1Casino.SlotMachine).GetMethod("DisplayOutcome",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (displayMethod != null)
-                    displayMethod.Invoke(machine, new object[] { outcome, winAmount });
+                action();
+                return true;
             }
             catch (Exception ex)
             {
-                Logger.Warning($"Failed to display outcome: {ex.Message}");
-            }
+                if (!_isSceneChangeInProgress)
+                {
+                    Logger.Warning($"Aborting slot machine spin during {stepName}: {ex.Message}");
+                }
 
-            if (isSpinningProp != null && isSpinningProp.CanWrite)
-                isSpinningProp.SetValue(machine, false);
+                return false;
+            }
+        }
+
+        private static void SetMachineSpinning(S1Casino.SlotMachine machine, bool isSpinning)
+        {
+            if (machine == null)
+                return;
+
+            try
+            {
+                var isSpinningProp = typeof(S1Casino.SlotMachine).GetProperty("IsSpinning");
+                if (isSpinningProp != null && isSpinningProp.CanWrite)
+                    isSpinningProp.SetValue(machine, isSpinning);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Failed to set slot machine spinning state: {ex.Message}");
+            }
         }
 
         private static S1Casino.SlotMachine.EOutcome EvaluateOutcome(S1Casino.SlotMachine machine, S1Casino.SlotMachine.ESymbol[] outcome)

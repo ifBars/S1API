@@ -421,11 +421,15 @@ namespace S1API.Entities.Schedule
             while (true)
             {
                 loopIteration++;
+
+                if (SlotMachineHelper.IsSceneTransitionInProgress)
+                    yield break;
                 
                 // Check if NPC is still valid
                 if (npc == null || npc.gameObject == null)
                 {
-                    Logger.Warning($"[{npc?.ID}] NPC is null in gambling session loop, breaking");
+                    if (!SlotMachineHelper.IsSceneTransitionInProgress)
+                        Logger.Warning($"[{npc?.ID}] NPC is null in gambling session loop, breaking");
                     yield break;
                 }
 
@@ -458,6 +462,9 @@ namespace S1API.Entities.Schedule
                 bool success = SlotMachineHelper.UseSlotMachine(npc, position, bet, maxDistance);
                 if (!success)
                 {
+                    if (SlotMachineHelper.IsSceneTransitionInProgress)
+                        yield break;
+
                     // Failed to use machine (might be occupied or not found)
                     Logger.Warning($"[{npc.ID}] Failed to use slot machine (attempt {loopIteration}), will retry in 5s");
                     // Wait a bit and try again
