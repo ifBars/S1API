@@ -22,7 +22,6 @@ using Il2CppSystem.Collections.Generic;
 #endif
 
 using System;
-using System.Collections;
 using System.IO;
 using MelonLoader;
 using S1API.Entities;
@@ -221,42 +220,11 @@ namespace S1API.Quests
         /// <returns>A reference to the quest entry</returns>
         protected QuestEntry AddEntry(string title, Vector3? poiPosition = null)
         {
-            var questEntryObject = new GameObject($"QuestEntry");
-            questEntryObject.transform.SetParent(_gameObject?.transform);
-
-            S1Quests.QuestEntry s1QuestEntry = questEntryObject.AddComponent<S1Quests.QuestEntry>();
-            
-            // Set PoILocation based on whether a location is provided
-            // If no location, set to null to prevent POI and compass element creation
-            if (poiPosition == null)
-            {
-                // Set PoILocation to null to prevent compass waypoint creation
-                s1QuestEntry.PoILocation = null;
-                // Set AutoCreatePoI to false to prevent POI marker creation
-                s1QuestEntry.AutoCreatePoI = false;
-            }
-            else
-            {
-                // Set PoILocation to the transform when a location is provided
-                s1QuestEntry.PoILocation = questEntryObject.transform;
-                // Enable AutoCreatePoI to allow POI marker creation
-                s1QuestEntry.AutoCreatePoI = true;
-            }
-            
-            S1Quest.Entries.Add(s1QuestEntry);
-
-            QuestEntry questEntry = new QuestEntry(s1QuestEntry)
-            {
-                Title = title
-            };
-            
-            // Only set POIPosition if a location was provided
+            QuestEntry questEntry = CreateEntry(title);
             if (poiPosition != null)
             {
                 questEntry.POIPosition = poiPosition.Value;
             }
-            
-            QuestEntries.Add(questEntry);
 
             return questEntry;
         }
@@ -273,48 +241,27 @@ namespace S1API.Quests
             if (npc == null)
                 throw new ArgumentNullException(nameof(npc));
 
+            QuestEntry questEntry = CreateEntry(title);
+            questEntry.SetPOIToNPC(npc);
+            return questEntry;
+        }
+
+        private QuestEntry CreateEntry(string title)
+        {
             var questEntryObject = new GameObject($"QuestEntry");
             questEntryObject.transform.SetParent(_gameObject?.transform);
-            // Ensure the GameObject is active so Start() will run
-            questEntryObject.SetActive(true);
 
             S1Quests.QuestEntry s1QuestEntry = questEntryObject.AddComponent<S1Quests.QuestEntry>();
-            
-            // Set PoILocation to the NPC's transform so the POI follows the NPC
-            // This must be set BEFORE adding to Entries list so Start() can create the POI
-            Transform npcTransform = npc.Transform;
-            if (npcTransform == null)
-            {
-                // Fallback: set to null if NPC transform is not available
-                s1QuestEntry.PoILocation = null;
-                s1QuestEntry.AutoCreatePoI = false;
-                s1QuestEntry.AutoUpdatePoILocation = false;
-            }
-            else
-            {
-                s1QuestEntry.PoILocation = npcTransform;
-                // Enable AutoCreatePoI to allow POI marker creation (defaults to true, but ensure it's set)
-                s1QuestEntry.AutoCreatePoI = true;
-                // Enable AutoUpdatePoILocation so the POI follows the NPC when it moves
-                s1QuestEntry.AutoUpdatePoILocation = true;
-            }
-            
+            s1QuestEntry.PoILocation = null;
+            s1QuestEntry.AutoCreatePoI = false;
+            s1QuestEntry.AutoUpdatePoILocation = false;
             S1Quest.Entries.Add(s1QuestEntry);
 
             QuestEntry questEntry = new QuestEntry(s1QuestEntry)
             {
                 Title = title
             };
-            
             QuestEntries.Add(questEntry);
-
-            // Use a coroutine to ensure POI creation happens after Start() has run
-            // This handles cases where Start() hasn't executed yet or has already completed
-            if (s1QuestEntry.PoILocation != null && s1QuestEntry.AutoCreatePoI)
-            {
-                MelonCoroutines.Start(EnsurePOICreation(s1QuestEntry));
-            }
-
             return questEntry;
         }
 
@@ -362,35 +309,5 @@ namespace S1API.Quests
         /// NOTE: This is done upon completion of the entries by default.
         /// </summary>
         public void End() => S1Quest?.End();
-
-        /// <summary>
-        /// INTERNAL: Coroutine to ensure POI creation happens after Start() has executed.
-        /// Waits one frame to allow Unity's Start() method to run, which will automatically
-        /// call CreatePoI() if AutoCreatePoI is true and PoI is null.
-        /// If Start() has already run, we call CreatePoI() directly since it's a public method.
-        /// </summary>
-        /// <param name="questEntry">The quest entry to create POI for.</param>
-        private static System.Collections.IEnumerator EnsurePOICreation(S1Quests.QuestEntry questEntry)
-        {
-            // Wait one frame to allow Start() to execute if it hasn't run yet
-            yield return null;
-
-            // If Start() hasn't created the POI yet (e.g., Start() already ran before we set PoILocation),
-            // call CreatePoI() directly since it's a public method
-            // CreatePoI() checks for PoI == null, PoILocation != null, and ParentQuest != null internally
-            if (questEntry.PoILocation != null && questEntry.AutoCreatePoI)
-            {
-                try
-                {
-                    questEntry.CreatePoI();
-                }
-                catch (Exception ex)
-                {
-                    // Log the exception for debugging, but don't fail completely
-                    // The POI might be created by Start() on the next frame if timing is off
-                    UnityEngine.Debug.LogWarning($"[S1API] Failed to create POI for quest entry: {ex.Message}");
-                }
-            }
-        }
     }
 }

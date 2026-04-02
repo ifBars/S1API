@@ -21,10 +21,14 @@ namespace S1API.Quests
     /// </summary>
     public class QuestEntry
     {
+        private const string FixedPoiAnchorName = "S1API.FixedPoiAnchor";
+
         /// <summary>
         /// INTERNAL: The stored reference to the quest entry in-game.
         /// </summary>
         internal readonly S1Quests.QuestEntry S1QuestEntry;
+        private Transform? _fixedPoiAnchor;
+        private object? _ensurePoiPresentationCoroutine;
 
         /// <summary>
         /// INTERNAL: Creates a quest entry from an in-game quest entry instance.
@@ -64,29 +68,16 @@ namespace S1API.Quests
         {
             get
             {
-                object? poILocation = Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(S1QuestEntry, "PoILocation");
-                if (poILocation is Transform transform && transform != null)
-                    return transform.position;
+                Transform? poILocation = S1QuestEntry.PoILocation;
+                if (poILocation != null)
+                    return poILocation.position;
                 return Vector3.zero;
             }
             set
             {
-                object? poILocation = Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(S1QuestEntry, "PoILocation");
-                if (poILocation is Transform transform && transform != null)
-                {
-                    transform.position = value;
-                }
-                else
-                {
-                    // Backward compatibility: If PoILocation is null but we're setting a position,
-                    // create the transform and enable POI creation (for older mods that set POIPosition after AddEntry)
-                    Transform entryTransform = S1QuestEntry.transform;
-                    S1QuestEntry.PoILocation = entryTransform;
-                    entryTransform.position = value;
-                    
-                    // Enable AutoCreatePoI to allow POI marker creation
-                    S1QuestEntry.AutoCreatePoI = true;
-                }
+                Transform poiAnchor = GetOrCreateFixedPoiAnchor();
+                poiAnchor.position = value;
+                BindPoiLocation(poiAnchor, autoUpdatePoILocation: false);
             }
         }
 
@@ -139,17 +130,7 @@ namespace S1API.Quests
             if (npcTransform == null)
                 return false;
 
-            // Set PoILocation, AutoCreatePoI, and AutoUpdatePoILocation to enable POI creation and NPC following
-            S1QuestEntry.PoILocation = npcTransform;
-            S1QuestEntry.AutoCreatePoI = true;
-            // Enable AutoUpdatePoILocation so the POI follows the NPC when it moves
-            S1QuestEntry.AutoUpdatePoILocation = true;
-            
-            // Use a coroutine to ensure POI creation happens after Start() has executed
-            // This handles cases where SetPOIToNPC is called after Start() has already run
-            // or when AddEntry was called without a location first
-            MelonCoroutines.Start(EnsurePOICreationForNPC(S1QuestEntry));
-            
+            BindPoiLocation(npcTransform, autoUpdatePoILocation: true);
             return true;
         }
 
@@ -168,33 +149,115 @@ namespace S1API.Quests
         }
 
         /// <summary>
-        /// INTERNAL: Coroutine to ensure POI creation happens after Start() has executed.
-        /// Waits one frame to allow Unity's Start() method to run, which will automatically
-        /// call CreatePoI() if AutoCreatePoI is true and PoI is null.
-        /// If Start() has already run, we call CreatePoI() directly since it's a public method.
+        /// Clears any active POI from this quest entry and hides the compass marker.
         /// </summary>
-        /// <param name="questEntry">The quest entry to create POI for.</param>
-        private static System.Collections.IEnumerator EnsurePOICreationForNPC(S1Quests.QuestEntry questEntry)
+        public void ClearPOI()
         {
-            // Wait one frame to allow Start() to execute if it hasn't run yet
+            StopPendingPoiPresentation();
+
+            S1QuestEntry.PoILocation = null;
+            S1QuestEntry.AutoCreatePoI = false;
+            S1QuestEntry.AutoUpdatePoILocation = false;
+
+            if (S1QuestEntry.PoI != null)
+            {
+                S1QuestEntry.DestroyPoI();
+            }
+
+            S1QuestEntry.UpdateCompassElement();
+        }
+
+        /// <summary>
+        /// Binds a quest entry to a POI transform and schedules late POI/compass setup.
+        /// </summary>
+        /// <param name="poiLocation">The transform to use as the POI source.</param>
+        /// <param name="autoUpdatePoILocation">Whether the game should follow the POI transform automatically.</param>
+        private void BindPoiLocation(Transform poiLocation, bool autoUpdatePoILocation)
+        {
+            S1QuestEntry.PoILocation = poiLocation;
+            S1QuestEntry.AutoCreatePoI = true;
+            S1QuestEntry.AutoUpdatePoILocation = autoUpdatePoILocation;
+            SyncPoiInstancePosition();
+            SchedulePoiPresentation();
+        }
+
+        private Transform GetOrCreateFixedPoiAnchor()
+        {
+            if (_fixedPoiAnchor != null)
+            {
+                return _fixedPoiAnchor;
+            }
+
+            Transform? existingAnchor = S1QuestEntry.transform.Find(FixedPoiAnchorName);
+            if (existingAnchor != null)
+            {
+                _fixedPoiAnchor = existingAnchor;
+                return _fixedPoiAnchor;
+            }
+
+            GameObject anchorObject = new GameObject(FixedPoiAnchorName);
+            anchorObject.transform.SetParent(S1QuestEntry.transform, false);
+            _fixedPoiAnchor = anchorObject.transform;
+            return _fixedPoiAnchor;
+        }
+
+        private void SchedulePoiPresentation()
+        {
+            StopPendingPoiPresentation();
+            _ensurePoiPresentationCoroutine = MelonCoroutines.Start(EnsurePoiPresentation());
+        }
+
+        private void StopPendingPoiPresentation()
+        {
+            if (_ensurePoiPresentationCoroutine == null)
+                return;
+
+            MelonCoroutines.Stop(_ensurePoiPresentationCoroutine);
+            _ensurePoiPresentationCoroutine = null;
+        }
+
+        /// <summary>
+        /// Ensures POI and compass presentation is created even when the POI target is assigned after Start().
+        /// </summary>
+        private IEnumerator EnsurePoiPresentation()
+        {
             yield return null;
 
-            // If Start() hasn't created the POI yet (e.g., Start() already ran before we set PoILocation),
-            // call CreatePoI() directly since it's a public method
-            // CreatePoI() checks for PoI == null, PoILocation != null, and ParentQuest != null internally
-            if (questEntry.PoILocation != null && questEntry.AutoCreatePoI)
+            try
             {
-                try
+                if (S1QuestEntry.PoILocation == null)
+                    yield break;
+
+                if (S1QuestEntry.AutoCreatePoI && S1QuestEntry.PoI == null)
                 {
-                    questEntry.CreatePoI();
+                    S1QuestEntry.CreatePoI();
                 }
-                catch (Exception ex)
+
+                if (ReflectionUtils.TryGetFieldOrProperty(S1QuestEntry, "compassElement") == null)
                 {
-                    // Log the exception for debugging, but don't fail completely
-                    // The POI might be created by Start() on the next frame if timing is off
-                    UnityEngine.Debug.LogWarning($"[S1API] Failed to create POI for quest entry: {ex.Message}");
+                    S1QuestEntry.CreateCompassElement();
                 }
+
+                SyncPoiInstancePosition();
+                S1QuestEntry.UpdateCompassElement();
             }
+            catch (Exception ex)
+            {
+                UnityEngine.Debug.LogWarning($"[S1API] Failed to update POI presentation for quest entry: {ex.Message}");
+            }
+            finally
+            {
+                _ensurePoiPresentationCoroutine = null;
+            }
+        }
+
+        private void SyncPoiInstancePosition()
+        {
+            if (S1QuestEntry.PoI == null || S1QuestEntry.PoILocation == null)
+                return;
+
+            S1QuestEntry.PoI.transform.position = S1QuestEntry.PoILocation.position;
+            S1QuestEntry.PoI.UpdatePosition();
         }
     }
 }
