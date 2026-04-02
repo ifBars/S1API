@@ -32,33 +32,33 @@ namespace S1API.Internal.Patches
         private static Dictionary<string, Type>? _npcWrapperTypeById;
 
         /// <summary>
-        /// Targets all concrete product instance ApplyEffectsToPlayer and ApplyEffectsToNPC implementations.
+        /// Targets only the base ProductItemInstance ApplyEffectsToPlayer and ApplyEffectsToNPC implementations.
+        /// Subclass overrides (e.g., WeedInstance) will run their custom logic and then call base,
+        /// which is intercepted here to route through callbacks.
         /// </summary>
         private static IEnumerable<MethodBase> TargetMethods()
         {
             var playerType = typeof(S1PlayerScripts.Player);
             var npcType = typeof(S1NPCs.NPC);
+            var baseType = typeof(S1Product.ProductItemInstance);
 
-            return typeof(S1Product.ProductItemInstance).Assembly
-                .GetTypes()
-                .Where(type => typeof(S1Product.ProductItemInstance).IsAssignableFrom(type))
-                .SelectMany(type => new[]
-                {
-                    type.GetMethod(
-                        "ApplyEffectsToPlayer",
-                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                        null,
-                        new[] { playerType },
-                        null),
-                    type.GetMethod(
-                        "ApplyEffectsToNPC",
-                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                        null,
-                        new[] { npcType },
-                        null)
-                })
-                .Where(method => method != null)
-                .Cast<MethodBase>();
+            return new[]
+            {
+                baseType.GetMethod(
+                    "ApplyEffectsToPlayer",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                    null,
+                    new[] { playerType },
+                    null),
+                baseType.GetMethod(
+                    "ApplyEffectsToNPC",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                    null,
+                    new[] { npcType },
+                    null)
+            }
+            .Where(method => method != null)
+            .Cast<MethodBase>();
         }
 
         /// <summary>

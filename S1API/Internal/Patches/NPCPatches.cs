@@ -74,6 +74,10 @@ namespace S1API.Internal.Patches
         private static readonly System.Collections.Generic.Dictionary<S1Economy.Customer, float> _savedCurrentAddiction
             = new System.Collections.Generic.Dictionary<S1Economy.Customer, float>();
 
+        // Pending inventory loads for custom dealers - stored until NPCInventory.Awake creates slots
+        private static readonly System.Collections.Generic.Dictionary<string, S1Datas.DeserializedItemSet> _pendingInventoryLoads
+            = new System.Collections.Generic.Dictionary<string, S1Datas.DeserializedItemSet>();
+
         /// <summary>
         /// Resets static state that can leak across save loads.
         /// </summary>
@@ -81,6 +85,7 @@ namespace S1API.Internal.Patches
         {
             _savedCurrentAddiction.Clear();
             _loadingDealers.Clear();
+            _pendingInventoryLoads.Clear();
         }
 
         /// <summary>
@@ -624,6 +629,13 @@ namespace S1API.Internal.Patches
                 {
                     var wrapperInventory = new NPCInventory(apiNpc);
                     wrapperInventory.EnsureInitialized();
+
+                    // Load pending inventory after slots are initialized
+                    if (baseNpc != null && _pendingInventoryLoads.TryGetValue(baseNpc.ID, out var pendingItemSet))
+                    {
+                        pendingItemSet.LoadTo(__instance.ItemSlots);
+                        _pendingInventoryLoads.Remove(baseNpc.ID);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -2248,6 +2260,17 @@ namespace S1API.Internal.Patches
                     {
                         Logger.Warning($"Failed to load overflow items for dealer '{baseNpc?.ID ?? "unknown"}': {ex.Message}");
                         Logger.Warning($"Stack trace: {ex.StackTrace}");
+                    }
+                }
+
+                if (isCustomNPC)
+                {
+                    if (dynamicData.TryGetData("Inventory", out var inventoryData))
+                    {
+                        if (S1Datas.ItemSet.TryDeserialize(inventoryData, out var itemSet))
+                            _pendingInventoryLoads[__instance.ID] = itemSet;
+                        else
+                            Logger.Warning($"Failed to deserialize inventory data for custom NPC dealer {__instance.ID}");
                     }
                 }
             }

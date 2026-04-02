@@ -154,8 +154,16 @@ namespace S1API.Internal.Patches
         private static void PlaceableStorageEntity_Start_Postfix(S1ObjectScripts.PlaceableStorageEntity __instance)
         {
             // Skip if ItemInstance isn't ready yet - InitializeGridItem patch will handle it
-            if (__instance?.ItemInstance?.Definition == null)
+            try
+            {
+                if (__instance?.ItemInstance?.Definition == null)
+                    return;
+            }
+            catch (Exception)
+            {
+                // Accessing Definition accesses the ID, which can throw NRE
                 return;
+            }
 
             if (__instance.StorageEntity == null)
                 return;
