@@ -8,6 +8,7 @@ using S1DevUtilities = ScheduleOne.DevUtilities;
 using S1Map = ScheduleOne.Map;
 #endif
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using S1API.Internal.Utils;
@@ -102,6 +103,17 @@ namespace S1API.Graffiti
         /// <returns>The nearest untagged spray surface, or null if none found.</returns>
         public static SpraySurface? FindNearestUntaggedSurface(Vector3 position)
         {
+            return FindNearestUntaggedSurface(position, include: null);
+        }
+
+        /// <summary>
+        /// Finds the nearest untagged spray surface to a given position using an additional filter.
+        /// </summary>
+        /// <param name="position">The position to search from.</param>
+        /// <param name="include">An optional predicate used to keep eligible surfaces after the base untagged filter.</param>
+        /// <returns>The nearest matching spray surface, or null if none found.</returns>
+        public static SpraySurface? FindNearestUntaggedSurface(Vector3 position, Func<SpraySurface, bool>? include)
+        {
             var untaggedSurfaces = GetUntaggedSpraySurfaces();
             if (untaggedSurfaces.Count == 0)
                 return null;
@@ -111,6 +123,9 @@ namespace S1API.Graffiti
 
             foreach (var surface in untaggedSurfaces)
             {
+                if (include != null && !include(surface))
+                    continue;
+
                 float distance = Vector3.Distance(position, surface.Position);
                 if (distance < nearestDistance)
                 {
