@@ -18,6 +18,8 @@ using S1API.Internal.Utils;
 using S1API.Money;
 using S1API.Products;
 using S1API.Products.Packaging;
+using System;
+using System.Reflection;
 
 namespace S1API.Items
 {
@@ -87,6 +89,45 @@ namespace S1API.Items
         }
 
         /// <summary>
+        /// Prevents a runtime-registered item from being removed during the next scene transition.
+        /// This is useful for items that must survive a menu-to-game load sequence.
+        /// </summary>
+        /// <param name="definition">The item definition to preserve.</param>
+        /// <returns>True if the item was removed from the runtime cleanup queue, false otherwise.</returns>
+        public static bool PreserveRuntimeItem(ItemDefinition definition)
+        {
+            if (definition == null)
+            {
+                throw new ArgumentNullException(nameof(definition), "Cannot preserve a null item definition");
+            }
+
+            return RemoveFromRuntimeCleanupQueue(definition.S1ItemDefinition, definition.ID);
+        }
+
+        /// <summary>
+        /// Removes an item definition from the registry by ID.
+        /// </summary>
+        /// <param name="itemID">The ID of the item to remove.</param>
+        /// <returns>True if the item existed and was removed, false otherwise.</returns>
+        public static bool UnregisterItem(string itemID)
+        {
+            if (string.IsNullOrWhiteSpace(itemID) || S1Registry.Instance == null)
+            {
+                return false;
+            }
+
+            ItemDefinition definition = GetItemDefinition(itemID);
+            if (definition == null)
+            {
+                return false;
+            }
+
+            RemoveFromRuntimeCleanupQueue(definition.S1ItemDefinition, definition.ID);
+            S1Registry.Instance.RemoveFromRegistry(definition.S1ItemDefinition);
+            return GetItemDefinition(itemID) == null;
+        }
+
+        /// <summary>
         /// Gets all item definitions registered in the game's registry.
         /// </summary>
         /// <returns>A list of all registered item definitions, wrapped with S1API types.</returns>
@@ -130,6 +171,64 @@ namespace S1API.Items
             }
 
             return wrappedItems;
+        }
+
+        private static bool RemoveFromRuntimeCleanupQueue(S1ItemFramework.ItemDefinition nativeDefinition, string itemId)
+        {
+            if (S1Registry.Instance == null || nativeDefinition == null || string.IsNullOrWhiteSpace(itemId))
+            {
+                return false;
+            }
+
+            FieldInfo runtimeItemsField = typeof(S1Registry).GetField("ItemsAddedAtRuntime", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (runtimeItemsField == null)
+            {
+                return false;
+            }
+
+            object runtimeItems = runtimeItemsField.GetValue(S1Registry.Instance);
+            if (runtimeItems == null)
+            {
+                return false;
+            }
+
+            Type runtimeItemsType = runtimeItems.GetType();
+            PropertyInfo countProperty = runtimeItemsType.GetProperty("Count", BindingFlags.Public | BindingFlags.Instance);
+            PropertyInfo indexerProperty = runtimeItemsType.GetProperty("Item", BindingFlags.Public | BindingFlags.Instance);
+            MethodInfo removeAtMethod = runtimeItemsType.GetMethod("RemoveAt", BindingFlags.Public | BindingFlags.Instance);
+            if (countProperty == null || indexerProperty == null || removeAtMethod == null)
+            {
+                return false;
+            }
+
+            int count = Convert.ToInt32(countProperty.GetValue(runtimeItems));
+            bool removed = false;
+
+            for (int index = count - 1; index >= 0; index--)
+            {
+                object register = indexerProperty.GetValue(runtimeItems, new object[] { index });
+                if (register == null)
+                {
+                    continue;
+                }
+
+                Type registerType = register.GetType();
+                FieldInfo idField = registerType.GetField("ID", BindingFlags.Public | BindingFlags.Instance);
+                FieldInfo definitionField = registerType.GetField("Definition", BindingFlags.Public | BindingFlags.Instance);
+
+                string registeredId = idField?.GetValue(register) as string;
+                object registeredDefinition = definitionField?.GetValue(register);
+                if (!string.Equals(registeredId, itemId, StringComparison.OrdinalIgnoreCase) &&
+                    !ReferenceEquals(registeredDefinition, nativeDefinition))
+                {
+                    continue;
+                }
+
+                removeAtMethod.Invoke(runtimeItems, new object[] { index });
+                removed = true;
+            }
+
+            return removed;
         }
     }
 }
