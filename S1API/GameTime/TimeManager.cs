@@ -16,6 +16,11 @@ namespace S1API.GameTime
     public static class TimeManager
     {
         /// <summary>
+        /// Called when a new in-game hour starts.
+        /// </summary>
+        public static Action OnHourPass = delegate { };
+
+        /// <summary>
         /// Called when a new in-game day starts.
         /// </summary>
         public static Action OnDayPass = delegate { };
@@ -44,6 +49,7 @@ namespace S1API.GameTime
         private static int _lastSleepSkippedMinutes;
         private static S1GameTime.TimeManager _boundInstance;
 
+        private static readonly Action HourPassHandler = () => OnHourPass();
         private static readonly Action DayPassHandler = () => OnDayPass();
         private static readonly Action WeekPassHandler = () => OnWeekPass();
         private static readonly Action TickHandler = () => OnTick();
@@ -69,6 +75,7 @@ namespace S1API.GameTime
             UnbindFromInstance(_boundInstance);
             _boundInstance = instance;
 
+            instance.onHourPass += HourPassHandler;
             instance.onDayPass += DayPassHandler;
             instance.onWeekPass += WeekPassHandler;
             
@@ -94,6 +101,7 @@ namespace S1API.GameTime
             if (instance == null)
                 return;
 
+            instance.onHourPass -= HourPassHandler;
             instance.onDayPass -= DayPassHandler;
             instance.onWeekPass -= WeekPassHandler;
             
