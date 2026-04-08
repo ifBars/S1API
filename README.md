@@ -7,7 +7,7 @@
 [![GitHub issues](https://img.shields.io/github/issues/ifBars/S1API)](https://github.com/ifBars/S1API/issues)
 [![GitHub license](https://img.shields.io/github/license/ifBars/S1API)](https://github.com/ifBars/S1API/blob/stable/LICENSE)
 [![GitHub last commit](https://img.shields.io/github/last-commit/ifBars/S1API/stable)](https://github.com/ifBars/S1API/commits/stable)
-[![MLVScan Attestation](https://api.mlvscan.com/public/attestations/att_Ng5tA8Ahsxuz33cD8t10cbIw/badge.svg?style=split-pill)](https://mlvscan.com/attestations/att_Ng5tA8Ahsxuz33cD8t10cbIw)
+[![MLVScan Attestation](https://mlvscan.com/attestations/att_RYtq7jrbUY0fpmy0NXJc8UUX/badge.svg?style=split-pill)](https://mlvscan.com/attestations/att_RYtq7jrbUY0fpmy0NXJc8UUX)
 
 S1API is an open source collaboration project to help standardize Schedule One modding processes.
 The goal is to provide a standard place for common functionalities so you can focus on making content versus reverse engineering the game.
