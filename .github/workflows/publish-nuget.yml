@@ -2,7 +2,7 @@ name: Publish NuGet Package
 
 on:
   push:
-    branches: [ 'release/**', 'releases/**' ]
+    branches: [ 'releases/**' ]
     paths:
       - S1API/S1API.csproj
   workflow_dispatch:
@@ -72,9 +72,24 @@ jobs:
         run: |
           mkdir -p S1API/ScheduleOneAssemblies/Managed
           mkdir -p S1API/ScheduleOneAssemblies/MelonLoader
+          mkdir -p S1API/ScheduleOneAssemblies/MelonLoaderMono
 
           cp -r game-assemblies/Managed/* S1API/ScheduleOneAssemblies/Managed/
-          cp -r game-assemblies/MelonLoader/* S1API/ScheduleOneAssemblies/MelonLoader/
+
+          if [[ -d "game-assemblies/MelonLoader" ]]; then
+            cp -r game-assemblies/MelonLoader/* S1API/ScheduleOneAssemblies/MelonLoader/
+          fi
+
+          if [[ -d "game-assemblies/MelonLoaderMono" ]]; then
+            cp -r game-assemblies/MelonLoaderMono/* S1API/ScheduleOneAssemblies/MelonLoaderMono/
+          elif [[ -d "game-assemblies/MelonLoader/net35" ]]; then
+            cp -r game-assemblies/MelonLoader/net35/* S1API/ScheduleOneAssemblies/MelonLoaderMono/
+          elif [[ -d "game-assemblies/MelonLoader" ]]; then
+            cp -r game-assemblies/MelonLoader/* S1API/ScheduleOneAssemblies/MelonLoaderMono/
+          else
+            echo "Unable to locate Mono MelonLoader assemblies in game-assemblies"
+            exit 1
+          fi
 
           if [[ ! -f "S1API/ScheduleOneAssemblies/Managed/Unity.TextMeshPro.dll" ]]; then
             TMPRO_PATH=$(find game-assemblies -name "Unity.TextMeshPro.dll" -type f | head -1)
@@ -87,9 +102,10 @@ jobs:
           <Project>
               <PropertyGroup>
                   <AutomateLocalDeployment>false</AutomateLocalDeployment>
-                  <MelonLoaderAssembliesPath>../ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
+                  <MelonLoaderAssembliesPath>$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
+                  <MelonLoaderMonoAssembliesPath>$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/MelonLoaderMono</MelonLoaderMonoAssembliesPath>
                   <LocalMonoDeploymentPath>null</LocalMonoDeploymentPath>
-                  <MonoAssembliesPath>../ScheduleOneAssemblies/Managed</MonoAssembliesPath>
+                  <MonoAssembliesPath>$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/Managed</MonoAssembliesPath>
               </PropertyGroup>
           </Project>
           EOF
@@ -100,7 +116,7 @@ jobs:
 
       - name: Pack NuGet Package
         if: steps.version.outputs.changed == 'true'
-        run: dotnet pack S1API/S1API.csproj --no-restore -c MonoMelon -o artifacts/nuget /p:ContinuousIntegrationBuild=true
+        run: dotnet pack S1API/S1API.csproj --no-restore -c MonoMelon /p:ContinuousIntegrationBuild=true
 
       - name: Publish to NuGet
         if: steps.version.outputs.changed == 'true'
@@ -108,22 +124,15 @@ jobs:
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
-          shopt -s nullglob
-          PACKAGES=(artifacts/nuget/*.nupkg)
+          PACKAGE="S1API/bin/MonoMelon/S1API.Forked.${{ steps.version.outputs.new_version }}.nupkg"
 
-          if [[ ${#PACKAGES[@]} -eq 0 ]]; then
-            echo "No NuGet packages were produced"
+          if [[ ! -f "$PACKAGE" ]]; then
+            echo "Expected NuGet package was not produced: $PACKAGE"
             exit 1
           fi
 
-          for PACKAGE in "${PACKAGES[@]}"; do
-            if [[ "$PACKAGE" == *.snupkg ]]; then
-              continue
-            fi
-
-            echo "Publishing $PACKAGE"
-            dotnet nuget push "$PACKAGE" \
-              --api-key "$NUGET_API_KEY" \
-              --source https://api.nuget.org/v3/index.json \
-              --skip-duplicate
-          done
+          echo "Publishing $PACKAGE"
+          dotnet nuget push "$PACKAGE" \
+            --api-key "$NUGET_API_KEY" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
