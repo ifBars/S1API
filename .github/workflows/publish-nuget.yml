@@ -114,9 +114,13 @@ jobs:
         if: steps.version.outputs.changed == 'true'
         run: dotnet restore S1API/S1API.csproj -p:Configuration=MonoMelon
 
+      - name: Build Package Assembly
+        if: steps.version.outputs.changed == 'true'
+        run: dotnet build S1API/S1API.csproj --no-restore -c MonoMelon -v minimal
+
       - name: Pack NuGet Package
         if: steps.version.outputs.changed == 'true'
-        run: dotnet pack S1API/S1API.csproj --no-restore -c MonoMelon /p:ContinuousIntegrationBuild=true
+        run: dotnet pack S1API/S1API.csproj --no-build --no-restore -c MonoMelon /p:ContinuousIntegrationBuild=true
 
       - name: Publish to NuGet
         if: steps.version.outputs.changed == 'true'
