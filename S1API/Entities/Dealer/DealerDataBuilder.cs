@@ -5,6 +5,7 @@ using S1Economy = ScheduleOne.Economy;
 #endif
 
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using S1API.Economy;
 using S1API.Map;
@@ -13,7 +14,7 @@ namespace S1API.Entities.Dealer
 {
     /// <summary>
     /// Builder for composing dealer configuration at runtime without asset bundles.
-    /// Public surface uses strings/primitives only.
+    /// Public surface uses API wrappers and primitive identifiers only.
     /// </summary>
     public sealed class DealerDataBuilder
     {
@@ -27,6 +28,8 @@ namespace S1API.Entities.Dealer
             public bool SellInsufficientQualityItems { get; set; } = false;
             public bool SellExcessQualityItems { get; set; } = true;
             public string CompletedDealsVariable { get; set; } = string.Empty;
+            public List<DealerRecommendationBuilder.RecommendationConfigData> Recommendations { get; } =
+                new List<DealerRecommendationBuilder.RecommendationConfigData>();
         }
 
         private readonly DealerConfigData _data;
@@ -111,6 +114,30 @@ namespace S1API.Entities.Dealer
         public DealerDataBuilder WithCompletedDealsVariable(string varName)
         {
             _data.CompletedDealsVariable = varName ?? string.Empty;
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a dealer recommendation rule.
+        /// </summary>
+        /// <param name="configure">Configures the recommendation source and trigger.</param>
+        public DealerDataBuilder WithRecommendation(Action<DealerRecommendationBuilder> configure)
+        {
+            if (configure == null)
+            {
+                return this;
+            }
+
+            var builder = new DealerRecommendationBuilder();
+            configure(builder);
+            var recommendation = builder.BuildInternal();
+
+            if (!string.IsNullOrWhiteSpace(recommendation.CustomerId) &&
+                recommendation.RecommendationTrigger.HasValue)
+            {
+                _data.Recommendations.Add(recommendation);
+            }
+
             return this;
         }
 

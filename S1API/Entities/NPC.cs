@@ -1949,6 +1949,26 @@ namespace S1API.Entities
             All.FirstOrDefault(npc => npc.GetType() == typeof(T)) ?? TryCreateBuiltInWrapper(typeof(T));
 
         /// <summary>
+        /// Gets the instance of an NPC by its unique ID.
+        /// Supports already-materialized wrappers and built-in NPC wrappers.
+        /// </summary>
+        /// <param name="npcId">The S1 NPC ID.</param>
+        /// <returns>The matching wrapper instance, or null if one could not be resolved.</returns>
+        public static NPC? Get(string npcId)
+        {
+            if (string.IsNullOrWhiteSpace(npcId))
+                return null;
+
+            var existing = All.FirstOrDefault(npc =>
+                string.Equals(npc.ID, npcId, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+                return existing;
+
+            var builtInType = Internal.Utils.NPCTypeUtils.TryResolveBuiltInNPCType(npcId);
+            return builtInType == null ? null : TryCreateBuiltInWrapper(builtInType);
+        }
+
+        /// <summary>
         /// INTERNAL: Lazily creates built-in NPC wrappers (base-game NPCs) when they haven't been materialized yet.
         /// Avoids instantiating custom mod NPCs to prevent unintended prefab creation during ConfigurePrefab.
         /// </summary>
@@ -2750,6 +2770,8 @@ namespace S1API.Entities
         private bool _wasLoadedFromSave;
         private S1Relation.NPCRelationData.EUnlockType? _loadedUnlockType;
         private bool _relationshipDataAppliedFromPrefab;
+        private readonly List<DealerRecommendationSubscription> _recommendationSubscriptions =
+            new List<DealerRecommendationSubscription>();
 
         private void MarkLoadedFromSave()
         {
@@ -2979,6 +3001,15 @@ namespace S1API.Entities
                 // Note: Random inventory defaults are applied in InitializeInventoryComponent, not here
                 // to avoid duplicate item insertion when StartupItems is processed by NPCInventory.Awake
 
+                try
+                {
+                    ApplyDealerRecommendationDefaults();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"[S1API] Failed to apply dealer recommendation defaults for '{S1NPC.ID}': {ex.Message}");
+                }
+
                 // Apply spawn position for this NPC type (always applied, regardless of save state)
                 try
                 {
@@ -3039,6 +3070,108 @@ namespace S1API.Entities
             catch (Exception ex)
             {
                 Logger.Warning($"[NPC] Failed to check CustomNpcsReady status: {ex.Message}");
+            }
+        }
+
+        private void ApplyDealerRecommendationDefaults()
+        {
+            if (!IsDealerType(GetType()))
+            {
+                ClearDealerRecommendationHooks();
+                return;
+            }
+
+            var defaults = BuildDealerDefaultsForType(GetType());
+            if (defaults == null || defaults.Recommendations.Count == 0)
+            {
+                ClearDealerRecommendationHooks();
+                return;
+            }
+
+            ClearDealerRecommendationHooks();
+
+            for (int i = 0; i < defaults.Recommendations.Count; i++)
+            {
+                var recommendation = defaults.Recommendations[i];
+                if (recommendation == null || string.IsNullOrWhiteSpace(recommendation.CustomerId) ||
+                    !recommendation.RecommendationTrigger.HasValue)
+                {
+                    continue;
+                }
+
+                var customerNpc = Get(recommendation.CustomerId);
+                if (customerNpc == null)
+                {
+                    Logger.Warning(
+                        $"[S1API] Could not resolve recommending customer '{recommendation.CustomerId}' for dealer '{S1NPC.ID}'.");
+                    continue;
+                }
+
+                switch (recommendation.RecommendationTrigger.Value)
+                {
+                    case DealerRecommendationBuilder.Trigger.DealCompleted:
+                    {
+                        Action handler = () =>
+                        {
+                            try
+                            {
+                                if (!Dealer.HasBeenRecommended())
+                                    customerNpc.Customer.RecommendDealer(Dealer);
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.Warning(
+                                    $"[S1API] Failed to auto-recommend dealer '{S1NPC.ID}' from customer '{customerNpc.ID}': {ex.Message}");
+                            }
+                        };
+
+                        customerNpc.Customer.OnDealCompleted += handler;
+                        _recommendationSubscriptions.Add(new DealerRecommendationSubscription(
+                            customerNpc,
+                            recommendation.RecommendationTrigger.Value,
+                            handler));
+                        break;
+                    }
+                }
+            }
+        }
+
+        private void ClearDealerRecommendationHooks()
+        {
+            for (int i = 0; i < _recommendationSubscriptions.Count; i++)
+            {
+                var subscription = _recommendationSubscriptions[i];
+
+                switch (subscription.RecommendationTrigger)
+                {
+                    case DealerRecommendationBuilder.Trigger.DealCompleted:
+                        subscription.Customer.Customer.OnDealCompleted -= subscription.Handler;
+                        break;
+                }
+            }
+
+            _recommendationSubscriptions.Clear();
+        }
+
+        internal void CleanupRuntimeHooks()
+        {
+            ClearDealerRecommendationHooks();
+        }
+
+        private sealed class DealerRecommendationSubscription
+        {
+            internal NPC Customer { get; }
+            internal DealerRecommendationBuilder.Trigger RecommendationTrigger { get; }
+            internal Action Handler { get; }
+
+            internal DealerRecommendationSubscription(
+                NPC customer,
+                DealerRecommendationBuilder.Trigger recommendationTrigger,
+                Action handler)
+            {
+                Customer = customer;
+                RecommendationTrigger = recommendationTrigger;
+                Handler = handler;
             }
         }
 

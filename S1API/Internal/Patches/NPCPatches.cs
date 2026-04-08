@@ -1397,6 +1397,7 @@ namespace S1API.Internal.Patches
                 var npc = NPC.All[i];
                 if (npc.S1NPC == __instance)
                 {
+                    npc.CleanupRuntimeHooks();
                     NPC.All.Remove(npc);
                     break;
                 }

@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using S1API.Entities;
+using S1API.Internal.Utils;
 using S1API.Logging;
 
 namespace S1API.Entities.Relation
@@ -122,86 +123,6 @@ namespace S1API.Entities.Relation
         }
         
         /// <summary>
-        /// INTERNAL: Attempts to get the static NPCId property value from an NPC type.
-        /// </summary>
-        private static string TryGetStaticNPCId(System.Type npcType)
-        {
-            if (npcType == null)
-                return null;
-            
-            try
-            {
-                // Use reflection to get static NPCId property
-                var npcIdProperty = npcType.GetProperty("NPCId", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.FlattenHierarchy);
-                if (npcIdProperty != null && npcIdProperty.PropertyType == typeof(string))
-                {
-                    var staticId = npcIdProperty.GetValue(null) as string;
-                    if (!string.IsNullOrEmpty(staticId))
-                    {
-                        return staticId;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning($"[Relationship Data] TryGetStaticNPCId: Exception reading static NPCId property for type '{npcType.Name}': {ex.Message}");
-            }
-            
-            return null;
-        }
-        
-        /// <summary>
-        /// INTERNAL: Attempts to resolve an NPC ID from a built-in NPC wrapper type by looking it up in the base game's NPC registry.
-        /// This works for built-in NPCs that have their IDs hardcoded in their constructors.
-        /// </summary>
-        private static string TryResolveNPCIdFromType(System.Type npcType)
-        {
-            if (npcType == null)
-                return null;
-            
-            try
-            {
-                // For built-in NPC wrappers, try to find the ID by looking up the type name pattern
-                // Built-in NPCs typically have IDs that match their type name (e.g., KyleCooley -> "kyle_cooley")
-                string typeName = npcType.Name;
-                
-                // Try common ID patterns for built-in NPCs
-                // Convert PascalCase to snake_case (e.g., "KyleCooley" -> "kyle_cooley")
-                var idCandidates = new List<string>();
-                
-                // Direct lowercase conversion
-                idCandidates.Add(typeName.ToLowerInvariant());
-                
-                // Snake case conversion (insert underscores before capitals)
-                var snakeCase = System.Text.RegularExpressions.Regex.Replace(typeName, "([a-z])([A-Z])", "$1_$2").ToLowerInvariant();
-                if (snakeCase != typeName.ToLowerInvariant())
-                    idCandidates.Add(snakeCase);
-                
-                // Check base game NPC registry for matching IDs
-                var registry = S1NPCs.NPCManager.NPCRegistry;
-                if (registry != null)
-                {
-                    foreach (var candidateId in idCandidates)
-                    {
-                        foreach (var baseNpc in registry)
-                        {
-                            if (baseNpc != null && string.Equals(baseNpc.ID, candidateId, StringComparison.OrdinalIgnoreCase))
-                            {
-                                return candidateId;
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning($"[Relationship Data] TryResolveNPCIdFromType: Exception resolving ID for NPC type '{npcType?.Name ?? "<null>"}': {ex.Message}");
-            }
-            
-            return null;
-        }
-
-        /// <summary>
         /// Replaces the connections list using API NPC wrappers. Nulls are ignored.
         /// </summary>
         [Obsolete("Use WithConnections<T1, T2, ...>() or WithConnectionsById instead. NPC instances are not available during prefab configuration.")]
@@ -260,12 +181,12 @@ namespace S1API.Entities.Relation
                 }
 
                 // Try to get ID from static NPCId property
-                string id = TryGetStaticNPCId(npcType);
+                string id = NPCTypeUtils.TryGetStaticNPCId(npcType);
 
                 // Try to resolve from base game registry if needed
                 if (string.IsNullOrEmpty(id) && npcType.Assembly == typeof(NPCRelationshipDataBuilder).Assembly)
                 {
-                    id = TryResolveNPCIdFromType(npcType);
+                    id = NPCTypeUtils.TryResolveNPCIdFromType(npcType);
                     if (!string.IsNullOrEmpty(id))
                         resolvedFromTypeCount++;
                 }

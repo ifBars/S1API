@@ -19,6 +19,7 @@ To create a dealer NPC, set `IsDealer = true` and configure dealer defaults usin
 ```csharp
 using S1API.Entities;
 using S1API.Economy;
+using S1API.Entities.NPCs.Suburbia;
 using UnityEngine;
 
 public class MyDealerNPC : NPC
@@ -44,7 +45,10 @@ public class MyDealerNPC : NPC
                   .WithHomeName("North Apartments")    // Home building
                   .AllowInsufficientQuality(false)     // Won't sell low quality
                   .AllowExcessQuality(true)            // Can sell high quality
-                  .WithCompletedDealsVariable("my_dealer_deals");
+                  .WithCompletedDealsVariable("my_dealer_deals")
+                  .WithRecommendation(r => r
+                      .FromCustomer(NPC.Get<JeremyWilkinson>())
+                      .OnDealCompleted());
             })
             .WithRelationshipDefaults(r =>
             {
@@ -135,8 +139,15 @@ The `DealerDataBuilder` provides several configuration methods:
 
     // Variable to track completed deals
     .WithCompletedDealsVariable("dealer_completed_deals")
+
+    // Automatically recommend this dealer when the customer completes a deal
+    .WithRecommendation(r => r
+        .FromCustomer(NPC.Get<JeremyWilkinson>())
+        .OnDealCompleted())
 });
 ```
+
+This helper wires the configured customer's `OnDealCompleted` event to the dealer recommendation flow for you. It does not replace relationship unlock metadata such as `UnlockType`; it simply streamlines the separate native recommendation step that the base game requires for dealers.
 
 ### Dealer Types
 
