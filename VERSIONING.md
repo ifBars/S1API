@@ -9,6 +9,7 @@ This repository uses branch-based version maintenance so active development can 
 - Release branches only receive fixes that are safe for that shipped version.
 - Breaking changes, refactors, and new feature work stay on `stable` unless they are intentionally backported.
 - Each public release is identified by a git tag.
+- NuGet publishing automation only runs from `releases/x.y.z` branches, not from `stable`.
 
 ## Branch Roles
 
@@ -46,7 +47,8 @@ Revision numbers start at `r2` because the original shipped release is already `
 1. Finish the planned work on `stable`.
 2. Publish the release as tag `vX.Y.Z`.
 3. Branch from that exact release commit to `releases/X.Y.Z`.
-4. Continue forward development on `stable` toward the next version.
+4. Verify the branch name matches the `releases/x.y.z` convention exactly so GitHub automation can detect it.
+5. Continue forward development on `stable` toward the next version.
 
 ### Hotfix release for an existing line
 
@@ -65,6 +67,25 @@ Using PRs for hotfixes keeps review history attached to the release line and imp
 - Merge hotfix PRs into `releases/x.y.z` before tagging the next `rN` release.
 - Backport the merged change to `stable` with a cherry-pick when possible.
 - If `stable` has diverged too far for a clean cherry-pick, use a separate PR into `stable` that references the release-branch PR.
+
+## NuGet Publishing
+
+The NuGet package publish workflow is intentionally tied to release branches.
+
+- Automatic publish only runs for pushes to `releases/**`.
+- Automatic publish only runs when `S1API/S1API.csproj` changes and the `<Version>` value changes.
+- `workflow_dispatch` can be used to rerun the publish workflow manually, but it should be run from the relevant `releases/x.y.z` branch.
+- A version bump on `stable` does not publish to NuGet. That is expected.
+- If a release branch does not exist yet, create `releases/x.y.z` from the tagged release commit before expecting NuGet automation to run.
+
+### Contributor checklist
+
+Before expecting a NuGet package to publish:
+
+1. Confirm the shipped line has a matching `releases/x.y.z` branch.
+2. Confirm the version change is being merged into that release branch, not only into `stable`.
+3. Confirm the branch name uses `releases/`, not `release/`.
+4. Confirm the publish workflow secrets are configured in GitHub.
 
 ## Backporting Rules
 
