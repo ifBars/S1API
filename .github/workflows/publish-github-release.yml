@@ -1,0 +1,141 @@
+name: Publish GitHub Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish or refresh
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve release metadata
+        id: metadata
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ -z "$tag" ]]; then
+            echo "::error::Unable to determine release tag"
+            exit 1
+          fi
+
+          if [[ ! "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(r[0-9]+)?$ ]]; then
+            echo "::error::Tag '$tag' does not match the expected release format"
+            exit 1
+          fi
+
+          base_version="${BASH_REMATCH[1]}"
+          release_name="S1API ${tag#v}"
+          release_branch="releases/${base_version}"
+
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "base_version=${base_version}" >> "$GITHUB_OUTPUT"
+          echo "release_name=${release_name}" >> "$GITHUB_OUTPUT"
+          echo "release_branch=${release_branch}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish or update GitHub release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
+          RELEASE_NAME: ${{ steps.metadata.outputs.release_name }}
+          RELEASE_BRANCH: ${{ steps.metadata.outputs.release_branch }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tag = process.env.RELEASE_TAG;
+            const releaseName = process.env.RELEASE_NAME;
+            const releaseBranch = process.env.RELEASE_BRANCH;
+
+            const resolveTargetCommitish = async () => {
+              try {
+                await github.rest.repos.getBranch({
+                  owner,
+                  repo,
+                  branch: releaseBranch
+                });
+                return releaseBranch;
+              } catch (error) {
+                if (error.status !== 404) {
+                  throw error;
+                }
+              }
+
+              const ref = await github.rest.git.getRef({
+                owner,
+                repo,
+                ref: `tags/${tag}`
+              });
+
+              let target = ref.data.object;
+              if (target.type === "tag") {
+                const annotated = await github.rest.git.getTag({
+                  owner,
+                  repo,
+                  tag_sha: target.sha
+                });
+                target = annotated.data.object;
+              }
+
+              return target.sha;
+            };
+
+            const targetCommitish = await resolveTargetCommitish();
+            const notes = await github.rest.repos.generateReleaseNotes({
+              owner,
+              repo,
+              tag_name: tag,
+              target_commitish: targetCommitish
+            });
+
+            const payload = {
+              owner,
+              repo,
+              tag_name: tag,
+              target_commitish: targetCommitish,
+              name: releaseName,
+              body: notes.data.body,
+              draft: false,
+              prerelease: false,
+              make_latest: "legacy"
+            };
+
+            let existingRelease = null;
+            try {
+              existingRelease = await github.rest.repos.getReleaseByTag({
+                owner,
+                repo,
+                tag
+              });
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+            }
+
+            if (existingRelease) {
+              const updated = await github.rest.repos.updateRelease({
+                ...payload,
+                release_id: existingRelease.data.id
+              });
+
+              core.notice(`Updated GitHub release ${updated.data.html_url}`);
+              return;
+            }
+
+            const created = await github.rest.repos.createRelease(payload);
+            core.notice(`Published GitHub release ${created.data.html_url}`);
