@@ -118,6 +118,7 @@ namespace S1API.Entities
         internal static readonly System.Collections.Generic.Dictionary<System.Type, System.Action<NPCRelationshipDataBuilder>> TypeToRelationshipDefaults = new System.Collections.Generic.Dictionary<System.Type, System.Action<NPCRelationshipDataBuilder>>();
         private static readonly System.Collections.Generic.Dictionary<System.Type, System.Action<RandomInventoryItemsBuilder>> TypeToRandomInventoryDefaults = new System.Collections.Generic.Dictionary<System.Type, System.Action<RandomInventoryItemsBuilder>>();
         private static readonly System.Collections.Generic.Dictionary<System.Type, System.Action<DealerDataBuilder>> TypeToDealerDefaults = new System.Collections.Generic.Dictionary<System.Type, System.Action<DealerDataBuilder>>();
+        private static readonly System.Collections.Generic.Dictionary<System.Type, DealerDataBuilder.DealerConfigData> TypeToBuiltDealerDefaults = new System.Collections.Generic.Dictionary<System.Type, DealerDataBuilder.DealerConfigData>();
         private static readonly System.Collections.Generic.Dictionary<System.Type, (Vector3 position, Quaternion rotation)> TypeToSpawnPosition = new System.Collections.Generic.Dictionary<System.Type, (Vector3, Quaternion)>();
         private static readonly System.Collections.Generic.HashSet<System.Type> CustomerTypes = new System.Collections.Generic.HashSet<System.Type>();
         private static readonly System.Collections.Generic.HashSet<System.Type> DealerTypes = new System.Collections.Generic.HashSet<System.Type>();
@@ -927,7 +928,20 @@ namespace S1API.Entities
         {
             if (npcType == null || configure == null)
                 return;
+
             TypeToDealerDefaults[npcType] = configure;
+
+            try
+            {
+                var builder = new DealerDataBuilder();
+                configure(builder);
+                TypeToBuiltDealerDefaults[npcType] = builder.BuildInternal();
+            }
+            catch (Exception ex)
+            {
+                TypeToBuiltDealerDefaults.Remove(npcType);
+                Logger.Warning($"[S1API] Failed to cache dealer defaults for '{npcType.Name}': {ex.Message}");
+            }
         }
 
         internal static void RegisterDealerType(System.Type npcType)
@@ -959,14 +973,33 @@ namespace S1API.Entities
             return cfg;
         }
 
+        internal static DealerDataBuilder.DealerConfigData GetBuiltDealerDefaultsForType(System.Type npcType)
+        {
+            if (npcType == null)
+                return null;
+
+            TypeToBuiltDealerDefaults.TryGetValue(npcType, out var cfg);
+            return cfg;
+        }
+
         internal static DealerDataBuilder.DealerConfigData BuildDealerDefaultsForType(System.Type npcType)
         {
+            var cached = GetBuiltDealerDefaultsForType(npcType);
+            if (cached != null)
+                return cached;
+
             var cfg = GetDealerDefaultsForType(npcType);
             if (cfg == null)
                 return null;
+
             var builder = new DealerDataBuilder();
             cfg(builder);
-            return builder.BuildInternal();
+            var built = builder.BuildInternal();
+
+            if (npcType != null)
+                TypeToBuiltDealerDefaults[npcType] = built;
+
+            return built;
         }
 
         internal static void RegisterRandomInventoryDefaultsForType(System.Type npcType, System.Action<RandomInventoryItemsBuilder> configure)
@@ -3075,13 +3108,14 @@ namespace S1API.Entities
 
         private void ApplyDealerRecommendationDefaults()
         {
-            if (!IsDealerType(GetType()))
+            var npcType = GetType();
+            if (!IsDealerType(npcType))
             {
                 ClearDealerRecommendationHooks();
                 return;
             }
 
-            var defaults = BuildDealerDefaultsForType(GetType());
+            var defaults = GetBuiltDealerDefaultsForType(npcType);
             if (defaults == null || defaults.Recommendations.Count == 0)
             {
                 ClearDealerRecommendationHooks();
