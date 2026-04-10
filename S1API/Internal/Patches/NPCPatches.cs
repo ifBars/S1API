@@ -88,6 +88,33 @@ namespace S1API.Internal.Patches
             _pendingInventoryLoads.Clear();
         }
 
+        private static void LogCustomNpcInstantiationException(Type type, string context, Exception ex)
+        {
+            if (ex == null)
+            {
+                Logger.Warning($"[S1API] Failed to instantiate custom NPC type '{type?.FullName ?? "<null>"}' {context}: <null exception>");
+                return;
+            }
+
+            var exceptionChain = new System.Collections.Generic.List<Exception>();
+            for (Exception current = ex; current != null; current = current.InnerException)
+                exceptionChain.Add(current);
+
+            string chainSummary = string.Join(" --> ",
+                exceptionChain.Select(e => $"{e.GetType().FullName}: {e.Message}"));
+
+            Logger.Warning($"[S1API] Failed to instantiate custom NPC type '{type?.FullName ?? "<null>"}' {context}: {chainSummary}");
+
+            for (int i = 0; i < exceptionChain.Count; i++)
+            {
+                Exception current = exceptionChain[i];
+                if (string.IsNullOrWhiteSpace(current.StackTrace))
+                    continue;
+
+                Logger.Warning($"[S1API] Instantiation exception[{i}] stack trace ({current.GetType().FullName}): {current.StackTrace}");
+            }
+        }
+
         /// <summary>
         /// Comparison function for sorting NPCAction by StartTime, with signals coming before non-signals when times are equal.
         /// </summary>
@@ -248,7 +275,7 @@ namespace S1API.Internal.Patches
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warning($"[S1API] Failed to instantiate custom NPC type '{type?.FullName ?? "<null>"}' for save ID '{npcId}': {ex.Message}");
+                    LogCustomNpcInstantiationException(type, $"for save ID '{npcId}'", ex);
                 }
 
                 if (customNPC == null)
@@ -295,7 +322,7 @@ namespace S1API.Internal.Patches
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warning($"[S1API] Failed to instantiate custom NPC type '{type?.FullName ?? "<null>"}' with default data: {ex.Message}");
+                    LogCustomNpcInstantiationException(type, "with default data", ex);
                 }
 
                 if (customNPC == null)
