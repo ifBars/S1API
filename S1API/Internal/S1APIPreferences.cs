@@ -24,7 +24,7 @@ namespace S1API.Internal
 
             EnableUnityNullReferenceTraceLogging = _category.CreateEntry<bool>(
                 "EnableUnityNullReferenceTraceLogging",
-                true,
+                false,
                 "When true, S1API subscribes to Unity's threaded log callback and emits stack traces for NullReferenceException logs to help diagnose runtime issues.");
         }
     }
