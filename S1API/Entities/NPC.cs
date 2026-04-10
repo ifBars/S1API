@@ -2803,8 +2803,8 @@ namespace S1API.Entities
         private bool _wasLoadedFromSave;
         private S1Relation.NPCRelationData.EUnlockType? _loadedUnlockType;
         private bool _relationshipDataAppliedFromPrefab;
-        private readonly List<DealerRecommendationSubscription> _recommendationSubscriptions =
-            new List<DealerRecommendationSubscription>();
+        private readonly System.Collections.Generic.List<DealerRecommendationSubscription> _recommendationSubscriptions =
+            new System.Collections.Generic.List<DealerRecommendationSubscription>();
 
         private void MarkLoadedFromSave()
         {
