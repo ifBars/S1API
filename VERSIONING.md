@@ -23,22 +23,23 @@ This repository uses branch-based version maintenance so active development can 
 
 ### `releases/x.y.z`
 
-Each release branch preserves the source for one shipped base version.
+Each release branch preserves the source for one shipped version.
 
 - Create the branch immediately after publishing `x.y.z`.
+- For an active maintenance line, work from the newest shipped patch branch in that line.
 - Only put hotfixes, packaging fixes, and other low-risk corrections on that branch.
 - Do not merge unrelated `stable` work into a release branch.
 - If a fix starts on a release branch, cherry-pick it back to `stable` if the issue also exists there.
 
 ## Tag Format
 
-Use lightweight, predictable tags so users can tell whether a build is the original release or a later hotfix revision.
+Use standard semantic version tags.
 
 - Initial release: `v2.9.9`
-- First follow-up hotfix release from that branch: `v2.9.9r2`
-- Second follow-up hotfix release from that branch: `v2.9.9r3`
+- First follow-up hotfix release for that line: `v2.9.10`
+- Second follow-up hotfix release for that line: `v2.9.11`
 
-Revision numbers start at `r2` because the original shipped release is already `v2.9.9`.
+Patch numbers are ordinary integers, not single digits. That means `2.9.10` is the next patch after `2.9.9`, not `3.0.0`.
 
 ## Release Flow
 
@@ -55,8 +56,10 @@ Revision numbers start at `r2` because the original shipped release is already `
 1. Create a short-lived branch from `releases/X.Y.Z`, such as `hotfix/X.Y.Z/fix-name`.
 2. Apply only the fixes intended for that shipped line.
 3. Open a PR back into `releases/X.Y.Z` and merge it after validation.
-4. Tag the updated release branch as the next revision, such as `vX.Y.Zr2` or `vX.Y.Zr3`.
-5. Cherry-pick the merged fix back to `stable` if it still applies there, or open a matching PR if adaptation is needed.
+4. Bump the version on that release branch to the next patch version by incrementing the patch number normally, such as `2.9.10` after `2.9.9`.
+5. Tag the updated release branch as that new patch version, such as `v2.9.10`.
+6. Create `releases/X.Y.(Z+1)` from that exact tagged commit so the newly shipped version has its own maintenance branch.
+7. Cherry-pick the merged fix back to `stable` if it still applies there, or open a matching PR if adaptation is needed.
 
 Using PRs for hotfixes keeps review history attached to the release line and improves GitHub auto-generated release notes by linking each fix to its PR and author.
 
@@ -64,7 +67,7 @@ Using PRs for hotfixes keeps review history attached to the release line and imp
 
 - Prefer a dedicated hotfix branch and PR for each maintenance fix.
 - Keep hotfix PRs narrowly scoped so release notes stay easy to read.
-- Merge hotfix PRs into `releases/x.y.z` before tagging the next `rN` release.
+- Merge hotfix PRs into `releases/x.y.z` before tagging the next patch release.
 - Backport the merged change to `stable` with a cherry-pick when possible.
 - If `stable` has diverged too far for a clean cherry-pick, use a separate PR into `stable` that references the release-branch PR.
 
@@ -98,7 +101,8 @@ Before expecting a NuGet package to publish:
 
 The current repository state follows this model:
 
-- `releases/2.9.9` holds the shipped `2.9.9` code line and any future `2.9.9rN` hotfixes.
+- `releases/2.9.9` holds the shipped `2.9.9` code line until the next patch in that line ships.
+- If a hotfix release is published from that line, tag it as `v2.9.10` and then create `releases/2.9.10` from that exact release commit.
 - `stable` is already moving toward `3.0.0`.
 - Fixes that still matter to both lines can be cherry-picked between the two branches as needed.
 
