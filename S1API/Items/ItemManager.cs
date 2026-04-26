@@ -1,12 +1,10 @@
 #if (IL2CPPMELON)
-using S1 = Il2CppScheduleOne;
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1Product = Il2CppScheduleOne.Product;
 using S1Registry = Il2CppScheduleOne.Registry;
 using S1Clothing = Il2CppScheduleOne.Clothing;
 using S1Packaging = Il2CppScheduleOne.Product.Packaging;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
-using S1 = ScheduleOne;
 using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1Product = ScheduleOne.Product;
 using S1Registry = ScheduleOne.Registry;
@@ -35,7 +33,7 @@ namespace S1API.Items
         /// <returns>An instance of the item definition.</returns>
         public static ItemDefinition GetItemDefinition(string itemID)
         {
-            S1ItemFramework.ItemDefinition itemDefinition = S1.Registry.GetItem(itemID);
+            S1ItemFramework.ItemDefinition itemDefinition = S1Registry.GetItem(itemID);
 
             if (itemDefinition == null)
                 return null;
@@ -100,7 +98,7 @@ namespace S1API.Items
                 return false;
             }
 
-            return S1.Registry.ItemExists(itemID);
+            return S1Registry.ItemExists(itemID);
         }
 
         /// <summary>
