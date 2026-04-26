@@ -26,7 +26,8 @@ namespace S1API.Items
     public sealed class ClothingItemDefinitionBuilder
     {
         private static readonly Log Logger = new Log("ClothingItemDefinitionBuilder");
-        private static bool _warnedMissingNativeClothingItemUi;
+        private static readonly object Gate = new object();
+        private static readonly HashSet<string> WarnedMissingNativeClothingItemUiReasons = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
 
         private readonly S1Clothing.ClothingDefinition _definition;
 
@@ -247,14 +248,21 @@ namespace S1API.Items
 
         private void EnsureNativeClothingItemUi()
         {
-            if (_definition.CustomItemUI != null || S1Registry.Instance == null)
+            if (_definition.CustomItemUI != null)
             {
+                return;
+            }
+
+            if (S1Registry.Instance == null)
+            {
+                WarnMissingNativeClothingItemUi("S1Registry.Instance is null");
                 return;
             }
 
             var allItems = S1Registry.Instance.GetAllItems();
             if (allItems == null)
             {
+                WarnMissingNativeClothingItemUi("S1Registry.Instance.GetAllItems() returned null");
                 return;
             }
 
@@ -267,17 +275,22 @@ namespace S1API.Items
                     continue;
                 }
 
-                // CustomItemUI is a native UI template. Share the existing template instead of
-                // cloning it here; listing state is bound per item by the game, and cloning
-                // Unity/Il2Cpp UI objects is riskier across runtimes.
                 _definition.CustomItemUI = clothingDefinition.CustomItemUI;
                 return;
             }
 
-            if (!_warnedMissingNativeClothingItemUi)
+            WarnMissingNativeClothingItemUi("no S1Clothing.ClothingDefinition with S1Clothing.ClothingDefinition.CustomItemUI was found");
+        }
+
+        private static void WarnMissingNativeClothingItemUi(string reason)
+        {
+            if (string.IsNullOrWhiteSpace(reason))
+                return;
+
+            lock (Gate)
             {
-                _warnedMissingNativeClothingItemUi = true;
-                Logger.Warning("Could not find a native clothing CustomItemUI template. Custom clothing inventory UI may be incomplete if Build() runs before base clothing is registered.");
+                if (WarnedMissingNativeClothingItemUiReasons.Add(reason))
+                    Logger.Warning($"Could not borrow a native clothing CustomItemUI template ({reason}). Custom clothing inventory UI may be incomplete. This usually means Build() was called before any native clothing registered.");
             }
         }
     }
