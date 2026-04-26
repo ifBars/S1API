@@ -383,6 +383,15 @@ namespace S1API.Entities
             remove => EventHelper.RemoveListener(value, S1Player.Health.onDie);
         }
 
+        /// <summary>
+        /// Called when the player revives.
+        /// </summary>
+        public event Action OnRevive
+        {
+            add => EventHelper.AddListener(value, S1Player.Health.onRevive);
+            remove => EventHelper.RemoveListener(value, S1Player.Health.onRevive);
+        }
+
         private static readonly HashSet<S1PlayerScripts.Player> InvinciblePlayers = new HashSet<S1PlayerScripts.Player>();
 
         internal static bool IsPlayerInvincible(S1PlayerScripts.Player player) => InvinciblePlayers.Contains(player);
