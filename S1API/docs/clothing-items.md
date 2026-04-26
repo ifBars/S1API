@@ -4,7 +4,7 @@ Clothing content bridges the avatar rendering system, runtime resource registry,
 
 ## Quick Checklist
 
-1. Wait for the `Main` scene before touching registries (`OnSceneWasLoaded`).
+1. Hook setup after the `Main` scene starts, then register clothing during `GameLifecycle.OnPreLoad` so definitions exist before save data loads.
 2. (Optional) Clone an existing accessory prefab and override its materials/textures via `AccessoryFactory`.
 3. Build or clone the clothing definition with `ClothingItemCreator`, pointing `WithClothingAsset` at your custom accessory path.
 4. Register icons and pricing just like other items.
@@ -88,7 +88,7 @@ int shopsAdded = ShopManager.AddToCompatibleShops(itemDefinition);
 MelonLogger.Msg($"Added to {shopsAdded} shop(s)");
 ```
 
-Shop injection should happen after the registry confirms your item exists (e.g., immediately after `CreateClothingItem()` succeeds).
+Shop injection should happen after the registry confirms your item exists (e.g., immediately after `Build()` succeeds or during `GameLifecycle.OnLoadComplete`).
 
 ## Slots and Application Types
 
@@ -113,7 +113,7 @@ Shop injection should happen after the registry confirms your item exists (e.g.,
 
 ## Testing and Troubleshooting
 
-- **Initialization timing**: Guard the workflow with `if (sceneName == "Main" && !_initialized)` to avoid duplicate registration across scene loads.
+- **Initialization timing**: Subscribe from the `Main` scene once, register definitions in `GameLifecycle.OnPreLoad`, and add shop entries in `GameLifecycle.OnLoadComplete`.
 - **Resource paths**: Match the string passed to `WithClothingAsset` with the `targetResourcePath` you registered via `AccessoryFactory`.
 - **Texture validation**: Log texture dimensions after loading so you catch mis-sized PNGs early.
 - **Shop coverage**: `ShopManager.AddToCompatibleShops` returns how many inventories accepted the item—log the count and ensure it is non-zero for your desired vendors.
@@ -126,6 +126,7 @@ Here's a complete example combining all steps:
 ```csharp
 using MelonLoader;
 using S1API.Items;
+using S1API.Lifecycle;
 using S1API.Rendering;
 using S1API.Internal.Utils;
 using S1API.Shops;
@@ -141,10 +142,13 @@ public class MyMod : MelonMod
     {
         if (sceneName == "Main" && !_itemsInitialized)
         {
-            InitializeCustomClothing();
+            GameLifecycle.OnPreLoad += InitializeCustomClothing;
+            GameLifecycle.OnLoadComplete += AddCustomClothingToShops;
             _itemsInitialized = true;
         }
     }
+
+    private ClothingItemDefinition customCap;
 
     private void InitializeCustomClothing()
     {
@@ -179,7 +183,7 @@ public class MyMod : MelonMod
             assembly,
             "MyMod.Resources.CustomCap.icon.png");
 
-        var customCap = ClothingItemCreator.CloneFrom("cap")
+        customCap = ClothingItemCreator.CloneFrom("cap")
             .WithBasicInfo(
                 id: "custom_cap",
                 name: "Custom Cap",
@@ -194,10 +198,17 @@ public class MyMod : MelonMod
         {
             customCap.Icon = icon;
         }
-
-        // Step 3: Add to shops
-        int shopsAdded = ShopManager.AddToCompatibleShops(customCap);
         MelonLogger.Msg($"Created custom clothing item: {customCap.Name}");
+    }
+
+    private void AddCustomClothingToShops()
+    {
+        if (customCap == null)
+        {
+            return;
+        }
+
+        int shopsAdded = ShopManager.AddToCompatibleShops(customCap);
         MelonLogger.Msg($"Added to {shopsAdded} shop(s)");
     }
 }

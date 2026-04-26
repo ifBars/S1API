@@ -15,8 +15,8 @@ namespace S1API.Items
     /// Extends <see cref="StorableItemDefinition"/> with clothing-specific properties.
     /// </summary>
     /// <remarks>
-    /// Use <see cref="ClothingItemCreator.CreateBuilder"/> to create new clothing items,
-    /// or <see cref="ClothingItemCreator.CloneFrom"/> to create variants of existing items.
+    /// Use <see cref="ClothingItemCreator.CreateBuilder()"/> to create new clothing items,
+    /// or <see cref="ClothingItemCreator.CloneFrom(string)"/> to create variants of existing items.
     /// </remarks>
     public sealed class ClothingItemDefinition : StorableItemDefinition
     {
