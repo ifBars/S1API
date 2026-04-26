@@ -302,6 +302,30 @@ namespace S1API.Entities
         }
 
         /// <summary>
+        /// Creates and inserts clothing into the matching player clothing slot.
+        /// </summary>
+        /// <param name="definition">The clothing item definition to equip.</param>
+        /// <param name="color">The clothing color to use for the created instance.</param>
+        /// <returns>The clothing instance that was inserted.</returns>
+        public ClothingItemInstance EquipClothing(ClothingItemDefinition definition, ClothingColor color = ClothingColor.White)
+        {
+            if (definition == null)
+            {
+                throw new ArgumentNullException(nameof(definition));
+            }
+
+            ClothingItemInstance clothing = definition.CreateInstance(color);
+            InsertClothing(clothing);
+            return clothing;
+        }
+
+        /// <summary>
+        /// Refreshes the player's avatar from the current clothing slots.
+        /// </summary>
+        public void RefreshClothingAppearance() =>
+            S1Player.Clothing.RefreshAppearance();
+
+        /// <summary>
         /// Sends updated appearance settings through the game's native appearance flow.
         /// </summary>
         public void SendAppearance(BasicAvatarSettings settings)
