@@ -14,6 +14,7 @@ using Il2CppCollections = System.Collections.Generic;
 
 using System.Collections.Generic;
 using S1API.Internal.Utils;
+using S1API.Logging;
 using UnityEngine;
 
 namespace S1API.Items
@@ -24,6 +25,9 @@ namespace S1API.Items
     /// </summary>
     public sealed class ClothingItemDefinitionBuilder
     {
+        private static readonly Log Logger = new Log("ClothingItemDefinitionBuilder");
+        private static bool _warnedMissingNativeClothingItemUi;
+
         private readonly S1Clothing.ClothingDefinition _definition;
 
         /// <summary>
@@ -263,8 +267,17 @@ namespace S1API.Items
                     continue;
                 }
 
+                // CustomItemUI is a native UI template. Share the existing template instead of
+                // cloning it here; listing state is bound per item by the game, and cloning
+                // Unity/Il2Cpp UI objects is riskier across runtimes.
                 _definition.CustomItemUI = clothingDefinition.CustomItemUI;
                 return;
+            }
+
+            if (!_warnedMissingNativeClothingItemUi)
+            {
+                _warnedMissingNativeClothingItemUi = true;
+                Logger.Warning("Could not find a native clothing CustomItemUI template. Custom clothing inventory UI may be incomplete if Build() runs before base clothing is registered.");
             }
         }
     }
