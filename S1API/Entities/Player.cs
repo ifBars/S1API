@@ -281,7 +281,7 @@ namespace S1API.Entities
         public object CurrentAvatarSettings => S1Player.CurrentAvatarSettings;
 
         /// <summary>
-        /// The player's current avatar settings as an S1API wrapper.
+        /// The player's current avatar settings as a new S1API wrapper around the current native settings.
         /// </summary>
         public BasicAvatarSettings? CurrentBasicAvatarSettings =>
             S1Player.CurrentAvatarSettings == null
