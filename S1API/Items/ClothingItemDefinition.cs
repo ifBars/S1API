@@ -40,12 +40,14 @@ namespace S1API.Items
         public object NativeClothingDefinition => S1ClothingDefinition;
 
         /// <summary>
-        /// Creates a clothing instance from this definition.
+        /// Creates a clothing instance from this definition with the specified color.
         /// </summary>
-        public ClothingItemInstance CreateInstance(int quantity = 1, ClothingColor color = ClothingColor.White) =>
+        /// <param name="color">The clothing color to apply to the created instance.</param>
+        /// <returns>A clothing instance using the specified color.</returns>
+        public ClothingItemInstance CreateInstance(ClothingColor color) =>
             new ClothingItemInstance(new S1Clothing.ClothingInstance(
                 S1ClothingDefinition,
-                quantity,
+                1,
                 (S1Clothing.EClothingColor)color));
 
         /// <summary>
