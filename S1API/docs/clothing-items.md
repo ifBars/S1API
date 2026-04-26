@@ -4,7 +4,7 @@ Clothing content bridges the avatar rendering system, runtime resource registry,
 
 ## Quick Checklist
 
-1. Subscribe once after the `Main` scene starts, then register clothing during `GameLifecycle.OnPreLoad` so definitions exist before save data loads. Because `OnPreLoad` can run on each save load, registration code should be idempotent.
+1. Subscribe to `GameLifecycle.OnPreLoad` once after the `Main` scene starts, then let that callback register clothing before save data loads. Because `OnPreLoad` fires on every load, guard registration with either a manual `ItemManager.IsItemRegistered` check when you need to recover an existing definition, or `ItemManager.EnsureItemRegistered` when you already have the definition instance.
 2. (Optional) Clone an existing accessory prefab and override its materials/textures via `AccessoryFactory`.
 3. Build or clone the clothing definition with `ClothingItemCreator`, pointing `WithClothingAsset` at your custom accessory path.
 4. Register icons and pricing just like other items.
