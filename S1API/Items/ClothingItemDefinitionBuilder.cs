@@ -13,6 +13,7 @@ using Il2CppCollections = System.Collections.Generic;
 #endif
 
 using System.Collections.Generic;
+using S1API.Internal.Utils;
 using UnityEngine;
 
 namespace S1API.Items
@@ -220,6 +221,8 @@ namespace S1API.Items
         /// <returns>A wrapper around the created clothing item definition.</returns>
         public ClothingItemDefinition Build()
         {
+            EnsureNativeClothingItemUi();
+
             // Register with the game's registry
             S1Registry.Instance.AddToRegistry(_definition);
 
@@ -233,7 +236,36 @@ namespace S1API.Items
         /// </summary>
         internal S1Clothing.ClothingDefinition BuildInternal()
         {
+            EnsureNativeClothingItemUi();
+
             return _definition;
+        }
+
+        private void EnsureNativeClothingItemUi()
+        {
+            if (_definition.CustomItemUI != null || S1Registry.Instance == null)
+            {
+                return;
+            }
+
+            var allItems = S1Registry.Instance.GetAllItems();
+            if (allItems == null)
+            {
+                return;
+            }
+
+            foreach (var item in allItems)
+            {
+                if (item == null ||
+                    !CrossType.Is(item, out S1Clothing.ClothingDefinition clothingDefinition) ||
+                    clothingDefinition.CustomItemUI == null)
+                {
+                    continue;
+                }
+
+                _definition.CustomItemUI = clothingDefinition.CustomItemUI;
+                return;
+            }
         }
     }
 }
