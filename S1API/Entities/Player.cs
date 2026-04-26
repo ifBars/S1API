@@ -11,8 +11,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
+using S1API.Avatar;
 using S1API.Entities.Interfaces;
 using S1API.Internal.Abstraction;
+using S1API.Items;
 using S1API.Law;
 using UnityEngine;
 using S1API.Vehicles;
@@ -62,6 +64,11 @@ namespace S1API.Entities
         /// INTERNAL: Tracking of the S1 instance of the player.
         /// </summary>
         internal S1PlayerScripts.Player S1Player;
+
+        /// <summary>
+        /// The underlying game player.
+        /// </summary>
+        public object NativePlayer => S1Player;
 
         /// <summary>
         /// INTERNAL: Constructor to create a new player from an S1 instance.
@@ -272,6 +279,40 @@ namespace S1API.Entities
         /// The player's current avatar settings (appearance configuration).
         /// </summary>
         public object CurrentAvatarSettings => S1Player.CurrentAvatarSettings;
+
+        /// <summary>
+        /// The player's current avatar settings as an S1API wrapper.
+        /// </summary>
+        public BasicAvatarSettings? CurrentBasicAvatarSettings =>
+            S1Player.CurrentAvatarSettings == null
+                ? null
+                : new BasicAvatarSettings(S1Player.CurrentAvatarSettings);
+
+        /// <summary>
+        /// Inserts clothing into the matching player clothing slot.
+        /// </summary>
+        public void InsertClothing(ClothingItemInstance clothing)
+        {
+            if (clothing == null)
+            {
+                throw new ArgumentNullException(nameof(clothing));
+            }
+
+            S1Player.Clothing.InsertClothing(clothing.S1ClothingInstance);
+        }
+
+        /// <summary>
+        /// Sends updated appearance settings through the game's native appearance flow.
+        /// </summary>
+        public void SendAppearance(BasicAvatarSettings settings)
+        {
+            if (settings == null)
+            {
+                throw new ArgumentNullException(nameof(settings));
+            }
+
+            S1Player.SendAppearance(settings.S1BasicAvatarSettings);
+        }
 
         /// <summary>
         /// Revives the player.

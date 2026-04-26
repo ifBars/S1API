@@ -35,6 +35,20 @@ namespace S1API.Items
         internal S1Clothing.ClothingDefinition S1ClothingDefinition { get; }
 
         /// <summary>
+        /// The underlying game clothing definition.
+        /// </summary>
+        public object NativeClothingDefinition => S1ClothingDefinition;
+
+        /// <summary>
+        /// Creates a clothing instance from this definition.
+        /// </summary>
+        public ClothingItemInstance CreateInstance(int quantity = 1, ClothingColor color = ClothingColor.White) =>
+            new ClothingItemInstance(new S1Clothing.ClothingInstance(
+                S1ClothingDefinition,
+                quantity,
+                (S1Clothing.EClothingColor)color));
+
+        /// <summary>
         /// The clothing slot this item occupies.
         /// </summary>
         public ClothingSlot Slot

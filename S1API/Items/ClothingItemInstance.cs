@@ -18,6 +18,11 @@ namespace S1API.Items
         internal readonly S1Clothing.ClothingInstance S1ClothingInstance;
 
         /// <summary>
+        /// The underlying game clothing instance.
+        /// </summary>
+        public object NativeClothingInstance => S1ClothingInstance;
+
+        /// <summary>
         /// INTERNAL: Creates a ClothingItemInstance wrapper.
         /// </summary>
         /// <param name="itemInstance">In-game clothing item instance</param>

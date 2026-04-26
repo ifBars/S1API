@@ -89,6 +89,47 @@ namespace S1API.Items
         }
 
         /// <summary>
+        /// Checks whether an item ID is present in the active game registry.
+        /// </summary>
+        /// <param name="itemID">The ID of the item to look up.</param>
+        /// <returns>True if the item is registered; otherwise, false.</returns>
+        public static bool IsItemRegistered(string itemID)
+        {
+            if (string.IsNullOrWhiteSpace(itemID) || S1Registry.Instance == null)
+            {
+                return false;
+            }
+
+            return S1.Registry.ItemExists(itemID);
+        }
+
+        /// <summary>
+        /// Registers an item only when it is missing from the active game registry.
+        /// </summary>
+        /// <param name="definition">The item definition to register.</param>
+        /// <returns>True if the item is registered after the call; otherwise, false.</returns>
+        public static bool EnsureItemRegistered(ItemDefinition definition)
+        {
+            if (definition == null)
+            {
+                throw new ArgumentNullException(nameof(definition), "Cannot register null item definition");
+            }
+
+            if (S1Registry.Instance == null)
+            {
+                return false;
+            }
+
+            if (IsItemRegistered(definition.ID))
+            {
+                return true;
+            }
+
+            S1Registry.Instance.AddToRegistry(definition.S1ItemDefinition);
+            return IsItemRegistered(definition.ID);
+        }
+
+        /// <summary>
         /// Prevents a runtime-registered item from being removed during the next scene transition.
         /// This is useful for items that must survive a menu-to-game load sequence.
         /// </summary>

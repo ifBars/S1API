@@ -27,6 +27,11 @@ namespace S1API.Items
         internal S1ItemFramework.ItemDefinition S1ItemDefinition { get; }
 
         /// <summary>
+        /// The underlying game item definition.
+        /// </summary>
+        public object NativeDefinition => S1ItemDefinition;
+
+        /// <summary>
         /// INTERNAL: Wraps an existing native item definition.
         /// </summary>
         internal ItemDefinition(S1ItemFramework.ItemDefinition definition)
