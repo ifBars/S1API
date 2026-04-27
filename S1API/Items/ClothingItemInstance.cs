@@ -18,7 +18,7 @@ namespace S1API.Items
         internal readonly S1Clothing.ClothingInstance S1ClothingInstance;
 
         /// <summary>
-        /// The underlying game clothing instance.
+        /// The underlying game clothing instance (ScheduleOne.Clothing.ClothingInstance).
         /// </summary>
         public object NativeClothingInstance => S1ClothingInstance;
 

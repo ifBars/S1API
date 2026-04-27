@@ -27,7 +27,7 @@ namespace S1API.Items
         internal S1ItemFramework.ItemDefinition S1ItemDefinition { get; }
 
         /// <summary>
-        /// The underlying game item definition.
+        /// The underlying game item definition (ScheduleOne.ItemFramework.ItemDefinition).
         /// </summary>
         public object NativeDefinition => S1ItemDefinition;
 

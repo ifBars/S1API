@@ -66,7 +66,7 @@ namespace S1API.Entities
         internal S1PlayerScripts.Player S1Player;
 
         /// <summary>
-        /// The underlying game player.
+        /// The underlying game player (ScheduleOne.PlayerScripts.Player).
         /// </summary>
         public object NativePlayer => S1Player;
 
@@ -281,10 +281,10 @@ namespace S1API.Entities
         public object CurrentAvatarSettings => S1Player.CurrentAvatarSettings;
 
         /// <summary>
-        /// The player's current avatar settings as an S1API <see cref="BasicAvatarSettings"/> wrapper around S1Player.CurrentAvatarSettings.
-        /// <see cref="CurrentBasicAvatarSettings"/> returns a new <see cref="BasicAvatarSettings"/> instance on each access when S1Player.CurrentAvatarSettings is available.
+        /// Retrieves the player's current avatar settings as an S1API <see cref="BasicAvatarSettings"/> wrapper.
+        /// Returns a new <see cref="BasicAvatarSettings"/> instance on each call when S1Player.CurrentAvatarSettings is available.
         /// </summary>
-        public BasicAvatarSettings? CurrentBasicAvatarSettings =>
+        public BasicAvatarSettings? GetCurrentBasicAvatarSettings() =>
             S1Player.CurrentAvatarSettings == null
                 ? null
                 : new BasicAvatarSettings(S1Player.CurrentAvatarSettings);

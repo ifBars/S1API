@@ -35,7 +35,7 @@ namespace S1API.Items
         internal S1Clothing.ClothingDefinition S1ClothingDefinition { get; }
 
         /// <summary>
-        /// The underlying game clothing definition.
+        /// The underlying game clothing definition (ScheduleOne.Clothing.ClothingDefinition).
         /// </summary>
         public object NativeClothingDefinition => S1ClothingDefinition;
 
