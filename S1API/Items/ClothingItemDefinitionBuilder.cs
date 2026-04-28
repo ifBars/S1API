@@ -26,7 +26,7 @@ namespace S1API.Items
     public sealed class ClothingItemDefinitionBuilder
     {
         private static readonly Log Logger = new Log("ClothingItemDefinitionBuilder");
-        private static readonly HashSet<string> WarnedMissingNativeClothingItemUiReasons = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+        private static readonly HashSet<string> WarnedMissingNativeClothingItemUiReasons = new HashSet<string>();
 
         private readonly S1Clothing.ClothingDefinition _definition;
 

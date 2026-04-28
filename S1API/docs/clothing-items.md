@@ -138,6 +138,7 @@ public class MyMod : MelonMod
 {
     private const string CustomItemId = "custom_cap";
     private const string CustomAccessoryPath = "MyMod/Accessories/CustomCap";
+    private const string CustomTextureResourceName = "MyMod.Resources.CustomCap.custom_cap_texture.png";
 
     private bool _itemsInitialized = false;
     private ClothingItemDefinition customCap;
@@ -157,6 +158,12 @@ public class MyMod : MelonMod
         if (ItemManager.IsItemRegistered(CustomItemId))
         {
             customCap = ItemManager.GetItemDefinition(CustomItemId) as ClothingItemDefinition;
+            if (customCap == null)
+            {
+                MelonLogger.Error($"Registered item '{CustomItemId}' is not a ClothingItemDefinition; custom clothing setup cannot continue.");
+                return;
+            }
+
             return;
         }
 
@@ -166,7 +173,13 @@ public class MyMod : MelonMod
         {
             var customTexture = TextureUtils.LoadTextureFromResource(
                 assembly,
-                "MyMod.Resources.CustomCap.custom_cap_texture.png");
+                CustomTextureResourceName);
+
+            if (customTexture == null)
+            {
+                MelonLogger.Error($"Failed to load custom clothing texture resource: {CustomTextureResourceName}");
+                return;
+            }
 
             var textureReplacements = new Dictionary<string, Texture2D>
             {
@@ -216,6 +229,7 @@ public class MyMod : MelonMod
     {
         if (customCap == null)
         {
+            MelonLogger.Warning($"Skipping shop registration because '{CustomItemId}' was not created as a ClothingItemDefinition.");
             return;
         }
 
