@@ -27,6 +27,7 @@ namespace S1API.Items
     {
         private static readonly Log Logger = new Log("ClothingItemDefinitionBuilder");
         private static readonly HashSet<string> WarnedMissingNativeClothingItemUiReasons = new HashSet<string>();
+        private static readonly object WarnedMissingNativeClothingItemUiLock = new object();
 
         private readonly S1Clothing.ClothingDefinition _definition;
 
@@ -292,7 +293,13 @@ namespace S1API.Items
                 return;
             }
 
-            if (WarnedMissingNativeClothingItemUiReasons.Add(reason))
+            bool shouldWarn;
+            lock (WarnedMissingNativeClothingItemUiLock)
+            {
+                shouldWarn = WarnedMissingNativeClothingItemUiReasons.Add(reason);
+            }
+
+            if (shouldWarn)
             {
                 Logger.Warning($"Could not borrow a native clothing CustomItemUI template ({reason}). Custom clothing inventory UI may be incomplete. This usually means Build() was called before any native clothing registered.");
             }
