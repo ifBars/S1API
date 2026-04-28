@@ -298,19 +298,18 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Creates and inserts clothing into the matching player clothing slot.
+        /// Creates clothing with the definition's default color and inserts it into the matching player clothing slot.
         /// </summary>
         /// <param name="definition">The clothing item definition to equip.</param>
-        /// <param name="color">The clothing color to use for the created instance.</param>
         /// <returns>The clothing instance that was inserted.</returns>
-        public ClothingItemInstance EquipClothing(ClothingItemDefinition definition, ClothingColor color = ClothingColor.White)
+        public ClothingItemInstance EquipClothing(ClothingItemDefinition definition)
         {
             if (definition == null)
             {
                 throw new ArgumentNullException(nameof(definition));
             }
 
-            ClothingItemInstance clothing = definition.CreateInstance(color);
+            ClothingItemInstance clothing = definition.CreateInstance(definition.DefaultColor);
             InsertClothing(clothing);
             return clothing;
         }
