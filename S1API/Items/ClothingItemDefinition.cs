@@ -35,11 +35,6 @@ namespace S1API.Items
         internal S1Clothing.ClothingDefinition S1ClothingDefinition { get; }
 
         /// <summary>
-        /// The underlying game clothing definition (ScheduleOne.Clothing.ClothingDefinition).
-        /// </summary>
-        public object NativeClothingDefinition => S1ClothingDefinition;
-
-        /// <summary>
         /// Creates a clothing instance from this definition using the default color.
         /// </summary>
         /// <param name="quantity">The quantity to apply to the created clothing instance.</param>

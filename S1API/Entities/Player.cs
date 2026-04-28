@@ -66,11 +66,6 @@ namespace S1API.Entities
         internal S1PlayerScripts.Player S1Player;
 
         /// <summary>
-        /// The underlying game player (ScheduleOne.PlayerScripts.Player).
-        /// </summary>
-        public object NativePlayer => S1Player;
-
-        /// <summary>
         /// INTERNAL: Constructor to create a new player from an S1 instance.
         /// </summary>
         /// <param name="player"></param>
