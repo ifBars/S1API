@@ -65,6 +65,11 @@ namespace S1API.Items
         /// </summary>
         internal ClothingItemDefinitionBuilder(S1Clothing.ClothingDefinition source)
         {
+            if (source == null)
+            {
+                throw new System.ArgumentNullException(nameof(source));
+            }
+
             _definition = ScriptableObject.CreateInstance<S1Clothing.ClothingDefinition>();
             
             // Copy all StorableItemDefinition properties
@@ -99,7 +104,9 @@ namespace S1API.Items
                 }
             }
 #else
-            _definition.SlotsToBlock = new List<S1Clothing.EClothingSlot>(source.SlotsToBlock);
+            _definition.SlotsToBlock = source.SlotsToBlock == null
+                ? new List<S1Clothing.EClothingSlot>()
+                : new List<S1Clothing.EClothingSlot>(source.SlotsToBlock);
 #endif
         }
 
