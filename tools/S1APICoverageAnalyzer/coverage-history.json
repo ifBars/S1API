@@ -249,7 +249,7 @@
       "note": null
     },
     {
-      "timestamp": "2026-04-11T04:01:51.8747074Z",
+      "timestamp": "2026-04-28T08:19:58.680011Z",
       "classCoveragePercentage": 30.417495029821072,
       "memberCoveragePercentage": 0,
       "totalClasses": 1006,
@@ -265,7 +265,7 @@
     }
   ],
   "latestEntry": {
-    "timestamp": "2026-04-11T04:01:51.8747074Z",
+    "timestamp": "2026-04-28T08:19:58.680011Z",
     "classCoveragePercentage": 30.417495029821072,
     "memberCoveragePercentage": 0,
     "totalClasses": 1006,

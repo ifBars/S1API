@@ -15,8 +15,8 @@ namespace S1API.Items
     /// Extends <see cref="StorableItemDefinition"/> with clothing-specific properties.
     /// </summary>
     /// <remarks>
-    /// Use <see cref="ClothingItemCreator.CreateBuilder"/> to create new clothing items,
-    /// or <see cref="ClothingItemCreator.CloneFrom"/> to create variants of existing items.
+    /// Use <see cref="ClothingItemCreator.CreateBuilder()"/> to create new clothing items,
+    /// or <see cref="ClothingItemCreator.CloneFrom(string)"/> to create variants of existing items.
     /// </remarks>
     public sealed class ClothingItemDefinition : StorableItemDefinition
     {
@@ -33,6 +33,34 @@ namespace S1API.Items
         /// INTERNAL: A reference to the native game clothing item definition.
         /// </summary>
         internal S1Clothing.ClothingDefinition S1ClothingDefinition { get; }
+
+        /// <summary>
+        /// Creates a clothing instance from this definition using the default color.
+        /// </summary>
+        /// <param name="quantity">The quantity to apply to the created clothing instance.</param>
+        /// <returns>A clothing item instance using this definition's default color.</returns>
+        public override ItemInstance CreateInstance(int quantity = 1) =>
+            CreateInstance(quantity, DefaultColor);
+
+        /// <summary>
+        /// Creates a clothing instance from this definition with the specified color.
+        /// </summary>
+        /// <param name="color">The clothing color to apply to the created instance.</param>
+        /// <returns>A clothing instance using the specified color.</returns>
+        public ClothingItemInstance CreateInstance(ClothingColor color) =>
+            CreateInstance(1, color);
+
+        /// <summary>
+        /// Creates a clothing instance from this definition with the specified quantity and color.
+        /// </summary>
+        /// <param name="quantity">The quantity to apply to the created clothing instance.</param>
+        /// <param name="color">The clothing color to apply to the created instance.</param>
+        /// <returns>A clothing instance using the specified quantity and color.</returns>
+        public ClothingItemInstance CreateInstance(int quantity, ClothingColor color) =>
+            new ClothingItemInstance(new S1Clothing.ClothingInstance(
+                S1ClothingDefinition,
+                quantity,
+                (S1Clothing.EClothingColor)color));
 
         /// <summary>
         /// The clothing slot this item occupies.

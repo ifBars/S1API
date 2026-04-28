@@ -11,8 +11,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
+using S1API.Avatar;
 using S1API.Entities.Interfaces;
 using S1API.Internal.Abstraction;
+using S1API.Items;
 using S1API.Law;
 using UnityEngine;
 using S1API.Vehicles;
@@ -274,6 +276,64 @@ namespace S1API.Entities
         public object CurrentAvatarSettings => S1Player.CurrentAvatarSettings;
 
         /// <summary>
+        /// Retrieves the player's current avatar settings as an S1API <see cref="BasicAvatarSettings"/> wrapper.
+        /// Returns a new <see cref="BasicAvatarSettings"/> instance on each call when S1Player.CurrentAvatarSettings is available.
+        /// </summary>
+        public BasicAvatarSettings? GetCurrentBasicAvatarSettings() =>
+            S1Player.CurrentAvatarSettings == null
+                ? null
+                : new BasicAvatarSettings(S1Player.CurrentAvatarSettings);
+
+        /// <summary>
+        /// Inserts clothing into the matching player clothing slot.
+        /// </summary>
+        public void InsertClothing(ClothingItemInstance clothing)
+        {
+            if (clothing == null)
+            {
+                throw new ArgumentNullException(nameof(clothing));
+            }
+
+            S1Player.Clothing.InsertClothing(clothing.S1ClothingInstance);
+        }
+
+        /// <summary>
+        /// Creates clothing with the definition's default color and inserts it into the matching player clothing slot.
+        /// </summary>
+        /// <param name="definition">The clothing item definition to equip.</param>
+        /// <returns>The clothing instance that was inserted.</returns>
+        public ClothingItemInstance EquipClothing(ClothingItemDefinition definition)
+        {
+            if (definition == null)
+            {
+                throw new ArgumentNullException(nameof(definition));
+            }
+
+            ClothingItemInstance clothing = definition.CreateInstance(definition.DefaultColor);
+            InsertClothing(clothing);
+            return clothing;
+        }
+
+        /// <summary>
+        /// Refreshes the player's avatar from the current clothing slots.
+        /// </summary>
+        public void RefreshClothingAppearance() =>
+            S1Player.Clothing.RefreshAppearance();
+
+        /// <summary>
+        /// Sends updated appearance settings through the game's native appearance flow.
+        /// </summary>
+        public void SendAppearance(BasicAvatarSettings settings)
+        {
+            if (settings == null)
+            {
+                throw new ArgumentNullException(nameof(settings));
+            }
+
+            S1Player.SendAppearance(settings.S1BasicAvatarSettings);
+        }
+
+        /// <summary>
         /// Revives the player.
         /// </summary>
         public void Revive() =>
@@ -316,6 +376,15 @@ namespace S1API.Entities
         {
             add => EventHelper.AddListener(value, S1Player.Health.onDie);
             remove => EventHelper.RemoveListener(value, S1Player.Health.onDie);
+        }
+
+        /// <summary>
+        /// Called when the player revives.
+        /// </summary>
+        public event Action OnRevive
+        {
+            add => EventHelper.AddListener(value, S1Player.Health.onRevive);
+            remove => EventHelper.RemoveListener(value, S1Player.Health.onRevive);
         }
 
         private static readonly HashSet<S1PlayerScripts.Player> InvinciblePlayers = new HashSet<S1PlayerScripts.Player>();
