@@ -3,12 +3,14 @@ using S1Clothing = Il2CppScheduleOne.Clothing;
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1CoreItemFramework = Il2CppScheduleOne.Core.Items.Framework;
 using S1Registry = Il2CppScheduleOne.Registry;
+using S1UiItems = Il2CppScheduleOne.UI.Items;
 using Il2CppCollections = Il2CppSystem.Collections.Generic;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Clothing = ScheduleOne.Clothing;
 using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1CoreItemFramework = ScheduleOne.Core.Items.Framework;
 using S1Registry = ScheduleOne.Registry;
+using S1UiItems = ScheduleOne.UI.Items;
 using Il2CppCollections = System.Collections.Generic;
 #endif
 
@@ -28,6 +30,7 @@ namespace S1API.Items
         private static readonly Log Logger = new Log("ClothingItemDefinitionBuilder");
         private static readonly HashSet<string> WarnedMissingNativeClothingItemUiReasons = new HashSet<string>();
         private static readonly object WarnedMissingNativeClothingItemUiLock = new object();
+        private static S1UiItems.ItemUI? s_cachedNativeCustomItemUI;
 
         private readonly S1Clothing.ClothingDefinition _definition;
 
@@ -261,6 +264,12 @@ namespace S1API.Items
                 return;
             }
 
+            if (s_cachedNativeCustomItemUI != null)
+            {
+                _definition.CustomItemUI = s_cachedNativeCustomItemUI;
+                return;
+            }
+
             if (S1Registry.Instance == null)
             {
                 WarnMissingNativeClothingItemUi("S1Registry.Instance is null");
@@ -277,8 +286,13 @@ namespace S1API.Items
             foreach (var item in allItems)
             {
                 if (item == null ||
-                    !CrossType.Is(item, out S1Clothing.ClothingDefinition clothingDefinition) ||
-                    clothingDefinition.CustomItemUI == null)
+                    !CrossType.Is(item, out S1Clothing.ClothingDefinition clothingDefinition))
+                {
+                    continue;
+                }
+
+                var customItemUI = clothingDefinition.CustomItemUI;
+                if (customItemUI == null)
                 {
                     continue;
                 }
@@ -286,7 +300,8 @@ namespace S1API.Items
                 // CustomItemUI is a native UI template. Share the existing template instead of
                 // cloning it here; listing state is bound per item by the game, and cloning
                 // Unity/Il2Cpp UI objects is riskier across runtimes.
-                _definition.CustomItemUI = clothingDefinition.CustomItemUI;
+                s_cachedNativeCustomItemUI = customItemUI;
+                _definition.CustomItemUI = customItemUI;
                 return;
             }
 
