@@ -1,12 +1,10 @@
 #if (IL2CPPMELON)
-using S1 = Il2CppScheduleOne;
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1Product = Il2CppScheduleOne.Product;
 using S1Registry = Il2CppScheduleOne.Registry;
 using S1Clothing = Il2CppScheduleOne.Clothing;
 using S1Packaging = Il2CppScheduleOne.Product.Packaging;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
-using S1 = ScheduleOne;
 using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1Product = ScheduleOne.Product;
 using S1Registry = ScheduleOne.Registry;
@@ -35,7 +33,7 @@ namespace S1API.Items
         /// <returns>An instance of the item definition.</returns>
         public static ItemDefinition GetItemDefinition(string itemID)
         {
-            S1ItemFramework.ItemDefinition itemDefinition = S1.Registry.GetItem(itemID);
+            S1ItemFramework.ItemDefinition itemDefinition = S1Registry.GetItem(itemID);
 
             if (itemDefinition == null)
                 return null;
@@ -86,6 +84,47 @@ namespace S1API.Items
             }
 
             S1Registry.Instance.AddToRegistry(definition.S1ItemDefinition);
+        }
+
+        /// <summary>
+        /// Checks whether an item ID is present in the active game registry.
+        /// </summary>
+        /// <param name="itemID">The ID of the item to look up.</param>
+        /// <returns>True if the item is registered; otherwise, false.</returns>
+        public static bool IsItemRegistered(string itemID)
+        {
+            if (string.IsNullOrWhiteSpace(itemID) || S1Registry.Instance == null)
+            {
+                return false;
+            }
+
+            return S1Registry.ItemExists(itemID);
+        }
+
+        /// <summary>
+        /// Registers an item only when it is missing from the active game registry.
+        /// </summary>
+        /// <param name="definition">The item definition to register.</param>
+        /// <returns>True if the item is registered after the call; otherwise, false.</returns>
+        public static bool EnsureItemRegistered(ItemDefinition definition)
+        {
+            if (definition == null)
+            {
+                throw new ArgumentNullException(nameof(definition), "Cannot register null item definition");
+            }
+
+            if (S1Registry.Instance == null)
+            {
+                return false;
+            }
+
+            if (IsItemRegistered(definition.ID))
+            {
+                return true;
+            }
+
+            S1Registry.Instance.AddToRegistry(definition.S1ItemDefinition);
+            return IsItemRegistered(definition.ID);
         }
 
         /// <summary>

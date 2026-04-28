@@ -3,16 +3,20 @@ using S1Clothing = Il2CppScheduleOne.Clothing;
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1CoreItemFramework = Il2CppScheduleOne.Core.Items.Framework;
 using S1Registry = Il2CppScheduleOne.Registry;
+using S1UiItems = Il2CppScheduleOne.UI.Items;
 using Il2CppCollections = Il2CppSystem.Collections.Generic;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Clothing = ScheduleOne.Clothing;
 using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1CoreItemFramework = ScheduleOne.Core.Items.Framework;
 using S1Registry = ScheduleOne.Registry;
+using S1UiItems = ScheduleOne.UI.Items;
 using Il2CppCollections = System.Collections.Generic;
 #endif
 
 using System.Collections.Generic;
+using S1API.Internal.Utils;
+using S1API.Logging;
 using UnityEngine;
 
 namespace S1API.Items
@@ -23,6 +27,11 @@ namespace S1API.Items
     /// </summary>
     public sealed class ClothingItemDefinitionBuilder
     {
+        private static readonly Log Logger = new Log("ClothingItemDefinitionBuilder");
+        private static readonly HashSet<string> WarnedMissingNativeClothingItemUiReasons = new HashSet<string>();
+        private static readonly object WarnedMissingNativeClothingItemUiLock = new object();
+        private static S1UiItems.ItemUI? s_cachedNativeCustomItemUI;
+
         private readonly S1Clothing.ClothingDefinition _definition;
 
         /// <summary>
@@ -33,7 +42,7 @@ namespace S1API.Items
             _definition = ScriptableObject.CreateInstance<S1Clothing.ClothingDefinition>();
             
             // Set defaults
-            _definition.StackLimit = 10;
+            _definition.StackLimit = 1;
             _definition.BasePurchasePrice = 10f;
             _definition.ResellMultiplier = 0.5f;
             _definition.Category = S1CoreItemFramework.EItemCategory.Clothing;
@@ -59,6 +68,11 @@ namespace S1API.Items
         /// </summary>
         internal ClothingItemDefinitionBuilder(S1Clothing.ClothingDefinition source)
         {
+            if (source == null)
+            {
+                throw new System.ArgumentNullException(nameof(source));
+            }
+
             _definition = ScriptableObject.CreateInstance<S1Clothing.ClothingDefinition>();
             
             // Copy all StorableItemDefinition properties
@@ -75,6 +89,7 @@ namespace S1API.Items
             _definition.UsableInFilters = source.UsableInFilters;
             _definition.StoredItem = source.StoredItem;
             _definition.Equippable = source.Equippable;
+            _definition.CustomItemUI = source.CustomItemUI;
             
             // Copy clothing-specific properties
             _definition.Slot = source.Slot;
@@ -92,7 +107,9 @@ namespace S1API.Items
                 }
             }
 #else
-            _definition.SlotsToBlock = new List<S1Clothing.EClothingSlot>(source.SlotsToBlock);
+            _definition.SlotsToBlock = source.SlotsToBlock == null
+                ? new List<S1Clothing.EClothingSlot>()
+                : new List<S1Clothing.EClothingSlot>(source.SlotsToBlock);
 #endif
         }
 
@@ -220,6 +237,8 @@ namespace S1API.Items
         /// <returns>A wrapper around the created clothing item definition.</returns>
         public ClothingItemDefinition Build()
         {
+            EnsureNativeClothingItemUi();
+
             // Register with the game's registry
             S1Registry.Instance.AddToRegistry(_definition);
 
@@ -233,7 +252,79 @@ namespace S1API.Items
         /// </summary>
         internal S1Clothing.ClothingDefinition BuildInternal()
         {
+            EnsureNativeClothingItemUi();
+
             return _definition;
+        }
+
+        private void EnsureNativeClothingItemUi()
+        {
+            if (_definition.CustomItemUI != null)
+            {
+                return;
+            }
+
+            if (s_cachedNativeCustomItemUI != null)
+            {
+                _definition.CustomItemUI = s_cachedNativeCustomItemUI;
+                return;
+            }
+
+            if (S1Registry.Instance == null)
+            {
+                WarnMissingNativeClothingItemUi("S1Registry.Instance is null");
+                return;
+            }
+
+            var allItems = S1Registry.Instance.GetAllItems();
+            if (allItems == null)
+            {
+                WarnMissingNativeClothingItemUi("S1Registry.Instance.GetAllItems() returned null");
+                return;
+            }
+
+            foreach (var item in allItems)
+            {
+                if (item == null ||
+                    !CrossType.Is(item, out S1Clothing.ClothingDefinition clothingDefinition))
+                {
+                    continue;
+                }
+
+                var customItemUI = clothingDefinition.CustomItemUI;
+                if (customItemUI == null)
+                {
+                    continue;
+                }
+
+                // CustomItemUI is a native UI template. Share the existing template instead of
+                // cloning it here; listing state is bound per item by the game, and cloning
+                // Unity/Il2Cpp UI objects is riskier across runtimes.
+                s_cachedNativeCustomItemUI = customItemUI;
+                _definition.CustomItemUI = customItemUI;
+                return;
+            }
+
+            WarnMissingNativeClothingItemUi("no S1Clothing.ClothingDefinition with S1Clothing.ClothingDefinition.CustomItemUI was found");
+        }
+
+        private static void WarnMissingNativeClothingItemUi(string reason)
+        {
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                return;
+            }
+
+            bool shouldWarn;
+            lock (WarnedMissingNativeClothingItemUiLock)
+            {
+                shouldWarn = WarnedMissingNativeClothingItemUiReasons.Add(reason);
+            }
+
+            if (shouldWarn)
+            {
+                Logger.Warning($"Could not borrow a native clothing CustomItemUI template ({reason}). Custom clothing inventory UI may be incomplete. This usually means Build() was called before any native clothing registered.");
+            }
         }
     }
 }
