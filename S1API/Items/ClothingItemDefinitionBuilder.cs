@@ -38,7 +38,7 @@ namespace S1API.Items
             _definition = ScriptableObject.CreateInstance<S1Clothing.ClothingDefinition>();
             
             // Set defaults
-            _definition.StackLimit = 10;
+            _definition.StackLimit = 1;
             _definition.BasePurchasePrice = 10f;
             _definition.ResellMultiplier = 0.5f;
             _definition.Category = S1CoreItemFramework.EItemCategory.Clothing;
