@@ -12,7 +12,7 @@ namespace S1API.Internal.Diagnostics
     /// </summary>
     internal static class UnityExceptionTraceHook
     {
-        private static readonly Log Logger = new Log("UnityExceptionTrace");
+        private static readonly Log Logger = new Log("S1API.UnityExceptionTrace");
         private static readonly object Sync = new object();
 #if IL2CPPMELON
         private static readonly System.Action<string, string, LogType> ManagedCallback = OnUnityLogMessageReceived;
