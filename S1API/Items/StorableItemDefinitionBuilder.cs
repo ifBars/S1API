@@ -1,4 +1,4 @@
-#if (IL2CPPMELON)
+﻿#if (IL2CPPMELON)
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1CoreItemFramework = Il2CppScheduleOne.Core.Items.Framework;
 using S1Levelling = Il2CppScheduleOne.Levelling;
@@ -30,6 +30,7 @@ namespace S1API.Items
     /// All items in Schedule One are StorableItemDefinition (or subclasses thereof).
     /// The base ItemDefinition class is never used directly in the game.
     /// </remarks>
+    [Obsolete]
     public sealed class StorableItemDefinitionBuilder
     {
         private static readonly Log Logger = new Log("StorableItemDefinitionBuilder");
