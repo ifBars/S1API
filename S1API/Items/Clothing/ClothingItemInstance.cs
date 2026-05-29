@@ -1,17 +1,16 @@
-#if (IL2CPPMELON)
+﻿#if (IL2CPPMELON)
 using S1Clothing = Il2CppScheduleOne.Clothing;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Clothing = ScheduleOne.Clothing;
 #endif
 using System;
 
-namespace S1API.Items
+namespace S1API.Items.Clothing
 {
     /// <summary>
     /// Represents a clothing item instance in the game world (physical clothing you own).
     /// Extends <see cref="ItemInstance"/> with color information.
     /// </summary>
-    [Obsolete]
     public class ClothingItemInstance : ItemInstance
     {
         /// <summary>
@@ -45,4 +44,3 @@ namespace S1API.Items
             new ClothingItemDefinition((S1Clothing.ClothingDefinition)S1ClothingInstance.Definition);
     }
 }
-

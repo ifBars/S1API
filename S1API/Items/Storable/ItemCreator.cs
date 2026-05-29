@@ -1,16 +1,16 @@
-using System;
-using S1API.Internal.Utils;
-using S1API.Leveling;
-using UnityEngine;
-#if (IL2CPPMELON)
+﻿#if (IL2CPPMELON)
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1Registry = Il2CppScheduleOne.Registry;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1Registry = ScheduleOne.Registry;
 #endif
+using System;
+using S1API.Internal.Utils;
+using S1API.Leveling;
+using UnityEngine;
 
-namespace S1API.Items
+namespace S1API.Items.Storable
 {
     /// <summary>
     /// Provides convenient static methods for creating custom items.
@@ -19,7 +19,6 @@ namespace S1API.Items
     /// <remarks>
     /// All items in Schedule One are storable items (StorableItemDefinition), so both methods create the same type.
     /// </remarks>
-    [Obsolete("Use S1API.Items.Storable.ItemCreator instead")]
     public static class ItemCreator
     {
         /// <summary>
@@ -36,9 +35,9 @@ namespace S1API.Items
         ///     .Build();
         /// </code>
         /// </example>
-        public static StorableItemDefinitionBuilder CreateBuilder()
+        public static ItemBuilders.StorableItemDefinitionBuilder CreateBuilder()
         {
-            return new StorableItemDefinitionBuilder();
+            return new ItemBuilders.StorableItemDefinitionBuilder();
         }
 
         /// <summary>
@@ -47,7 +46,7 @@ namespace S1API.Items
         /// <param name="sourceItemId">The ID of the item to clone.</param>
         /// <returns>A builder pre-configured with the source item properties.</returns>
         /// <exception cref="ArgumentException">Thrown if the source item ID is not found or is not a storable item.</exception>
-        public static StorableItemDefinitionBuilder CloneFrom(string sourceItemId)
+        public static ItemBuilders.StorableItemDefinitionBuilder CloneFrom(string sourceItemId)
         {
             var sourceDefinition = S1Registry.GetItem(sourceItemId);
             if (sourceDefinition == null)
@@ -60,7 +59,7 @@ namespace S1API.Items
                 throw new ArgumentException($"Item '{sourceItemId}' is not an StorableItemDefinition", nameof(sourceItemId));
             }
 
-            return new StorableItemDefinitionBuilder(storableDef);
+            return new ItemBuilders.StorableItemDefinitionBuilder(storableDef);
         }
 
         /// <summary>
@@ -69,14 +68,14 @@ namespace S1API.Items
         /// <param name="source">The storable item definition to clone.</param>
         /// <returns>A builder pre-configured with the source item properties.</returns>
         /// <exception cref="ArgumentNullException">Thrown if the source definition is null.</exception>
-        public static StorableItemDefinitionBuilder CloneFrom(StorableItemDefinition source)
+        public static ItemBuilders.StorableItemDefinitionBuilder CloneFrom(StorableItemDefinition source)
         {
             if (source == null)
             {
                 throw new ArgumentNullException(nameof(source), "Source storable item definition cannot be null");
             }
 
-            return new StorableItemDefinitionBuilder(source.S1StorableItemDefinition);
+            return new ItemBuilders.StorableItemDefinitionBuilder(source.S1StorableItemDefinition);
         }
 
         /// <summary>
@@ -122,7 +121,7 @@ namespace S1API.Items
             Sprite icon = null,
             Equippable equippable = null)
         {
-            var builder = new StorableItemDefinitionBuilder()
+            var builder = new ItemBuilders.StorableItemDefinitionBuilder()
                 .WithBasicInfo(id, name, description, category)
                 .WithStackLimit(stackLimit)
                 .WithPricing(basePurchasePrice, resellMultiplier)

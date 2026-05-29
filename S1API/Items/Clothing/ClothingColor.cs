@@ -1,12 +1,11 @@
-using System;
+﻿using System;
 
-namespace S1API.Items
+namespace S1API.Items.Clothing
 {
     /// <summary>
     /// Represents available clothing colors.
     /// Mirrors ScheduleOne.Clothing.EClothingColor.
     /// </summary>
-    [Obsolete]
     public enum ClothingColor
     {
         White = 0,
@@ -38,4 +37,3 @@ namespace S1API.Items
         HotPink = 26
     }
 }
-

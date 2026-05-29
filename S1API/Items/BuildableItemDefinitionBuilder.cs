@@ -8,6 +8,7 @@ using S1CoreItemFramework = ScheduleOne.Core.Items.Framework;
 using S1Registry = ScheduleOne.Registry;
 #endif
 
+using System;
 using UnityEngine;
 
 namespace S1API.Items
@@ -16,6 +17,7 @@ namespace S1API.Items
     /// Builder for composing buildable item definitions at runtime.
     /// Use fluent methods to configure buildable item properties before calling <see cref="Build"/>.
     /// </summary>
+    [Obsolete]
     public sealed class BuildableItemDefinitionBuilder
     {
         private readonly S1ItemFramework.BuildableItemDefinition _definition;

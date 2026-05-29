@@ -1,15 +1,14 @@
-#if (IL2CPPMELON)
+﻿#if (IL2CPPMELON)
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1Registry = Il2CppScheduleOne.Registry;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1Registry = ScheduleOne.Registry;
 #endif
-
 using System;
 using S1API.Internal.Utils;
 
-namespace S1API.Items
+namespace S1API.Items.Buildable
 {
     /// <summary>
     /// Provides convenient static methods for creating custom buildable items.
@@ -18,7 +17,6 @@ namespace S1API.Items
     /// Use <see cref="CreateBuilder"/> for creating items from scratch,
     /// or <see cref="CloneFrom"/> for creating variants of existing buildable items.
     /// </remarks>
-    [Obsolete]
     public static class BuildableItemCreator
     {
         /// <summary>
@@ -35,9 +33,9 @@ namespace S1API.Items
         ///     .Build();
         /// </code>
         /// </example>
-        public static BuildableItemDefinitionBuilder CreateBuilder()
+        public static ItemBuilders.BuildableItemDefinitionBuilder CreateBuilder()
         {
-            return new BuildableItemDefinitionBuilder();
+            return new ItemBuilders.BuildableItemDefinitionBuilder();
         }
 
         /// <summary>
@@ -55,7 +53,7 @@ namespace S1API.Items
         ///     .Build();
         /// </code>
         /// </example>
-        public static BuildableItemDefinitionBuilder CloneFrom(string sourceItemId)
+        public static ItemBuilders.BuildableItemDefinitionBuilder CloneFrom(string sourceItemId)
         {
             var sourceDefinition = S1Registry.GetItem(sourceItemId);
 
@@ -76,7 +74,7 @@ namespace S1API.Items
                 );
             }
 
-            return new BuildableItemDefinitionBuilder(buildableDef);
+            return new ItemBuilders.BuildableItemDefinitionBuilder(buildableDef);
         }
 
         /// <summary>
@@ -93,14 +91,14 @@ namespace S1API.Items
         ///     .Build();
         /// </code>
         /// </example>
-        public static BuildableItemDefinitionBuilder CloneFrom(BuildableItemDefinition source)
+        public static ItemBuilders.BuildableItemDefinitionBuilder CloneFrom(BuildableItemDefinition source)
         {
             if (source == null)
             {
                 throw new System.ArgumentNullException(nameof(source), "Source item definition cannot be null");
             }
 
-            return new BuildableItemDefinitionBuilder(source.S1BuildableItemDefinition);
+            return new ItemBuilders.BuildableItemDefinitionBuilder(source.S1BuildableItemDefinition);
         }
     }
 }

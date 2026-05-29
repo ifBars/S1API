@@ -14,6 +14,7 @@ using S1UiItems = ScheduleOne.UI.Items;
 using Il2CppCollections = System.Collections.Generic;
 #endif
 
+using System;
 using System.Collections.Generic;
 using S1API.Internal.Utils;
 using S1API.Logging;
@@ -25,6 +26,7 @@ namespace S1API.Items
     /// Builder for composing clothing item definitions at runtime.
     /// Use fluent methods to configure clothing properties before calling <see cref="Build"/>.
     /// </summary>
+    [Obsolete]
     public sealed class ClothingItemDefinitionBuilder
     {
         private static readonly Log Logger = new Log("ClothingItemDefinitionBuilder");

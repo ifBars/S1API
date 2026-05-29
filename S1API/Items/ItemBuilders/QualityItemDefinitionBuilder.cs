@@ -59,7 +59,7 @@ namespace S1API.Items.ItemBuilders
         /// </summary>
         /// <param name="quality">The default quality to assign to items of this definition.</param>
         /// <returns>>The builder instance for fluent chaining.</returns>
-        public QualityItemDefinitionBuilder WithDefaultQuality(Quality quality)
+        public QualityItemDefinitionBuilder WithDefaultQuality(Products.Quality quality)
         {
             QualityDefinition.DefaultQuality = (S1ItemFramework.EQuality)quality;
             return this;
@@ -69,9 +69,9 @@ namespace S1API.Items.ItemBuilders
         /// Builds the item definition, registers it with the game's registry, and returns a wrapper.
         /// </summary>
         /// <returns>A wrapper around the created quality item definition.</returns>
-        public new QualityItemDefinition Build()
+        public new Quality.QualityItemDefinition Build()
         {
-            return (QualityItemDefinition)base.Build();
+            return (Quality.QualityItemDefinition)base.Build();
         }
 
         /// <summary>
@@ -84,10 +84,10 @@ namespace S1API.Items.ItemBuilders
         }
 
         /// <inheritdoc />
-        protected override StorableItemDefinition CreateWrapper(
+        protected override Storable.StorableItemDefinition CreateWrapper(
             S1ItemFramework.StorableItemDefinition definition)
         {
-            return new QualityItemDefinition(QualityDefinition);
+            return new Quality.QualityItemDefinition(QualityDefinition);
         }
     }
 }

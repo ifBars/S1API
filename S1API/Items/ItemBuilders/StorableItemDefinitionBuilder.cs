@@ -49,7 +49,7 @@ namespace S1API.Items.ItemBuilders
         /// Builds the item definition, registers it with the game's registry, and returns a wrapper.
         /// </summary>
         /// <returns>A wrapper around the created storable item definition.</returns>
-        public new StorableItemDefinition Build()
+        public new Storable.StorableItemDefinition Build()
         {
             return base.Build();
         }
@@ -365,7 +365,7 @@ namespace S1API.Items.ItemBuilders
         /// Builds the item definition, registers it with the game's registry, and returns a wrapper.
         /// </summary>
         /// <returns>A wrapper around the created storable item definition.</returns>
-        public virtual StorableItemDefinition Build()
+        public virtual Storable.StorableItemDefinition Build()
         {
             if (!_hasCustomStoredItem && Definition.StoredItem != null)
             {
@@ -398,10 +398,10 @@ namespace S1API.Items.ItemBuilders
         /// </summary>
         /// <param name="definition">The item definition to wrap.</param>
         /// <returns>>A wrapper around the given item definition.</returns>
-        protected virtual StorableItemDefinition CreateWrapper(
+        protected virtual Storable.StorableItemDefinition CreateWrapper(
             S1ItemFramework.StorableItemDefinition definition)
         {
-            return new StorableItemDefinition(definition);
+            return new Storable.StorableItemDefinition(definition);
         }
 
         private static S1StationFramework.StationItem GetOrCreateStationItemPrefab(

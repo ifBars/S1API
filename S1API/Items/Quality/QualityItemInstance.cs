@@ -3,16 +3,13 @@ using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1ItemFramework = ScheduleOne.ItemFramework;
 #endif
-using System;
-using S1API.Products;
 
-namespace S1API.Items
+namespace S1API.Items.Quality
 {
     /// <summary>
     /// Represents a quality item instance in the game world (usable item).
     /// Extends <see cref="ItemInstance"/> with quality information.
     /// </summary>
-    [Obsolete("Use S1API.Items.Quality.QualityItemInstance instead")]
     public class QualityItemInstance : ItemInstance
     {
         /// <summary>

@@ -27,7 +27,7 @@ namespace S1API.Items
     /// Builder for composing quality item definitions at runtime.
     /// Use fluent methods to configure item properties before calling <see cref="Build"/>
     /// </summary>
-    [Obsolete]
+    [Obsolete("Use S1API.Items.ItemBuilders.QualityItemDefinitionBuilder instead")]
     public sealed class QualityItemDefinitionBuilder
     {
         private static readonly Log Logger = new Log("QualityItemDefinitionBuilder");
@@ -263,7 +263,7 @@ namespace S1API.Items
         /// </summary>
         /// <param name="quality">The default quality to assign to items of this definition.</param>
         /// <returns>>The builder instance for fluent chaining.</returns>
-        public QualityItemDefinitionBuilder WithDefaultQuality(Quality quality)
+        public QualityItemDefinitionBuilder WithDefaultQuality(Products.Quality quality)
         {
             _definition.DefaultQuality = (S1ItemFramework.EQuality)quality;
             return this;

@@ -22,6 +22,7 @@ namespace S1API.Items
     /// Builder for composing additive definitions at runtime.
     /// Use fluent methods to configure additive properties before calling <see cref="Build"/>.
     /// </summary>
+    [Obsolete("Use S1API.Items.ItemBuilders.AdditiveDefinitionBuilder instead")]
     public sealed class AdditiveDefinitionBuilder
     {
         private static readonly Log Logger = new Log("AdditiveDefinitionBuilder");

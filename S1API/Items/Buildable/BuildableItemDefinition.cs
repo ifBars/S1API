@@ -1,13 +1,11 @@
-#if (IL2CPPMELON)
+﻿#if (IL2CPPMELON)
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1ItemFramework = ScheduleOne.ItemFramework;
 #endif
-
 using System;
-using UnityEngine;
 
-namespace S1API.Items
+namespace S1API.Items.Buildable
 {
     /// <summary>
     /// Represents a buildable item definition that can be placed in the game world.
@@ -17,8 +15,7 @@ namespace S1API.Items
     /// Use <see cref="BuildableItemCreator.CreateBuilder"/> to create new buildable items,
     /// or <see cref="BuildableItemCreator.CloneFrom"/> to create variants of existing items.
     /// </remarks>
-    [Obsolete]
-    public sealed class BuildableItemDefinition : StorableItemDefinition
+    public sealed class BuildableItemDefinition : Storable.StorableItemDefinition
     {
         /// <summary>
         /// INTERNAL: Wraps an existing native buildable item definition.

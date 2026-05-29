@@ -8,23 +8,22 @@ using S1Registry = ScheduleOne.Registry;
 using System;
 using S1API.Internal.Utils;
 
-namespace S1API.Items
+namespace S1API.Items.Quality
 {
     /// <summary>
     /// Provides convenient static methods for creating custom quality items.
     /// Use <see cref="CreateBuilder"/> for flexible configuration
     /// or <see cref="CloneFrom"/> for quick variants based on existing items.
     /// </summary>
-    [Obsolete("Use S1API.Items.Quality.QualityItemCreator instead")]
     public class QualityItemCreator
     {
         /// <summary>
         /// Creates a new builder for composing a quality item definition with full flexibility.
         /// Use fluent methods to configure the definition, then call Build() to register it.
         /// </summary>
-        public static QualityItemDefinitionBuilder CreateBuilder()
+        public static ItemBuilders.QualityItemDefinitionBuilder CreateBuilder()
         {
-            return new QualityItemDefinitionBuilder();
+            return new ItemBuilders.QualityItemDefinitionBuilder();
         }
         
         /// <summary>
@@ -33,7 +32,7 @@ namespace S1API.Items
         /// <param name="sourceItemId">The ID of the item to clone.</param>
         /// <returns>A builder pre-configured with the source item properties.</returns>
         /// <exception cref="ArgumentException">Thrown if the source item ID is not found or is not a quality item.</exception>
-        public static QualityItemDefinitionBuilder CloneFrom(string sourceItemId)
+        public static ItemBuilders.QualityItemDefinitionBuilder CloneFrom(string sourceItemId)
         {
             var sourceDefinition = S1Registry.GetItem(sourceItemId);
             if (sourceDefinition == null)
@@ -46,7 +45,7 @@ namespace S1API.Items
                 throw new ArgumentException($"Item '{sourceItemId}' is not an QualityItemDefinition", nameof(sourceItemId));
             }
 
-            return new QualityItemDefinitionBuilder(qualityDef);
+            return new ItemBuilders.QualityItemDefinitionBuilder(qualityDef);
         }
         
         /// <summary>
@@ -55,14 +54,14 @@ namespace S1API.Items
         /// <param name="source">The quality item definition to clone.</param>
         /// <returns>A builder pre-configured with the source item properties.</returns>
         /// <exception cref="ArgumentNullException">Thrown if the source definition is null.</exception>
-        public static QualityItemDefinitionBuilder CloneFrom(QualityItemDefinition source)
+        public static ItemBuilders.QualityItemDefinitionBuilder CloneFrom(QualityItemDefinition source)
         {
             if (source == null)
             {
                 throw new ArgumentNullException(nameof(source), "Source storable item definition cannot be null");
             }
 
-            return new QualityItemDefinitionBuilder(source.S1QualityDefinition);
+            return new ItemBuilders.QualityItemDefinitionBuilder(source.S1QualityDefinition);
         }
     }
 }
