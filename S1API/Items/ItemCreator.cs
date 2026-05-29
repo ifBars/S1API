@@ -1,4 +1,14 @@
+using System;
+using S1API.Internal.Utils;
+using S1API.Leveling;
 using UnityEngine;
+#if (IL2CPPMELON)
+using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
+using S1Registry = Il2CppScheduleOne.Registry;
+#elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
+using S1ItemFramework = ScheduleOne.ItemFramework;
+using S1Registry = ScheduleOne.Registry;
+#endif
 
 namespace S1API.Items
 {
@@ -31,6 +41,44 @@ namespace S1API.Items
         }
 
         /// <summary>
+        /// Creates a new storable item builder by cloning an existing item by ID.
+        /// </summary>
+        /// <param name="sourceItemId">The ID of the item to clone.</param>
+        /// <returns>A builder pre-configured with the source item properties.</returns>
+        /// <exception cref="ArgumentException">Thrown if the source item ID is not found or is not a storable item.</exception>
+        public static StorableItemDefinitionBuilder CloneFrom(string sourceItemId)
+        {
+            var sourceDefinition = S1Registry.GetItem(sourceItemId);
+            if (sourceDefinition == null)
+            {
+                throw new ArgumentException($"Source item with ID '{sourceItemId}' not found in registry", nameof(sourceItemId));
+            }
+
+            if (!CrossType.Is(sourceDefinition, out S1ItemFramework.StorableItemDefinition storableDef))
+            {
+                throw new ArgumentException($"Item '{sourceItemId}' is not an StorableItemDefinition", nameof(sourceItemId));
+            }
+
+            return new StorableItemDefinitionBuilder(storableDef);
+        }
+
+        /// <summary>
+        /// Creates a new storable item builder by cloning an existing storable item wrapper.
+        /// </summary>
+        /// <param name="source">The storable item definition to clone.</param>
+        /// <returns>A builder pre-configured with the source item properties.</returns>
+        /// <exception cref="ArgumentNullException">Thrown if the source definition is null.</exception>
+        public static StorableItemDefinitionBuilder CloneFrom(StorableItemDefinition source)
+        {
+            if (source == null)
+            {
+                throw new ArgumentNullException(nameof(source), "Source storable item definition cannot be null");
+            }
+
+            return new StorableItemDefinitionBuilder(source.S1StorableItemDefinition);
+        }
+
+        /// <summary>
         /// Creates an item with common parameters in a single call.
         /// The item is automatically registered with the game's registry.
         /// </summary>
@@ -42,6 +90,8 @@ namespace S1API.Items
         /// <param name="basePurchasePrice">Base price when buying from shops (default: 10).</param>
         /// <param name="resellMultiplier">Fraction of purchase price recovered when selling (default: 0.5).</param>
         /// <param name="legalStatus">Whether the item is legal or illegal (default: Legal).</param>
+        /// <param name="requiresLevelToPurchase">Whether purchasing the item requires a certain player rank (default: false).</param>
+        /// <param name="requiredRank">The player rank required to purchase the item, if applicable (default: null).</param>
         /// <param name="icon">Optional sprite to use as the item icon.</param>
         /// <param name="equippable">Optional equippable component to attach.</param>
         /// <returns>A wrapper around the created item definition.</returns>
@@ -66,6 +116,8 @@ namespace S1API.Items
             float basePurchasePrice = 10f,
             float resellMultiplier = 0.5f,
             LegalStatus legalStatus = LegalStatus.Legal,
+            bool requiresLevelToPurchase = false,
+            FullRank? requiredRank = null,
             Sprite icon = null,
             Equippable equippable = null)
         {
@@ -73,6 +125,7 @@ namespace S1API.Items
                 .WithBasicInfo(id, name, description, category)
                 .WithStackLimit(stackLimit)
                 .WithPricing(basePurchasePrice, resellMultiplier)
+                .WithRequiredRank(requiredRank)
                 .WithLegalStatus(legalStatus);
 
             if (icon != null)
