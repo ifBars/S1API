@@ -64,6 +64,10 @@ namespace S1API.Items
                 return new AdditiveDefinition(additiveDefinition);
 
             if (CrossType.Is(itemDefinition,
+                    out S1ItemFramework.QualityItemDefinition qualityItemDefinition))
+                return new QualityItemDefinition(qualityItemDefinition);
+
+            if (CrossType.Is(itemDefinition,
                     out S1ItemFramework.StorableItemDefinition storableItemDefinition))
                 return new StorableItemDefinition(storableItemDefinition);
 
