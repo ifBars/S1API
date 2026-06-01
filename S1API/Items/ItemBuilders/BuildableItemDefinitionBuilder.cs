@@ -17,7 +17,7 @@ namespace S1API.Items.ItemBuilders
     /// Use fluent methods to configure buildable item properties before calling <see cref="Build"/>.
     /// </summary>
     public class BuildableItemDefinitionBuilder
-        : StorableItemDefinitionBuilder<BuildableItemDefinitionBuilder>
+        : StorableItemDefinitionBuilderBase<BuildableItemDefinitionBuilder>
     {
         private S1ItemFramework.BuildableItemDefinition BuildableDefinition =>
             CrossType.As<S1ItemFramework.BuildableItemDefinition>(Definition);

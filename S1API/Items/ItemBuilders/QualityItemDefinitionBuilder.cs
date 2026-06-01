@@ -14,7 +14,7 @@ namespace S1API.Items.ItemBuilders
     /// Use fluent methods to configure item properties before calling <see cref="Build"/>
     /// </summary>
     public sealed class QualityItemDefinitionBuilder
-        : StorableItemDefinitionBuilder<QualityItemDefinitionBuilder>
+        : StorableItemDefinitionBuilderBase<QualityItemDefinitionBuilder>
     {
         private S1ItemFramework.QualityItemDefinition QualityDefinition =>
             CrossType.As<S1ItemFramework.QualityItemDefinition>(Definition);

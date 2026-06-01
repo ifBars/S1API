@@ -17,7 +17,7 @@ namespace S1API.Items
     /// Builder for composing buildable item definitions at runtime.
     /// Use fluent methods to configure buildable item properties before calling <see cref="Build"/>.
     /// </summary>
-    [Obsolete]
+    [Obsolete("Use S1API.Items.ItemBuilders.BuildableItemDefinitionBuilder instead")]
     public sealed class BuildableItemDefinitionBuilder
     {
         private readonly S1ItemFramework.BuildableItemDefinition _definition;

@@ -17,7 +17,7 @@ namespace S1API.Items
     /// Provides convenient static methods for creating custom clothing items.
     /// Use <see cref="CreateBuilder()"/> for flexible configuration or <see cref="CloneFrom(string)"/> for variants.
     /// </summary>
-    [Obsolete]
+    [Obsolete("Use S1API.Items.Clothing.ClothingItemCreator instead")]
     public static class ClothingItemCreator
     {
         private static readonly Log Logger = new Log("ClothingItemCreator");

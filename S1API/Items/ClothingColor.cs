@@ -6,7 +6,7 @@ namespace S1API.Items
     /// Represents available clothing colors.
     /// Mirrors ScheduleOne.Clothing.EClothingColor.
     /// </summary>
-    [Obsolete]
+    [Obsolete("Use S1API.Items.Clothing.ClothingColor instead")]
     public enum ClothingColor
     {
         White = 0,

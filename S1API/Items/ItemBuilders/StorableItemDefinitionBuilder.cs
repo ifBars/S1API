@@ -30,7 +30,7 @@ namespace S1API.Items.ItemBuilders
     /// The base ItemDefinition class is never used directly in the game.
     /// </remarks>
     public sealed class StorableItemDefinitionBuilder
-        : StorableItemDefinitionBuilder<StorableItemDefinitionBuilder>
+        : StorableItemDefinitionBuilderBase<StorableItemDefinitionBuilder>
     {
         /// <inheritdoc/>
         internal StorableItemDefinitionBuilder(
@@ -56,7 +56,7 @@ namespace S1API.Items.ItemBuilders
     }
 
     /// <summary>
-    /// State class for managing shared resources and caches used by <see cref="StorableItemDefinitionBuilder{TSelf}"/>.
+    /// State class for managing shared resources and caches used by <see cref="StorableItemDefinitionBuilderBase{TSelf}"/>.
     /// </summary>
     internal static class StorableItemDefinitionBuilderState
     {
@@ -71,11 +71,11 @@ namespace S1API.Items.ItemBuilders
     }
 
     /// <summary>
-    /// Generic base builder for composing item definitions at runtime, with fluent methods returning the correct subclass type.
+    /// INTERNAL: Generic base builder for composing item definitions at runtime, with fluent methods returning the correct subclass type.
     /// </summary>
     /// <typeparam name="TSelf">The concrete builder type being implemented (e.g., StorableItemDefinitionBuilder).</typeparam>
-    public abstract class StorableItemDefinitionBuilder<TSelf>
-        where TSelf : StorableItemDefinitionBuilder<TSelf>
+    public abstract class StorableItemDefinitionBuilderBase<TSelf>
+        where TSelf : StorableItemDefinitionBuilderBase<TSelf>
     {
         private static Log Logger => StorableItemDefinitionBuilderState.Logger;
         private static object StationItemGate => StorableItemDefinitionBuilderState.StationItemGate;
@@ -105,7 +105,7 @@ namespace S1API.Items.ItemBuilders
         /// INTERNAL: Creates a new builder instance with a fresh StorableItemDefinition.
         /// Only ItemCreator can instantiate this.
         /// </summary>
-        internal StorableItemDefinitionBuilder(
+        internal StorableItemDefinitionBuilderBase(
             Func<S1ItemFramework.StorableItemDefinition>? definitionFactory = null)
         {
             Definition = definitionFactory != null
@@ -123,11 +123,13 @@ namespace S1API.Items.ItemBuilders
         /// </summary>
         /// <param name="source">The existing item definition to clone properties from.</param>
         /// <param name="definitionFactory">Optional factory function to create the definition instance. If null, a default StorableItemDefinition will be created.</param>
-        internal StorableItemDefinitionBuilder(
+        internal StorableItemDefinitionBuilderBase(
             S1ItemFramework.StorableItemDefinition source,
             Func<S1ItemFramework.StorableItemDefinition>? definitionFactory = null)
             : this(definitionFactory)
         {
+            // Intentionally virtual - Overrides should operate only
+            // on fields initialized by chained constructor i.e. Definition
             CopyPropertiesFrom(source);
         }
 
@@ -365,7 +367,10 @@ namespace S1API.Items.ItemBuilders
         /// Builds the item definition, registers it with the game's registry, and returns a wrapper.
         /// </summary>
         /// <returns>A wrapper around the created storable item definition.</returns>
-        public virtual Storable.StorableItemDefinition Build()
+        /// <remarks>
+        /// Designated virtual, usually shadowed in subclasses due to different return type.
+        /// </remarks>
+        protected virtual Storable.StorableItemDefinition Build()
         {
             if (!_hasCustomStoredItem && Definition.StoredItem != null)
             {
@@ -387,6 +392,9 @@ namespace S1API.Items.ItemBuilders
         /// INTERNAL: Builds and returns the raw game item definition without registering.
         /// Used internally by S1API. Modders should use <see cref="Build"/> instead.
         /// </summary>
+        /// <remarks>
+        /// Designated virtual, usually shadowed in subclasses due to different return type.
+        /// </remarks>
         internal virtual S1ItemFramework.StorableItemDefinition BuildInternal()
         {
             return Definition;

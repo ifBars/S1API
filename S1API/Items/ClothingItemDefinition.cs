@@ -19,7 +19,7 @@ namespace S1API.Items
     /// Use <see cref="ClothingItemCreator.CreateBuilder()"/> to create new clothing items,
     /// or <see cref="ClothingItemCreator.CloneFrom(string)"/> to create variants of existing items.
     /// </remarks>
-    [Obsolete]
+    [Obsolete("Use S1API.Items.Clothing.ClothingItemDefinition instead")]
     public sealed class ClothingItemDefinition : StorableItemDefinition
     {
         /// <summary>

@@ -11,7 +11,7 @@ namespace S1API.Items
     /// Represents a clothing item instance in the game world (physical clothing you own).
     /// Extends <see cref="ItemInstance"/> with color information.
     /// </summary>
-    [Obsolete]
+    [Obsolete("Use S1API.Items.Clothing.ClothingItemInstance instead")]
     public class ClothingItemInstance : ItemInstance
     {
         /// <summary>

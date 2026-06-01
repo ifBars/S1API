@@ -23,7 +23,7 @@ namespace S1API.Items.ItemBuilders
     /// Use fluent methods to configure additive properties before calling <see cref="Build"/>.
     /// </summary>
     public sealed class AdditiveDefinitionBuilder
-        : StorableItemDefinitionBuilder<AdditiveDefinitionBuilder>
+        : StorableItemDefinitionBuilderBase<AdditiveDefinitionBuilder>
     {
         private static readonly Log Logger = new Log("AdditiveDefinitionBuilder");
 

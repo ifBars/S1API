@@ -6,7 +6,7 @@ namespace S1API.Items
     /// Represents the slot where a clothing item can be equipped.
     /// Mirrors ScheduleOne.Clothing.EClothingSlot.
     /// </summary>
-    [Obsolete]
+    [Obsolete("Use S1API.Items.Clothing.ClothingSlot instead")]
     public enum ClothingSlot
     {
         /// <summary>Feet slot (shoes, boots).</summary>

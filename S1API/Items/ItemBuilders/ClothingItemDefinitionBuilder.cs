@@ -27,7 +27,7 @@ namespace S1API.Items.ItemBuilders
     /// Use fluent methods to configure clothing properties before calling <see cref="Build"/>.
     /// </summary>
     public class ClothingItemDefinitionBuilder
-        : StorableItemDefinitionBuilder<ClothingItemDefinitionBuilder>
+        : StorableItemDefinitionBuilderBase<ClothingItemDefinitionBuilder>
     {
         private S1Clothing.ClothingDefinition ClothingDefinition =>
             CrossType.As<S1Clothing.ClothingDefinition>(Definition);

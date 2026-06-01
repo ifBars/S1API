@@ -26,7 +26,7 @@ namespace S1API.Items
     /// Builder for composing clothing item definitions at runtime.
     /// Use fluent methods to configure clothing properties before calling <see cref="Build"/>.
     /// </summary>
-    [Obsolete]
+    [Obsolete("Use S1API.Items.ItemBuilders.ClothingItemDefinitionBuilder instead")]
     public sealed class ClothingItemDefinitionBuilder
     {
         private static readonly Log Logger = new Log("ClothingItemDefinitionBuilder");

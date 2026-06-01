@@ -17,7 +17,7 @@ namespace S1API.Items
     /// Use <see cref="BuildableItemCreator.CreateBuilder"/> to create new buildable items,
     /// or <see cref="BuildableItemCreator.CloneFrom"/> to create variants of existing items.
     /// </remarks>
-    [Obsolete]
+    [Obsolete("Use S1API.Items.Buildable.BuildableItemDefinition instead")]
     public sealed class BuildableItemDefinition : StorableItemDefinition
     {
         /// <summary>
