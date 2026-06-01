@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using HarmonyLib;
+using MelonLoader;
 using Newtonsoft.Json;
 using S1API.Internal.Abstraction;
 using S1API.Saveables;
@@ -71,7 +72,7 @@ namespace S1API.Internal.Patches
 			}
 		}
 
-		private static string lastLoadedGameFolderPath = null;
+		private static bool sameSession = false;
 
 		/// <summary>
 		/// Loads saveables marked with BeforeBaseGame load order BEFORE base game loaders run.
@@ -89,12 +90,9 @@ namespace S1API.Internal.Patches
 				if (lm == null || string.IsNullOrEmpty(lm.LoadedGameFolderPath))
 					return;
 
-				// Only run once per load cycle by checking if the folder path has changed
-				if (lastLoadedGameFolderPath == lm.LoadedGameFolderPath)
-					return;
-
-				lastLoadedGameFolderPath = lm.LoadedGameFolderPath;
-
+				// QueueLoadRequest may be called multiple times before loading into a save
+				// this flag makes sure we only load once - it's cleared by onLoadComplete
+				if (sameSession) return;
 				string basePath = Path.Combine(lm.LoadedGameFolderPath, "Modded", "Saveables");
 				
 				foreach (var saveable in SaveableAutoRegistry.GetRegisteredSaveables())
@@ -129,6 +127,23 @@ namespace S1API.Internal.Patches
 						EventHelper.AddListener(InitializeOnLoadComplete, lm.onLoadComplete);
 					}
 				}
+				
+				// Lock subsequent calls to this prefix until load completes to avoid loading multiple times in the same session
+				sameSession = true;
+				// Clear the lock once the game is loaded to allow loading again in future sessions without restarting the game
+				void ClearLockOnLoadComplete()
+				{
+				    try
+				    {
+					    EventHelper.RemoveListener(ClearLockOnLoadComplete, lm.onLoadComplete);
+					    sameSession = false;
+				    }
+				    catch (Exception e)
+				    {
+					    try { MelonLoader.MelonLogger.Warning($"[Saveables] ClearLockOnLoadComplete failed: {e.Message}\n{e.StackTrace}"); } catch { }
+				    }
+				}
+				EventHelper.AddListener(ClearLockOnLoadComplete, lm.onLoadComplete);
 			}
 			catch (Exception e)
 			{
