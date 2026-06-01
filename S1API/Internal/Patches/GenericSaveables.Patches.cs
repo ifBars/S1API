@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using HarmonyLib;
-using MelonLoader;
 using Newtonsoft.Json;
 using S1API.Internal.Abstraction;
 using S1API.Saveables;
@@ -78,7 +77,7 @@ namespace S1API.Internal.Patches
 		/// Loads saveables marked with BeforeBaseGame load order BEFORE base game loaders run.
 		/// This runs as a prefix to LoadManager.QueueLoadRequest on the first LoadRequest creation,
 		/// which happens right before base game loaders start processing.
-		/// Uses the LoadedGameFolderPath to detect new load cycles.
+		/// Uses a session flag cleared by onLoadComplete to detect new load cycles.
 		/// </summary>
 		[HarmonyPatch(typeof(S1Persistence.LoadManager), nameof(S1Persistence.LoadManager.QueueLoadRequest))]
 		[HarmonyPrefix]
