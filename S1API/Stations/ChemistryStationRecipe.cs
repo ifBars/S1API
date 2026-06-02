@@ -23,17 +23,21 @@ namespace S1API.Stations
             string recipeId,
             string title,
             int cookTimeMinutes,
+            ChemistryStationRecipeTemperature temperature,
             Color finalLiquidColor,
             ChemistryStationRecipeProduct product,
-            IReadOnlyList<ChemistryStationRecipeIngredient> ingredients)
+            IReadOnlyList<ChemistryStationRecipeIngredient> ingredients,
+            QualityCalculationMethod qualityCalculationMethod)
         {
             S1StationRecipe = stationRecipe;
             RecipeID = recipeId;
             Title = title;
             CookTimeMinutes = cookTimeMinutes;
+            Temperature = temperature;
             FinalLiquidColor = finalLiquidColor;
             Product = product;
             Ingredients = ingredients;
+            QualityCalculationMethod = qualityCalculationMethod;
         }
 
         /// <summary>
@@ -50,6 +54,11 @@ namespace S1API.Stations
         /// Cook time in minutes.
         /// </summary>
         public int CookTimeMinutes { get; }
+        
+        /// <summary>
+        /// Temperatures required by the recipe.
+        /// </summary>
+        public ChemistryStationRecipeTemperature Temperature { get; }
 
         /// <summary>
         /// UI liquid color for the final product.
@@ -66,6 +75,11 @@ namespace S1API.Stations
         /// Each group can have multiple acceptable item IDs (variants).
         /// </summary>
         public IReadOnlyList<ChemistryStationRecipeIngredient> Ingredients { get; }
+        
+        /// <summary>
+        /// Calculation method used when determining resulting product's quality.
+        /// </summary>
+        public QualityCalculationMethod QualityCalculationMethod { get; }
 
         /// <summary>
         /// Returns the native product item definition.
@@ -115,5 +129,39 @@ namespace S1API.Stations
         /// Required quantity for this ingredient group.
         /// </summary>
         public int Quantity { get; }
+    }
+
+    /// <summary>
+    /// Temperature ranges for the recipe, used mainly in the cooking minigame.
+    /// </summary>
+    public sealed class ChemistryStationRecipeTemperature
+    {
+        internal ChemistryStationRecipeTemperature(float cookTemperature, float tolerance)
+        {
+            CookTemperature = cookTemperature;
+            CookTemperatureTolerance = tolerance;
+        }
+        
+        /// <summary>
+        /// Target cook temperature.
+        /// </summary>
+        public float CookTemperature { get; }
+        
+        /// <summary>
+        /// Tolerance for cook temperature.
+        /// </summary>
+        public float CookTemperatureTolerance { get; }
+        
+        /// <summary>
+        /// Lower bound of the acceptable cook temperature range (inclusive).
+        /// Used in the minigame - lower values will not start the recipe.
+        /// </summary>
+        public float CookTemperatureLowerBound => CookTemperature - CookTemperatureTolerance;
+        
+        /// <summary>
+        /// Upper bound of the acceptable cook temperature range (inclusive).
+        /// Used in the minigame - higher values will cause the recipe to fail.
+        /// </summary>
+        public float CookTemperatureUpperBound => CookTemperature + CookTemperatureTolerance;
     }
 }

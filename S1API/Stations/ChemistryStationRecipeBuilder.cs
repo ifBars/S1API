@@ -22,11 +22,14 @@ namespace S1API.Stations
     {
         private string? _title;
         private int _cookTimeMinutes = 180;
+        private float _cookTemperature = 250f;
+        private float _cookTemperatureTolerance = 25f;
         private Color _finalLiquidColor = Color.white;
 
         private string? _productItemId;
         private int _productQuantity = 1;
         private S1ItemFramework.ItemDefinition? _productItem;
+        private QualityCalculationMethod _method = QualityCalculationMethod.Additive;
 
         private readonly List<IngredientSpec> _ingredients = new List<IngredientSpec>();
 
@@ -128,6 +131,30 @@ namespace S1API.Stations
         }
 
         /// <summary>
+        /// Sets the quality calculation method.
+        /// </summary>
+        public ChemistryStationRecipeBuilder WithCalculationMethod(QualityCalculationMethod method)
+        {
+            _method = method;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the cook temperature and tolerance.
+        /// </summary>
+        public ChemistryStationRecipeBuilder WithTemperature(float cookTemperature, float tolerance)
+        {
+            if (cookTemperature <= 0)
+                throw new ArgumentOutOfRangeException(nameof(cookTemperature), "Cook temperature must be > 0.");
+            if (tolerance < 0)
+                throw new ArgumentOutOfRangeException(nameof(tolerance), "Cook temperature tolerance cannot be negative.");
+
+            _cookTemperature = cookTemperature;
+            _cookTemperatureTolerance = tolerance;
+            return this;
+        }
+
+        /// <summary>
         /// Builds and auto-registers the recipe with S1API.
         /// </summary>
         public ChemistryStationRecipe Build()
@@ -147,9 +174,11 @@ namespace S1API.Stations
                 recipeId: recipeId,
                 title: title,
                 cookTimeMinutes: _cookTimeMinutes,
+                temperature: new ChemistryStationRecipeTemperature(_cookTemperature, _cookTemperatureTolerance),
                 finalLiquidColor: _finalLiquidColor,
                 product: new ChemistryStationRecipeProduct(_productItemId!, _productQuantity),
-                ingredients: BuildIngredientWrappers());
+                ingredients: BuildIngredientWrappers(),
+                qualityCalculationMethod: _method);
 
             return ChemistryStationRecipes.Register(wrapper);
         }
@@ -167,7 +196,10 @@ namespace S1API.Stations
             recipe.Unlocked = true;
             recipe.RecipeTitle = string.IsNullOrWhiteSpace(_title) ? _productItemId! : _title!;
             recipe.CookTime_Mins = _cookTimeMinutes;
+            recipe.CookTemperature = _cookTemperature;
+            recipe.CookTemperatureTolerance = _cookTemperatureTolerance;
             recipe.FinalLiquidColor = _finalLiquidColor;
+            // Other calculation methods do not exist in base game, so we implement them ourselves later
             recipe.QualityCalculationMethod = S1StationFramework.StationRecipe.EQualityCalculationMethod.Additive;
 
             recipe.Product = new S1StationFramework.StationRecipe.ItemQuantity
