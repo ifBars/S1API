@@ -76,8 +76,9 @@ namespace S1API.Internal.Patches
 		/// <summary>
 		/// Loads saveables marked with BeforeBaseGame load order BEFORE base game loaders run.
 		/// This runs as a prefix to LoadManager.QueueLoadRequest on the first LoadRequest creation,
-		/// which happens right before base game loaders start processing.
-		/// Uses a session flag cleared by onLoadComplete to detect new load cycles.
+		/// before base game loaders start processing.
+		/// Uses an internal sameSession flag to detect new load cycles. sameSession is reset by
+		/// onLoadComplete so subsequent load cycles can be detected.
 		/// </summary>
 		[HarmonyPatch(typeof(S1Persistence.LoadManager), nameof(S1Persistence.LoadManager.QueueLoadRequest))]
 		[HarmonyPrefix]
