@@ -279,10 +279,13 @@ namespace S1API.Internal.Patches
         private static bool UseCustomCalcMethods(S1StationFramework.StationRecipe __instance,
             ref S1ItemFramework.EQuality __result)
         {
-            // Exit early out of patch if instance is null
+            // Exit early out of patch if instance or recipeID is null
             if (__instance == null) return true;
+            string? instanceRecipeId;
+            try { instanceRecipeId = __instance.RecipeID; } catch { instanceRecipeId = null; }
+            if (string.IsNullOrWhiteSpace(instanceRecipeId)) return true;
             var currentAddedRecipe =
-                ChemistryStationRecipes.GetAll().FirstOrDefault(r => r.RecipeID == __instance.RecipeID);
+                ChemistryStationRecipes.GetAll().FirstOrDefault(r => instanceRecipeId == __instance.RecipeID);
             // If this recipe is not one of ours, exit early from patch
             if (currentAddedRecipe == null) return true;
             // Use default quality calculation for non-absolute methods
