@@ -4,11 +4,16 @@ using System.Reflection;
 using HarmonyLib;
 using S1API.Console;
 using S1API.Internal.Utils;
+using UnityEngine;
+using Object = UnityEngine.Object;
 #if (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Console = ScheduleOne.Console;
-
+using S1CommandListScreen = ScheduleOne.CommandListScreen;
+using TMPro;
 #elif (IL2CPPMELON)
 using S1Console = Il2CppScheduleOne.Console;
+using S1CommandListScreen = Il2CppScheduleOne.CommandListScreen;
+using Il2CppTMPro;
 #endif
 
 #if (IL2CPPMELON || IL2CPPBEPINEX)
@@ -35,6 +40,7 @@ namespace S1API.Internal.Patches
             if (__instance == null)
                 return;
 
+            _addedCommandsToList.Clear();
             var commandTypes = ReflectionUtils.GetDerivedClasses<BaseConsoleCommand>();
             foreach (var type in commandTypes)
             {
@@ -134,5 +140,64 @@ namespace S1API.Internal.Patches
             }
         }
 #endif
+
+#if (MONOMELON || MONOBEPINEX)
+        private static FieldInfo? _commandEntriesField;
+#endif
+
+        /// <summary>
+        /// Custom commands that were added to command list screen, stored here to prevent duplicate additions.
+        /// </summary>
+        private static HashSet<string> _addedCommandsToList = new();
+
+        /// <summary>
+        /// Adds custom commands to command list screen.
+        /// </summary>
+        [HarmonyPatch(typeof(S1CommandListScreen), "Start")]
+        [HarmonyPostfix]
+        private static void AddCustomCommandEntries(S1CommandListScreen __instance)
+        {
+            try
+            {
+                if (__instance == null || __instance.CommandEntryPrefab == null ||
+                    __instance.CommandEntryContainer == null)
+                    return;
+#if (MONOMELON || MONOBEPINEX)
+                _commandEntriesField ??= 
+                    typeof(S1CommandListScreen)
+                        .GetField("commandEntries", BindingFlags.NonPublic | BindingFlags.Instance);
+                var commandEntries = _commandEntriesField?.GetValue(__instance) as List<RectTransform>;
+#elif (IL2CPPMELON || IL2CPPBEPINEX)
+                var commandEntries = __instance?.commandEntries;
+#endif
+
+                foreach (var commandKey in CustomConsoleRegistry.registry.Keys)
+                {
+                    try
+                    {
+                        if (_addedCommandsToList.Contains(commandKey))
+                            continue;
+                        var rt = Object.Instantiate(__instance.CommandEntryPrefab, __instance.CommandEntryContainer);
+                        rt.Find("Command").GetComponent<TextMeshProUGUI>().text =
+                            CustomConsoleRegistry.registry[commandKey].CommandWord;
+                        rt.Find("Description").GetComponent<TextMeshProUGUI>().text =
+                            CustomConsoleRegistry.registry[commandKey].CommandDescription;
+                        rt.Find("Example").GetComponent<TextMeshProUGUI>().text =
+                            CustomConsoleRegistry.registry[commandKey].ExampleUsage;
+
+                        commandEntries?.Add(rt);
+                        _addedCommandsToList.Add(commandKey);
+                    }
+                    catch (Exception e)
+                    {
+                        Logger.Warning($"[Console] Failed to add command '{commandKey}' to command list screen: {e.Message}");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Logger.Warning($"[Console] Failed to add custom commands to command list screen: {e.Message}");
+            }
+        }
     }
 }
