@@ -648,6 +648,12 @@ namespace S1API.PhoneApp
             }
         }
 
+        private void OnDestroy()
+        {
+            // Destroy phone app when button handler is destroyed
+            phoneApp?.DestroyInternal();
+        }
+
         private bool IsHoveringButton()
         {
             // This is the same logic as native App<T>.IsHoveringButton()
