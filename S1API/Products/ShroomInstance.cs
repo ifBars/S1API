@@ -37,7 +37,7 @@ namespace S1API.Products
         /// Gets the shroom-specific definition for this instance.
         /// </summary>
         public new ShroomDefinition Definition =>
-            new ShroomDefinition(S1ShroomInstance.Definition as S1Product.ShroomDefinition);
+            new ShroomDefinition(CrossType.As<S1Product.ShroomDefinition>(S1ShroomInstance.Definition));
 
         /// <summary>
         /// Gets the display name of the shroom instance.

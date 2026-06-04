@@ -58,7 +58,8 @@ namespace S1API.Products
         /// <summary>
         /// Gets the definition of the product associated with this instance.
         /// </summary>
-        public ProductDefinition Definition => new ProductDefinition(S1ProductInstance.Definition);
+        public ProductDefinition Definition =>
+            new ProductDefinition(CrossType.As<S1Product.ProductDefinition>(S1ProductInstance.Definition));
 
         /// <summary>
         /// Gets the list of properties associated with the product definition.
