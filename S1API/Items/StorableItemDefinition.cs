@@ -4,6 +4,7 @@ using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1ItemFramework = ScheduleOne.ItemFramework;
 #endif
 
+using S1API.Leveling;
 using UnityEngine;
 
 namespace S1API.Items
@@ -56,6 +57,24 @@ namespace S1API.Items
         /// </summary>
         public bool IsUnlocked =>
             S1StorableItemDefinition.IsUnlocked;
+
+        /// <summary>
+        /// Whether purchasing this item requires the player to be at or above a certain level.
+        /// </summary>
+        public bool RequiresLevelToPurchase
+        {
+            get => S1StorableItemDefinition.RequiresLevelToPurchase;
+            set => S1StorableItemDefinition.RequiresLevelToPurchase = value;
+        }
+
+        /// <summary>
+        /// The required player level to purchase this item, if <see cref="RequiresLevelToPurchase"/> is true.
+        /// </summary>
+        public FullRank RequiredRank
+        {
+            get => FullRank.FromNative(S1StorableItemDefinition.RequiredRank);
+            set => S1StorableItemDefinition.RequiredRank = value.ToNative();
+        }
 
         /// <summary>
         /// Gets whether this item has a StationItem assigned (used by station/minigame tasks, e.g., Chemistry Station).

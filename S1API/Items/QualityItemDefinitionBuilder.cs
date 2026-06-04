@@ -1,4 +1,4 @@
-#if (IL2CPPMELON)
+﻿#if (IL2CPPMELON)
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1CoreItemFramework = Il2CppScheduleOne.Core.Items.Framework;
 using S1Levelling = Il2CppScheduleOne.Levelling;
@@ -17,39 +17,36 @@ using S1Storage = ScheduleOne.Storage;
 using System;
 using System.Collections.Generic;
 using S1API.Logging;
+using S1API.Products;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
 namespace S1API.Items
 {
     /// <summary>
-    /// Builder for composing item definitions at runtime.
-    /// Use fluent methods to configure item properties before calling <see cref="Build"/>.
+    /// Builder for composing quality item definitions at runtime.
+    /// Use fluent methods to configure item properties before calling <see cref="Build"/>
     /// </summary>
-    /// <remarks>
-    /// All items in Schedule One are StorableItemDefinition (or subclasses thereof).
-    /// The base ItemDefinition class is never used directly in the game.
-    /// </remarks>
-    public sealed class StorableItemDefinitionBuilder
+    public sealed class QualityItemDefinitionBuilder
     {
-        private static readonly Log Logger = new Log("StorableItemDefinitionBuilder");
+        private static readonly Log Logger = new Log("QualityItemDefinitionBuilder");
         private static readonly object StationItemGate = new object();
         private static readonly Dictionary<int, S1StationFramework.StationItem> StationItemCache = new Dictionary<int, S1StationFramework.StationItem>();
         private static readonly HashSet<int> WarnedStationItemModuleMissing = new HashSet<int>();
         private static GameObject _stationItemRoot;
 
-        private readonly S1ItemFramework.StorableItemDefinition _definition;
+        private readonly S1ItemFramework.QualityItemDefinition _definition;
         private readonly GameObject _storedItemPlaceholder;
         private bool _hasCustomStoredItem;
 
         /// <summary>
-        /// INTERNAL: Creates a new builder instance with a fresh StorableItemDefinition.
-        /// Only ItemCreator can instantiate this.
+        /// INTERNAL: Creates a new builder instance with a fresh QualityItemDefinition.
+        /// Only QualityItemCreator can instantiate this.
         /// </summary>
-        internal StorableItemDefinitionBuilder()
+        internal QualityItemDefinitionBuilder()
         {
-            _definition = ScriptableObject.CreateInstance<S1ItemFramework.StorableItemDefinition>();
-
+            _definition = ScriptableObject.CreateInstance<S1ItemFramework.QualityItemDefinition>();
+            
             // Set defaults
             _definition.StackLimit = 10;
             _definition.BasePurchasePrice = 10f;
@@ -60,6 +57,7 @@ namespace S1API.Items
             _definition.UsableInFilters = true;
             _definition.RequiresLevelToPurchase = false;
             _definition.RequiredRank = new S1Levelling.FullRank(S1Levelling.ERank.Street_Rat, 1);
+            _definition.DefaultQuality = S1ItemFramework.EQuality.Standard;
 
             // Provide a minimal StoredItem placeholder so the field is never null in tooling/inspectors.
             _storedItemPlaceholder = new GameObject("S1API_DefaultStoredItem");
@@ -71,14 +69,14 @@ namespace S1API.Items
         }
 
         /// <summary>
-        /// INTERNAL: Creates a builder instance initialized by cloning an existing storable item definition.
-        /// Only ItemCreator can instantiate this.
+        /// INTERNAL: Creates a builder instance initialized by cloning an existing quality item definition.
+        /// Only QualityItemCreator can instantiate this.
         /// </summary>
-        /// <param name="source">The source definition to clone properties from.</param>
-        internal StorableItemDefinitionBuilder(S1ItemFramework.StorableItemDefinition source)
+        /// <param name="source"></param>
+        internal QualityItemDefinitionBuilder(S1ItemFramework.QualityItemDefinition source)
         {
-            _definition = ScriptableObject.CreateInstance<S1ItemFramework.StorableItemDefinition>();
-
+            _definition = ScriptableObject.CreateInstance<S1ItemFramework.QualityItemDefinition>();
+            
             // Provide a minimal StoredItem placeholder so the field is never null in tooling/inspectors.
             _storedItemPlaceholder = new GameObject("S1API_DefaultStoredItem");
             _storedItemPlaceholder.SetActive(false);
@@ -86,19 +84,19 @@ namespace S1API.Items
             Object.DontDestroyOnLoad(_storedItemPlaceholder);
             var storedItemComponent = _storedItemPlaceholder.AddComponent<S1Storage.StoredItem>();
             _definition.StoredItem = storedItemComponent;
-
+            
             CopyPropertiesFrom(source);
         }
 
         /// <summary>
         /// Sets the basic information for the item.
         /// </summary>
-        /// <param name="id">Unique identifier for the item (e.g., "my_custom_tool").</param>
+        /// <param name="id">Unique identifier for the item (e.g., "my_custom_item").</param>
         /// <param name="name">Display name shown in UI.</param>
         /// <param name="description">Item description shown in tooltips.</param>
         /// <param name="category">Item category for inventory organization.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
-        public StorableItemDefinitionBuilder WithBasicInfo(string id, string name, string description, ItemCategory category)
+        public QualityItemDefinitionBuilder WithBasicInfo(string id, string name, string description, ItemCategory category)
         {
             _definition.ID = id;
             _definition.Name = name;
@@ -123,7 +121,7 @@ namespace S1API.Items
         /// </summary>
         /// <param name="limit">Maximum quantity per inventory slot (1-999).</param>
         /// <returns>The builder instance for fluent chaining.</returns>
-        public StorableItemDefinitionBuilder WithStackLimit(int limit)
+        public QualityItemDefinitionBuilder WithStackLimit(int limit)
         {
             _definition.StackLimit = Mathf.Clamp(limit, 1, 999);
             return this;
@@ -134,7 +132,7 @@ namespace S1API.Items
         /// </summary>
         /// <param name="icon">The sprite to use as the item icon.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
-        public StorableItemDefinitionBuilder WithIcon(Sprite icon)
+        public QualityItemDefinitionBuilder WithIcon(Sprite icon)
         {
             _definition.Icon = icon;
             return this;
@@ -146,7 +144,7 @@ namespace S1API.Items
         /// <param name="basePurchasePrice">Base price when buying from shops.</param>
         /// <param name="resellMultiplier">Fraction of purchase price recovered when selling (0.0 to 1.0).</param>
         /// <returns>The builder instance for fluent chaining.</returns>
-        public StorableItemDefinitionBuilder WithPricing(float basePurchasePrice, float resellMultiplier = 0.5f)
+        public QualityItemDefinitionBuilder WithPricing(float basePurchasePrice, float resellMultiplier = 0.5f)
         {
             _definition.BasePurchasePrice = Mathf.Max(0f, basePurchasePrice);
             _definition.ResellMultiplier = Mathf.Clamp01(resellMultiplier);
@@ -158,7 +156,7 @@ namespace S1API.Items
         /// </summary>
         /// <param name="status">Whether the item is legal or illegal.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
-        public StorableItemDefinitionBuilder WithLegalStatus(LegalStatus status)
+        public QualityItemDefinitionBuilder WithLegalStatus(LegalStatus status)
         {
             _definition.legalStatus = (S1CoreItemFramework.ELegalStatus)status;
             return this;
@@ -169,7 +167,7 @@ namespace S1API.Items
         /// </summary>
         /// <param name="equippable">The equippable wrapper to attach.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
-        public StorableItemDefinitionBuilder WithEquippable(Equippable equippable)
+        public QualityItemDefinitionBuilder WithEquippable(Equippable equippable)
         {
             if (equippable != null)
             {
@@ -183,7 +181,7 @@ namespace S1API.Items
         /// </summary>
         /// <param name="storedItemPrefab">Prefab containing a StoredItem component.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
-        public StorableItemDefinitionBuilder WithStoredItem(GameObject storedItemPrefab)
+        public QualityItemDefinitionBuilder WithStoredItem(GameObject storedItemPrefab)
         {
             if (storedItemPrefab == null)
                 return this;
@@ -204,9 +202,9 @@ namespace S1API.Items
         /// </remarks>
         /// <param name="stationItemPrefab">A prefab GameObject that has a StationItem component.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="stationItemPrefab"/> is null.</exception>
-        /// <exception cref="ArgumentException">Thrown if <paramref name="stationItemPrefab"/> does not have a StationItem component.</exception>
-        public StorableItemDefinitionBuilder WithStationItem(GameObject stationItemPrefab)
+        /// <exception cref="System.ArgumentNullException">Thrown if <paramref name="stationItemPrefab"/> is null.</exception>
+        /// <exception cref="System.ArgumentException">Thrown if <paramref name="stationItemPrefab"/> does not have a StationItem component.</exception>
+        public QualityItemDefinitionBuilder WithStationItem(GameObject stationItemPrefab)
         {
             if (stationItemPrefab == null)
                 throw new ArgumentNullException(nameof(stationItemPrefab));
@@ -225,7 +223,7 @@ namespace S1API.Items
         /// <summary>
         /// Clears the StationItem reference for this definition.
         /// </summary>
-        public StorableItemDefinitionBuilder WithoutStationItem()
+        public QualityItemDefinitionBuilder WithoutStationItem()
         {
             _definition.StationItem = null;
             return this;
@@ -236,7 +234,7 @@ namespace S1API.Items
         /// </summary>
         /// <param name="available">True if available in demo, false otherwise.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
-        public StorableItemDefinitionBuilder WithDemoAvailability(bool available)
+        public QualityItemDefinitionBuilder WithDemoAvailability(bool available)
         {
             _definition.AvailableInDemo = available;
             return this;
@@ -247,16 +245,26 @@ namespace S1API.Items
         /// </summary>
         /// <param name="rank">The required rank to purchase this item, or null to remove level requirement.</param>
         /// <returns>>The builder instance for fluent chaining.</returns>
-        public StorableItemDefinitionBuilder WithRequiredRank(Leveling.FullRank? rank)
+        public QualityItemDefinitionBuilder WithRequiredRank(Leveling.FullRank? rank)
         {
             if (rank == null)
             {
                 _definition.RequiresLevelToPurchase = false;
                 return this;
             }
-
             _definition.RequiredRank = rank.Value.ToNative();
             _definition.RequiresLevelToPurchase = true;
+            return this;
+        }
+
+        /// <summary>
+        /// Assigns a default quality for this definition.
+        /// </summary>
+        /// <param name="quality">The default quality to assign to items of this definition.</param>
+        /// <returns>>The builder instance for fluent chaining.</returns>
+        public QualityItemDefinitionBuilder WithDefaultQuality(Quality quality)
+        {
+            _definition.DefaultQuality = (S1ItemFramework.EQuality)quality;
             return this;
         }
 
@@ -264,7 +272,7 @@ namespace S1API.Items
         /// Builds the item definition, registers it with the game's registry, and returns a wrapper.
         /// </summary>
         /// <returns>A wrapper around the created storable item definition.</returns>
-        public StorableItemDefinition Build()
+        public QualityItemDefinition Build()
         {
             if (!_hasCustomStoredItem && _definition.StoredItem != null)
             {
@@ -279,14 +287,14 @@ namespace S1API.Items
             S1Registry.Instance.AddToRegistry(_definition);
 
             // Return wrapper
-            return new StorableItemDefinition(_definition);
+            return new QualityItemDefinition(_definition);
         }
 
         /// <summary>
         /// INTERNAL: Builds and returns the raw game item definition without registering.
         /// Used internally by S1API. Modders should use <see cref="Build"/> instead.
         /// </summary>
-        internal S1ItemFramework.StorableItemDefinition BuildInternal()
+        internal S1ItemFramework.QualityItemDefinition BuildInternal()
         {
             return _definition;
         }
@@ -295,10 +303,10 @@ namespace S1API.Items
         /// Copies all properties from a source StorableItemDefinition to the current definition.
         /// </summary>
         /// <param name="source">The source definition to copy properties from.</param>
-        private void CopyPropertiesFrom(S1ItemFramework.StorableItemDefinition source)
+        private void CopyPropertiesFrom(S1ItemFramework.QualityItemDefinition source)
         {
             if (source == null) return;
-
+            
             // Basic ItemDefinition properties
             _definition.Name = source.Name;
             _definition.Description = source.Description;
@@ -320,10 +328,11 @@ namespace S1API.Items
             _definition.StoredItem = source.StoredItem != null ? source.StoredItem : _definition.StoredItem;
             _definition.StationItem = source.StationItem;
             _definition.Equippable = source.Equippable;
+            _definition.DefaultQuality = source.DefaultQuality;
+            _definition.CustomItemUI = source.CustomItemUI;
         }
 
-        private static S1StationFramework.StationItem GetOrCreateStationItemPrefab(
-            S1StationFramework.StationItem stationItemPrefab)
+        private static S1StationFramework.StationItem GetOrCreateStationItemPrefab(S1StationFramework.StationItem stationItemPrefab)
         {
             var id = stationItemPrefab.GetInstanceID();
 
