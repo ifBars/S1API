@@ -5,12 +5,11 @@ using S1CoreItemFramework = Il2CppScheduleOne.Core.Items.Framework;
 using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1CoreItemFramework = ScheduleOne.Core.Items.Framework;
 #endif
-
-using System;
 using S1API.Internal.Utils;
+using S1API.Items.Storable;
 using UnityEngine;
 
-namespace S1API.Items.ItemBuilders
+namespace S1API.Items.Buildable
 {
     /// <summary>
     /// Builder for composing buildable item definitions at runtime.
@@ -24,7 +23,7 @@ namespace S1API.Items.ItemBuilders
 
         /// <summary>
         /// INTERNAL: Creates a new builder instance with a fresh BuildableItemDefinition.
-        /// Only BuildableItemCreator can instantiate this.
+        /// Only <see cref="BuildableItemCreator"/> can instantiate this.
         /// </summary>
         internal BuildableItemDefinitionBuilder()
             : base(ScriptableObject.CreateInstance<S1ItemFramework.BuildableItemDefinition>)
@@ -57,7 +56,7 @@ namespace S1API.Items.ItemBuilders
         /// </summary>
         /// <param name="soundType">The build sound type.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
-        public BuildableItemDefinitionBuilder WithBuildSound(BuildSoundType soundType)
+        public BuildableItemDefinitionBuilder WithBuildSound(Items.BuildSoundType soundType)
         {
             BuildableDefinition.BuildSoundType = (S1ItemFramework.BuildableItemDefinition.EBuildSoundType)soundType;
             return this;
@@ -67,9 +66,9 @@ namespace S1API.Items.ItemBuilders
         /// Builds the item definition, registers it with the game's registry, and returns a wrapper.
         /// </summary>
         /// <returns>A wrapper around the created buildable item definition.</returns>
-        public new Buildable.BuildableItemDefinition Build()
+        public new BuildableItemDefinition Build()
         {
-            return (Buildable.BuildableItemDefinition)base.Build();
+            return (BuildableItemDefinition)base.Build();
         }
 
         /// <summary>
@@ -85,7 +84,7 @@ namespace S1API.Items.ItemBuilders
         protected override Storable.StorableItemDefinition CreateWrapper(
             S1ItemFramework.StorableItemDefinition definition)
         {
-            return new Buildable.BuildableItemDefinition(BuildableDefinition);
+            return new BuildableItemDefinition(BuildableDefinition);
         }
     }
 }

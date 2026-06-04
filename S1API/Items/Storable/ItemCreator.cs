@@ -35,9 +35,9 @@ namespace S1API.Items.Storable
         ///     .Build();
         /// </code>
         /// </example>
-        public static ItemBuilders.StorableItemDefinitionBuilder CreateBuilder()
+        public static StorableItemDefinitionBuilder CreateBuilder()
         {
-            return new ItemBuilders.StorableItemDefinitionBuilder();
+            return new StorableItemDefinitionBuilder();
         }
 
         /// <summary>
@@ -46,7 +46,7 @@ namespace S1API.Items.Storable
         /// <param name="sourceItemId">The ID of the item to clone.</param>
         /// <returns>A builder pre-configured with the source item properties.</returns>
         /// <exception cref="ArgumentException">Thrown if the source item ID is not found or is not a storable item.</exception>
-        public static ItemBuilders.StorableItemDefinitionBuilder CloneFrom(string sourceItemId)
+        public static StorableItemDefinitionBuilder CloneFrom(string sourceItemId)
         {
             var sourceDefinition = S1Registry.GetItem(sourceItemId);
             if (sourceDefinition == null)
@@ -59,7 +59,7 @@ namespace S1API.Items.Storable
                 throw new ArgumentException($"Item '{sourceItemId}' is not an StorableItemDefinition", nameof(sourceItemId));
             }
 
-            return new ItemBuilders.StorableItemDefinitionBuilder(storableDef);
+            return new StorableItemDefinitionBuilder(storableDef);
         }
 
         /// <summary>
@@ -68,14 +68,14 @@ namespace S1API.Items.Storable
         /// <param name="source">The storable item definition to clone.</param>
         /// <returns>A builder pre-configured with the source item properties.</returns>
         /// <exception cref="ArgumentNullException">Thrown if the source definition is null.</exception>
-        public static ItemBuilders.StorableItemDefinitionBuilder CloneFrom(StorableItemDefinition source)
+        public static StorableItemDefinitionBuilder CloneFrom(StorableItemDefinition source)
         {
             if (source == null)
             {
                 throw new ArgumentNullException(nameof(source), "Source storable item definition cannot be null");
             }
 
-            return new ItemBuilders.StorableItemDefinitionBuilder(source.S1StorableItemDefinition);
+            return new StorableItemDefinitionBuilder(source.S1StorableItemDefinition);
         }
 
         /// <summary>
@@ -121,7 +121,7 @@ namespace S1API.Items.Storable
             Sprite icon = null,
             Equippable equippable = null)
         {
-            var builder = new ItemBuilders.StorableItemDefinitionBuilder()
+            var builder = new StorableItemDefinitionBuilder()
                 .WithBasicInfo(id, name, description, category)
                 .WithStackLimit(stackLimit)
                 .WithPricing(basePurchasePrice, resellMultiplier)

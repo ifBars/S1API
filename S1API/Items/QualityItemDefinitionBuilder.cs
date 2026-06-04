@@ -27,7 +27,7 @@ namespace S1API.Items
     /// Builder for composing quality item definitions at runtime.
     /// Use fluent methods to configure item properties before calling <see cref="Build"/>
     /// </summary>
-    [Obsolete("Use S1API.Items.ItemBuilders.QualityItemDefinitionBuilder instead")]
+    [Obsolete("Use S1API.Items.Quality.QualityItemDefinitionBuilder instead")]
     public sealed class QualityItemDefinitionBuilder
     {
         private static readonly Log Logger = new Log("QualityItemDefinitionBuilder");

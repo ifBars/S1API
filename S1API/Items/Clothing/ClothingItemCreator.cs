@@ -35,9 +35,9 @@ namespace S1API.Items.Clothing
         ///     .Build();
         /// </code>
         /// </example>
-        public static ItemBuilders.ClothingItemDefinitionBuilder CreateBuilder()
+        public static ClothingItemDefinitionBuilder CreateBuilder()
         {
-            return new ItemBuilders.ClothingItemDefinitionBuilder();
+            return new ClothingItemDefinitionBuilder();
         }
 
         /// <summary>
@@ -57,7 +57,7 @@ namespace S1API.Items.Clothing
         ///     .Build();
         /// </code>
         /// </example>
-        public static ItemBuilders.ClothingItemDefinitionBuilder CloneFrom(string sourceItemId)
+        public static ClothingItemDefinitionBuilder CloneFrom(string sourceItemId)
         {
             var sourceDefinition = S1.Registry.GetItem(sourceItemId);
             if (sourceDefinition == null)
@@ -73,7 +73,7 @@ namespace S1API.Items.Clothing
                 return null;
             }
 
-            return new ItemBuilders.ClothingItemDefinitionBuilder(clothingDef);
+            return new ClothingItemDefinitionBuilder(clothingDef);
         }
 
         /// <summary>
@@ -90,7 +90,7 @@ namespace S1API.Items.Clothing
         ///     .Build();
         /// </code>
         /// </example>
-        public static ItemBuilders.ClothingItemDefinitionBuilder CloneFrom(ClothingItemDefinition source)
+        public static ClothingItemDefinitionBuilder CloneFrom(ClothingItemDefinition source)
         {
             if (source == null)
             {
@@ -98,7 +98,7 @@ namespace S1API.Items.Clothing
                 return null;
             }
 
-            return new ItemBuilders.ClothingItemDefinitionBuilder(source.S1ClothingDefinition);
+            return new ClothingItemDefinitionBuilder(source.S1ClothingDefinition);
         }
     }
 }

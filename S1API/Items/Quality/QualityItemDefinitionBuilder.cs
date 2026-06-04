@@ -4,10 +4,10 @@ using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1ItemFramework = ScheduleOne.ItemFramework;
 #endif
 using S1API.Internal.Utils;
-using S1API.Products;
+using S1API.Items.Storable;
 using UnityEngine;
 
-namespace S1API.Items.ItemBuilders
+namespace S1API.Items.Quality
 {
     /// <summary>
     /// Builder for composing quality item definitions at runtime.
@@ -21,7 +21,7 @@ namespace S1API.Items.ItemBuilders
 
         /// <summary>
         /// INTERNAL: Creates a new builder instance with a fresh QualityItemDefinition.
-        /// Only QualityItemCreator can instantiate this.
+        /// Only <see cref="QualityItemCreator"/> can instantiate this.
         /// </summary>
         internal QualityItemDefinitionBuilder()
             : base(ScriptableObject.CreateInstance<S1ItemFramework.QualityItemDefinition>)
@@ -32,7 +32,7 @@ namespace S1API.Items.ItemBuilders
 
         /// <summary>
         /// INTERNAL: Creates a builder instance initialized by cloning an existing quality item definition.
-        /// Only QualityItemCreator can instantiate this.
+        /// Only <see cref="QualityItemCreator"/> can instantiate this.
         /// </summary>
         /// <param name="source">The existing quality item definition to clone properties from.</param>
         internal QualityItemDefinitionBuilder(
@@ -69,9 +69,9 @@ namespace S1API.Items.ItemBuilders
         /// Builds the item definition, registers it with the game's registry, and returns a wrapper.
         /// </summary>
         /// <returns>A wrapper around the created quality item definition.</returns>
-        public new Quality.QualityItemDefinition Build()
+        public new QualityItemDefinition Build()
         {
-            return (Quality.QualityItemDefinition)base.Build();
+            return (QualityItemDefinition)base.Build();
         }
 
         /// <summary>
@@ -87,7 +87,7 @@ namespace S1API.Items.ItemBuilders
         protected override Storable.StorableItemDefinition CreateWrapper(
             S1ItemFramework.StorableItemDefinition definition)
         {
-            return new Quality.QualityItemDefinition(QualityDefinition);
+            return new QualityItemDefinition(QualityDefinition);
         }
     }
 }

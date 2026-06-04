@@ -4,6 +4,7 @@ using S1Clothing = Il2CppScheduleOne.Clothing;
 using S1Clothing = ScheduleOne.Clothing;
 #endif
 using System;
+using S1API.Internal.Utils;
 
 namespace S1API.Items.Clothing
 {
@@ -22,7 +23,7 @@ namespace S1API.Items.Clothing
         /// INTERNAL: Creates a ClothingItemInstance wrapper.
         /// </summary>
         /// <param name="itemInstance">In-game clothing item instance</param>
-        internal ClothingItemInstance(S1Clothing.ClothingInstance itemInstance) 
+        internal ClothingItemInstance(S1Clothing.ClothingInstance itemInstance)
             : base(itemInstance)
         {
             S1ClothingInstance = itemInstance;
@@ -41,6 +42,7 @@ namespace S1API.Items.Clothing
         /// The clothing definition (template) this instance was created from.
         /// </summary>
         public new ClothingItemDefinition Definition =>
-            new ClothingItemDefinition((S1Clothing.ClothingDefinition)S1ClothingInstance.Definition);
+            new ClothingItemDefinition(
+                CrossType.As<S1Clothing.ClothingDefinition>(S1ClothingInstance.Definition));
     }
 }

@@ -30,7 +30,7 @@ namespace S1API.Items
     /// All items in Schedule One are StorableItemDefinition (or subclasses thereof).
     /// The base ItemDefinition class is never used directly in the game.
     /// </remarks>
-    [Obsolete("Use S1API.Items.ItemBuilders.StorableItemDefinitionBuilder instead")]
+    [Obsolete("Use S1API.Items.Storable.StorableItemDefinitionBuilder instead")]
     public sealed class StorableItemDefinitionBuilder
     {
         private static readonly Log Logger = new Log("StorableItemDefinitionBuilder");

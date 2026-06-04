@@ -3,6 +3,7 @@ using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1ItemFramework = ScheduleOne.ItemFramework;
 #endif
+using S1API.Internal.Utils;
 
 namespace S1API.Items.Quality
 {
@@ -16,7 +17,7 @@ namespace S1API.Items.Quality
         /// INTERNAL: Reference to the in-game quality item instance.
         /// </summary>
         internal readonly S1ItemFramework.QualityItemInstance S1QualityInstance;
-        
+
         /// <summary>
         /// INTERNAL: Creates a QualityItemInstance wrapper.
         /// </summary>
@@ -25,7 +26,7 @@ namespace S1API.Items.Quality
         {
             S1QualityInstance = itemInstance;
         }
-        
+
         /// <summary>
         /// The quality of this item.
         /// </summary>
@@ -34,11 +35,12 @@ namespace S1API.Items.Quality
             get => (Products.Quality)S1QualityInstance.Quality;
             set => S1QualityInstance.Quality = (S1ItemFramework.EQuality)value;
         }
-        
+
         /// <summary>
         /// The quality item definition (template) this instance was created from.
         /// </summary>
         public new QualityItemDefinition Definition =>
-            new QualityItemDefinition((S1ItemFramework.QualityItemDefinition)S1QualityInstance.Definition);
+            new QualityItemDefinition(
+                CrossType.As<S1ItemFramework.QualityItemDefinition>(S1QualityInstance.Definition));
     }
 }

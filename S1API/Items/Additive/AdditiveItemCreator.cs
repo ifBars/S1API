@@ -20,9 +20,9 @@ namespace S1API.Items.Additive
         /// Creates a new builder for composing an additive definition with full flexibility.
         /// Use fluent methods to configure the additive, then call Build() to register it.
         /// </summary>
-        public static ItemBuilders.AdditiveDefinitionBuilder CreateBuilder()
+        public static AdditiveDefinitionBuilder CreateBuilder()
         {
-            return new ItemBuilders.AdditiveDefinitionBuilder();
+            return new AdditiveDefinitionBuilder();
         }
 
         /// <summary>
@@ -31,7 +31,7 @@ namespace S1API.Items.Additive
         /// <param name="sourceItemId">The ID of the additive to clone.</param>
         /// <returns>A builder pre-configured with the source additive's properties.</returns>
         /// <exception cref="ArgumentException">Thrown if the source item does not exist or is not an additive.</exception>
-        public static ItemBuilders.AdditiveDefinitionBuilder CloneFrom(string sourceItemId)
+        public static AdditiveDefinitionBuilder CloneFrom(string sourceItemId)
         {
             var sourceDefinition = S1Registry.GetItem(sourceItemId);
             if (sourceDefinition == null)
@@ -44,7 +44,7 @@ namespace S1API.Items.Additive
                 throw new ArgumentException($"Item '{sourceItemId}' is not an AdditiveDefinition", nameof(sourceItemId));
             }
 
-            return new ItemBuilders.AdditiveDefinitionBuilder(additiveDef);
+            return new AdditiveDefinitionBuilder(additiveDef);
         }
 
         /// <summary>
@@ -52,14 +52,14 @@ namespace S1API.Items.Additive
         /// </summary>
         /// <param name="source">The additive definition to clone from.</param>
         /// <returns>A builder pre-configured with the source additive's properties.</returns>
-        public static ItemBuilders.AdditiveDefinitionBuilder CloneFrom(AdditiveDefinition source)
+        public static AdditiveDefinitionBuilder CloneFrom(AdditiveDefinition source)
         {
             if (source == null)
             {
                 throw new ArgumentNullException(nameof(source), "Source additive definition cannot be null");
             }
 
-            return new ItemBuilders.AdditiveDefinitionBuilder(source.S1AdditiveDefinition);
+            return new AdditiveDefinitionBuilder(source.S1AdditiveDefinition);
         }
     }
 }

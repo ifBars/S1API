@@ -19,7 +19,7 @@ using S1API.Logging;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-namespace S1API.Items.ItemBuilders
+namespace S1API.Items.Storable
 {
     /// <summary>
     /// Builder for composing item definitions at runtime.
@@ -103,7 +103,7 @@ namespace S1API.Items.ItemBuilders
 
         /// <summary>
         /// INTERNAL: Creates a new builder instance with a fresh StorableItemDefinition.
-        /// Only ItemCreator can instantiate this.
+        /// Only <see cref="ItemCreator"/> can instantiate this.
         /// </summary>
         internal StorableItemDefinitionBuilderBase(
             Func<S1ItemFramework.StorableItemDefinition>? definitionFactory = null)
@@ -119,7 +119,7 @@ namespace S1API.Items.ItemBuilders
 
         /// <summary>
         /// INTERNAL: Creates a builder instance initialized by cloning an existing item.
-        /// Only ItemCreator can instantiate this.
+        /// Only <see cref="ItemCreator"/> can instantiate this.
         /// </summary>
         /// <param name="source">The existing item definition to clone properties from.</param>
         /// <param name="definitionFactory">Optional factory function to create the definition instance. If null, a default StorableItemDefinition will be created.</param>
@@ -406,10 +406,10 @@ namespace S1API.Items.ItemBuilders
         /// </summary>
         /// <param name="definition">The item definition to wrap.</param>
         /// <returns>>A wrapper around the given item definition.</returns>
-        protected virtual Storable.StorableItemDefinition CreateWrapper(
+        protected virtual StorableItemDefinition CreateWrapper(
             S1ItemFramework.StorableItemDefinition definition)
         {
-            return new Storable.StorableItemDefinition(definition);
+            return new StorableItemDefinition(definition);
         }
 
         private static S1StationFramework.StationItem GetOrCreateStationItemPrefab(

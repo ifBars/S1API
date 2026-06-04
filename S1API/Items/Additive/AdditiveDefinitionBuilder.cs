@@ -1,22 +1,16 @@
 ﻿#if (IL2CPPMELON)
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1CoreItemFramework = Il2CppScheduleOne.Core.Items.Framework;
-using S1Registry = Il2CppScheduleOne.Registry;
-using S1Storage = Il2CppScheduleOne.Storage;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1CoreItemFramework = ScheduleOne.Core.Items.Framework;
-using S1Registry = ScheduleOne.Registry;
-using S1Storage = ScheduleOne.Storage;
 #endif
-
-using System;
 using S1API.Internal.Utils;
+using S1API.Items.Storable;
 using S1API.Logging;
 using UnityEngine;
-using Object = UnityEngine.Object;
 
-namespace S1API.Items.ItemBuilders
+namespace S1API.Items.Additive
 {
     /// <summary>
     /// Builder for composing additive definitions at runtime.
@@ -117,9 +111,9 @@ namespace S1API.Items.ItemBuilders
         /// Builds the item definition, registers it with the game's registry, and returns a wrapper.
         /// </summary>
         /// <returns>A wrapper around the created additive definition.</returns>
-        public new Additive.AdditiveDefinition Build()
+        public new AdditiveDefinition Build()
         {
-            return (Additive.AdditiveDefinition)base.Build();
+            return (AdditiveDefinition)base.Build();
         }
 
         /// <summary>
@@ -135,7 +129,7 @@ namespace S1API.Items.ItemBuilders
         protected override Storable.StorableItemDefinition CreateWrapper(
             S1ItemFramework.StorableItemDefinition definition)
         {
-            return new Additive.AdditiveDefinition(AdditiveDefinition);
+            return new AdditiveDefinition(AdditiveDefinition);
         }
     }
 }

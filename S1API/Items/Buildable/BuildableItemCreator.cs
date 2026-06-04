@@ -33,9 +33,9 @@ namespace S1API.Items.Buildable
         ///     .Build();
         /// </code>
         /// </example>
-        public static ItemBuilders.BuildableItemDefinitionBuilder CreateBuilder()
+        public static BuildableItemDefinitionBuilder CreateBuilder()
         {
-            return new ItemBuilders.BuildableItemDefinitionBuilder();
+            return new BuildableItemDefinitionBuilder();
         }
 
         /// <summary>
@@ -53,7 +53,7 @@ namespace S1API.Items.Buildable
         ///     .Build();
         /// </code>
         /// </example>
-        public static ItemBuilders.BuildableItemDefinitionBuilder CloneFrom(string sourceItemId)
+        public static BuildableItemDefinitionBuilder CloneFrom(string sourceItemId)
         {
             var sourceDefinition = S1Registry.GetItem(sourceItemId);
 
@@ -74,7 +74,7 @@ namespace S1API.Items.Buildable
                 );
             }
 
-            return new ItemBuilders.BuildableItemDefinitionBuilder(buildableDef);
+            return new BuildableItemDefinitionBuilder(buildableDef);
         }
 
         /// <summary>
@@ -91,14 +91,14 @@ namespace S1API.Items.Buildable
         ///     .Build();
         /// </code>
         /// </example>
-        public static ItemBuilders.BuildableItemDefinitionBuilder CloneFrom(BuildableItemDefinition source)
+        public static BuildableItemDefinitionBuilder CloneFrom(BuildableItemDefinition source)
         {
             if (source == null)
             {
                 throw new System.ArgumentNullException(nameof(source), "Source item definition cannot be null");
             }
 
-            return new ItemBuilders.BuildableItemDefinitionBuilder(source.S1BuildableItemDefinition);
+            return new BuildableItemDefinitionBuilder(source.S1BuildableItemDefinition);
         }
     }
 }

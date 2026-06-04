@@ -11,16 +11,14 @@ using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1CoreItemFramework = ScheduleOne.Core.Items.Framework;
 using S1Registry = ScheduleOne.Registry;
 using S1UiItems = ScheduleOne.UI.Items;
-using Il2CppCollections = System.Collections.Generic;
 #endif
-
-using System;
 using System.Collections.Generic;
 using S1API.Internal.Utils;
+using S1API.Items.Storable;
 using S1API.Logging;
 using UnityEngine;
 
-namespace S1API.Items.ItemBuilders
+namespace S1API.Items.Clothing
 {
     /// <summary>
     /// Builder for composing clothing item definitions at runtime.
@@ -177,10 +175,10 @@ namespace S1API.Items.ItemBuilders
         /// Builds the item definition, registers it with the game's registry, and returns a wrapper.
         /// </summary>
         /// <returns>A wrapper around the created clothing item definition.</returns>
-        public new Clothing.ClothingItemDefinition Build()
+        public new ClothingItemDefinition Build()
         {
             EnsureNativeClothingItemUi();
-            return (Clothing.ClothingItemDefinition)base.Build();
+            return (ClothingItemDefinition)base.Build();
         }
 
         /// <summary>
@@ -197,7 +195,7 @@ namespace S1API.Items.ItemBuilders
         protected override Storable.StorableItemDefinition CreateWrapper(
             S1ItemFramework.StorableItemDefinition definition)
         {
-            return new Clothing.ClothingItemDefinition(ClothingDefinition);
+            return new ClothingItemDefinition(ClothingDefinition);
         }
 
 
