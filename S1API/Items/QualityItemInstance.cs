@@ -4,6 +4,7 @@ using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1ItemFramework = ScheduleOne.ItemFramework;
 #endif
 using System;
+using S1API.Internal.Utils;
 using S1API.Products;
 
 namespace S1API.Items
@@ -42,6 +43,7 @@ namespace S1API.Items
         /// The quality item definition (template) this instance was created from.
         /// </summary>
         public new QualityItemDefinition Definition =>
-            new QualityItemDefinition((S1ItemFramework.QualityItemDefinition)S1QualityInstance.Definition);
+            new QualityItemDefinition(
+                CrossType.As<S1ItemFramework.QualityItemDefinition>(S1QualityInstance.Definition));
     }
 }

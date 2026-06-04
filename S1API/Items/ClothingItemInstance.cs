@@ -4,6 +4,7 @@ using S1Clothing = Il2CppScheduleOne.Clothing;
 using S1Clothing = ScheduleOne.Clothing;
 #endif
 using System;
+using S1API.Internal.Utils;
 
 namespace S1API.Items
 {
@@ -42,7 +43,8 @@ namespace S1API.Items
         /// The clothing definition (template) this instance was created from.
         /// </summary>
         public new ClothingItemDefinition Definition =>
-            new ClothingItemDefinition((S1Clothing.ClothingDefinition)S1ClothingInstance.Definition);
+            new ClothingItemDefinition(
+                CrossType.As<S1Clothing.ClothingDefinition>(S1ClothingInstance.Definition));
     }
 }
 

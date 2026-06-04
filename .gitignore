@@ -5,6 +5,7 @@ obj/
 bin/
 *.user
 .vs/
+smoke
 
 # Build props
 local.*
