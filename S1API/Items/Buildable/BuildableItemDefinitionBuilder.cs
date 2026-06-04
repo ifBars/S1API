@@ -56,7 +56,7 @@ namespace S1API.Items.Buildable
         /// </summary>
         /// <param name="soundType">The build sound type.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
-        public BuildableItemDefinitionBuilder WithBuildSound(Items.BuildSoundType soundType)
+        public BuildableItemDefinitionBuilder WithBuildSound(BuildSoundType soundType)
         {
             BuildableDefinition.BuildSoundType = (S1ItemFramework.BuildableItemDefinition.EBuildSoundType)soundType;
             return this;

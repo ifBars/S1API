@@ -372,10 +372,10 @@ namespace S1API.Items.Storable
         /// </remarks>
         protected virtual Storable.StorableItemDefinition Build()
         {
-            if (string.IsNullOrEmpty(Definition.ID))
+            if (string.IsNullOrWhiteSpace(Definition.ID))
             {
                 Logger.Error("Cannot build item definition: ID is required. Use WithBasicInfo(...) to set the ID.");
-                throw new ArgumentNullException(Definition.ID);
+                throw new InvalidOperationException("Cannot build item definition: ID is required.");
             }
             if (!_hasCustomStoredItem && Definition.StoredItem != null)
             {

@@ -55,6 +55,11 @@ namespace S1API.Items.Buildable
         /// </example>
         public static BuildableItemDefinitionBuilder CloneFrom(string sourceItemId)
         {
+            if (string.IsNullOrWhiteSpace(sourceItemId))
+            {
+                throw new ArgumentException("Source item ID cannot be null or whitespace", nameof(sourceItemId));
+            }
+
             var sourceDefinition = S1Registry.GetItem(sourceItemId);
 
             if (sourceDefinition == null)
@@ -84,7 +89,7 @@ namespace S1API.Items.Buildable
         /// <returns>A builder initialized with the source item's properties, ready for customization.</returns>
         /// <example>
         /// <code>
-        /// var originalRack = ItemManager.GetItemDefinition("StorageRack-1x0.5") as BuildableItemDefinition;
+        /// var originalRack = ItemManager.GetDefinition("StorageRack-1x0.5") as BuildableItemDefinition;
         /// var metalRack = BuildableItemCreator.CloneFrom(originalRack)
         ///     .WithBasicInfo("metal_rack_small", "Small Metal Storage Rack", "A metal version")
         ///     .WithBuildSound(BuildSoundType.Metal)

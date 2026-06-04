@@ -208,7 +208,7 @@ namespace S1API.Items
                 return false;
             }
 
-            ItemDefinition definition = GetItemDefinition(itemID);
+            var definition = GetDefinition(itemID);
             if (definition == null)
             {
                 return false;
@@ -216,7 +216,7 @@ namespace S1API.Items
 
             RemoveFromRuntimeCleanupQueue(definition.S1ItemDefinition, definition.ID);
             S1Registry.Instance.RemoveFromRegistry(definition.S1ItemDefinition);
-            return GetItemDefinition(itemID) == null;
+            return GetDefinition(itemID) == null;
         }
 
         /// <summary>
@@ -255,7 +255,7 @@ namespace S1API.Items
                     continue;
 
                 // Use GetItemDefinition to properly wrap the item with the correct type
-                var wrappedItem = GetItemDefinition(itemId);
+                var wrappedItem = GetDefinition(itemId);
                 if (wrappedItem != null)
                 {
                     wrappedItems.Add(wrappedItem);

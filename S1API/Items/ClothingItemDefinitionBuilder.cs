@@ -239,7 +239,8 @@ namespace S1API.Items
         /// <returns>A wrapper around the created clothing item definition.</returns>
         public ClothingItemDefinition Build()
         {
-            if (string.IsNullOrEmpty(_definition.ID)) throw new ArgumentNullException(nameof(_definition.ID));
+            if (string.IsNullOrWhiteSpace(_definition.ID))
+                throw new ArgumentException("Item ID cannot be null, empty, or whitespace.", nameof(_definition.ID));
 
             EnsureNativeClothingItemUi();
 

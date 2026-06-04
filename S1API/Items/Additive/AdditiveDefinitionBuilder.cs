@@ -83,6 +83,7 @@ namespace S1API.Items.Additive
         /// </summary>
         public AdditiveDefinitionBuilder WithEffects(float yieldMultiplier, float instantGrowth, float qualityChange)
         {
+            instantGrowth = Mathf.Clamp01(instantGrowth);
             if (!AutoPropertySetter.TrySet(AdditiveDefinition, nameof(S1ItemFramework.AdditiveDefinition.YieldMultiplier),
                     yieldMultiplier))
             {

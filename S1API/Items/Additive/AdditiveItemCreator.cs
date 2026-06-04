@@ -33,6 +33,11 @@ namespace S1API.Items.Additive
         /// <exception cref="ArgumentException">Thrown if the source item does not exist or is not an additive.</exception>
         public static AdditiveDefinitionBuilder CloneFrom(string sourceItemId)
         {
+            if (string.IsNullOrWhiteSpace(sourceItemId))
+            {
+                throw new ArgumentException("Source item ID cannot be null or whitespace", nameof(sourceItemId));
+            }
+
             var sourceDefinition = S1Registry.GetItem(sourceItemId);
             if (sourceDefinition == null)
             {

@@ -34,6 +34,11 @@ namespace S1API.Items.Quality
         /// <exception cref="ArgumentException">Thrown if the source item ID is not found or is not a quality item.</exception>
         public static QualityItemDefinitionBuilder CloneFrom(string sourceItemId)
         {
+            if (string.IsNullOrWhiteSpace(sourceItemId))
+            {
+                throw new ArgumentException("Source item ID cannot be null or whitespace", nameof(sourceItemId));
+            }
+
             var sourceDefinition = S1Registry.GetItem(sourceItemId);
             if (sourceDefinition == null)
             {

@@ -267,7 +267,8 @@ namespace S1API.Items
         /// <returns>A wrapper around the created storable item definition.</returns>
         public StorableItemDefinition Build()
         {
-            if (string.IsNullOrEmpty(_definition.ID)) throw new ArgumentNullException(nameof(_definition.ID));
+            if (string.IsNullOrWhiteSpace(_definition.ID))
+                throw new ArgumentException("Item ID cannot be null, empty, or whitespace.", nameof(_definition.ID));
             if (!_hasCustomStoredItem && _definition.StoredItem != null)
             {
                 // Ensure placeholder naming stays in sync after late changes.
