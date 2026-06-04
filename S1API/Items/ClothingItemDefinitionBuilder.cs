@@ -239,6 +239,8 @@ namespace S1API.Items
         /// <returns>A wrapper around the created clothing item definition.</returns>
         public ClothingItemDefinition Build()
         {
+            if (string.IsNullOrEmpty(_definition.ID)) throw new ArgumentNullException(nameof(_definition.ID));
+
             EnsureNativeClothingItemUi();
 
             // Register with the game's registry

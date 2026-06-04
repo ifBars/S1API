@@ -372,6 +372,11 @@ namespace S1API.Items.Storable
         /// </remarks>
         protected virtual Storable.StorableItemDefinition Build()
         {
+            if (string.IsNullOrEmpty(Definition.ID))
+            {
+                Logger.Error("Cannot build item definition: ID is required. Use WithBasicInfo(...) to set the ID.");
+                throw new ArgumentNullException(Definition.ID);
+            }
             if (!_hasCustomStoredItem && Definition.StoredItem != null)
             {
                 // Ensure placeholder naming stays in sync after late changes.
