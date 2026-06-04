@@ -90,8 +90,7 @@ namespace S1API.Items.Storable
         /// <param name="basePurchasePrice">Base price when buying from shops (default: 10).</param>
         /// <param name="resellMultiplier">Fraction of purchase price recovered when selling (default: 0.5).</param>
         /// <param name="legalStatus">Whether the item is legal or illegal (default: Legal).</param>
-        /// <param name="requiresLevelToPurchase">Whether purchasing the item requires a certain player rank (default: false).</param>
-        /// <param name="requiredRank">The player rank required to purchase the item, if applicable (default: null).</param>
+        /// <param name="requiredRank">The player rank required to purchase the item, null if no rank required (default: null).</param>
         /// <param name="icon">Optional sprite to use as the item icon.</param>
         /// <param name="equippable">Optional equippable component to attach.</param>
         /// <returns>A wrapper around the created item definition.</returns>
@@ -116,7 +115,6 @@ namespace S1API.Items.Storable
             float basePurchasePrice = 10f,
             float resellMultiplier = 0.5f,
             LegalStatus legalStatus = LegalStatus.Legal,
-            bool requiresLevelToPurchase = false,
             FullRank? requiredRank = null,
             Sprite icon = null,
             Equippable equippable = null)
