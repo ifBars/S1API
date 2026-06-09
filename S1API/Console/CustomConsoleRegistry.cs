@@ -11,7 +11,9 @@ namespace S1API.Console
     {
         private static readonly Logging.Log Logger = new Logging.Log("Console");
 
-        internal static readonly Dictionary<string, BaseConsoleCommand> registry = new Dictionary<string, BaseConsoleCommand>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, BaseConsoleCommand> registry = new Dictionary<string, BaseConsoleCommand>(StringComparer.OrdinalIgnoreCase);
+
+        internal static IReadOnlyDictionary<string, BaseConsoleCommand> RegisteredCommands => registry;
 
         internal static void Register(BaseConsoleCommand command)
         {

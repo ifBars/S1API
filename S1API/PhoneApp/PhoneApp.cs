@@ -51,6 +51,9 @@ namespace S1API.PhoneApp
         /// app canvas structure in the game's Unity hierarchy.
         /// </summary>
         private GameObject? _appPanel;
+        private bool _isDestroying;
+
+        internal bool IsDestroying => _isDestroying;
 
         /// <summary>
         /// Indicates whether the application UI has been successfully created and initialized.
@@ -187,6 +190,11 @@ namespace S1API.PhoneApp
         /// </summary>
         protected override void OnDestroyed()
         {
+            if (_isDestroying)
+                return;
+
+            _isDestroying = true;
+
             if (_appPanel != null)
             {
                 Object.Destroy(_appPanel);
@@ -651,7 +659,8 @@ namespace S1API.PhoneApp
         private void OnDestroy()
         {
             // Destroy phone app when button handler is destroyed
-            phoneApp?.DestroyInternal();
+            if (phoneApp != null && !phoneApp.IsDestroying)
+                phoneApp.DestroyInternal();
         }
 
         private bool IsHoveringButton()

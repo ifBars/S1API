@@ -89,7 +89,8 @@ public class CombatBehaviour
                 return;
             }
 
-            var equippable = Object.Instantiate(gameObject).GetComponent<AvatarEquippable>();
+            var equippable = gameObject.GetComponent<AvatarEquippable>() ??
+                             gameObject.GetComponentInChildren<AvatarEquippable>(true);
             if (equippable == null)
             {
                 Logger.Error("Could not get AvatarEquippable from weapon at path: " + value);

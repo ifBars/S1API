@@ -30,7 +30,8 @@ namespace S1API.Entities.Employees
                 return null;
             }
 
-            return new EmployeeAppearance(S1Employees.EmployeeManager.Instance.GetAppearance(male, index));
+            var appearance = S1Employees.EmployeeManager.Instance.GetAppearance(male, index);
+            return appearance == null ? null : new EmployeeAppearance(appearance);
         }
 
         /// <summary>
@@ -51,6 +52,13 @@ namespace S1API.Entities.Employees
             }
 
             S1Employees.EmployeeManager.Instance.GetRandomAppearance(male, out var i, out var avatarSettings);
+            if (avatarSettings == null)
+            {
+                settings = null;
+                index = -1;
+                return false;
+            }
+
             index = i;
             settings = new AvatarSettings(avatarSettings);
             return true;

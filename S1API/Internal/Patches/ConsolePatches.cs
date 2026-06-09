@@ -40,7 +40,6 @@ namespace S1API.Internal.Patches
             if (__instance == null)
                 return;
 
-            _addedCommandsToList.Clear();
             var commandTypes = ReflectionUtils.GetDerivedClasses<BaseConsoleCommand>();
             foreach (var type in commandTypes)
             {
@@ -162,6 +161,8 @@ namespace S1API.Internal.Patches
                 if (__instance == null || __instance.CommandEntryPrefab == null ||
                     __instance.CommandEntryContainer == null)
                     return;
+
+                _addedCommandsToList.Clear();
 #if (MONOMELON || MONOBEPINEX)
                 _commandEntriesField ??= 
                     typeof(S1CommandListScreen)
@@ -171,19 +172,23 @@ namespace S1API.Internal.Patches
                 var commandEntries = __instance?.commandEntries;
 #endif
 
-                foreach (var commandKey in CustomConsoleRegistry.registry.Keys)
+                foreach (var command in CustomConsoleRegistry.RegisteredCommands)
                 {
+                    var commandKey = command.Key;
                     try
                     {
                         if (_addedCommandsToList.Contains(commandKey))
                             continue;
+                        if (IsNativeCommand(commandKey))
+                            continue;
+
                         var rt = Object.Instantiate(__instance.CommandEntryPrefab, __instance.CommandEntryContainer);
                         rt.Find("Command").GetComponent<TextMeshProUGUI>().text =
-                            CustomConsoleRegistry.registry[commandKey].CommandWord;
+                            command.Value.CommandWord;
                         rt.Find("Description").GetComponent<TextMeshProUGUI>().text =
-                            CustomConsoleRegistry.registry[commandKey].CommandDescription;
+                            command.Value.CommandDescription;
                         rt.Find("Example").GetComponent<TextMeshProUGUI>().text =
-                            CustomConsoleRegistry.registry[commandKey].ExampleUsage;
+                            command.Value.ExampleUsage;
 
                         commandEntries?.Add(rt);
                         _addedCommandsToList.Add(commandKey);
@@ -198,6 +203,23 @@ namespace S1API.Internal.Patches
             {
                 Logger.Warning($"[Console] Failed to add custom commands to command list screen: {e.Message}");
             }
+        }
+
+        private static bool IsNativeCommand(string commandKey)
+        {
+            if (string.IsNullOrWhiteSpace(commandKey))
+                return false;
+
+#if (MONOMELON || MONOBEPINEX)
+            _monoCommandsField ??= typeof(S1Console).GetField("commands", BindingFlags.NonPublic | BindingFlags.Static);
+            var dict = _monoCommandsField?.GetValue(null) as IDictionary<string, S1Console.ConsoleCommand>;
+            return dict != null && dict.ContainsKey(commandKey);
+#elif (IL2CPPMELON || IL2CPPBEPINEX)
+            var dict = S1Console.commands;
+            return dict != null && dict.ContainsKey(commandKey);
+#else
+            return false;
+#endif
         }
     }
 }
