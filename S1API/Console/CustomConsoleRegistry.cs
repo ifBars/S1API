@@ -13,6 +13,8 @@ namespace S1API.Console
 
         private static readonly Dictionary<string, BaseConsoleCommand> registry = new Dictionary<string, BaseConsoleCommand>(StringComparer.OrdinalIgnoreCase);
 
+        internal static IReadOnlyDictionary<string, BaseConsoleCommand> RegisteredCommands => registry;
+
         internal static void Register(BaseConsoleCommand command)
         {
             if (command == null)

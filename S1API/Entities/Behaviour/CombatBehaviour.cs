@@ -13,6 +13,7 @@ using S1API.Items;
 using UnityEngine;
 using MelonLoader;
 using S1API.Entities.Equippables;
+using S1API.Internal.Utils;
 using Object = UnityEngine.Object;
 
 namespace S1API.Entities.Behaviour;
@@ -22,6 +23,8 @@ namespace S1API.Entities.Behaviour;
 /// </summary>
 public class CombatBehaviour
 {
+    private static readonly Logging.Log Logger = new("CombatBehaviour");
+
     /// <summary>
     /// INTERNAL: NPC reference
     /// </summary>
@@ -57,8 +60,13 @@ public class CombatBehaviour
     /// <summary>
     /// Gets or sets the default weapon asset path for the NPC's combat behaviour.
     /// This property allows you to specify the weapon that the NPC will use by default.
-    /// <see cref="Weapon"/> for convenience when setting this property.
+    /// Use <see cref="Weapon"/> or <see cref="AvatarEquippablePaths"/> for convenience when setting this property.
+    /// Set to an empty string to clear the default weapon.
     /// </summary>
+    /// <remarks>
+    /// Using type-safe <see cref="SetDefaultWeapon(Equippable)"/>
+    /// or <see cref="SetDefaultWeapon(EquippableBuilder)"/> is generally preferred and advised.
+    /// </remarks>
     public string DefaultWeaponAssetPath
     {
         get
@@ -74,21 +82,28 @@ public class CombatBehaviour
                 return;
             }
 
-            var go = Resources.Load(value) as GameObject;
-            if (go == null)
+            var go = Resources.Load(value);
+            if (!CrossType.Is<GameObject>(go, out var gameObject) || gameObject == null)
             {
-                Debug.LogError("Could not find weapon at path: " + value);
+                Logger.Error("Could not find weapon at path: " + value);
                 return;
             }
 
-            var equippable = Object.Instantiate(go).GetComponent<AvatarEquippable>();
+            var equippable = gameObject.GetComponent<AvatarEquippable>() ??
+                             gameObject.GetComponentInChildren<AvatarEquippable>(true);
             if (equippable == null)
             {
-                Debug.LogError("Could not get AvatarEquippable from weapon at path: " + value);
+                Logger.Error("Could not get AvatarEquippable from weapon at path: " + value);
                 return;
             }
 
-            NPC.S1NPC.Behaviour.CombatBehaviour.DefaultWeapon = equippable as AvatarWeapon;
+            if (!CrossType.Is<AvatarWeapon>(equippable, out var avatarWeapon))
+            {
+                Logger.Error("AvatarEquippable at path is not an AvatarWeapon: " + value);
+                return;
+            }
+
+            NPC.S1NPC.Behaviour.CombatBehaviour.DefaultWeapon = avatarWeapon;
         }
     }
 
