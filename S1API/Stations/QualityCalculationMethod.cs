@@ -14,7 +14,7 @@
         /// Quality is determined by the product's default quality.
         /// </summary>
         /// <remarks>
-        /// Requires the result to be of type QualityItemInstance or its inheritor.
+        /// Requires the recipe product to be of type QualityItemDefinition or its inheritor.
         /// </remarks>
         Absolute
     }

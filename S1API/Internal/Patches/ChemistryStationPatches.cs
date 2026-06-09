@@ -285,7 +285,11 @@ namespace S1API.Internal.Patches
             try { instanceRecipeId = __instance.RecipeID; } catch { instanceRecipeId = null; }
             if (string.IsNullOrWhiteSpace(instanceRecipeId)) return true;
             var currentAddedRecipe =
-                ChemistryStationRecipes.GetAll().FirstOrDefault(r => instanceRecipeId == __instance.RecipeID);
+                ChemistryStationRecipes.GetAll().FirstOrDefault(r =>
+                {
+                    try { return string.Equals(r.RecipeID, instanceRecipeId, StringComparison.OrdinalIgnoreCase); }
+                    catch { return false; }
+                });
             // If this recipe is not one of ours, exit early from patch
             if (currentAddedRecipe == null) return true;
             // Use default quality calculation for non-absolute methods
