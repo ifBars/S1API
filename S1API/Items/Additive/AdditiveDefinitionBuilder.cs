@@ -130,7 +130,7 @@ namespace S1API.Items.Additive
         protected override Storable.StorableItemDefinition CreateWrapper(
             S1ItemFramework.StorableItemDefinition definition)
         {
-            return new AdditiveDefinition(AdditiveDefinition);
+            return new AdditiveDefinition(CrossType.As<S1ItemFramework.AdditiveDefinition>(definition));
         }
     }
 }

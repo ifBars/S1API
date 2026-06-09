@@ -87,7 +87,7 @@ namespace S1API.Items.Quality
         protected override Storable.StorableItemDefinition CreateWrapper(
             S1ItemFramework.StorableItemDefinition definition)
         {
-            return new QualityItemDefinition(QualityDefinition);
+            return new QualityItemDefinition(CrossType.As<S1ItemFramework.QualityItemDefinition>(definition));
         }
     }
 }

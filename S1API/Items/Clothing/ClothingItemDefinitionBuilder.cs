@@ -153,7 +153,7 @@ namespace S1API.Items.Clothing
         /// </summary>
         /// <param name="slots">Array of slots to block.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
-        public ClothingItemDefinitionBuilder WithBlockedSlots(params Clothing.ClothingColor[] slots)
+        public ClothingItemDefinitionBuilder WithBlockedSlots(params Clothing.ClothingSlot[] slots)
         {
 #if (IL2CPPMELON)
             ClothingDefinition.SlotsToBlock = new Il2CppCollections.List<S1Clothing.EClothingSlot>();
@@ -195,7 +195,7 @@ namespace S1API.Items.Clothing
         protected override Storable.StorableItemDefinition CreateWrapper(
             S1ItemFramework.StorableItemDefinition definition)
         {
-            return new ClothingItemDefinition(ClothingDefinition);
+            return new ClothingItemDefinition(CrossType.As<S1Clothing.ClothingDefinition>(definition));
         }
 
 

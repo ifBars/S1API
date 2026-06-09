@@ -84,7 +84,7 @@ namespace S1API.Items.Buildable
         protected override Storable.StorableItemDefinition CreateWrapper(
             S1ItemFramework.StorableItemDefinition definition)
         {
-            return new BuildableItemDefinition(BuildableDefinition);
+            return new BuildableItemDefinition(CrossType.As<S1ItemFramework.BuildableItemDefinition>(definition));
         }
     }
 }

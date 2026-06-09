@@ -254,8 +254,8 @@ namespace S1API.Items
                 if (string.IsNullOrEmpty(itemId))
                     continue;
 
-                // Use GetItemDefinition to properly wrap the item with the correct type
-                var wrappedItem = GetDefinition(itemId);
+                // Preserve the legacy method's root-namespace wrapper contract.
+                var wrappedItem = GetItemDefinition(itemId);
                 if (wrappedItem != null)
                 {
                     wrappedItems.Add(wrappedItem);
