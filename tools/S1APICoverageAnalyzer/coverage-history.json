@@ -264,11 +264,11 @@
       "note": null
     },
     {
-      "timestamp": "2026-06-04T01:06:08.9873796Z",
-      "classCoveragePercentage": 30.61630218687873,
+      "timestamp": "2026-06-09T22:44:51.4390486Z",
+      "classCoveragePercentage": 30.91451292246521,
       "memberCoveragePercentage": 0,
       "totalClasses": 1006,
-      "coveredClasses": 308,
+      "coveredClasses": 311,
       "totalMembers": 25377,
       "coveredMembers": 0,
       "excludedClasses": 1176,
@@ -280,11 +280,11 @@
     }
   ],
   "latestEntry": {
-    "timestamp": "2026-06-04T01:06:08.9873796Z",
-    "classCoveragePercentage": 30.61630218687873,
+    "timestamp": "2026-06-09T22:44:51.4390486Z",
+    "classCoveragePercentage": 30.91451292246521,
     "memberCoveragePercentage": 0,
     "totalClasses": 1006,
-    "coveredClasses": 308,
+    "coveredClasses": 311,
     "totalMembers": 25377,
     "coveredMembers": 0,
     "excludedClasses": 1176,
