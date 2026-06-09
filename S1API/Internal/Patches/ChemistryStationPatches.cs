@@ -1,8 +1,10 @@
 #if (IL2CPPMELON)
+using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1ObjectScripts = Il2CppScheduleOne.ObjectScripts;
 using S1StationFramework = Il2CppScheduleOne.StationFramework;
 using S1UIStations = Il2CppScheduleOne.UI.Stations;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
+using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1ObjectScripts = ScheduleOne.ObjectScripts;
 using S1StationFramework = ScheduleOne.StationFramework;
 using S1UIStations = ScheduleOne.UI.Stations;
@@ -10,9 +12,11 @@ using S1UIStations = ScheduleOne.UI.Stations;
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using HarmonyLib;
 using S1API.Internal.Utils;
+using S1API.Items;
 using S1API.Logging;
 using S1API.Stations;
 using UnityEngine;
@@ -268,6 +272,38 @@ namespace S1API.Internal.Patches
             }
 
             return null;
+        }
+
+        [HarmonyPatch(typeof(S1StationFramework.StationRecipe), "CalculateQuality")]
+        [HarmonyPrefix]
+        private static bool UseCustomCalcMethods(S1StationFramework.StationRecipe __instance,
+            ref S1ItemFramework.EQuality __result)
+        {
+            // Exit early out of patch if instance or recipeID is null
+            if (__instance == null) return true;
+            string? instanceRecipeId;
+            try { instanceRecipeId = __instance.RecipeID; } catch { instanceRecipeId = null; }
+            if (string.IsNullOrWhiteSpace(instanceRecipeId)) return true;
+            var currentAddedRecipe =
+                ChemistryStationRecipes.GetAll().FirstOrDefault(r =>
+                {
+                    try { return string.Equals(r.RecipeID, instanceRecipeId, StringComparison.OrdinalIgnoreCase); }
+                    catch { return false; }
+                });
+            // If this recipe is not one of ours, exit early from patch
+            if (currentAddedRecipe == null) return true;
+            // Use default quality calculation for non-absolute methods
+            if (currentAddedRecipe.QualityCalculationMethod != QualityCalculationMethod.Absolute) return true;
+            var product = currentAddedRecipe.Product.ItemId;
+            var itemDefinition = ItemManager.GetItemDefinition(product);
+            if (itemDefinition is not QualityItemDefinition qualityItemDefinition)
+            {
+                Logger.Warning($"[S1API] Absolute quality calculation method specified for recipe '{currentAddedRecipe.RecipeID}' but product '{product}' is not a quality item. Falling back to default calculation.");
+                return true;
+            }
+
+            __result = (S1ItemFramework.EQuality)qualityItemDefinition.DefaultQuality;
+            return false;
         }
     }
 }
