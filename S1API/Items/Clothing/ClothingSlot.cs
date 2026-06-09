@@ -1,12 +1,11 @@
-using System;
+﻿using System;
 
-namespace S1API.Items
+namespace S1API.Items.Clothing
 {
     /// <summary>
     /// Represents the slot where a clothing item can be equipped.
     /// Mirrors ScheduleOne.Clothing.EClothingSlot.
     /// </summary>
-    [Obsolete("Use S1API.Items.Clothing.ClothingSlot instead")]
     public enum ClothingSlot
     {
         /// <summary>Feet slot (shoes, boots).</summary>
@@ -31,4 +30,3 @@ namespace S1API.Items
         Wrist = 9
     }
 }
-

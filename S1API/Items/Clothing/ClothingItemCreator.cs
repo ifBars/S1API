@@ -1,23 +1,20 @@
-#if (IL2CPPMELON)
+﻿#if (IL2CPPMELON)
 using S1 = Il2CppScheduleOne;
 using S1Clothing = Il2CppScheduleOne.Clothing;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1 = ScheduleOne;
 using S1Clothing = ScheduleOne.Clothing;
 #endif
-
 using System;
 using S1API.Internal.Utils;
 using S1API.Logging;
-using UnityEngine;
 
-namespace S1API.Items
+namespace S1API.Items.Clothing
 {
     /// <summary>
     /// Provides convenient static methods for creating custom clothing items.
     /// Use <see cref="CreateBuilder()"/> for flexible configuration or <see cref="CloneFrom(string)"/> for variants.
     /// </summary>
-    [Obsolete("Use S1API.Items.Clothing.ClothingItemCreator instead")]
     public static class ClothingItemCreator
     {
         private static readonly Log Logger = new Log("ClothingItemCreator");
@@ -62,6 +59,11 @@ namespace S1API.Items
         /// </example>
         public static ClothingItemDefinitionBuilder CloneFrom(string sourceItemId)
         {
+            if (string.IsNullOrWhiteSpace(sourceItemId))
+            {
+                throw new ArgumentException("Source item ID cannot be null or whitespace", nameof(sourceItemId));
+            }
+
             var sourceDefinition = S1.Registry.GetItem(sourceItemId);
             if (sourceDefinition == null)
             {

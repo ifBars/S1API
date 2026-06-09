@@ -1,14 +1,12 @@
-#if (IL2CPPMELON)
+﻿#if (IL2CPPMELON)
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1ItemFramework = ScheduleOne.ItemFramework;
 #endif
-
-using System;
 using S1API.Leveling;
 using UnityEngine;
 
-namespace S1API.Items
+namespace S1API.Items.Storable
 {
     /// <summary>
     /// Represents an item definition that can be purchased, sold, and stored in inventories.
@@ -18,7 +16,6 @@ namespace S1API.Items
     /// In Schedule One, all items are StorableItemDefinition or subclasses thereof.
     /// The base ItemDefinition class is abstract and not used directly in gameplay.
     /// </remarks>
-    [Obsolete("Use S1API.Items.Storable.StorableItemDefinition instead")]
     public class StorableItemDefinition : ItemDefinition
     {
         /// <summary>

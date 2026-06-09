@@ -31,6 +31,7 @@ namespace S1API.Items
         /// </summary>
         /// <param name="itemID">The ID of the item.</param>
         /// <returns>An instance of the item definition.</returns>
+        [Obsolete("Use S1API.Items.ItemManager.GetDefinition instead.")]
         public static ItemDefinition GetItemDefinition(string itemID)
         {
             S1ItemFramework.ItemDefinition itemDefinition = S1Registry.GetItem(itemID);
@@ -70,6 +71,54 @@ namespace S1API.Items
             if (CrossType.Is(itemDefinition,
                     out S1ItemFramework.StorableItemDefinition storableItemDefinition))
                 return new StorableItemDefinition(storableItemDefinition);
+
+            return new ItemDefinition(itemDefinition);
+        }
+
+        /// <summary>
+        /// Gets the definition of an item by its ID.
+        /// </summary>
+        /// <param name="itemID">The ID of the item.</param>
+        /// <returns>An instance of the item definition.</returns>
+        public static ItemDefinition? GetDefinition(string itemID)
+        {
+            var itemDefinition = S1Registry.GetItem(itemID);
+
+            if (itemDefinition == null)
+                return null;
+
+            // Check for specific types first (most derived to least derived)
+            if (CrossType.Is(itemDefinition,
+                    out S1Product.ProductDefinition productDefinition))
+                return new ProductDefinition(productDefinition);
+
+            if (CrossType.Is(itemDefinition,
+                    out S1ItemFramework.CashDefinition cashDefinition))
+                return new CashDefinition(cashDefinition);
+
+            if (CrossType.Is(itemDefinition,
+                    out S1Clothing.ClothingDefinition clothingDefinition))
+                return new Clothing.ClothingItemDefinition(clothingDefinition);
+
+            if (CrossType.Is(itemDefinition,
+                    out S1ItemFramework.BuildableItemDefinition buildableItemDefinition))
+                return new Buildable.BuildableItemDefinition(buildableItemDefinition);
+
+            if (CrossType.Is(itemDefinition,
+                    out S1Packaging.PackagingDefinition packagingDefinition))
+                return new PackagingDefinition(packagingDefinition);
+
+            if (CrossType.Is(itemDefinition,
+                    out S1ItemFramework.AdditiveDefinition additiveDefinition))
+                return new Additive.AdditiveDefinition(additiveDefinition);
+
+            if (CrossType.Is(itemDefinition,
+                    out S1ItemFramework.QualityItemDefinition qualityItemDefinition))
+                return new Quality.QualityItemDefinition(qualityItemDefinition);
+            
+            if (CrossType.Is(itemDefinition,
+                    out S1ItemFramework.StorableItemDefinition storableItemDefinition))
+                return new Storable.StorableItemDefinition(storableItemDefinition);
 
             return new ItemDefinition(itemDefinition);
         }
@@ -159,7 +208,7 @@ namespace S1API.Items
                 return false;
             }
 
-            ItemDefinition definition = GetItemDefinition(itemID);
+            var definition = GetDefinition(itemID);
             if (definition == null)
             {
                 return false;
@@ -167,7 +216,7 @@ namespace S1API.Items
 
             RemoveFromRuntimeCleanupQueue(definition.S1ItemDefinition, definition.ID);
             S1Registry.Instance.RemoveFromRegistry(definition.S1ItemDefinition);
-            return GetItemDefinition(itemID) == null;
+            return GetDefinition(itemID) == null;
         }
 
         /// <summary>
@@ -205,7 +254,7 @@ namespace S1API.Items
                 if (string.IsNullOrEmpty(itemId))
                     continue;
 
-                // Use GetItemDefinition to properly wrap the item with the correct type
+                // Preserve the legacy method's root-namespace wrapper contract.
                 var wrappedItem = GetItemDefinition(itemId);
                 if (wrappedItem != null)
                 {

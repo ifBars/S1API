@@ -1,16 +1,16 @@
-using System;
-using S1API.Internal.Utils;
-using S1API.Leveling;
-using UnityEngine;
-#if (IL2CPPMELON)
+﻿#if (IL2CPPMELON)
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1Registry = Il2CppScheduleOne.Registry;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1Registry = ScheduleOne.Registry;
 #endif
+using System;
+using S1API.Internal.Utils;
+using S1API.Leveling;
+using UnityEngine;
 
-namespace S1API.Items
+namespace S1API.Items.Storable
 {
     /// <summary>
     /// Provides convenient static methods for creating custom items.
@@ -19,7 +19,6 @@ namespace S1API.Items
     /// <remarks>
     /// All items in Schedule One are storable items (StorableItemDefinition), so both methods create the same type.
     /// </remarks>
-    [Obsolete("Use S1API.Items.Storable.ItemCreator instead")]
     public static class ItemCreator
     {
         /// <summary>
@@ -49,6 +48,11 @@ namespace S1API.Items
         /// <exception cref="ArgumentException">Thrown if the source item ID is not found or is not a storable item.</exception>
         public static StorableItemDefinitionBuilder CloneFrom(string sourceItemId)
         {
+            if (string.IsNullOrWhiteSpace(sourceItemId))
+            {
+                throw new ArgumentException("Source item ID cannot be null or whitespace", nameof(sourceItemId));
+            }
+
             var sourceDefinition = S1Registry.GetItem(sourceItemId);
             if (sourceDefinition == null)
             {
@@ -91,8 +95,7 @@ namespace S1API.Items
         /// <param name="basePurchasePrice">Base price when buying from shops (default: 10).</param>
         /// <param name="resellMultiplier">Fraction of purchase price recovered when selling (default: 0.5).</param>
         /// <param name="legalStatus">Whether the item is legal or illegal (default: Legal).</param>
-        /// <param name="requiresLevelToPurchase">Whether purchasing the item requires a certain player rank (default: false).</param>
-        /// <param name="requiredRank">The player rank required to purchase the item, if applicable (default: null).</param>
+        /// <param name="requiredRank">The player rank required to purchase the item, null if no rank required (default: null).</param>
         /// <param name="icon">Optional sprite to use as the item icon.</param>
         /// <param name="equippable">Optional equippable component to attach.</param>
         /// <returns>A wrapper around the created item definition.</returns>
@@ -117,7 +120,6 @@ namespace S1API.Items
             float basePurchasePrice = 10f,
             float resellMultiplier = 0.5f,
             LegalStatus legalStatus = LegalStatus.Legal,
-            bool requiresLevelToPurchase = false,
             FullRank? requiredRank = null,
             Sprite icon = null,
             Equippable equippable = null)
@@ -126,7 +128,7 @@ namespace S1API.Items
                 .WithBasicInfo(id, name, description, category)
                 .WithStackLimit(stackLimit)
                 .WithPricing(basePurchasePrice, resellMultiplier)
-                .WithRequiredRank(requiresLevelToPurchase ? requiredRank : null)
+                .WithRequiredRank(requiredRank)
                 .WithLegalStatus(legalStatus);
 
             if (icon != null)

@@ -3,24 +3,21 @@ using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1ItemFramework = ScheduleOne.ItemFramework;
 #endif
-using System;
 using S1API.Internal.Utils;
-using S1API.Products;
 
-namespace S1API.Items
+namespace S1API.Items.Quality
 {
     /// <summary>
     /// Represents a quality item instance in the game world (usable item).
     /// Extends <see cref="ItemInstance"/> with quality information.
     /// </summary>
-    [Obsolete("Use S1API.Items.Quality.QualityItemInstance instead")]
     public class QualityItemInstance : ItemInstance
     {
         /// <summary>
         /// INTERNAL: Reference to the in-game quality item instance.
         /// </summary>
         internal readonly S1ItemFramework.QualityItemInstance S1QualityInstance;
-        
+
         /// <summary>
         /// INTERNAL: Creates a QualityItemInstance wrapper.
         /// </summary>
@@ -29,7 +26,7 @@ namespace S1API.Items
         {
             S1QualityInstance = itemInstance;
         }
-        
+
         /// <summary>
         /// The quality of this item.
         /// </summary>
@@ -38,7 +35,7 @@ namespace S1API.Items
             get => (Products.Quality)S1QualityInstance.Quality;
             set => S1QualityInstance.Quality = (S1ItemFramework.EQuality)value;
         }
-        
+
         /// <summary>
         /// The quality item definition (template) this instance was created from.
         /// </summary>

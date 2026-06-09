@@ -8,14 +8,13 @@ using S1Registry = ScheduleOne.Registry;
 using System;
 using S1API.Internal.Utils;
 
-namespace S1API.Items
+namespace S1API.Items.Quality
 {
     /// <summary>
     /// Provides convenient static methods for creating custom quality items.
     /// Use <see cref="CreateBuilder"/> for flexible configuration
     /// or <see cref="CloneFrom"/> for quick variants based on existing items.
     /// </summary>
-    [Obsolete("Use S1API.Items.Quality.QualityItemCreator instead")]
     public class QualityItemCreator
     {
         /// <summary>
@@ -35,6 +34,11 @@ namespace S1API.Items
         /// <exception cref="ArgumentException">Thrown if the source item ID is not found or is not a quality item.</exception>
         public static QualityItemDefinitionBuilder CloneFrom(string sourceItemId)
         {
+            if (string.IsNullOrWhiteSpace(sourceItemId))
+            {
+                throw new ArgumentException("Source item ID cannot be null or whitespace", nameof(sourceItemId));
+            }
+
             var sourceDefinition = S1Registry.GetItem(sourceItemId);
             if (sourceDefinition == null)
             {

@@ -1,4 +1,4 @@
-#if (IL2CPPMELON)
+﻿#if (IL2CPPMELON)
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1CoreItemFramework = Il2CppScheduleOne.Core.Items.Framework;
 using S1Levelling = Il2CppScheduleOne.Levelling;
@@ -30,6 +30,7 @@ namespace S1API.Items
     /// All items in Schedule One are StorableItemDefinition (or subclasses thereof).
     /// The base ItemDefinition class is never used directly in the game.
     /// </remarks>
+    [Obsolete("Use S1API.Items.Storable.StorableItemDefinitionBuilder instead")]
     public sealed class StorableItemDefinitionBuilder
     {
         private static readonly Log Logger = new Log("StorableItemDefinitionBuilder");
@@ -266,6 +267,8 @@ namespace S1API.Items
         /// <returns>A wrapper around the created storable item definition.</returns>
         public StorableItemDefinition Build()
         {
+            if (string.IsNullOrWhiteSpace(_definition.ID))
+                throw new ArgumentException("Item ID cannot be null, empty, or whitespace.", nameof(_definition.ID));
             if (!_hasCustomStoredItem && _definition.StoredItem != null)
             {
                 // Ensure placeholder naming stays in sync after late changes.

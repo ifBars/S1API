@@ -3,20 +3,17 @@ using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1ItemFramework = ScheduleOne.ItemFramework;
 #endif
-using System;
-using S1API.Products;
 
-namespace S1API.Items
+namespace S1API.Items.Quality
 {
     /// <summary>
     /// Represents a quality item definition that can be consumed or used in recipes
     /// Extends <see cref="StorableItemDefinition"/> with quality-specific properties.
     /// </summary>
     /// <remarks>
-    /// Use <see cref="QualityItemCreator"/>
+    /// Use <see cref="Items.QualityItemCreator"/>
     /// </remarks>
-    [Obsolete("Use S1API.Items.Quality.QualityItemDefinition instead")]
-    public class QualityItemDefinition : StorableItemDefinition
+    public class QualityItemDefinition : Storable.StorableItemDefinition
     {
         /// <summary>
         /// INTERNAL: Wraps an existing native quality item definition.

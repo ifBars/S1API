@@ -1,26 +1,23 @@
-#if (IL2CPPMELON)
+﻿#if (IL2CPPMELON)
 using S1Clothing = Il2CppScheduleOne.Clothing;
 using Il2CppCollections = Il2CppSystem.Collections.Generic;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1Clothing = ScheduleOne.Clothing;
-using Il2CppCollections = System.Collections.Generic;
 #endif
-
 using System;
 using System.Collections.Generic;
 
-namespace S1API.Items
+namespace S1API.Items.Clothing
 {
     /// <summary>
     /// Represents a clothing item definition that can be worn by the player.
     /// Extends <see cref="StorableItemDefinition"/> with clothing-specific properties.
     /// </summary>
     /// <remarks>
-    /// Use <see cref="ClothingItemCreator.CreateBuilder()"/> to create new clothing items,
-    /// or <see cref="ClothingItemCreator.CloneFrom(string)"/> to create variants of existing items.
+    /// Use <see cref="Items.ClothingItemCreator.CreateBuilder"/> to create new clothing items,
+    /// or <see cref="Items.ClothingItemCreator.CloneFrom(string)"/> to create variants of existing items.
     /// </remarks>
-    [Obsolete("Use S1API.Items.Clothing.ClothingItemDefinition instead")]
-    public sealed class ClothingItemDefinition : StorableItemDefinition
+    public sealed class ClothingItemDefinition : Storable.StorableItemDefinition
     {
         /// <summary>
         /// INTERNAL: Wraps an existing native clothing item definition.

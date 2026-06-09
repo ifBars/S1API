@@ -27,6 +27,7 @@ namespace S1API.Items
     /// Builder for composing quality item definitions at runtime.
     /// Use fluent methods to configure item properties before calling <see cref="Build"/>
     /// </summary>
+    [Obsolete("Use S1API.Items.Quality.QualityItemDefinitionBuilder instead")]
     public sealed class QualityItemDefinitionBuilder
     {
         private static readonly Log Logger = new Log("QualityItemDefinitionBuilder");
@@ -262,7 +263,7 @@ namespace S1API.Items
         /// </summary>
         /// <param name="quality">The default quality to assign to items of this definition.</param>
         /// <returns>>The builder instance for fluent chaining.</returns>
-        public QualityItemDefinitionBuilder WithDefaultQuality(Quality quality)
+        public QualityItemDefinitionBuilder WithDefaultQuality(Products.Quality quality)
         {
             _definition.DefaultQuality = (S1ItemFramework.EQuality)quality;
             return this;
@@ -274,6 +275,8 @@ namespace S1API.Items
         /// <returns>A wrapper around the created storable item definition.</returns>
         public QualityItemDefinition Build()
         {
+            if (string.IsNullOrWhiteSpace(_definition.ID))
+                throw new ArgumentException("Item ID cannot be null, empty, or whitespace.", nameof(_definition.ID));
             if (!_hasCustomStoredItem && _definition.StoredItem != null)
             {
                 // Ensure placeholder naming stays in sync after late changes.

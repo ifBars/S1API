@@ -14,6 +14,7 @@ using S1UiItems = ScheduleOne.UI.Items;
 using Il2CppCollections = System.Collections.Generic;
 #endif
 
+using System;
 using System.Collections.Generic;
 using S1API.Internal.Utils;
 using S1API.Logging;
@@ -25,6 +26,7 @@ namespace S1API.Items
     /// Builder for composing clothing item definitions at runtime.
     /// Use fluent methods to configure clothing properties before calling <see cref="Build"/>.
     /// </summary>
+    [Obsolete("Use S1API.Items.Clothing.ClothingItemDefinitionBuilder instead")]
     public sealed class ClothingItemDefinitionBuilder
     {
         private static readonly Log Logger = new Log("ClothingItemDefinitionBuilder");
@@ -237,6 +239,9 @@ namespace S1API.Items
         /// <returns>A wrapper around the created clothing item definition.</returns>
         public ClothingItemDefinition Build()
         {
+            if (string.IsNullOrWhiteSpace(_definition.ID))
+                throw new ArgumentException("Item ID cannot be null, empty, or whitespace.", nameof(_definition.ID));
+
             EnsureNativeClothingItemUi();
 
             // Register with the game's registry

@@ -1,13 +1,12 @@
-#if (IL2CPPMELON)
+﻿#if (IL2CPPMELON)
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1ItemFramework = ScheduleOne.ItemFramework;
 #endif
-
 using System;
 using UnityEngine;
 
-namespace S1API.Items
+namespace S1API.Items.Additive
 {
     /// <summary>
     /// Represents an additive item definition.
@@ -18,8 +17,7 @@ namespace S1API.Items
     /// globally-registered ScriptableObject definitions mid-session. Use <see cref="AdditiveItemCreator"/> to create
     /// additives with configured effects.
     /// </remarks>
-    [Obsolete("Use S1API.Items.Additive.AdditiveDefinition instead")]
-    public sealed class AdditiveDefinition : StorableItemDefinition
+    public sealed class AdditiveDefinition : Storable.StorableItemDefinition
     {
         /// <summary>
         /// INTERNAL: Wraps an existing native additive definition.

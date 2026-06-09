@@ -8,6 +8,7 @@ using S1CoreItemFramework = ScheduleOne.Core.Items.Framework;
 using S1Registry = ScheduleOne.Registry;
 #endif
 
+using System;
 using UnityEngine;
 
 namespace S1API.Items
@@ -16,6 +17,7 @@ namespace S1API.Items
     /// Builder for composing buildable item definitions at runtime.
     /// Use fluent methods to configure buildable item properties before calling <see cref="Build"/>.
     /// </summary>
+    [Obsolete("Use S1API.Items.Buildable.BuildableItemDefinitionBuilder instead")]
     public sealed class BuildableItemDefinitionBuilder
     {
         private readonly S1ItemFramework.BuildableItemDefinition _definition;
@@ -189,6 +191,9 @@ namespace S1API.Items
         /// <returns>A wrapper around the created buildable item definition.</returns>
         public BuildableItemDefinition Build()
         {
+            if (string.IsNullOrWhiteSpace(_definition.ID))
+                throw new ArgumentException("Item ID cannot be null, empty, or whitespace.", nameof(_definition.ID));
+
             // Register with the game's registry
             S1Registry.Instance.AddToRegistry(_definition);
 

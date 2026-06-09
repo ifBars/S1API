@@ -1,21 +1,19 @@
-#if (IL2CPPMELON)
+﻿#if (IL2CPPMELON)
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1Registry = Il2CppScheduleOne.Registry;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1Registry = ScheduleOne.Registry;
 #endif
-
 using System;
 using S1API.Internal.Utils;
 
-namespace S1API.Items
+namespace S1API.Items.Additive
 {
     /// <summary>
     /// Provides convenient static methods for creating custom additive items.
     /// Use <see cref="CreateBuilder"/> for creating additives from scratch, or <see cref="CloneFrom"/> for variants.
     /// </summary>
-    [Obsolete("Use S1API.Items.Additive.AdditiveItemCreator instead")]
     public static class AdditiveItemCreator
     {
         /// <summary>
@@ -35,6 +33,11 @@ namespace S1API.Items
         /// <exception cref="ArgumentException">Thrown if the source item does not exist or is not an additive.</exception>
         public static AdditiveDefinitionBuilder CloneFrom(string sourceItemId)
         {
+            if (string.IsNullOrWhiteSpace(sourceItemId))
+            {
+                throw new ArgumentException("Source item ID cannot be null or whitespace", nameof(sourceItemId));
+            }
+
             var sourceDefinition = S1Registry.GetItem(sourceItemId);
             if (sourceDefinition == null)
             {

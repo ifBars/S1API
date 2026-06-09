@@ -1,15 +1,14 @@
-#if (IL2CPPMELON)
+﻿#if (IL2CPPMELON)
 using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1Registry = Il2CppScheduleOne.Registry;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1Registry = ScheduleOne.Registry;
 #endif
-
 using System;
 using S1API.Internal.Utils;
 
-namespace S1API.Items
+namespace S1API.Items.Buildable
 {
     /// <summary>
     /// Provides convenient static methods for creating custom buildable items.
@@ -18,7 +17,6 @@ namespace S1API.Items
     /// Use <see cref="CreateBuilder"/> for creating items from scratch,
     /// or <see cref="CloneFrom"/> for creating variants of existing buildable items.
     /// </remarks>
-    [Obsolete("Use S1API.Items.Buildable.BuildableItemCreator instead")]
     public static class BuildableItemCreator
     {
         /// <summary>
@@ -57,6 +55,11 @@ namespace S1API.Items
         /// </example>
         public static BuildableItemDefinitionBuilder CloneFrom(string sourceItemId)
         {
+            if (string.IsNullOrWhiteSpace(sourceItemId))
+            {
+                throw new ArgumentException("Source item ID cannot be null or whitespace", nameof(sourceItemId));
+            }
+
             var sourceDefinition = S1Registry.GetItem(sourceItemId);
 
             if (sourceDefinition == null)
@@ -86,7 +89,7 @@ namespace S1API.Items
         /// <returns>A builder initialized with the source item's properties, ready for customization.</returns>
         /// <example>
         /// <code>
-        /// var originalRack = ItemManager.GetItemDefinition("StorageRack-1x0.5") as BuildableItemDefinition;
+        /// var originalRack = ItemManager.GetDefinition("StorageRack-1x0.5") as BuildableItemDefinition;
         /// var metalRack = BuildableItemCreator.CloneFrom(originalRack)
         ///     .WithBasicInfo("metal_rack_small", "Small Metal Storage Rack", "A metal version")
         ///     .WithBuildSound(BuildSoundType.Metal)
