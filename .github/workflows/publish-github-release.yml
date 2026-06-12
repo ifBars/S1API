@@ -47,6 +47,164 @@ jobs:
           echo "release_name=${release_name}" >> "$GITHUB_OUTPUT"
           echo "release_branch=${release_branch}" >> "$GITHUB_OUTPUT"
 
+      - name: Checkout S1API
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.metadata.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Checkout Mono game assemblies
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.GAME_ASSEMBLIES_REPO }}
+          token: ${{ secrets.GAME_ASSEMBLIES_TOKEN }}
+          ref: main
+          path: game-assemblies
+          fetch-depth: 1
+
+      - name: Checkout IL2CPP game assemblies
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.IL2CPP_ASSEMBLIES_REPO }}
+          token: ${{ secrets.IL2CPP_ASSEMBLIES_TOKEN }}
+          ref: main
+          path: il2cpp-scheduleone-assemblies
+          fetch-depth: 1
+
+      - name: Prepare build inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p S1API/ScheduleOneAssemblies/Managed
+          mkdir -p S1API/ScheduleOneAssemblies/MelonLoader
+          mkdir -p S1API/ScheduleOneAssemblies/MelonLoaderMono
+          mkdir -p S1API/ScheduleOneAssemblies/Il2CppAssemblies
+
+          cp -r game-assemblies/Managed/* S1API/ScheduleOneAssemblies/Managed/
+
+          if [[ -d "game-assemblies/MelonLoaderMono" ]]; then
+            cp -r game-assemblies/MelonLoaderMono/* S1API/ScheduleOneAssemblies/MelonLoaderMono/
+          elif [[ -d "game-assemblies/MelonLoader/net35" ]]; then
+            cp -r game-assemblies/MelonLoader/net35/* S1API/ScheduleOneAssemblies/MelonLoaderMono/
+          elif [[ -d "game-assemblies/MelonLoader" ]]; then
+            cp -r game-assemblies/MelonLoader/* S1API/ScheduleOneAssemblies/MelonLoaderMono/
+          else
+            echo "Unable to locate Mono MelonLoader assemblies in game-assemblies"
+            exit 1
+          fi
+
+          if [[ -d "il2cpp-scheduleone-assemblies/MelonLoader/Il2CppAssemblies" ]]; then
+            cp -r il2cpp-scheduleone-assemblies/MelonLoader/Il2CppAssemblies/* S1API/ScheduleOneAssemblies/Il2CppAssemblies/
+          else
+            echo "Unable to locate IL2CPP generated assemblies"
+            exit 1
+          fi
+
+          if [[ -d "il2cpp-scheduleone-assemblies/MelonLoader/net6" ]]; then
+            cp -r il2cpp-scheduleone-assemblies/MelonLoader/net6/* S1API/ScheduleOneAssemblies/MelonLoader/
+          else
+            echo "Unable to locate IL2CPP MelonLoader net6 assemblies"
+            exit 1
+          fi
+
+          for assembly in \
+            Il2CppInterop.Runtime.dll \
+            Il2CppInterop.Common.dll \
+            Il2CppInterop.HarmonySupport.dll \
+            Il2CppInterop.Generator.dll \
+            UnityEngine.Il2CppAssetBundleManager.dll; do
+            if [[ ! -f "S1API/ScheduleOneAssemblies/MelonLoader/${assembly}" ]]; then
+              found_path="$(find il2cpp-scheduleone-assemblies -name "${assembly}" -type f | head -1)"
+              if [[ -n "${found_path}" ]]; then
+                cp "${found_path}" S1API/ScheduleOneAssemblies/MelonLoader/
+              else
+                echo "Missing required IL2CPP dependency: ${assembly}"
+                exit 1
+              fi
+            fi
+          done
+
+          for assembly in \
+            Unity.TextMeshPro.dll \
+            UnityEngine.AIModule.dll; do
+            if [[ ! -f "S1API/ScheduleOneAssemblies/Managed/${assembly}" ]]; then
+              found_path="$(find game-assemblies -name "${assembly}" -type f | head -1)"
+              if [[ -n "${found_path}" ]]; then
+                cp "${found_path}" S1API/ScheduleOneAssemblies/Managed/
+              fi
+            fi
+            if [[ ! -f "S1API/ScheduleOneAssemblies/Il2CppAssemblies/${assembly}" ]]; then
+              found_path="$(find il2cpp-scheduleone-assemblies -name "${assembly}" -type f | head -1)"
+              if [[ -n "${found_path}" ]]; then
+                cp "${found_path}" S1API/ScheduleOneAssemblies/Il2CppAssemblies/
+              fi
+            fi
+          done
+
+          cat > ci.build.props << 'EOF'
+          <Project>
+              <PropertyGroup>
+                  <AutomateLocalDeployment>false</AutomateLocalDeployment>
+                  <MelonLoaderAssembliesPath>$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
+                  <MelonLoaderMonoAssembliesPath>$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/MelonLoaderMono</MelonLoaderMonoAssembliesPath>
+                  <LocalMonoDeploymentPath>null</LocalMonoDeploymentPath>
+                  <MonoAssembliesPath>$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/Managed</MonoAssembliesPath>
+                  <LocalIl2CppDeploymentPath>null</LocalIl2CppDeploymentPath>
+                  <Il2CppAssembliesPath Condition="'$(Configuration)' == 'Il2CppMelon'">$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/Il2CppAssemblies</Il2CppAssembliesPath>
+              </PropertyGroup>
+          </Project>
+          EOF
+
+      - name: Build release DLLs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          dotnet restore S1API/S1API.csproj -p:Configuration=MonoMelon
+          dotnet build S1API/S1API.csproj -c MonoMelon -f netstandard2.1 /p:AutomateLocalDeployment=false --no-restore
+
+          dotnet restore S1API/S1API.csproj -p:Configuration=Il2CppMelon
+          dotnet build S1API/S1API.csproj -c Il2CppMelon -f net6.0 /p:AutomateLocalDeployment=false --no-restore
+
+          dotnet restore S1APILoader/S1APILoader.csproj -p:Configuration=MonoMelon
+          dotnet build S1APILoader/S1APILoader.csproj -c MonoMelon -f netstandard2.1 /p:AutomateLocalDeployment=false --no-restore
+
+      - name: Package release asset
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package_dir="artifacts/S1API-Forked-${{ steps.metadata.outputs.base_version }}"
+          zip_path="artifacts/S1API-Forked-${{ steps.metadata.outputs.base_version }}.zip"
+
+          mkdir -p "${package_dir}/mods" "${package_dir}/plugins"
+          cp S1API/bin/MonoMelon/netstandard2.1/S1API.dll "${package_dir}/mods/S1API.Mono.MelonLoader.dll"
+          cp S1API/bin/Il2CppMelon/net6.0/S1API.dll "${package_dir}/mods/S1API.Il2Cpp.MelonLoader.dll"
+          cp S1APILoader/bin/MonoMelon/netstandard2.1/S1APILoader.dll "${package_dir}/plugins/S1APILoader.MelonLoader.dll"
+
+          (
+            cd "${package_dir}"
+            zip -r "../$(basename "${zip_path}")" mods plugins
+          )
+
+          unzip -l "${zip_path}"
+
+          for entry in \
+            "mods/S1API.Mono.MelonLoader.dll" \
+            "mods/S1API.Il2Cpp.MelonLoader.dll" \
+            "plugins/S1APILoader.MelonLoader.dll"; do
+            unzip -Z1 "${zip_path}" | grep -Fx "${entry}" >/dev/null
+          done
+
+          echo "zip_path=${zip_path}" >> "$GITHUB_OUTPUT"
+
       - name: Publish or update GitHub release
         uses: actions/github-script@v7
         env:
@@ -139,3 +297,8 @@ jobs:
 
             const created = await github.rest.repos.createRelease(payload);
             core.notice(`Published GitHub release ${created.data.html_url}`);
+
+      - name: Upload release asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ steps.metadata.outputs.tag }}" "${{ steps.package.outputs.zip_path }}" --clobber
