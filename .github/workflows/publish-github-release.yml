@@ -165,11 +165,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          dotnet restore S1API/S1API.csproj -p:Configuration=MonoMelon
-          dotnet build S1API/S1API.csproj --no-restore -c MonoMelon -v minimal /p:AutomateLocalDeployment=false
-
           dotnet restore S1API/S1API.csproj -p:Configuration=Il2CppMelon
           dotnet build S1API/S1API.csproj --no-restore -c Il2CppMelon -v minimal /p:AutomateLocalDeployment=false
+
+          dotnet restore S1API/S1API.csproj -p:Configuration=MonoMelon
+          dotnet build S1API/S1API.csproj --no-restore -c MonoMelon -v minimal /p:AutomateLocalDeployment=false
 
           dotnet restore S1APILoader/S1APILoader.csproj -p:Configuration=MonoMelon
           dotnet build S1APILoader/S1APILoader.csproj -c MonoMelon -f netstandard2.1 /p:AutomateLocalDeployment=false --no-restore
