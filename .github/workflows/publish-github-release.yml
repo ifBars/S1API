@@ -10,9 +10,30 @@ on:
         description: Existing release tag to publish or refresh
         required: true
         type: string
+      publish_nexus:
+        description: Upload the release package to Nexus Mods
+        required: false
+        default: true
+        type: boolean
+      publish_thunderstore:
+        description: Upload the Thunderstore package to Thunderstore
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
+
+env:
+  NEXUSMODS_API_KEY: ${{ secrets.NEXUSMODS_API_KEY }}
+  NEXUSMODS_FILE_GROUP_ID: ${{ secrets.NEXUSMODS_FILE_GROUP_ID || vars.NEXUSMODS_FILE_GROUP_ID }}
+  RELEASE_DESCRIPTION: S1API is an open source collaboration project to help standardize Schedule One modding processes. The goal is to provide a standard place for common functionalities so you can focus on making content versus reverse engineering the game.
+  THUNDERSTORE_COMMUNITY: schedule-i
+  THUNDERSTORE_TOKEN: ${{ secrets.THUNDERSTORE_TOKEN }}
+  THUNDERSTORE_NAMESPACE: ifBars
+  THUNDERSTORE_PACKAGE_NAME: S1API_Forked
+  THUNDERSTORE_CATEGORIES: libraries
+  THUNDERSTORE_WEBSITE: https://github.com/ifBars/S1API
 
 jobs:
   publish-release:
@@ -213,7 +234,7 @@ jobs:
           dotnet build S1API/S1API.csproj --no-restore -c Il2CppMelon -v minimal /p:AutomateLocalDeployment=false
           cp S1API/bin/Il2CppMelon/net6.0/S1API.dll artifacts/build/S1API.Il2Cpp.MelonLoader.dll
 
-      - name: Package release asset
+      - name: Package release assets
         id: package
         shell: bash
         run: |
@@ -221,27 +242,69 @@ jobs:
 
           package_dir="artifacts/S1API-Forked-${{ steps.metadata.outputs.base_version }}"
           zip_path="artifacts/S1API-Forked-${{ steps.metadata.outputs.base_version }}.zip"
+          thunderstore_dir="artifacts/S1API-TS-${{ steps.metadata.outputs.base_version }}"
+          thunderstore_zip_path="artifacts/S1API-TS-${{ steps.metadata.outputs.base_version }}.zip"
 
-          mkdir -p "${package_dir}/mods" "${package_dir}/plugins"
-          cp artifacts/build/S1API.Mono.MelonLoader.dll "${package_dir}/mods/S1API.Mono.MelonLoader.dll"
-          cp artifacts/build/S1API.Il2Cpp.MelonLoader.dll "${package_dir}/mods/S1API.Il2Cpp.MelonLoader.dll"
-          cp artifacts/build/S1APILoader.MelonLoader.dll "${package_dir}/plugins/S1APILoader.MelonLoader.dll"
+          mkdir -p "${package_dir}/Mods" "${package_dir}/Plugins"
+          cp artifacts/build/S1API.Mono.MelonLoader.dll "${package_dir}/Mods/S1API.Mono.MelonLoader.dll"
+          cp artifacts/build/S1API.Il2Cpp.MelonLoader.dll "${package_dir}/Mods/S1API.Il2Cpp.MelonLoader.dll"
+          cp artifacts/build/S1APILoader.MelonLoader.dll "${package_dir}/Plugins/S1APILoader.MelonLoader.dll"
 
           (
             cd "${package_dir}"
-            zip -r "../$(basename "${zip_path}")" mods plugins
+            zip -r "../$(basename "${zip_path}")" Mods Plugins
           )
 
           unzip -l "${zip_path}"
 
           for entry in \
-            "mods/S1API.Mono.MelonLoader.dll" \
-            "mods/S1API.Il2Cpp.MelonLoader.dll" \
-            "plugins/S1APILoader.MelonLoader.dll"; do
+            "Mods/S1API.Mono.MelonLoader.dll" \
+            "Mods/S1API.Il2Cpp.MelonLoader.dll" \
+            "Plugins/S1APILoader.MelonLoader.dll"; do
             unzip -Z1 "${zip_path}" | grep -Fx "${entry}" >/dev/null
           done
 
+          mkdir -p "${thunderstore_dir}/Mods" "${thunderstore_dir}/Plugins"
+          cp artifacts/build/S1API.Mono.MelonLoader.dll "${thunderstore_dir}/Mods/S1API.Mono.MelonLoader.dll"
+          cp artifacts/build/S1API.Il2Cpp.MelonLoader.dll "${thunderstore_dir}/Mods/S1API.Il2Cpp.MelonLoader.dll"
+          cp artifacts/build/S1APILoader.MelonLoader.dll "${thunderstore_dir}/Plugins/S1APILoader.MelonLoader.dll"
+          cp Public/logo_compressed.png "${thunderstore_dir}/icon.png"
+          cp Public/README.md "${thunderstore_dir}/README.md"
+
+          jq -n \
+            --arg name "${THUNDERSTORE_PACKAGE_NAME}" \
+            --arg version "${{ steps.metadata.outputs.base_version }}" \
+            --arg website "${THUNDERSTORE_WEBSITE}" \
+            --arg description "${RELEASE_DESCRIPTION}" \
+            '{
+              name: $name,
+              version_number: $version,
+              website_url: $website,
+              description: $description,
+              dependencies: ["LavaGang-MelonLoader-0.7.2"]
+            }' > "${thunderstore_dir}/manifest.json"
+
+          (
+            cd "${thunderstore_dir}"
+            zip -r "../$(basename "${thunderstore_zip_path}")" icon.png README.md manifest.json Mods Plugins
+          )
+
+          unzip -l "${thunderstore_zip_path}"
+
+          for entry in \
+            "icon.png" \
+            "README.md" \
+            "manifest.json" \
+            "Mods/S1API.Mono.MelonLoader.dll" \
+            "Mods/S1API.Il2Cpp.MelonLoader.dll" \
+            "Plugins/S1APILoader.MelonLoader.dll"; do
+            unzip -Z1 "${thunderstore_zip_path}" | grep -Fx "${entry}" >/dev/null
+          done
+
+          jq -e --arg version "${{ steps.metadata.outputs.base_version }}" '.version_number == $version' "${thunderstore_dir}/manifest.json" >/dev/null
+
           echo "zip_path=${zip_path}" >> "$GITHUB_OUTPUT"
+          echo "thunderstore_zip_path=${thunderstore_zip_path}" >> "$GITHUB_OUTPUT"
 
       - name: Publish or update GitHub release
         uses: actions/github-script@v7
@@ -336,7 +399,50 @@ jobs:
             const created = await github.rest.repos.createRelease(payload);
             core.notice(`Published GitHub release ${created.data.html_url}`);
 
-      - name: Upload release asset
+      - name: Upload GitHub release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ steps.metadata.outputs.tag }}" "${{ steps.package.outputs.zip_path }}" --clobber
+        run: |
+          gh release upload "${{ steps.metadata.outputs.tag }}" "${{ steps.package.outputs.zip_path }}" --clobber
+          gh release upload "${{ steps.metadata.outputs.tag }}" "${{ steps.package.outputs.thunderstore_zip_path }}" --clobber
+
+      - name: Upload Nexus Mods release
+        if: ${{ (github.event_name != 'workflow_dispatch' || inputs.publish_nexus) && env.NEXUSMODS_API_KEY != '' && env.NEXUSMODS_FILE_GROUP_ID != '' }}
+        uses: Nexus-Mods/upload-action@v1.0.0-beta.7
+        with:
+          api_key: ${{ env.NEXUSMODS_API_KEY }}
+          file_group_id: ${{ env.NEXUSMODS_FILE_GROUP_ID }}
+          filename: ${{ steps.package.outputs.zip_path }}
+          version: ${{ steps.metadata.outputs.base_version }}
+          display_name: S1API Forked ${{ steps.metadata.outputs.base_version }}
+          description: ${{ env.RELEASE_DESCRIPTION }}
+          file_category: main
+          archive_existing_file: true
+          primary_mod_manager_download: true
+          allow_mod_manager_download: true
+          show_requirements_pop_up: false
+
+      - name: Skip Nexus Mods upload
+        if: ${{ (github.event_name != 'workflow_dispatch' || inputs.publish_nexus) && (env.NEXUSMODS_API_KEY == '' || env.NEXUSMODS_FILE_GROUP_ID == '') }}
+        shell: bash
+        run: echo "::notice::Skipping Nexus Mods upload because NEXUSMODS_API_KEY or NEXUSMODS_FILE_GROUP_ID is not configured."
+
+      - name: Upload Thunderstore release
+        if: ${{ (github.event_name != 'workflow_dispatch' || inputs.publish_thunderstore) && env.THUNDERSTORE_TOKEN != '' }}
+        uses: GreenTF/upload-thunderstore-package@v4.3
+        with:
+          token: ${{ env.THUNDERSTORE_TOKEN }}
+          community: ${{ env.THUNDERSTORE_COMMUNITY }}
+          namespace: ${{ env.THUNDERSTORE_NAMESPACE }}
+          name: ${{ env.THUNDERSTORE_PACKAGE_NAME }}
+          description: ${{ env.RELEASE_DESCRIPTION }}
+          version: ${{ steps.metadata.outputs.base_version }}
+          file: ${{ steps.package.outputs.thunderstore_zip_path }}
+          repo: https://thunderstore.io
+          website: ${{ env.THUNDERSTORE_WEBSITE }}
+          categories: ${{ env.THUNDERSTORE_CATEGORIES }}
+
+      - name: Skip Thunderstore upload
+        if: ${{ (github.event_name != 'workflow_dispatch' || inputs.publish_thunderstore) && env.THUNDERSTORE_TOKEN == '' }}
+        shell: bash
+        run: echo "::notice::Skipping Thunderstore upload because THUNDERSTORE_TOKEN is not configured."

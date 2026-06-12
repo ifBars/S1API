@@ -90,6 +90,19 @@ Before expecting a NuGet package to publish:
 3. Confirm the branch name uses `releases/`, not `release/`.
 4. Confirm the publish workflow secrets are configured in GitHub.
 
+## GitHub, Nexus Mods, and Thunderstore Publishing
+
+The GitHub release workflow packages public mod archives and can publish the same release to mod distribution platforms.
+
+- `publish-github-release.yml` runs from release tags and can also be rerun with `workflow_dispatch`.
+- The GitHub/Nexus archive is `S1API-Forked-x.y.z.zip` and contains `Mods/` and `Plugins/` at the archive root.
+- The Thunderstore archive is `S1API-TS-x.y.z.zip` and contains `icon.png`, `README.md`, `manifest.json`, `Mods/`, and `Plugins/` at the archive root.
+- The uppercase `Mods/` and `Plugins/` paths are intentional so case-sensitive filesystems do not create parallel lowercase install folders.
+- GitHub release assets are always uploaded by the workflow.
+- Nexus Mods upload runs when `NEXUSMODS_API_KEY` and `NEXUSMODS_FILE_GROUP_ID` are configured.
+- Thunderstore upload runs when `THUNDERSTORE_TOKEN` is configured.
+- `workflow_dispatch` exposes `publish_nexus` and `publish_thunderstore` toggles for refreshing GitHub assets without re-publishing external platforms.
+
 ## Backporting Rules
 
 - Prefer cherry-picking specific commits instead of merging branches.
