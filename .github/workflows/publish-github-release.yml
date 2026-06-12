@@ -168,6 +168,8 @@ jobs:
           dotnet restore S1API/S1API.csproj -p:Configuration=Il2CppMelon
           dotnet build S1API/S1API.csproj --no-restore -c Il2CppMelon -v minimal /p:AutomateLocalDeployment=false
 
+          rm -rf S1API/obj
+
           dotnet restore S1API/S1API.csproj -p:Configuration=MonoMelon
           dotnet build S1API/S1API.csproj --no-restore -c MonoMelon -v minimal /p:AutomateLocalDeployment=false
 
