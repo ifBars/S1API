@@ -22,7 +22,7 @@
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <LangVersion>latest</LangVersion>
-        <Version>3.0.4</Version>
+        <Version>3.0.5</Version>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)' == 'MonoMelon' or '$(Configuration)' == 'MonoBepInEx'">
