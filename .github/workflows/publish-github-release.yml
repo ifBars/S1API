@@ -66,16 +66,7 @@ jobs:
           path: game-assemblies
           fetch-depth: 1
 
-      - name: Checkout IL2CPP game assemblies
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ secrets.IL2CPP_ASSEMBLIES_REPO }}
-          token: ${{ secrets.IL2CPP_ASSEMBLIES_TOKEN }}
-          ref: main
-          path: il2cpp-scheduleone-assemblies
-          fetch-depth: 1
-
-      - name: Prepare build inputs
+      - name: Prepare Mono build inputs
         shell: bash
         run: |
           set -euo pipefail
@@ -83,9 +74,12 @@ jobs:
           mkdir -p S1API/ScheduleOneAssemblies/Managed
           mkdir -p S1API/ScheduleOneAssemblies/MelonLoader
           mkdir -p S1API/ScheduleOneAssemblies/MelonLoaderMono
-          mkdir -p S1API/ScheduleOneAssemblies/Il2CppAssemblies
 
           cp -r game-assemblies/Managed/* S1API/ScheduleOneAssemblies/Managed/
+
+          if [[ -d "game-assemblies/MelonLoader" ]]; then
+            cp -r game-assemblies/MelonLoader/* S1API/ScheduleOneAssemblies/MelonLoader/
+          fi
 
           if [[ -d "game-assemblies/MelonLoaderMono" ]]; then
             cp -r game-assemblies/MelonLoaderMono/* S1API/ScheduleOneAssemblies/MelonLoaderMono/
@@ -97,6 +91,65 @@ jobs:
             echo "Unable to locate Mono MelonLoader assemblies in game-assemblies"
             exit 1
           fi
+
+          if [[ ! -f "S1API/ScheduleOneAssemblies/Managed/Unity.TextMeshPro.dll" ]]; then
+            found_path="$(find game-assemblies -name "Unity.TextMeshPro.dll" -type f | head -1)"
+            if [[ -n "${found_path}" ]]; then
+              cp "${found_path}" S1API/ScheduleOneAssemblies/Managed/
+            fi
+          fi
+
+          if [[ ! -f "S1API/ScheduleOneAssemblies/Managed/UnityEngine.AIModule.dll" ]]; then
+            found_path="$(find game-assemblies -name "UnityEngine.AIModule.dll" -type f | head -1)"
+            if [[ -n "${found_path}" ]]; then
+              cp "${found_path}" S1API/ScheduleOneAssemblies/Managed/
+            fi
+          fi
+
+          cat > ci.build.props << 'EOF'
+          <Project>
+              <PropertyGroup>
+                  <AutomateLocalDeployment>false</AutomateLocalDeployment>
+                  <MelonLoaderAssembliesPath>$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
+                  <MelonLoaderMonoAssembliesPath>$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/MelonLoaderMono</MelonLoaderMonoAssembliesPath>
+                  <LocalMonoDeploymentPath>null</LocalMonoDeploymentPath>
+                  <MonoAssembliesPath>$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/Managed</MonoAssembliesPath>
+              </PropertyGroup>
+          </Project>
+          EOF
+
+      - name: Build Mono release DLLs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifacts/build
+
+          dotnet restore S1API/S1API.csproj -p:Configuration=MonoMelon
+          dotnet build S1API/S1API.csproj --no-restore -c MonoMelon -v minimal /p:AutomateLocalDeployment=false
+          cp S1API/bin/MonoMelon/netstandard2.1/S1API.dll artifacts/build/S1API.Mono.MelonLoader.dll
+
+          dotnet restore S1APILoader/S1APILoader.csproj -p:Configuration=MonoMelon
+          dotnet build S1APILoader/S1APILoader.csproj -c MonoMelon -f netstandard2.1 /p:AutomateLocalDeployment=false --no-restore
+          cp S1APILoader/bin/MonoMelon/netstandard2.1/S1APILoader.dll artifacts/build/S1APILoader.MelonLoader.dll
+
+      - name: Checkout IL2CPP game assemblies
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.IL2CPP_ASSEMBLIES_REPO }}
+          token: ${{ secrets.IL2CPP_ASSEMBLIES_TOKEN }}
+          ref: main
+          path: il2cpp-scheduleone-assemblies
+          fetch-depth: 1
+
+      - name: Prepare IL2CPP build inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf S1API/obj
+          mkdir -p S1API/ScheduleOneAssemblies/MelonLoader
+          mkdir -p S1API/ScheduleOneAssemblies/Il2CppAssemblies
 
           if [[ -d "il2cpp-scheduleone-assemblies/MelonLoader/Il2CppAssemblies" ]]; then
             cp -r il2cpp-scheduleone-assemblies/MelonLoader/Il2CppAssemblies/* S1API/ScheduleOneAssemblies/Il2CppAssemblies/
@@ -132,12 +185,6 @@ jobs:
           for assembly in \
             Unity.TextMeshPro.dll \
             UnityEngine.AIModule.dll; do
-            if [[ ! -f "S1API/ScheduleOneAssemblies/Managed/${assembly}" ]]; then
-              found_path="$(find game-assemblies -name "${assembly}" -type f | head -1)"
-              if [[ -n "${found_path}" ]]; then
-                cp "${found_path}" S1API/ScheduleOneAssemblies/Managed/
-              fi
-            fi
             if [[ ! -f "S1API/ScheduleOneAssemblies/Il2CppAssemblies/${assembly}" ]]; then
               found_path="$(find il2cpp-scheduleone-assemblies -name "${assembly}" -type f | head -1)"
               if [[ -n "${found_path}" ]]; then
@@ -151,35 +198,20 @@ jobs:
               <PropertyGroup>
                   <AutomateLocalDeployment>false</AutomateLocalDeployment>
                   <MelonLoaderAssembliesPath>$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
-                  <MelonLoaderMonoAssembliesPath>$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/MelonLoaderMono</MelonLoaderMonoAssembliesPath>
-                  <LocalMonoDeploymentPath>null</LocalMonoDeploymentPath>
-                  <MonoAssembliesPath>$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/Managed</MonoAssembliesPath>
                   <LocalIl2CppDeploymentPath>null</LocalIl2CppDeploymentPath>
                   <Il2CppAssembliesPath Condition="'$(Configuration)' == 'Il2CppMelon'">$(MSBuildThisFileDirectory)S1API/ScheduleOneAssemblies/Il2CppAssemblies</Il2CppAssembliesPath>
               </PropertyGroup>
           </Project>
           EOF
 
-      - name: Build release DLLs
+      - name: Build IL2CPP release DLL
         shell: bash
         run: |
           set -euo pipefail
 
-          mkdir -p artifacts/build
-
-          dotnet restore S1API/S1API.csproj -p:Configuration=MonoMelon
-          dotnet build S1API/S1API.csproj --no-restore -c MonoMelon -v minimal /p:AutomateLocalDeployment=false
-          cp S1API/bin/MonoMelon/netstandard2.1/S1API.dll artifacts/build/S1API.Mono.MelonLoader.dll
-
-          rm -rf S1API/obj
-
           dotnet restore S1API/S1API.csproj -p:Configuration=Il2CppMelon
           dotnet build S1API/S1API.csproj --no-restore -c Il2CppMelon -v minimal /p:AutomateLocalDeployment=false
           cp S1API/bin/Il2CppMelon/net6.0/S1API.dll artifacts/build/S1API.Il2Cpp.MelonLoader.dll
-
-          dotnet restore S1APILoader/S1APILoader.csproj -p:Configuration=MonoMelon
-          dotnet build S1APILoader/S1APILoader.csproj -c MonoMelon -f netstandard2.1 /p:AutomateLocalDeployment=false --no-restore
-          cp S1APILoader/bin/MonoMelon/netstandard2.1/S1APILoader.dll artifacts/build/S1APILoader.MelonLoader.dll
 
       - name: Package release asset
         id: package
