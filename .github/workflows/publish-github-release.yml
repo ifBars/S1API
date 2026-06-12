@@ -165,16 +165,21 @@ jobs:
         run: |
           set -euo pipefail
 
-          dotnet restore S1API/S1API.csproj -p:Configuration=Il2CppMelon
-          dotnet build S1API/S1API.csproj --no-restore -c Il2CppMelon -v minimal /p:AutomateLocalDeployment=false
-
-          rm -rf S1API/obj
+          mkdir -p artifacts/build
 
           dotnet restore S1API/S1API.csproj -p:Configuration=MonoMelon
           dotnet build S1API/S1API.csproj --no-restore -c MonoMelon -v minimal /p:AutomateLocalDeployment=false
+          cp S1API/bin/MonoMelon/netstandard2.1/S1API.dll artifacts/build/S1API.Mono.MelonLoader.dll
+
+          rm -rf S1API/obj
+
+          dotnet restore S1API/S1API.csproj -p:Configuration=Il2CppMelon
+          dotnet build S1API/S1API.csproj --no-restore -c Il2CppMelon -v minimal /p:AutomateLocalDeployment=false
+          cp S1API/bin/Il2CppMelon/net6.0/S1API.dll artifacts/build/S1API.Il2Cpp.MelonLoader.dll
 
           dotnet restore S1APILoader/S1APILoader.csproj -p:Configuration=MonoMelon
           dotnet build S1APILoader/S1APILoader.csproj -c MonoMelon -f netstandard2.1 /p:AutomateLocalDeployment=false --no-restore
+          cp S1APILoader/bin/MonoMelon/netstandard2.1/S1APILoader.dll artifacts/build/S1APILoader.MelonLoader.dll
 
       - name: Package release asset
         id: package
@@ -186,9 +191,9 @@ jobs:
           zip_path="artifacts/S1API-Forked-${{ steps.metadata.outputs.base_version }}.zip"
 
           mkdir -p "${package_dir}/mods" "${package_dir}/plugins"
-          cp S1API/bin/MonoMelon/netstandard2.1/S1API.dll "${package_dir}/mods/S1API.Mono.MelonLoader.dll"
-          cp S1API/bin/Il2CppMelon/net6.0/S1API.dll "${package_dir}/mods/S1API.Il2Cpp.MelonLoader.dll"
-          cp S1APILoader/bin/MonoMelon/netstandard2.1/S1APILoader.dll "${package_dir}/plugins/S1APILoader.MelonLoader.dll"
+          cp artifacts/build/S1API.Mono.MelonLoader.dll "${package_dir}/mods/S1API.Mono.MelonLoader.dll"
+          cp artifacts/build/S1API.Il2Cpp.MelonLoader.dll "${package_dir}/mods/S1API.Il2Cpp.MelonLoader.dll"
+          cp artifacts/build/S1APILoader.MelonLoader.dll "${package_dir}/plugins/S1APILoader.MelonLoader.dll"
 
           (
             cd "${package_dir}"
