@@ -63,7 +63,6 @@ jobs:
         with:
           repository: ${{ secrets.GAME_ASSEMBLIES_REPO }}
           token: ${{ secrets.GAME_ASSEMBLIES_TOKEN }}
-          ref: main
           path: game-assemblies
           fetch-depth: 1
 
