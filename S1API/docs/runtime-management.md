@@ -1,4 +1,4 @@
-# Runtime Management
+# NPC Runtime Management
 
 This guide covers NPC lifecycle, runtime properties, and management during gameplay.
 

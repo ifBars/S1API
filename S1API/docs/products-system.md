@@ -6,7 +6,7 @@ S1API provides a comprehensive system for working with products (drugs, goods) i
 
 The Products system allows you to:
 - Access existing product definitions (Weed, Cocaine, Meth, etc.)
-- Work with product properties (THC%, Purity, etc.)
+- Work with product property tokens such as `Munchies`, `Energizing`, and `Cyclopean`
 - Retrieve product information and pricing
 - Integrate products with dealers and customers
 
@@ -50,7 +50,7 @@ public enum DrugType
 
 ## Product Properties
 
-Products have properties that affect their quality, value, and appeal to customers. The Properties system provides a type-safe way to work with product attributes.
+Products have effect properties that affect value, customer preferences, and callbacks. S1API exposes these as `PropertyBase` tokens so mods do not need to reference runtime-specific game effect types directly.
 
 ### Common Properties
 
@@ -59,11 +59,11 @@ using S1API.Properties;
 using S1API.Products;
 
 // Properties are accessed through the Property class
-Property.Munchies      // Induces hunger
-Property.Energizing    // Provides energy
-Property.Cyclopean     // Hallucinogenic effect
-Property.Relaxing      // Calming effect
-Property.Euphoric      // Happiness effect
+Property.Munchies
+Property.Energizing
+Property.Cyclopean
+Property.Calming
+Property.Euphoric
 // ... many more
 ```
 
@@ -144,36 +144,43 @@ using S1API.Properties;
 
 ## Product Properties Reference
 
-### THC-Related (Marijuana)
-- `Property.Munchies` - Induces hunger
-- `Property.Cyclopean` - Visual/hallucinogenic effects
-- `Property.Relaxing` - Calming effects
-- `Property.Energizing` - Stimulating effects
+The current `Property` helper exposes these built-in tokens:
 
-### Cocaine Properties
-- `Property.Euphoric` - Happiness/euphoria
-- `Property.Energizing` - Energy boost
-- `Property.Focused` - Concentration enhancement
-- `Property.Confident` - Confidence boost
-
-### Methamphetamine Properties
-- `Property.Energizing` - Extreme stimulation
-- `Property.Euphoric` - Intense happiness
-- `Property.Focused` - Enhanced focus
-- `Property.Tweaking` - Jittery/hyperactive
-
-### Negative Properties
-- `Property.Paranoid` - Induces paranoia
-- `Property.Anxious` - Causes anxiety
-- `Property.Nauseous` - Causes nausea
-- `Property.Headache` - Induces headaches
-- `Property.Dizzy` - Causes dizziness
-
-### Quality Indicators
-- `Property.Pure` - High purity (cocaine/meth)
-- `Property.Potent` - High potency (general)
-- `Property.Smooth` - Smooth experience
-- `Property.Harsh` - Harsh/unpleasant
+- `Property.Munchies`
+- `Property.AntiGravity`
+- `Property.Energizing`
+- `Property.Focused`
+- `Property.Smelly`
+- `Property.Euphoric`
+- `Property.Cyclopean`
+- `Property.Slippery`
+- `Property.Shrinking`
+- `Property.Seizure`
+- `Property.Electrifying`
+- `Property.Zombifying`
+- `Property.Disorienting`
+- `Property.Sedating`
+- `Property.CalorieDense`
+- `Property.TropicThunder`
+- `Property.Toxic`
+- `Property.ThoughtProvoking`
+- `Property.Lethal`
+- `Property.Calming`
+- `Property.Schizophrenic`
+- `Property.Spicy`
+- `Property.Laxative`
+- `Property.BrightEyed`
+- `Property.Sneaky`
+- `Property.Jennerising`
+- `Property.Balding`
+- `Property.Glowie`
+- `Property.Refreshing`
+- `Property.Athletic`
+- `Property.LongFaced`
+- `Property.Paranoia`
+- `Property.Gingeritis`
+- `Property.Foggy`
+- `Property.Explosive`
 
 ## Customer Affinities
 
@@ -269,11 +276,10 @@ public sealed class SelectiveCustomer : NPC
                     (DrugType.Methamphetamine, -0.8f)  // Very much dislikes
                 })
 
-                // Property preferences - wants relaxing, quality weed
+                // Property preferences
                 .WithPreferredProperties(
-                    Property.Relaxing,
-                    Property.Smooth,
-                    Property.Potent,
+                    Property.Calming,
+                    Property.Euphoric,
                     Property.Munchies
                 );
             })
@@ -307,10 +313,7 @@ public sealed class SelectiveCustomer : NPC
 
 1. **Balanced Affinities**: Don't make all affinities extreme - mix preferences for realistic customers
 
-2. **Property Consistency**: Match preferred properties with drug affinities
-   - Weed lovers → Relaxing, Munchies, Smooth
-   - Coke users → Energizing, Euphoric, Confident
-   - Meth users → Energizing, Focused, Euphoric
+2. **Property Consistency**: Match preferred property tokens with drug affinities. Use actual `S1API.Properties.Property` constants, not inferred product stats.
 
 3. **Quality Standards**: Match standards with spending levels
    - High spenders → High/VeryHigh standards
@@ -326,6 +329,7 @@ To discover all available properties, you can enumerate them at runtime:
 
 ```csharp
 using S1API.Properties;
+using S1API.Properties.Interfaces;
 using System.Reflection;
 
 // Get all static Property fields
@@ -336,9 +340,9 @@ var properties = propertyType.GetFields(
 
 foreach (var field in properties)
 {
-    if (field.FieldType == typeof(Property))
+    if (field.FieldType == typeof(PropertyBase))
     {
-        var prop = (Property)field.GetValue(null);
+        var prop = (PropertyBase)field.GetValue(null);
         MelonLogger.Msg($"Property: {field.Name}");
     }
 }
@@ -353,9 +357,9 @@ foreach (var field in properties)
 {
     cd.WithAffinities(new[] { (DrugType.Marijuana, 0.9f) })
       .WithPreferredProperties(
-          Property.Relaxing,
+          Property.Calming,
           Property.Munchies,
-          Property.Smooth
+          Property.Euphoric
       )
       .WithStandards(CustomerStandard.High);
 });
@@ -374,7 +378,7 @@ foreach (var field in properties)
       .WithPreferredProperties(
           Property.Energizing,
           Property.Euphoric,
-          Property.Confident
+          Property.Focused
       )
       .WithStandards(CustomerStandard.Medium);
 });

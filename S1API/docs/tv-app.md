@@ -188,6 +188,8 @@ namespace HelloWorldTVApp
 Registration is automatic:
 
 - Ensure your app type is `public`
+- Ensure it derives from `S1API.TVApp.TVApp`
+- Ensure it is included in your compiled mod assembly
 - S1API will discover, instantiate, register, and spawn its UI/button at runtime. No explicit registration code is needed from the modder.
 
 ## UI Considerations
@@ -197,6 +199,23 @@ TV apps use a WorldSpace canvas, which differs from phone apps:
 - **Explicit sizing required**: RectTransform `sizeDelta` must be set explicitly; percentage-based anchors alone won't work
 - **Canvas orientation**: The TV canvas is positioned in 3D space to match the in-game TV screen
 - **Use UIFactory**: The `S1API.UI.UIFactory` class provides helpers for creating UI elements
+
+## Exit and Close Behavior
+
+S1API registers an exit listener at the same priority as the base-game TV apps. When exit is pressed while your app is open, `Close()` is called.
+
+Use `OnClosed()` for cleanup that must always be safe to run:
+
+- Stop coroutines started by the app
+- Detach event listeners
+- Clear transient state
+- Avoid leaving persistent objects under the TV canvas
+
+S1API may also force-close an open app when the TV home screen opens so orphaned app UIs do not remain active.
+
+## Update Loop
+
+`OnUpdate()` runs every frame only while the app is open and not paused. Prefer event-driven UI updates where possible, and keep per-frame work small.
 
 ## Icons
 

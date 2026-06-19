@@ -1,92 +1,122 @@
-- name: Introduction
-  href: introduction.md
-- name: Getting Started
-  href: getting-started.md
-- name: API Overview
-  href: api-overview.md
-- name: Custom NPCs
-  href: custom-npcs.md
+- name: Get Started
   items:
-    - name: Basic NPC Creation
+    - name: Introduction
+      href: introduction.md
+    - name: Installation
+      href: installation.md
+    - name: Quickstart
+      href: quickstart.md
+- name: Core Concepts
+  items:
+    - name: Cross-Compatibility
+      href: api-overview.md
+    - name: Saveables
+      href: save-system.md
+- name: API Modules
+  items:
+    - name: Module Overview
+      href: modules-overview.md
+    - name: NPCs
+      items:
+        - name: Overview
+          href: custom-npcs.md
+        - name: Basic NPC Creation
+          href: basic-npc-creation.md
+        - name: Prefab Configuration
+          href: prefab-configuration.md
+        - name: NPC Runtime Management
+          href: runtime-management.md
+        - name: Appearance Customization
+          href: appearance-customization.md
+        - name: Scheduling System
+          href: scheduling-system.md
+        - name: Seating Registry
+          href: seating-registry.md
+        - name: Building Registry
+          href: building-registry.md
+        - name: Delivery Location Registry
+          href: delivery-location-registry.md
+        - name: Dialogue System
+          href: dialogue-system.md
+        - name: Customer Behavior
+          href: customer-behavior.md
+        - name: Relationship Management
+          href: relationship-management.md
+    - name: Dealers
+      href: dealer-system.md
+    - name: Dialogue Injection
+      href: dialogue-injection.md
+    - name: Quests
+      href: quests-system.md
+    - name: Products
+      items:
+        - name: Overview
+          href: products-system.md
+        - name: Products API
+          href: products-api.md
+        - name: ProductPopulator
+          href: products-populator.md
+        - name: Runtime Additives
+          href: runtime-additives.md
+    - name: Items
+      items:
+        - name: Overview
+          href: items.md
+        - name: Item Registration
+          href: item-registration-basics.md
+        - name: Item Icons
+          href: item-icons.md
+        - name: Equippable Items
+          href: equippable-items.md
+        - name: Avatar Equippable Prefabs
+          href: avatar-equippable-prefabs.md
+        - name: Builder API Reference
+          href: item-builder-reference.md
+        - name: Clothing Items
+          href: clothing-items.md
+    - name: Phone
+      items:
+        - name: Overview
+          href: phone-app.md
+        - name: Phone Calls
+          href: phone-calls.md
+        - name: Stages & Triggers
+          href: phone-calls-stages-triggers.md
+    - name: TV Apps
+      href: tv-app.md
+    - name: Law Enforcement
+      items:
+        - name: Overview
+          href: law-enforcement.md
+        - name: Checkpoint Management
+          href: checkpoint-management.md
+        - name: Intensity
+          href: law-enforcement-intensity.md
+        - name: Police Dispatch
+          href: police-dispatch.md
+    - name: Stations
+      href: stations.md
+    - name: UI
+      href: ui.md
+    - name: Casino Slots
+      href: casino-slot-machines.md
+    - name: Cartel
+      href: cartel-system.md
+- name: Guides
+  items:
+    - name: Create an NPC
       href: basic-npc-creation.md
-    - name: Prefab Configuration
-      href: prefab-configuration.md
-    - name: Appearance Customization
-      href: appearance-customization.md
-    - name: Scheduling System
-      href: scheduling-system.md
-    - name: Seating Registry
-      href: seating-registry.md
-    - name: Building Registry
-      href: building-registry.md
-    - name: Delivery Location Registry
-      href: delivery-location-registry.md
-    - name: Dialogue System
-      href: dialogue-system.md
-    - name: Customer Behavior
-      href: customer-behavior.md
-    - name: Relationship Management
-      href: relationship-management.md
-    - name: Runtime Management
-      href: runtime-management.md
-- name: Dealer System
-  href: dealer-system.md
-- name: Dialogue Injection
-  href: dialogue-injection.md
-- name: Products & Properties
-  href: products-system.md
-  items:
-    - name: Products API
-      href: products-api.md
-    - name: ProductPopulator
-      href: products-populator.md
-- name: Quests
-  href: quests-system.md
-- name: Cartel System
-  href: cartel-system.md
-- name: Law Enforcement
-  href: law-enforcement.md
-  items:
-    - name: Checkpoint Management
-      href: checkpoint-management.md
-    - name: Law Enforcement Intensity
-      href: law-enforcement-intensity.md
-    - name: Police Dispatch
-      href: police-dispatch.md
-- name: Slot Machines
-  href: casino-slot-machines.md
-- name: Stations
-  href: stations.md
-- name: Items
-  href: items.md
-  items:
-    - name: Item Registration & Basics
+    - name: Complete Quest Example
+      href: quests-complete-example.md
+    - name: Custom Items
       href: item-registration-basics.md
-    - name: Runtime Additives
-      href: runtime-additives.md
-    - name: Item Icons
-      href: item-icons.md
-    - name: Equippable Items
-      href: equippable-items.md
-    - name: Avatar Equippable Prefabs
-      href: avatar-equippable-prefabs.md
-    - name: Builder API Reference
-      href: item-builder-reference.md
-    - name: Creating Custom Clothing Items
-      href: clothing-items.md
-- name: Phone Apps
-  href: phone-app.md
-- name: TV Apps
-  href: tv-app.md
+    - name: Phone App
+      href: phone-app.md
+    - name: TV App
+      href: tv-app.md
+- name: Resources
   items:
-    - name: Advanced Notes
-      href: tv-app-advanced.md
-- name: UI
-  href: ui.md
-- name: Save System
-  href: save-system.md
-- name: Phone Calls
-  href: phone-calls.md
-  items:
-    - name: Stages & Triggers
-      href: phone-calls-stages-triggers.md
+    - name: Release Channels
+      href: release-channels.md
+    - name: FAQ
+      href: faq.md
