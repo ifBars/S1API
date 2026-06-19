@@ -96,9 +96,10 @@ The GitHub release workflow packages public mod archives and can publish the sam
 
 - `publish-github-release.yml` runs from release tags and can also be rerun with `workflow_dispatch`.
 - The GitHub/Nexus archive is `S1API-Forked-x.y.z.zip` and contains `Mods/` and `Plugins/` at the archive root.
-- The Thunderstore archive is `S1API-TS-x.y.z.zip` and contains `icon.png`, `README.md`, `manifest.json`, `Mods/`, and `Plugins/` at the archive root.
+- GitHub Releases should only publish `S1API-Forked-x.y.z.zip` as a release asset.
+- The Thunderstore archive is `S1API-TS-x.y.z.zip` and contains `icon.png`, `README.md`, `manifest.json`, `Mods/`, and `Plugins/` at the archive root, but it is only used for Thunderstore publishing.
 - The uppercase `Mods/` and `Plugins/` paths are intentional so case-sensitive filesystems do not create parallel lowercase install folders.
-- GitHub release assets are always uploaded by the workflow.
+- The GitHub release asset is always uploaded by the workflow.
 - Nexus Mods upload runs when `NEXUSMODS_API_KEY` and `NEXUSMODS_FILE_GROUP_ID` are configured.
 - Thunderstore upload runs when `THUNDERSTORE_TOKEN` is configured.
 - `workflow_dispatch` exposes `publish_nexus` and `publish_thunderstore` toggles for refreshing GitHub assets without re-publishing external platforms.

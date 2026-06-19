@@ -403,8 +403,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          gh release delete-asset "${{ steps.metadata.outputs.tag }}" "$(basename "${{ steps.package.outputs.thunderstore_zip_path }}")" --yes || true
           gh release upload "${{ steps.metadata.outputs.tag }}" "${{ steps.package.outputs.zip_path }}" --clobber
-          gh release upload "${{ steps.metadata.outputs.tag }}" "${{ steps.package.outputs.thunderstore_zip_path }}" --clobber
 
       - name: Upload Nexus Mods release
         if: ${{ (github.event_name != 'workflow_dispatch' || inputs.publish_nexus) && env.NEXUSMODS_API_KEY != '' && env.NEXUSMODS_FILE_GROUP_ID != '' }}
