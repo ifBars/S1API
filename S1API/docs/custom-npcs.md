@@ -41,6 +41,10 @@ For complete, production-ready NPC implementations, see the **[S1API NPC Example
 - **[ExamplePhysicalDealerNPC](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/ExamplePhysicalDealerNPC.cs)** - Complete dealer implementation
 - **[CharacterCustomizerNPC](https://github.com/ifBars/S1APINPCExample/blob/master/NPCs/CharacterCustomizerNPC.cs)** - UI integration example
 
+## Using AI Assistance?
+
+If you use an AI coding agent to create or review custom NPC mods, point it at the **[schedule-one-custom-npcs agents skill](https://github.com/ifBars/S1API/tree/stable/skills/schedule-one-custom-npcs)**. The skill summarizes the S1API two-phase NPC model, physical versus non-physical NPC choices, customer/dealer setup, appearance constraints, schedules, dialogue, and lifecycle checks that custom NPC implementations should follow.
+
 ## Quick Start
 
 Here's a minimal example to get you started:
@@ -95,6 +99,7 @@ public sealed class MyFirstNPC : NPC
 
 - Review the <xref:S1API> for detailed method documentation
 - Look at the example projects in the repository for real-world usage patterns
+- When working with an AI coding agent, share the [schedule-one-custom-npcs agents skill](https://github.com/ifBars/S1API/tree/stable/skills/schedule-one-custom-npcs) so generated NPC code follows the same S1API patterns as these docs.
 
 ## Next Steps
 

@@ -2,6 +2,8 @@
 
 This page gets you from "empty class" to a physical NPC that spawns, has an avatar, and follows a simple schedule.
 
+Using an AI coding agent? Share the [schedule-one-custom-npcs agents skill](https://github.com/ifBars/S1API/tree/stable/skills/schedule-one-custom-npcs) with it so the generated NPC class follows S1API's prefab configuration, runtime lifecycle, appearance, schedule, dialogue, customer, and dealer patterns.
+
 The two phases to remember:
 
 - `ConfigurePrefab(...)`: saved defaults (identity, relationships, schedules, customer/dealer defaults)
