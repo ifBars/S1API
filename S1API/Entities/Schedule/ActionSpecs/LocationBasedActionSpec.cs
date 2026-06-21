@@ -225,11 +225,6 @@ namespace S1API.Entities.Schedule
             if (schedule?.NPC?.S1NPC == null)
                 return;
 
-            // Prefer the full SmokeBreakBehaviour path so modders can use its debug logs.
-            if (ToggleBehaviourByName(schedule, "SmokeBreakBehaviour", enabled))
-                return;
-
-            // Fallback: use API action wrapper (which resolves SmokeCigarette internally).
             var smoking = schedule.NPC.Smoking;
             if (smoking == null)
                 return;

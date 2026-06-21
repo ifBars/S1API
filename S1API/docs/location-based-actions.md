@@ -127,11 +127,11 @@ builder.EnsureSmokeBreak()
 **`EnsureSmokeBreak` options:**
 
 ```csharp
-// Default cigarette prefab, no debug logs
+// Default base-game cigarette equippable, no debug logs
 builder.EnsureSmokeBreak();
 
-// Custom cigarette prefab path
-builder.EnsureSmokeBreak(cigarettePrefabPath: "MyMod/Cigarette_Lit");
+// Custom cigarette EquippableData or TPEquippedItem Resources path
+builder.EnsureSmokeBreak(cigarettePrefabPath: "equippables/cigarette/Cigarette");
 
 // Enable verbose debug logging for the SmokeBreakBehaviour
 builder.EnsureSmokeBreak(debugMode: true);

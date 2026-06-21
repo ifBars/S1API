@@ -7,6 +7,7 @@ using S1Economy = Il2CppScheduleOne.Economy;
 using S1AvatarFramework = Il2CppScheduleOne.AvatarFramework;
 using S1Items = Il2CppScheduleOne.ItemFramework;
 using S1Registry = Il2CppScheduleOne.Registry;
+using S1CoreEquipping = Il2CppScheduleOne.Core.Equipping.Framework;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1NPCs = ScheduleOne.NPCs;
 using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
@@ -16,6 +17,7 @@ using S1Economy = ScheduleOne.Economy;
 using S1AvatarFramework = ScheduleOne.AvatarFramework;
 using S1Items = ScheduleOne.ItemFramework;
 using S1Registry = ScheduleOne.Registry;
+using S1CoreEquipping = ScheduleOne.Core.Equipping.Framework;
 #endif
 
 using System;
@@ -474,48 +476,26 @@ namespace S1API.Entities
         /// Adds smoke break behaviour to the NPC. Enables scheduled smoking with cigarette visual and animation.
         /// </summary>
         /// <remarks>
-        /// Adds SmokeBreakBehaviour and SmokeCigarette. Requires a cigarette prefab. If cigarettePrefabPath is null,
-        /// tries: (1) Resources "GameObject/Cigarette_Lit", (2) Resources search for "Cigarette_Lit", (3) runtime
-        /// fallback: first SmokeCigarette in scene with non-null CigarettePrefab. Modders can pass a Resources path
-        /// or bundle a cigarette in their mod. Adds a placeholder smoke location.
+        /// Adds SmokeBreakBehaviour and SmokeCigarette. Requires cigarette equippable data. If cigarettePrefabPath is null,
+        /// tries the current base game Resources path "equippables/cigarette/Cigarette", then runtime SmokeCigarette
+        /// data fallbacks, then the legacy CigarettePrefab fallback for older game builds. Modders can pass a Resources
+        /// path to an EquippableData asset or a TPEquippedItem prefab. Adds a placeholder smoke location.
         /// </remarks>
-        /// <param name="cigarettePrefabPath">Resources path to the cigarette GameObject prefab. Null to try default paths.</param>
+        /// <param name="cigarettePrefabPath">Resources path to cigarette EquippableData or TPEquippedItem. Null to try default paths.</param>
         /// <param name="debugMode">Whether to enable SmokeBreakBehaviour debug logging. Null leaves the current value unchanged.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder EnsureSmokeBreak(string? cigarettePrefabPath = null, bool? debugMode = null)
         {
             try
             {
-                GameObject? cigarettePrefab = null;
-                if (!string.IsNullOrEmpty(cigarettePrefabPath))
+                var cigaretteData = ResolveSmokeCigaretteData(cigarettePrefabPath);
+                var legacyCigarettePrefab = cigaretteData == null
+                    ? ResolveLegacySmokeCigarettePrefab(cigarettePrefabPath)
+                    : null;
+
+                if (cigaretteData == null && legacyCigarettePrefab == null)
                 {
-                    cigarettePrefab = Resources.Load<GameObject>(cigarettePrefabPath);
-                }
-                if (cigarettePrefab == null)
-                {
-                    cigarettePrefab = Resources.Load<GameObject>("GameObject/Cigarette_Lit");
-                }
-                if (cigarettePrefab == null)
-                {
-                    try
-                    {
-                        var all = Object.FindObjectsOfType<S1NPCsOther.SmokeCigarette>(true);
-                        if (all != null)
-                        {
-                            foreach (var t in all)
-                            {
-                                var prefab = ReflectionUtils.TryGetFieldOrProperty(t, "CigarettePrefab") as GameObject;
-                                if (prefab == null) continue;
-                                cigarettePrefab = prefab;
-                                break;
-                            }
-                        }
-                    }
-                    catch { /* ignore */ }
-                }
-                if (cigarettePrefab == null)
-                {
-                    Logger.Warning("EnsureSmokeBreak: Could not load cigarette prefab. The base game may not expose it via Resources. Pass a Resources path to a cigarette prefab in your mod (e.g. EnsureSmokeBreak(\"MyMod/Cigarette_Lit\")) or bundle one in your mod's Resources folder.");
+                    Logger.Warning("EnsureSmokeBreak: Could not load cigarette equippable data or legacy prefab. Pass a Resources path to an EquippableData asset or TPEquippedItem prefab in your mod (for example EnsureSmokeBreak(\"equippables/cigarette/Cigarette\")).");
                 }
 
                 var mgr = EnsureScheduleManager();
@@ -549,8 +529,11 @@ namespace S1API.Entities
                 var anim = prefabRoot.GetComponentInChildren<S1AvatarFramework.Animation.AvatarAnimation>(true);
 
                 ReflectionUtils.TrySetFieldOrProperty(smokeCigarette, "Npc", baseNpc);
-                if (cigarettePrefab != null)
-                    ReflectionUtils.TrySetFieldOrProperty(smokeCigarette, "CigarettePrefab", cigarettePrefab);
+                ReflectionUtils.TrySetFieldOrProperty(smokeCigarette, "_npc", baseNpc);
+                if (cigaretteData != null)
+                    ReflectionUtils.TrySetFieldOrProperty(smokeCigarette, "_cigarette", cigaretteData);
+                else if (legacyCigarettePrefab != null)
+                    ReflectionUtils.TrySetFieldOrProperty(smokeCigarette, "CigarettePrefab", legacyCigarettePrefab);
                 ReflectionUtils.TrySetFieldOrProperty(smokeCigarette, "Anim", anim);
                 ReflectionUtils.TrySetFieldOrProperty(smokeBreak, "SmokeCigarette", smokeCigarette);
                 if (debugMode.HasValue)
@@ -583,6 +566,91 @@ namespace S1API.Entities
                 Logger.Error($"EnsureSmokeBreak failed for {ownerType?.Name ?? "Unknown"}: {ex.Message}");
             }
             return this;
+        }
+
+        private static S1CoreEquipping.EquippableData? ResolveSmokeCigaretteData(string? resourcePath)
+        {
+            if (!string.IsNullOrWhiteSpace(resourcePath))
+            {
+                var explicitData = Resources.Load<S1CoreEquipping.EquippableData>(resourcePath);
+                if (explicitData != null)
+                    return explicitData;
+
+                var explicitThirdPersonPrefab = Resources.Load<S1CoreEquipping.TPEquippedItem>(resourcePath);
+                if (explicitThirdPersonPrefab != null)
+                    return CreateSmokeCigaretteData(explicitThirdPersonPrefab);
+            }
+
+            var baseGameData = Resources.Load<S1CoreEquipping.EquippableData>("equippables/cigarette/Cigarette");
+            if (baseGameData != null)
+                return baseGameData;
+
+            var baseGameThirdPersonPrefab = Resources.Load<S1CoreEquipping.TPEquippedItem>("equippables/cigarette/cigarette_tp");
+            if (baseGameThirdPersonPrefab != null)
+                return CreateSmokeCigaretteData(baseGameThirdPersonPrefab);
+
+            try
+            {
+                var all = Object.FindObjectsOfType<S1NPCsOther.SmokeCigarette>(true);
+                if (all != null)
+                {
+                    foreach (var smokeCigarette in all)
+                    {
+                        var data = ReflectionUtils.TryGetFieldOrProperty(smokeCigarette, "_cigarette")
+                            as S1CoreEquipping.EquippableData;
+                        if (data != null)
+                            return data;
+                    }
+                }
+            }
+            catch
+            {
+                // Runtime fallback only; Resources paths above are the expected current path.
+            }
+
+            return null;
+        }
+
+        private static S1CoreEquipping.EquippableData CreateSmokeCigaretteData(
+            S1CoreEquipping.TPEquippedItem thirdPersonPrefab)
+        {
+            var data = ScriptableObject.CreateInstance<S1CoreEquipping.EquippableData>();
+            data.name = "S1API_Cigarette";
+            data.ThirdPersonEquippedItemPrefab = thirdPersonPrefab;
+            return data;
+        }
+
+        private static GameObject? ResolveLegacySmokeCigarettePrefab(string? resourcePath)
+        {
+            GameObject? cigarettePrefab = null;
+            if (!string.IsNullOrWhiteSpace(resourcePath))
+                cigarettePrefab = Resources.Load<GameObject>(resourcePath);
+
+            if (cigarettePrefab == null)
+                cigarettePrefab = Resources.Load<GameObject>("GameObject/Cigarette_Lit");
+
+            if (cigarettePrefab != null)
+                return cigarettePrefab;
+
+            try
+            {
+                var all = Object.FindObjectsOfType<S1NPCsOther.SmokeCigarette>(true);
+                if (all != null)
+                {
+                    foreach (var smokeCigarette in all)
+                    {
+                        var prefab = ReflectionUtils.TryGetFieldOrProperty(smokeCigarette, "CigarettePrefab") as GameObject;
+                        if (prefab != null)
+                            return prefab;
+                    }
+                }
+            }
+            catch
+            {
+                // Legacy fallback for pre-equippable game builds.
+            }
+
+            return null;
         }
 
         /// <summary>

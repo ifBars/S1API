@@ -232,14 +232,14 @@ builder.WithCustomerDefaults(cd => {
 Adds the `SmokeBreakBehaviour` component to the NPC. Required before using `.OnArriveSmokeBreak()` in a schedule.
 
 ```csharp
-// Default cigarette prefab
+// Default base-game cigarette equippable
 builder.EnsureSmokeBreak();
 
 // With verbose debug logging (useful during development)
 builder.EnsureSmokeBreak(debugMode: true);
 
-// Custom cigarette equippable path
-builder.EnsureSmokeBreak(cigarettePrefabPath: "MyMod/Cigarette_Lit");
+// Custom cigarette EquippableData or TPEquippedItem Resources path
+builder.EnsureSmokeBreak(cigarettePrefabPath: "equippables/cigarette/Cigarette");
 ```
 
 ### EnsureGraffiti
