@@ -25,6 +25,7 @@ using UnityEngine;
 using S1API.Entities.Schedule;
 using S1API.Entities.Customer;
 using S1API.Entities.Dealer;
+using S1API.Entities.Impostors;
 using S1API.Entities.Relation;
 using System.Collections.Generic;
 using S1API.Internal.Entities;
@@ -165,6 +166,16 @@ namespace S1API.Entities
                 settings.EyebrowRestingAngle = builder.EyebrowRestingAngle;
                 settings.HairPath = builder.HairPath ?? string.Empty;
                 settings.HairColor = builder.HairColor;
+                if ((builder.ImpostorSelection.Kind == AvatarImpostorSelectionKind.Texture ||
+                     builder.ImpostorSelection.Kind == AvatarImpostorSelectionKind.Definition) &&
+                    ImpostorTextureResolver.TryResolve(
+                        builder.ImpostorSelection,
+                        ownerType?.FullName ?? prefabRoot.name,
+                        out Texture2D? impostorTexture))
+                {
+                    settings.ImpostorTexture = impostorTexture;
+                }
+
                 settings.LeftEyeRestingState = new S1AvatarFramework.Eye.EyeLidConfiguration
                 {
                     topLidOpen = builder.LeftEye.topLidOpen,
@@ -212,6 +223,7 @@ namespace S1API.Entities
                 // Attach to prefab identity so clients can load it on spawn
                 var identity = EnsureIdentityComponent();
                 identity.AppearanceDefaults = settings;
+                identity.AppearanceImpostorSelection = builder.ImpostorSelection;
                 // Register to static cache for Il2Cpp network spawn support
                 identity.RegisterToStaticCache(prefabRoot.name);
 
@@ -1069,6 +1081,7 @@ namespace S1API.Entities
             internal readonly List<(string path, Color color)> FaceLayers = new List<(string, Color)>();
             internal readonly List<(string path, Color color)> BodyLayers = new List<(string, Color)>();
             internal readonly List<(string path, Color color)> AccessoryLayers = new List<(string, Color)>();
+            internal AvatarImpostorSelection ImpostorSelection { get; private set; } = AvatarImpostorSelection.Preserve();
 
             public AvatarDefaultsBuilder WithFaceLayer(string path, Color color)
             {
@@ -1089,6 +1102,97 @@ namespace S1API.Entities
                 if (!string.IsNullOrEmpty(path))
                     AccessoryLayers.Add((path, color));
                 return this;
+            }
+
+            /// <summary>
+            /// Uses an existing game-owned NPC impostor by character settings name.
+            /// </summary>
+            /// <param name="name">
+            /// Name such as <c>Kyle</c>, or a resource path such as <c>charactersettings/Kyle</c>.
+            /// </param>
+            /// <returns>The current builder for chaining.</returns>
+            public AvatarDefaultsBuilder WithImpostor(string name)
+            {
+                if (!string.IsNullOrWhiteSpace(name))
+                    ImpostorSelection = AvatarImpostorSelection.FromName(name);
+                return this;
+            }
+
+            /// <summary>
+            /// Uses an existing game-owned NPC impostor discovered through <see cref="NPCImpostorCatalog"/>.
+            /// </summary>
+            /// <param name="impostor">The discovered impostor definition to use.</param>
+            /// <returns>The current builder for chaining.</returns>
+            public AvatarDefaultsBuilder WithImpostor(AvatarImpostorDefinition impostor)
+            {
+                if (impostor != null)
+                    ImpostorSelection = AvatarImpostorSelection.FromDefinition(impostor);
+                return this;
+            }
+
+            /// <summary>
+            /// Uses a texture supplied by the mod as this NPC's far-distance impostor.
+            /// </summary>
+            /// <remarks>
+            /// This is appropriate for textures loaded from an embedded resource with
+            /// <c>TextureUtils.LoadTextureFromResource(...)</c>. S1API does not network raw texture bytes;
+            /// every visual client must be able to load the same texture locally.
+            /// </remarks>
+            /// <param name="texture">Texture to use for the impostor.</param>
+            /// <returns>The current builder for chaining.</returns>
+            public AvatarDefaultsBuilder WithImpostorTexture(Texture2D texture)
+            {
+                if (texture != null)
+                    ImpostorSelection = AvatarImpostorSelection.FromTexture(texture);
+                return this;
+            }
+
+            /// <summary>
+            /// Uses a deterministic random game-owned NPC impostor from all available impostors.
+            /// </summary>
+            /// <returns>The current builder for chaining.</returns>
+            public AvatarDefaultsBuilder WithRandomImpostor()
+            {
+                ImpostorSelection = AvatarImpostorSelection.Random(null, null);
+                return this;
+            }
+
+            /// <summary>
+            /// Uses a deterministic random game-owned NPC impostor from the supplied character settings names.
+            /// </summary>
+            /// <param name="names">Names such as <c>Kyle</c>, <c>Mac</c>, or <c>Mick</c>.</param>
+            /// <returns>The current builder for chaining.</returns>
+            public AvatarDefaultsBuilder WithRandomImpostor(params string[] names)
+            {
+                ImpostorSelection = AvatarImpostorSelection.Random(CopyNames(names), null);
+                return this;
+            }
+
+            /// <summary>
+            /// Uses a seeded random game-owned NPC impostor from the supplied character settings names.
+            /// </summary>
+            /// <param name="seed">Seed used to select the impostor.</param>
+            /// <param name="names">Names such as <c>Kyle</c>, <c>Mac</c>, or <c>Mick</c>.</param>
+            /// <returns>The current builder for chaining.</returns>
+            public AvatarDefaultsBuilder WithRandomImpostor(int seed, params string[] names)
+            {
+                ImpostorSelection = AvatarImpostorSelection.Random(CopyNames(names), seed);
+                return this;
+            }
+
+            private static IReadOnlyList<string>? CopyNames(IEnumerable<string>? names)
+            {
+                if (names == null)
+                    return null;
+
+                var result = new List<string>();
+                foreach (string name in names)
+                {
+                    if (!string.IsNullOrWhiteSpace(name))
+                        result.Add(name);
+                }
+
+                return result.Count == 0 ? null : result;
             }
         }
     }

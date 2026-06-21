@@ -43,6 +43,7 @@ namespace S1API.Internal.Entities
         private string? _lastName;
         private Sprite? _icon;
         private S1AvatarFramework.AvatarSettings? _appearanceDefaults;
+        private AvatarImpostorSelection? _appearanceImpostorSelection;
         private string? _dealerHomeBuildingName;
         private string? _prefabName;
         private List<string>? _connectionIds;
@@ -52,6 +53,7 @@ namespace S1API.Internal.Entities
         [SerializeField] private string? _lastName;
         [SerializeField] private Sprite? _icon;
         [SerializeField] private S1AvatarFramework.AvatarSettings? _appearanceDefaults;
+        private AvatarImpostorSelection? _appearanceImpostorSelection;
         [SerializeField] private string? _dealerHomeBuildingName;
         [SerializeField] private string? _prefabName;
         [SerializeField] private List<string>? _connectionIds;
@@ -96,6 +98,18 @@ namespace S1API.Internal.Entities
             set => _appearanceDefaults = value;
         }
 
+        internal AvatarImpostorSelection? AppearanceImpostorSelection
+        {
+#if IL2CPPMELON
+            [HideFromIl2Cpp]
+#endif
+            get => _appearanceImpostorSelection;
+#if IL2CPPMELON
+            [HideFromIl2Cpp]
+#endif
+            set => _appearanceImpostorSelection = value;
+        }
+
         internal string? DealerHomeBuildingName
         {
             get => _dealerHomeBuildingName;
@@ -133,6 +147,7 @@ namespace S1API.Internal.Entities
             internal string LastName;
             internal Sprite Icon;
             internal AvatarSettingsData AppearanceDefaults;
+            internal AvatarImpostorSelection AppearanceImpostorSelection;
             internal string DealerHomeBuildingName;
             internal float? RelationDelta;
             internal bool? Unlocked;
@@ -251,6 +266,8 @@ namespace S1API.Internal.Entities
             }
 
             var avatarData = CaptureAvatarSettings(AppearanceDefaults);
+            if (avatarData != null)
+                avatarData.ImpostorSelection = AppearanceImpostorSelection;
             _cachedAppearanceDefaults = CloneAvatarSettingsData(avatarData);
 
             // Preserve existing relationship data from registry if component fields aren't set
@@ -302,6 +319,7 @@ namespace S1API.Internal.Entities
                 LastName = this.LastName,
                 Icon = this.Icon,
                 AppearanceDefaults = CloneAvatarSettingsData(avatarData),
+                AppearanceImpostorSelection = AppearanceImpostorSelection,
                 DealerHomeBuildingName = dealerHomeBuildingName,
                 RelationDelta = relationDelta,
                 Unlocked = unlocked,
@@ -412,6 +430,8 @@ namespace S1API.Internal.Entities
                 this.UnlockType = dataRef.UnlockType.HasValue ? (NPCRelationship.UnlockType?)dataRef.UnlockType.Value : null;
                 _connectionIds = dataRef.ConnectionIDs != null ? new List<string>(dataRef.ConnectionIDs) : null;
                 PrefabName = dataRef.PrefabName ?? PrefabName;
+                if (AppearanceImpostorSelection == null)
+                    AppearanceImpostorSelection = dataRef.AppearanceImpostorSelection ?? dataRef.AppearanceDefaults?.ImpostorSelection;
                 
                 // Debug log for connection restoration
                 // Silent when restored; applied logs happen later during Apply
@@ -618,6 +638,7 @@ namespace S1API.Internal.Entities
                 var avatar = npc.Avatar ?? npc.GetComponentInChildren<S1AvatarFramework.Avatar>(true);
                 if (avatar != null && AppearanceDefaults != null)
                 {
+                    EnsureAppearanceImpostorTexture(npc.ID ?? PrefabName ?? gameObject.name);
                     avatar.LoadAvatarSettings(AppearanceDefaults);
                 }
             }
@@ -787,13 +808,40 @@ namespace S1API.Internal.Entities
             if (_cachedAppearanceDefaults != null)
             {
                 AppearanceDefaults = CreateAvatarSettings(_cachedAppearanceDefaults);
+                EnsureAppearanceImpostorTexture(PrefabName ?? gameObject.name);
                 return;
             }
 
             if (TryGetRegistryData(out var data) && data.AppearanceDefaults != null)
             {
                 _cachedAppearanceDefaults = CloneAvatarSettingsData(data.AppearanceDefaults);
+                if (AppearanceImpostorSelection == null)
+                    AppearanceImpostorSelection = data.AppearanceImpostorSelection ?? data.AppearanceDefaults?.ImpostorSelection;
                 AppearanceDefaults = CreateAvatarSettings(_cachedAppearanceDefaults);
+                EnsureAppearanceImpostorTexture(PrefabName ?? gameObject.name);
+            }
+        }
+
+#if IL2CPPMELON
+        [HideFromIl2Cpp]
+#endif
+        private void EnsureAppearanceImpostorTexture(string deterministicKey)
+        {
+            if (AppearanceDefaults == null || AppearanceDefaults.ImpostorTexture != null)
+                return;
+
+            var selection =
+                _cachedAppearanceDefaults?.ImpostorSelection ??
+                AppearanceImpostorSelection;
+
+            if (selection == null || selection.Kind == AvatarImpostorSelectionKind.Preserve)
+                return;
+
+            if (ImpostorTextureResolver.TryResolve(selection, deterministicKey, out Texture2D? texture) && texture != null)
+            {
+                AppearanceDefaults.ImpostorTexture = texture;
+                if (_cachedAppearanceDefaults != null)
+                    _cachedAppearanceDefaults.ImpostorTexture = texture;
             }
         }
 
@@ -935,6 +983,7 @@ namespace S1API.Internal.Entities
                 EyebrowRestingAngle = settings.EyebrowRestingAngle,
                 HairPath = settings.HairPath,
                 HairColor = settings.HairColor,
+                ImpostorTexture = settings.ImpostorTexture,
                 LeftEye = new EyeStateData
                 {
                     TopLidOpen = settings.LeftEyeRestingState.topLidOpen,
@@ -1011,6 +1060,8 @@ namespace S1API.Internal.Entities
                 EyebrowRestingAngle = source.EyebrowRestingAngle,
                 HairPath = source.HairPath,
                 HairColor = source.HairColor,
+                ImpostorTexture = source.ImpostorTexture,
+                ImpostorSelection = source.ImpostorSelection,
                 LeftEyeLidColor = source.LeftEyeLidColor,
                 RightEyeLidColor = source.RightEyeLidColor,
                 EyeballMaterialIdentifier = source.EyeballMaterialIdentifier,
@@ -1073,6 +1124,7 @@ namespace S1API.Internal.Entities
             settings.EyebrowRestingAngle = data.EyebrowRestingAngle;
             settings.HairPath = data.HairPath ?? string.Empty;
             settings.HairColor = data.HairColor;
+            settings.ImpostorTexture = data.ImpostorTexture;
             settings.LeftEyeRestingState = new S1AvatarFramework.Eye.EyeLidConfiguration
             {
                 topLidOpen = data.LeftEye.TopLidOpen,
@@ -1156,6 +1208,8 @@ namespace S1API.Internal.Entities
             internal float EyebrowRestingAngle;
             internal string HairPath;
             internal Color HairColor;
+            internal Texture2D ImpostorTexture;
+            internal AvatarImpostorSelection ImpostorSelection;
             internal Color LeftEyeLidColor;
             internal Color RightEyeLidColor;
             internal string EyeballMaterialIdentifier;

@@ -7,11 +7,12 @@ The `ConfigurePrefab` method is where you set up your NPC's components and defau
 1. [Overview](#overview)
 2. [NPCPrefabBuilder Methods](#npcprefabbuilder-methods)
 3. [Spawn Position Configuration](#spawn-position-configuration)
-4. [Customer Configuration](#customer-configuration)
-5. [Relationship Configuration](#relationship-configuration)
-6. [Schedule Configuration](#schedule-configuration)
-7. [Configuration Workflow](#configuration-workflow)
-8. [Best Practices](#best-practices)
+4. [WithAppearanceDefaults](#withappearancedefaults)
+5. [Customer Configuration](#customer-configuration)
+6. [Relationship Configuration](#relationship-configuration)
+7. [Schedule Configuration](#schedule-configuration)
+8. [Configuration Workflow](#configuration-workflow)
+9. [Best Practices](#best-practices)
 
 ## Overview
 
@@ -85,6 +86,79 @@ builder.WithSpawnPosition(new Vector3(0, 0, 0), Quaternion.Euler(0, 90, 0));
 - Applied every time the NPC is spawned (new games and loaded games)
 - Use world coordinates
 - Consider building entrances, roads, and safe spawn areas
+
+### WithAppearanceDefaults
+
+Configures the prefab's default avatar settings before the NPC is spawned. Use this for appearance values that need to exist on the networked prefab, including far-distance impostor textures.
+
+```csharp
+using S1API.Entities.Impostors;
+using S1API.Rendering;
+
+builder.WithAppearanceDefaults(avatar => {
+    avatar.Gender = 0.0f;
+    avatar.Height = 1.0f;
+    avatar.Weight = 0.5f;
+    avatar.SkinColor = new Color32(150, 120, 95, 255);
+    avatar.HairPath = "Avatar/Hair/Spiky/Spiky";
+    avatar.HairColor = Color.black;
+
+    // Use a base-game impostor discovered from Resources/charactersettings.
+    avatar.WithImpostor("Kyle");
+});
+```
+
+#### Existing Game Impostors
+
+Use `NPCImpostorCatalog` when you want to inspect or choose from the impostors available in the current game build.
+The catalog is populated from loaded base-game NPC avatar settings, so query it after the game world has loaded.
+
+```csharp
+var kyle = NPCImpostorCatalog.Find("Kyle");
+if (kyle != null)
+{
+    builder.WithAppearanceDefaults(avatar => avatar.WithImpostor(kyle));
+}
+```
+
+You can also pass a resource path:
+
+```csharp
+builder.WithAppearanceDefaults(avatar => avatar.WithImpostor("charactersettings/Mick"));
+```
+
+#### Custom Embedded Impostors
+
+For mod-owned impostors, embed a PNG in your mod assembly and load it with `TextureUtils`.
+
+```csharp
+Texture2D impostorTexture = TextureUtils.LoadTextureFromResource(
+    typeof(MyMod).Assembly,
+    "MyMod.Resources.MyNpcImpostor.png");
+
+builder.WithAppearanceDefaults(avatar => {
+    avatar.WithImpostorTexture(impostorTexture);
+});
+```
+
+S1API stores the texture reference on the prefab's `AvatarSettings`. It does not network raw texture bytes, so every visual client must have the same mod assembly/resource available locally.
+
+#### Random Impostors
+
+Random selection is deterministic. Without an explicit seed, S1API uses the NPC type name so the same NPC type keeps the same impostor across runs.
+
+```csharp
+// Pick from all discoverable impostors.
+builder.WithAppearanceDefaults(avatar => avatar.WithRandomImpostor());
+
+// Pick from a constrained pool.
+builder.WithAppearanceDefaults(avatar => avatar.WithRandomImpostor("Kyle", "Mac", "Mick"));
+
+// Pick from a constrained pool with an explicit seed.
+builder.WithAppearanceDefaults(avatar => avatar.WithRandomImpostor(71, "Kyle", "Mac", "Mick"));
+```
+
+If no impostor is configured, S1API preserves the existing custom NPC behavior.
 
 ### EnsureCustomer
 

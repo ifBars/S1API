@@ -33,6 +33,8 @@ protected override void OnCreated()
 }
 ```
 
+Far-distance impostor textures are prefab defaults, not runtime appearance changes. Configure them in `ConfigurePrefab` with `builder.WithAppearanceDefaults(...)` and `avatar.WithImpostor(...)` or `avatar.WithImpostorTexture(...)`; then use this runtime `Appearance` builder for the NPC's live avatar, mugshot, clothing, and layer changes.
+
 ## Basic Appearance Setup
 
 ### Setting Up Appearance
