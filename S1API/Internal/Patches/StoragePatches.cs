@@ -21,6 +21,7 @@ using S1API.Storage;
 using S1API.Logging;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 #if (IL2CPPMELON)
 using S1PersistenceLoaders = Il2CppScheduleOne.Persistence.Loaders;
@@ -411,26 +412,42 @@ namespace S1API.Internal.Patches
         /// Patch for StorageMenu.Open(StorageEntity) - raises OnStorageOpening event.
         /// This allows mods to sync custom names before the menu displays.
         /// </summary>
-        [HarmonyPatch(typeof(S1UI.StorageMenu), nameof(S1UI.StorageMenu.Open), new Type[] { typeof(S1Storage.StorageEntity) })]
-        [HarmonyPrefix]
-        private static void StorageMenu_Open_Prefix(S1Storage.StorageEntity entity)
+        [HarmonyPatch]
+        private static class StorageMenuOpenPatch
         {
-            if (entity == null)
-                return;
-
-            try
+            private static MethodBase TargetMethod()
             {
-                // Get the placeable storage entity (if this is placeable storage)
-                var placeableStorage = entity.GetComponentInParent<S1ObjectScripts.PlaceableStorageEntity>();
+                return AccessTools.GetDeclaredMethods(typeof(S1UI.StorageMenu))
+                    .Find(method =>
+                    {
+                        if (method.Name != nameof(S1UI.StorageMenu.Open))
+                            return false;
 
-                // Wrap and raise event
-                var storageWrapper = new StorageEntity(entity, placeableStorage);
-                var args = new StorageEventArgs(storageWrapper);
-                StorageEvents.RaiseStorageOpening(args);
+                        var parameters = method.GetParameters();
+                        return parameters.Length > 0 && parameters[0].ParameterType == typeof(S1Storage.StorageEntity);
+                    });
             }
-            catch (Exception ex)
+
+            [HarmonyPrefix]
+            private static void StorageMenu_Open_Prefix(S1Storage.StorageEntity entity)
             {
-                Logger.Error($"Error in StorageMenu_Open_Prefix: {ex.Message}");
+                if (entity == null)
+                    return;
+
+                try
+                {
+                    // Get the placeable storage entity (if this is placeable storage)
+                    var placeableStorage = entity.GetComponentInParent<S1ObjectScripts.PlaceableStorageEntity>();
+
+                    // Wrap and raise event
+                    var storageWrapper = new StorageEntity(entity, placeableStorage);
+                    var args = new StorageEventArgs(storageWrapper);
+                    StorageEvents.RaiseStorageOpening(args);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Error in StorageMenu_Open_Prefix: {ex.Message}");
+                }
             }
         }
     }

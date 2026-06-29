@@ -401,11 +401,14 @@ namespace S1API.Entities.Schedule
                 var inventory = npc.S1NPC.Inventory;
                 
                 // Check if random cash is configured but NPC has no cash
-                if (currentCash == 0 && inventory.RandomCash && inventory.RandomCashMax > 0)
+                bool randomCash = ReflectionUtils.TryGetFieldOrProperty(inventory, "RandomCash") is bool enabled && enabled;
+                int randomCashMin = ReflectionUtils.TryGetFieldOrProperty(inventory, "RandomCashMin") is int min ? min : 0;
+                int randomCashMax = ReflectionUtils.TryGetFieldOrProperty(inventory, "RandomCashMax") is int max ? max : 0;
+                if (currentCash == 0 && randomCash && randomCashMax > 0)
                 {
                     int cashToAdd = UnityEngine.Random.Range(
-                        Mathf.Max(inventory.RandomCashMin, bet), // At least enough for one bet
-                        inventory.RandomCashMax + 1);
+                        Mathf.Max(randomCashMin, bet), // At least enough for one bet
+                        randomCashMax + 1);
                     
                     SlotMachineHelper.AddNPCCash(npc, cashToAdd);
                     

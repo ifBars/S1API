@@ -20,6 +20,7 @@ using S1AvatarEquipping = ScheduleOne.AvatarFramework.Equipping;
 using System;
 using System.Collections.Generic;
 using MelonLoader;
+using S1API.Internal.Utils;
 using S1API.Items;
 using UnityEngine;
 using UnityEngine.Events;
@@ -87,7 +88,7 @@ namespace S1API.Internal.Items
             if (OnUse != null && 
                 S1GameInput.GetButtonDown(S1GameInput.ButtonCode.PrimaryClick) &&
                 !S1GameInput.IsTyping &&
-                S1DevUtils.PlayerSingleton<S1PlayerScripts.PlayerCamera>.Instance.activeUIElementCount == 0)
+                GetActiveUIElementCount(S1DevUtils.PlayerSingleton<S1PlayerScripts.PlayerCamera>.Instance) == 0)
             {
                 // Invoke the callback with the current item instance wrapped
                 if (itemInstance != null)
@@ -123,6 +124,22 @@ namespace S1API.Internal.Items
                     }
                 }
             }
+        }
+
+        private static int GetActiveUIElementCount(S1PlayerScripts.PlayerCamera camera)
+        {
+            if (camera == null)
+                return 0;
+
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+            if (ReflectionUtils.TryGetFieldOrProperty(camera, "ActiveUIElementCount") is int count)
+                return count;
+#else
+            if (ReflectionUtils.TryGetFieldOrProperty(camera, "activeUIElementCount") is int count)
+                return count;
+#endif
+
+            return 0;
         }
     }
 }

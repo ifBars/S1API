@@ -16,6 +16,7 @@ using System.Collections.Generic;
 using MelonLoader;
 using S1API.Avatar;
 using S1API.Entities;
+using S1API.Internal.Utils;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -124,7 +125,11 @@ namespace S1API.UI
             }
 
             var s1Settings = initialSettings?.S1BasicAvatarSettings;
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+            _s1Creator.Open(s1Settings);
+#else
             _s1Creator.Open(s1Settings, showUI);
+#endif
 
             try
             {
@@ -395,11 +400,11 @@ namespace S1API.UI
                 camera.RemoveActiveUIElement(_s1Creator?.name ?? "CharacterCreator");
                 
                 // Only restore camera if no other UI elements are active
-                if (camera.activeUIElementCount == 0)
+                if (GetActiveUIElementCount(camera) == 0)
                 {
                     camera.StopTransformOverride(0f, reenableCameraLook: true, returnToOriginalRotation: false);
                     camera.StopFOVOverride(0f);
-                    camera.SetCanLook(c: true);
+                    camera.SetCanLook(true);
                     camera.LockMouse();
                 }
             }
@@ -453,6 +458,22 @@ namespace S1API.UI
                 Logger.Error($"Failed to get player avatar settings: {ex}");
                 return null;
             }
+        }
+
+        private static int GetActiveUIElementCount(S1PlayerScripts.PlayerCamera camera)
+        {
+            if (camera == null)
+                return 0;
+
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+            if (ReflectionUtils.TryGetFieldOrProperty(camera, "ActiveUIElementCount") is int count)
+                return count;
+#else
+            if (ReflectionUtils.TryGetFieldOrProperty(camera, "activeUIElementCount") is int count)
+                return count;
+#endif
+
+            return 0;
         }
 
         #endregion

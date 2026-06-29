@@ -7,6 +7,7 @@ using System.Collections.Generic;
 #endif
 using System.Linq;
 using S1API.Entities;
+using S1API.Logging;
 using S1API.Products;
 using S1API.Quests.Constants;
 
@@ -18,6 +19,8 @@ namespace S1API.Console
     /// </summary>
     public static class ConsoleHelper
     {
+        private static readonly Log Logger = new Log("ConsoleHelper");
+
         /// <summary>
         /// Submits a raw console command string (e.g. "settime 1530").
         /// Works across both IL2CPP and Mono builds.
@@ -254,17 +257,18 @@ namespace S1API.Console
         /// <summary>
         /// Sets the player's energy to a value between 0 and 100.
         /// </summary>
+        [System.Obsolete("SetPlayerEnergyLevel depends on the game's removed SetEnergy console command on beta IL2CPP builds. It is retained as a compatibility no-op where unavailable and may be removed in a future S1API version.")]
         public static void SetPlayerEnergyLevel(float amount)
         {
 #if (IL2CPPMELON || IL2CPPBEPINEX)
-            var command = new SetEnergy();
-            var args = new Il2CppSystem.Collections.Generic.List<string>();
+            Logger.Warning("SetPlayerEnergyLevel is unavailable because the SetEnergy console command is not present in this game build.");
+            return;
 #else
             var command = new SetEnergy();
             var args = new List<string>();
-#endif
             args.Add(amount.ToString(System.Globalization.CultureInfo.InvariantCulture));
             command.Execute(args);
+#endif
         }
 
         /// <summary>

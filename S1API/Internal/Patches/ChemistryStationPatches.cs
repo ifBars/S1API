@@ -13,6 +13,7 @@ using S1UIStations = ScheduleOne.UI.Stations;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using HarmonyLib;
 using S1API.Internal.Utils;
@@ -30,10 +31,11 @@ namespace S1API.Internal.Patches
     internal static class ChemistryStationPatches
     {
         private static readonly Log Logger = new Log("ChemistryStationPatches");
-        private static readonly ConditionalWeakTable<S1UIStations.ChemistryStationCanvas, CanvasInjectionState> CanvasStateTable =
-            new ConditionalWeakTable<S1UIStations.ChemistryStationCanvas, CanvasInjectionState>();
+        private static readonly ConditionalWeakTable<object, CanvasInjectionState> CanvasStateTable =
+            new ConditionalWeakTable<object, CanvasInjectionState>();
 
         private static bool _loggedRecipeEntriesMissing;
+        private static bool _loggedChemistryStationUiMissing;
 
         private sealed class CanvasInjectionState
         {
@@ -41,13 +43,40 @@ namespace S1API.Internal.Patches
             public readonly HashSet<string> LoggedEntryConflicts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         }
 
-        private static CanvasInjectionState GetCanvasState(S1UIStations.ChemistryStationCanvas canvas)
+        private static CanvasInjectionState GetCanvasState(object canvas)
         {
             return CanvasStateTable.GetValue(canvas, _ => new CanvasInjectionState());
         }
 
+        private static Type? ResolveChemistryStationUiType()
+        {
+            return AccessTools.TypeByName("Il2CppScheduleOne.UI.Stations.ChemistryStationInterface")
+                   ?? AccessTools.TypeByName("Il2CppScheduleOne.UI.Stations.ChemistryStationCanvas")
+                   ?? AccessTools.TypeByName("ScheduleOne.UI.Stations.ChemistryStationInterface")
+                   ?? AccessTools.TypeByName("ScheduleOne.UI.Stations.ChemistryStationCanvas");
+        }
+
+        private static IEnumerable<MethodBase> ResolveChemistryStationUiMethods(string methodName)
+        {
+            var type = ResolveChemistryStationUiType();
+            if (type == null)
+            {
+                if (!_loggedChemistryStationUiMissing)
+                {
+                    _loggedChemistryStationUiMissing = true;
+                    Logger.Warning("[S1API] Chemistry station UI type could not be resolved. Recipe UI injection will be skipped.");
+                }
+
+                yield break;
+            }
+
+            var method = AccessTools.Method(type, methodName);
+            if (method != null)
+                yield return method;
+        }
+
         private static bool TryGetRecipeEntriesList(
-            S1UIStations.ChemistryStationCanvas canvas,
+            object canvas,
 #if (IL2CPPMELON || IL2CPPBEPINEX)
             out Il2CppSystem.Collections.Generic.List<S1UIStations.StationRecipeEntry>? entries
 #else
@@ -77,9 +106,39 @@ namespace S1API.Internal.Patches
             return entries != null;
         }
 
-        [HarmonyPatch(typeof(S1UIStations.ChemistryStationCanvas), "Awake")]
-        [HarmonyPrefix]
-        private static void AwakePrefix(S1UIStations.ChemistryStationCanvas __instance)
+        [HarmonyPatch]
+        private static class ChemistryStationAwakePatch
+        {
+            [HarmonyTargetMethods]
+            private static IEnumerable<MethodBase> TargetMethods()
+            {
+                return ResolveChemistryStationUiMethods("Awake");
+            }
+
+            [HarmonyPrefix]
+            private static void Prefix(object __instance)
+            {
+                AwakePrefix(__instance);
+            }
+        }
+
+        [HarmonyPatch]
+        private static class ChemistryStationOpenPatch
+        {
+            [HarmonyTargetMethods]
+            private static IEnumerable<MethodBase> TargetMethods()
+            {
+                return ResolveChemistryStationUiMethods("Open");
+            }
+
+            [HarmonyPrefix]
+            private static void Prefix(object __instance, S1ObjectScripts.ChemistryStation __0)
+            {
+                OpenPrefix(__instance, __0);
+            }
+        }
+
+        private static void AwakePrefix(object __instance)
         {
             try
             {
@@ -91,9 +150,7 @@ namespace S1API.Internal.Patches
             }
         }
 
-        [HarmonyPatch(typeof(S1UIStations.ChemistryStationCanvas), "Open")]
-        [HarmonyPrefix]
-        private static void OpenPrefix(S1UIStations.ChemistryStationCanvas __instance, S1ObjectScripts.ChemistryStation __0)
+        private static void OpenPrefix(object __instance, S1ObjectScripts.ChemistryStation __0)
         {
             try
             {
@@ -107,7 +164,7 @@ namespace S1API.Internal.Patches
             }
         }
 
-        private static void InjectRegisteredRecipes(S1UIStations.ChemistryStationCanvas canvas)
+        private static void InjectRegisteredRecipes(object canvas)
         {
             if (canvas == null)
                 return;
@@ -116,7 +173,12 @@ namespace S1API.Internal.Patches
             if (registered.Count == 0)
                 return;
 
-            var recipes = canvas.Recipes;
+            var recipes =
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                ReflectionUtils.TryGetFieldOrProperty(canvas, "Recipes") as Il2CppSystem.Collections.Generic.List<S1StationFramework.StationRecipe>;
+#else
+                ReflectionUtils.TryGetFieldOrProperty(canvas, "Recipes") as List<S1StationFramework.StationRecipe>;
+#endif
             if (recipes == null)
                 return;
 
@@ -146,7 +208,7 @@ namespace S1API.Internal.Patches
             }
         }
 
-        private static void EnsureRecipeEntries(S1UIStations.ChemistryStationCanvas canvas)
+        private static void EnsureRecipeEntries(object canvas)
         {
             if (canvas == null)
                 return;
@@ -191,10 +253,12 @@ namespace S1API.Internal.Patches
 
                 try
                 {
-                    if (canvas.RecipeEntryPrefab == null || canvas.RecipeContainer == null)
+                    var recipeEntryPrefab = ReflectionUtils.TryGetFieldOrProperty(canvas, "RecipeEntryPrefab") as S1UIStations.StationRecipeEntry;
+                    var recipeContainer = ReflectionUtils.TryGetFieldOrProperty(canvas, "RecipeContainer") as Transform;
+                    if (recipeEntryPrefab == null || recipeContainer == null)
                         return;
 
-                    var entry = UnityEngine.Object.Instantiate(canvas.RecipeEntryPrefab, canvas.RecipeContainer);
+                    var entry = UnityEngine.Object.Instantiate(recipeEntryPrefab, recipeContainer);
                     if (entry == null)
                         continue;
 

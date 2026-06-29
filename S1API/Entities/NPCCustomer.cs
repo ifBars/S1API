@@ -40,6 +40,7 @@ using UnityEngine.Events;
 using MelonLoader;
 using S1API.Economy;
 using S1API.Internal.Abstraction;
+using S1API.Internal.Utils;
 #if (IL2CPPMELON)
 using Il2CppFishNet;
 using Il2CppFishNet.Managing;
@@ -563,7 +564,7 @@ namespace S1API.Entities
                 // Ensure a valid default delivery location to avoid nulls during contract creation
                 try
                 {
-                    if (customer.DefaultDeliveryLocation == null)
+                    if (ReflectionUtils.TryGetFieldOrProperty(customer, "DefaultDeliveryLocation") == null)
                     {
                         var map = S1DevUtilities.Singleton<S1Map.Map>.Instance;
                         if (map != null)
@@ -572,7 +573,7 @@ namespace S1API.Entities
                             var loc = (regionData != null) ? regionData.GetRandomUnscheduledDeliveryLocation() : null;
                             if (loc != null)
                             {
-                                customer.DefaultDeliveryLocation = loc;
+                                ReflectionUtils.TrySetFieldOrProperty(customer, "DefaultDeliveryLocation", loc);
                             }
                         }
                     }
@@ -582,6 +583,9 @@ namespace S1API.Entities
                 // Ensure DealSignal exists and is wired to the customer's schedule manager
                 try
                 {
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                    Logger.Warning("Skipping customer DealSignal setup because NPCSignal_WaitForDelivery is not present in this IL2CPP beta build.");
+#else
 #if MONOMELON
                     var dealSignalField = typeof(S1Economy.Customer).GetField("DealSignal", BindingFlags.Public | BindingFlags.Instance);
 #else
@@ -608,6 +612,7 @@ namespace S1API.Entities
                         }
                         dealSignalField?.SetValue(customer, signal);
                     }
+#endif
                 }
                 catch { /* ignore */ }
             }
@@ -1079,7 +1084,11 @@ namespace S1API.Entities
             yield return new WaitForSeconds(0.1f);
             if (handler != null && container != null)
             {
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                handler.StartDialogue(container);
+#else
                 handler.InitializeDialogue(container);
+#endif
             }
         }
 

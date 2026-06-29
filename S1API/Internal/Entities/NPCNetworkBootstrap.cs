@@ -363,7 +363,7 @@ namespace S1API.Internal.Entities
 
                 var netObject = pending.NetObject;
                 var owner = pending.Owner;
-                var ownerId = owner?.S1NPC?.ID ?? owner?.gameObject?.name ?? "<unknown>";
+                var ownerId = owner?.ID ?? owner?.gameObject?.name ?? "<unknown>";
 
                 if (netObject == null)
                 {

@@ -8,6 +8,7 @@ using S1NPCs = ScheduleOne.NPCs;
 
 using System;
 using HarmonyLib;
+using S1API.Internal.Utils;
 
 namespace S1API.Internal.Patches
 {
@@ -32,7 +33,11 @@ namespace S1API.Internal.Patches
                 // Sync categories from sender NPC before UI creation
                 if (__instance.sender != null)
                 {
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                    var npcCategories = ReflectionUtils.TryGetFieldOrProperty(__instance.sender, "ConversationCategories") as Il2CppSystem.Collections.Generic.List<S1Messaging.EConversationCategory>;
+#else
                     var npcCategories = __instance.sender.ConversationCategories;
+#endif
                     if (npcCategories != null && npcCategories.Count > 0)
                     {
                         // Check if categories differ

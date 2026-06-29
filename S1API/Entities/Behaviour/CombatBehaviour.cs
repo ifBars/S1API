@@ -71,14 +71,16 @@ public class CombatBehaviour
     {
         get
         {
-            var defaultWeapon = NPC.S1NPC.Behaviour.CombatBehaviour.DefaultWeapon;
+            var defaultWeapon =
+                ReflectionUtils.TryGetFieldOrProperty(NPC.S1NPC.Behaviour.CombatBehaviour, "DefaultWeapon") as AvatarWeapon ??
+                ReflectionUtils.TryGetFieldOrProperty(NPC.S1NPC.Behaviour.CombatBehaviour, "_defaultWeapon") as AvatarWeapon;
             return defaultWeapon?.AssetPath ?? string.Empty;
         }
         set
         {
             if (string.IsNullOrEmpty(value))
             {
-                NPC.S1NPC.Behaviour.CombatBehaviour.DefaultWeapon = null;
+                SetDefaultWeaponInternal(null);
                 return;
             }
 
@@ -103,7 +105,23 @@ public class CombatBehaviour
                 return;
             }
 
-            NPC.S1NPC.Behaviour.CombatBehaviour.DefaultWeapon = avatarWeapon;
+            SetDefaultWeaponInternal(avatarWeapon);
+        }
+    }
+
+    private void SetDefaultWeaponInternal(AvatarWeapon? weapon)
+    {
+        var combatBehaviour = NPC.S1NPC.Behaviour.CombatBehaviour;
+        var method = combatBehaviour.GetType().GetMethod("SetDefaultWeapon", BindingFlags.Public | BindingFlags.Instance);
+        if (method != null)
+        {
+            method.Invoke(combatBehaviour, new object?[] { weapon });
+            return;
+        }
+
+        if (!ReflectionUtils.TrySetFieldOrProperty(combatBehaviour, "DefaultWeapon", weapon))
+        {
+            ReflectionUtils.TrySetFieldOrProperty(combatBehaviour, "_defaultWeapon", weapon);
         }
     }
 

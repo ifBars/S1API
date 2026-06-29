@@ -310,16 +310,16 @@ namespace S1API.Entities
         /// </summary>
         /// <remarks>
         /// Enables the NPC to act as a dealer that sells products to assigned customers.
-        /// Note: Since Dealer inherits from NPC in the base game, dealer functionality is applied
-        /// through configuration rather than component addition. This marks the NPC type as dealer-capable.
+        /// This marks the NPC type as dealer-capable; S1API will ensure the generated spawnable prefab
+        /// has a Dealer-compatible NPC component before network registration when the selected base prefab
+        /// does not already include one.
         /// When the NPC spawns, <see cref="NPCDealer.EnsureDealer"/> will be called automatically to initialize
         /// dealer functionality and ensure the messaging app displays the correct Dealer category badge.
         /// </remarks>
         /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder EnsureDealer()
         {
-            // Since Dealer inherits from NPC (not a component), we can't add it as a component.
-            // Instead, we mark this NPC type as dealer-capable and store configuration.
+            // Mark the type as dealer-capable; NPC prefab creation materializes the correct runtime component.
             NPC.RegisterDealerType(ownerType);
             
             // Ensure required schedule components exist
@@ -900,16 +900,16 @@ namespace S1API.Entities
                 // Apply random cash
                 if (data.RandomCashMin.HasValue || data.RandomCashMax.HasValue)
                 {
-                    inventory.RandomCash = true;
+                    ReflectionUtils.TrySetFieldOrProperty(inventory, "RandomCash", true);
                     if (data.RandomCashMin.HasValue)
-                        inventory.RandomCashMin = data.RandomCashMin.Value;
+                        ReflectionUtils.TrySetFieldOrProperty(inventory, "RandomCashMin", data.RandomCashMin.Value);
                     if (data.RandomCashMax.HasValue)
-                        inventory.RandomCashMax = data.RandomCashMax.Value;
+                        ReflectionUtils.TrySetFieldOrProperty(inventory, "RandomCashMax", data.RandomCashMax.Value);
                 }
 
                 // Apply ClearInventoryEachNight setting
                 if (data.ClearInventoryEachNight.HasValue)
-                    inventory.ClearInventoryEachNight = data.ClearInventoryEachNight.Value;
+                    ReflectionUtils.TrySetFieldOrProperty(inventory, "ClearInventoryEachNight", data.ClearInventoryEachNight.Value);
 
                 // Do NOT set StartupItems here on the prefab - they will be set during runtime initialization
                 // in NPC.InitializeInventoryComponent to avoid duplicate insertion when NPCInventory.Awake runs.
@@ -993,6 +993,10 @@ namespace S1API.Entities
 
             if (dealSignal > 0)
             {
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                var npcTypeName = ownerType?.Name ?? "Unknown";
+                Logger.Warning($"Skipping DealSignal precreation for NPC type {npcTypeName} because NPCSignal_WaitForDelivery is not present in this IL2CPP beta build.");
+#else
                 EnsurePrefabAction<S1NPCsSchedules.NPCSignal_WaitForDelivery>(count: 1, namePrefix: "DealSignal");
 
                 // Wire the deal signal to the Customer component so runtime deal handling works without relying on OnValidate
@@ -1011,6 +1015,7 @@ namespace S1API.Entities
                     var npcTypeName = ownerType?.Name ?? "Unknown";
                     Logger.Warning($"Failed to wire DealSignal on prefab for NPC type {npcTypeName}: {ex.Message}");
                 }
+#endif
             }
             EnsurePrefabAction<S1NPCsSchedules.NPCSignal_WalkToLocation>(walkTo, "WalkTo");
             EnsurePrefabAction<S1NPCsSchedules.NPCEvent_StayInBuilding>(stayInBuilding, "StayInBuilding");

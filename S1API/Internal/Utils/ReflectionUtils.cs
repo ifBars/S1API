@@ -105,9 +105,14 @@ namespace S1API.Internal.Utils
             if (string.IsNullOrEmpty(fullName))
                 return false;
 
+            string assemblyName = assembly.GetName().Name ?? string.Empty;
+
             return fullName.StartsWith("System")
                    || fullName.StartsWith("Unity")
                    || fullName.StartsWith("Il2Cpp")
+                   || assemblyName.StartsWith("Unity")
+                   || assemblyName.StartsWith("Il2Cpp")
+                   || assemblyName.StartsWith("Assembly-CSharp")
                    || fullName.StartsWith("mscorlib")
                    || fullName.StartsWith("Mono.")
                    || fullName.StartsWith("netstandard")
@@ -272,7 +277,7 @@ namespace S1API.Internal.Utils
             const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
             
             // Try field first
-            var fi = type.GetField(memberName, flags);
+            var fi = GetField(type, memberName, flags);
             if (fi != null)
             {
                 try
@@ -290,19 +295,47 @@ namespace S1API.Internal.Utils
             }
             
             // Try property
-            var pi = type.GetProperty(memberName, flags);
-            if (pi == null || !pi.CanWrite) return false;
-            try
+            var pi = GetProperty(type, memberName, flags);
+            if (pi != null && pi.CanWrite)
             {
-                if (CanAssignValue(pi.PropertyType, value))
+                try
                 {
-                    pi.SetValue(target, value);
-                    return true;
+                    if (CanAssignValue(pi.PropertyType, value))
+                    {
+                        pi.SetValue(target, value);
+                        return true;
+                    }
+                }
+                catch
+                {
+                    // ignored
                 }
             }
-            catch
+
+            string[] backingFieldNames =
             {
-                // ignored
+                $"<{memberName}>k__BackingField",
+                $"_{memberName}_k__BackingField"
+            };
+
+            foreach (string backingFieldName in backingFieldNames)
+            {
+                var backingField = GetField(type, backingFieldName, flags);
+                if (backingField == null)
+                    continue;
+
+                try
+                {
+                    if (CanAssignValue(backingField.FieldType, value))
+                    {
+                        backingField.SetValue(target, value);
+                        return true;
+                    }
+                }
+                catch
+                {
+                    // ignored
+                }
             }
 
             return false;
@@ -321,7 +354,7 @@ namespace S1API.Internal.Utils
             const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
             
             // Try field first
-            var fi = type.GetField(memberName, flags);
+            var fi = GetField(type, memberName, flags);
             if (fi != null)
             {
                 try
@@ -335,15 +368,67 @@ namespace S1API.Internal.Utils
             }
             
             // Try property
-            var pi = type.GetProperty(memberName, flags);
-            if (pi == null || !pi.CanRead) return null;
-            try
+            var pi = GetProperty(type, memberName, flags);
+            if (pi != null && pi.CanRead)
             {
-                return pi.GetValue(target);
+                try
+                {
+                    return pi.GetValue(target);
+                }
+                catch
+                {
+                    // ignored
+                }
             }
-            catch
+
+            string[] backingFieldNames =
             {
-                // ignored
+                $"<{memberName}>k__BackingField",
+                $"_{memberName}_k__BackingField"
+            };
+
+            foreach (string backingFieldName in backingFieldNames)
+            {
+                var backingField = GetField(type, backingFieldName, flags);
+                if (backingField == null)
+                    continue;
+
+                try
+                {
+                    return backingField.GetValue(target);
+                }
+                catch
+                {
+                    // ignored
+                }
+            }
+
+            return null;
+        }
+
+        private static FieldInfo? GetField(Type? type, string fieldName, BindingFlags bindingFlags)
+        {
+            while (type != null && type != typeof(object))
+            {
+                var field = type.GetField(fieldName, bindingFlags);
+                if (field != null)
+                    return field;
+
+                type = type.BaseType;
+            }
+
+            return null;
+        }
+
+        private static PropertyInfo? GetProperty(Type? type, string propertyName, BindingFlags bindingFlags)
+        {
+            while (type != null && type != typeof(object))
+            {
+                var property = type.GetProperty(propertyName, bindingFlags);
+                if (property != null)
+                    return property;
+
+                type = type.BaseType;
             }
 
             return null;

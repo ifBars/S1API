@@ -62,8 +62,8 @@ namespace S1API.Entities
             {
                 if (_runtimeAvatar.CurrentSettings != null)
                     sourceSettings = _runtimeAvatar.CurrentSettings;
-                else if (_runtimeAvatar.InitialAvatarSettings != null)
-                    sourceSettings = _runtimeAvatar.InitialAvatarSettings;
+                else
+                    sourceSettings = global::S1API.Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(_runtimeAvatar, "InitialAvatarSettings") as S1AvatarFramework.AvatarSettings;
             }
 
             if (sourceSettings != null)
@@ -74,7 +74,7 @@ namespace S1API.Entities
                 ApplyDefaultSettings(_customAvatarSettings);
             }
 
-            S1AvatarFramework.AvatarSettings avatarSettings = Resources.Load<S1AvatarFramework.AvatarSettings>($"charactersettings/{NPC.S1NPC.FirstName}");
+            S1AvatarFramework.AvatarSettings avatarSettings = Resources.Load<S1AvatarFramework.AvatarSettings>($"charactersettings/{NPC.FirstName}");
             if (avatarSettings != null)
                 _customAvatarSettings = ScriptableObject.Instantiate(avatarSettings);
 
@@ -264,7 +264,7 @@ namespace S1API.Entities
                     mugshotRig.gameObject.SetActive(false);
 
                     if (attempt == maxRetries)
-                        _logger.Warning($"[Mugshot] {next.NPC.S1NPC.FirstName}: no content after {maxRetries + 1} attempts, using last capture");
+                        _logger.Warning($"[Mugshot] {next.NPC.FirstName}: no content after {maxRetries + 1} attempts, using last capture");
                 }
 
                 if (generatedMugshot != null)

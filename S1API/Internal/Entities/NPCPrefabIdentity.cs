@@ -2,6 +2,8 @@
 using S1AvatarFramework = Il2CppScheduleOne.AvatarFramework;
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1Economy = Il2CppScheduleOne.Economy;
+using S1Core = Il2CppScheduleOne.Core;
+using S1NPCFramework = Il2CppScheduleOne.NPCs.Framework;
 using Il2CppInterop.Runtime.Attributes;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1AvatarFramework = ScheduleOne.AvatarFramework;
@@ -244,12 +246,6 @@ namespace S1API.Internal.Entities
             if (string.IsNullOrEmpty(prefabName))
                 return;
 
-            // Only register prefab data during Menu scene configuration; runtime instances in Main should not alter the registry.
-            if (!DeferredMapResolver.IsMenuScene())
-            {
-                return;
-            }
-
             // Normalize prefab name (remove "(Clone)" suffix) - only register prefabs, not spawned instances
             string normalizedName = prefabName;
             if (normalizedName.EndsWith("(Clone)"))
@@ -258,7 +254,7 @@ namespace S1API.Internal.Entities
             // Don't register spawned instances - they should only read from registry
             // Check if this is a spawned instance by checking if gameObject name has "(Clone)"
             bool isSpawnedInstance = gameObject.name.EndsWith("(Clone)");
-            if (isSpawnedInstance)
+            if (isSpawnedInstance || !normalizedName.StartsWith("S1API_", StringComparison.OrdinalIgnoreCase))
             {
                 // Spawned instances should not create registry entries
                 // They should only read from existing prefab entries
@@ -375,13 +371,16 @@ namespace S1API.Internal.Entities
                     try
                     {
                         var npc = GetComponent<S1NPCs.NPC>();
-                        if (npc != null && !string.IsNullOrEmpty(npc.ID))
+                        string npcId = npc != null
+                            ? ReflectionUtils.TryGetFieldOrProperty(npc, "ID") as string
+                            : null;
+                        if (!string.IsNullOrEmpty(npcId))
                         {
                             foreach (var kvp in _registry)
                             {
                                 var entry = kvp.Value;
                                 // Match by ID - registry entry should have the same ID as the NPC
-                                if (!string.IsNullOrEmpty(entry.Id) && string.Equals(entry.Id, npc.ID, StringComparison.OrdinalIgnoreCase))
+                                if (!string.IsNullOrEmpty(entry.Id) && string.Equals(entry.Id, npcId, StringComparison.OrdinalIgnoreCase))
                                 {
                                     resolved = entry;
                                     PrefabName = entry.PrefabName ?? kvp.Key; // Use PrefabName from entry or fallback to registry key
@@ -611,25 +610,25 @@ namespace S1API.Internal.Entities
 
             try {
                 if (!string.IsNullOrEmpty(FirstName))
-                    npc.FirstName = FirstName;
+                    TrySetNpcMember(npc, "FirstName", FirstName);
             }
             catch { }
             try
             {
                 if (!string.IsNullOrEmpty(LastName))
-                    npc.LastName = LastName;
+                    TrySetNpcMember(npc, "LastName", LastName);
             }
             catch { }
             try
             {
                 if (!string.IsNullOrEmpty(Id))
-                    npc.ID = Id;
+                    TrySetNpcMember(npc, "ID", Id);
             }
             catch { }
             try
             {
                 if (Icon != null)
-                    npc.MugshotSprite = Icon;
+                    TrySetNpcMember(npc, "MugshotSprite", Icon);
             }
             catch { }
 
@@ -701,6 +700,41 @@ namespace S1API.Internal.Entities
                 }
             }
             catch { }
+        }
+
+        /// <summary>
+        /// Applies only the identity fields that beta IL2CPP NPC.Awake requires before Start runs.
+        /// </summary>
+        internal void ApplyCriticalIdentityBeforeAwake(S1NPCs.NPC npc)
+        {
+            if (npc == null)
+                return;
+
+            if (string.IsNullOrEmpty(Id) && string.IsNullOrEmpty(FirstName))
+                TryRestoreFromRegistry();
+
+            try
+            {
+                if (!string.IsNullOrEmpty(FirstName))
+                    TrySetNpcMember(npc, "FirstName", FirstName);
+            }
+            catch { }
+
+            try
+            {
+                if (!string.IsNullOrEmpty(LastName))
+                    TrySetNpcMember(npc, "LastName", LastName);
+            }
+            catch { }
+
+            try
+            {
+                if (!string.IsNullOrEmpty(Id))
+                    TrySetNpcMember(npc, "ID", Id);
+            }
+            catch { }
+
+            EnsureFrameworkNpcDataIdentity(npc);
         }
 
 #if IL2CPPMELON
@@ -822,6 +856,46 @@ namespace S1API.Internal.Entities
             }
         }
 
+        private static bool TrySetNpcMember(S1NPCs.NPC npc, string memberName, object value)
+        {
+            return ReflectionUtils.TrySetFieldOrProperty(npc, memberName, value)
+                   || ReflectionUtils.TrySetFieldOrProperty(npc, $"_{memberName}_k__BackingField", value)
+                   || ReflectionUtils.TrySetFieldOrProperty(npc, $"<{memberName}>k__BackingField", value);
+        }
+
+        private void EnsureFrameworkNpcDataIdentity(S1NPCs.NPC npc)
+        {
+#if IL2CPPMELON
+            if (npc == null)
+                return;
+
+            if (string.IsNullOrWhiteSpace(Id) && string.IsNullOrWhiteSpace(FirstName))
+                return;
+
+            try
+            {
+                var npcData = npc.NPCData ?? new S1NPCFramework.NPCData();
+                var basicInfo = npcData.BasicInfo ?? new S1NPCFramework.BasicInfo();
+
+                if (!string.IsNullOrWhiteSpace(Id))
+                    basicInfo.ID = Id;
+                if (!string.IsNullOrWhiteSpace(FirstName))
+                    basicInfo.FirstName = FirstName;
+
+                bool hasLastName = !string.IsNullOrWhiteSpace(LastName);
+                basicInfo.HasLastName = hasLastName;
+                basicInfo.LastName = hasLastName ? LastName : string.Empty;
+
+                npcData._basicInfo = new S1Core.ValueOrReference<S1NPCFramework.BasicInfo, S1NPCFramework.BasicInfoPreset>(basicInfo);
+                TrySetNpcMember(npc, "NPCData", npcData);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[NPCPrefabIdentity] Failed to initialize framework NPCData identity before Awake for '{Id ?? FirstName ?? "<unknown>"}': {ex.Message}");
+            }
+#endif
+        }
+
 #if IL2CPPMELON
         [HideFromIl2Cpp]
 #endif
@@ -869,12 +943,15 @@ namespace S1API.Internal.Entities
             try
             {
                 var npc = GetComponent<S1NPCs.NPC>();
-                if (npc != null && !string.IsNullOrEmpty(npc.ID))
+                string npcId = npc != null
+                    ? ReflectionUtils.TryGetFieldOrProperty(npc, "ID") as string
+                    : null;
+                if (!string.IsNullOrEmpty(npcId))
                 {
                     foreach (var kvp in _registry)
                     {
                         var entry = kvp.Value;
-                        if (!string.IsNullOrEmpty(entry.Id) && string.Equals(entry.Id, npc.ID, StringComparison.OrdinalIgnoreCase))
+                        if (!string.IsNullOrEmpty(entry.Id) && string.Equals(entry.Id, npcId, StringComparison.OrdinalIgnoreCase))
                         {
                             data = entry;
                             PrefabName = entry.PrefabName ?? kvp.Key;

@@ -16,6 +16,7 @@ using FishNet.Object;
 
 using System;
 using System.Collections.Generic;
+using S1API.Internal.Utils;
 using UnityEngine;
 using S1API.Entities.Schedule;
 
@@ -32,6 +33,7 @@ namespace S1API.Entities
     public sealed class NPCSchedule
     {
         internal readonly NPC NPC;
+        private static bool _loggedDealSignalTypeMissing;
 
         internal NPCSchedule(NPC npc)
         {
@@ -190,7 +192,7 @@ namespace S1API.Entities
                     return;
             }
 
-            var existing = manager.GetComponentInChildren<S1NPCsSchedules.NPCSignal_WaitForDelivery>(true);
+            var existing = FindDealSignal(manager);
             if (existing != null)
             {
                 TryNetworkInitialize(existing);
@@ -203,19 +205,49 @@ namespace S1API.Entities
             UnityEngine.Debug.LogWarning("[S1API] DealSignal missing on prefab. Please add via NPC.ConfigurePrefab(builder.EnsureDealSignal()).");
         }
 
-        private void TryWireCustomerDealSignal(S1NPCsSchedules.NPCSignal_WaitForDelivery signal)
+        private static Type? GetDealSignalType()
+        {
+            return ReflectionUtils.GetTypeByName("ScheduleOne.NPCs.Schedules.NPCSignal_WaitForDelivery")
+                   ?? ReflectionUtils.GetTypeByName("Il2CppScheduleOne.NPCs.Schedules.NPCSignal_WaitForDelivery");
+        }
+
+        private Component? FindDealSignal(S1NPCs.NPCScheduleManager manager)
+        {
+            var dealSignalType = GetDealSignalType();
+            if (dealSignalType == null)
+            {
+                if (!_loggedDealSignalTypeMissing)
+                {
+                    _loggedDealSignalTypeMissing = true;
+                    UnityEngine.Debug.LogWarning("[S1API] DealSignal type is not available in this game build. Customer deal signal wiring was skipped.");
+                }
+
+                return null;
+            }
+
+            var components = manager.GetComponentsInChildren<Component>(true);
+            for (int i = 0; i < components.Length; i++)
+            {
+                var component = components[i];
+                if (component != null && dealSignalType.IsInstanceOfType(component))
+                    return component;
+            }
+
+            return null;
+        }
+
+        private void TryWireCustomerDealSignal(object signal)
         {
             try
             {
                 var customer = NPC.gameObject.GetComponent<S1Economy.Customer>();
                 if (customer == null) return;
-                var field = typeof(S1Economy.Customer).GetField("DealSignal", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-                field?.SetValue(customer, signal);
+                ReflectionUtils.TrySetFieldOrProperty(customer, "DealSignal", signal);
             }
             catch { /* ignore */ }
         }
 
-        private void TryAssignDealSignalField(S1NPCsSchedules.NPCSignal_WaitForDelivery signal)
+        private void TryAssignDealSignalField(object signal)
         {
             try
             {
@@ -223,7 +255,7 @@ namespace S1API.Entities
                 if (customer == null || signal == null)
                     return;
 
-                customer.DealSignal = signal;
+                ReflectionUtils.TrySetFieldOrProperty(customer, "DealSignal", signal);
             }
             catch { /* ignore */ }
         }

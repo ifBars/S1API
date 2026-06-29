@@ -13,12 +13,14 @@ using Il2CppTMPro;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppInterop.Runtime;
 using S1GameInput = Il2CppScheduleOne.GameInput;
+using S1ExitAction = Il2CppScheduleOne.ExitAction;
 using S1TVHomeScreen = Il2CppScheduleOne.TV.TVHomeScreen;
 using S1TVApp = Il2CppScheduleOne.TV.TVApp;
 #elif MONOMELON || MONOBEPINEX || IL2CPPBEPINEX
 using TMPro;
 using ScheduleOne.DevUtilities;
 using S1GameInput = ScheduleOne.GameInput;
+using S1ExitAction = ScheduleOne.DevUtilities.ExitAction;
 using S1TVHomeScreen = ScheduleOne.TV.TVHomeScreen;
 using S1TVApp = ScheduleOne.TV.TVApp;
 #endif
@@ -422,7 +424,7 @@ namespace S1API.TVApp
 
             // Register exit listener at priority 3 (same as game's built-in TV apps)
 #if IL2CPPMELON
-            _exitDelegate = DelegateSupport.ConvertDelegate<S1GameInput.ExitDelegate>(new Action<ExitAction>(HandleExit));
+            _exitDelegate = DelegateSupport.ConvertDelegate<S1GameInput.ExitDelegate>(new Action<S1ExitAction>(HandleExit));
 #else
             _exitDelegate = new S1GameInput.ExitDelegate(HandleExit);
 #endif
@@ -523,7 +525,7 @@ namespace S1API.TVApp
         /// <summary>
         /// Handles exit/escape key press.
         /// </summary>
-        private void HandleExit(ExitAction exit)
+        private void HandleExit(S1ExitAction exit)
         {
             if (exit.Used || !_isOpen)
                 return;

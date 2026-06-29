@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.UI;
@@ -236,13 +237,19 @@ namespace S1API.Internal.Patches
     /// <summary>
     /// Patches TVHomeScreen.Close to prevent interface closing when custom app is opening.
     /// </summary>
-    [HarmonyPatch(typeof(TVHomeScreen), "Close")]
+    [HarmonyPatch]
     internal static class TVHomeScreen_Close_Patch
     {
         /// <summary>
         /// Flag indicating that a custom TV app is about to open.
         /// </summary>
         internal static bool SkipInterfaceClose { get; set; }
+
+        static MethodBase TargetMethod()
+        {
+            return AccessTools.GetDeclaredMethods(typeof(TVHomeScreen))
+                .Find(method => method.Name == "Close" || method.Name == "OnClose");
+        }
 
         static void Prefix(TVHomeScreen __instance)
         {

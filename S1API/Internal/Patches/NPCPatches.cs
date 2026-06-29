@@ -3,10 +3,12 @@ using S1Relation = Il2CppScheduleOne.NPCs.Relation;
 using S1Loaders = Il2CppScheduleOne.Persistence.Loaders;
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1NPCsBehaviour = Il2CppScheduleOne.NPCs.Behaviour;
+using S1NPCsActions = Il2CppScheduleOne.NPCs.Actions;
 using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
 using S1Map = Il2CppScheduleOne.Map;
 using S1Money = Il2CppScheduleOne.Money;
 using S1Economy = Il2CppScheduleOne.Economy;
+using S1Combat = Il2CppScheduleOne.Combat;
 using S1Datas = Il2CppScheduleOne.Persistence.Datas;
 using S1Items = Il2CppScheduleOne.ItemFramework;
 using S1GameTime = Il2CppScheduleOne.GameTime;
@@ -20,6 +22,7 @@ using S1Relation = ScheduleOne.NPCs.Relation;
 using S1Loaders = ScheduleOne.Persistence.Loaders;
 using S1NPCs = ScheduleOne.NPCs;
 using S1NPCsBehaviour = ScheduleOne.NPCs.Behaviour;
+using S1NPCsActions = ScheduleOne.NPCs.Actions;
 using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
 using FishNet;
 using FishNet.Object;
@@ -27,6 +30,7 @@ using ScheduleOne.DevUtilities;
 using S1Map = ScheduleOne.Map;
 using S1Money = ScheduleOne.Money;
 using S1Economy = ScheduleOne.Economy;
+using S1Combat = ScheduleOne.Combat;
 using S1Datas = ScheduleOne.Persistence.Datas;
 using S1Items = ScheduleOne.ItemFramework;
 using S1GameTime = ScheduleOne.GameTime;
@@ -61,6 +65,7 @@ namespace S1API.Internal.Patches
     {
         private static readonly Logging.Log Logger = new Logging.Log("NPCPatches");
         private static readonly HashSet<string> _loadingDealers = new HashSet<string>();
+        private const float DefaultRelationDelta = 2f;
         public static bool CustomNpcsReady = false;
         // Pending custom NPC types to instantiate when using consolidated NPCs.json saves (non-physical/custom contacts).
         private static readonly System.Collections.Generic.List<Type> _pendingCustomNpcTypes = new System.Collections.Generic.List<Type>();
@@ -77,6 +82,128 @@ namespace S1API.Internal.Patches
         // Pending inventory loads for custom dealers - stored until NPCInventory.Awake creates slots
         private static readonly System.Collections.Generic.Dictionary<string, S1Datas.DeserializedItemSet> _pendingInventoryLoads
             = new System.Collections.Generic.Dictionary<string, S1Datas.DeserializedItemSet>();
+        private static bool _loggedSkippedUnsafeRequestProductActivate;
+        private static bool _loggedSkippedUnsafeCombatStart;
+        private static bool _loggedSkippedUnsafeDealerStart;
+
+        private static object? GetInventoryMember(S1NPCs.NPCInventory inventory, string memberName)
+        {
+            return ReflectionUtils.TryGetFieldOrProperty(inventory, memberName);
+        }
+
+        private static bool SetInventoryMember(S1NPCs.NPCInventory inventory, string memberName, object? value)
+        {
+            return ReflectionUtils.TrySetFieldOrProperty(inventory, memberName, value);
+        }
+
+        private static bool GetInventoryBool(S1NPCs.NPCInventory inventory, string memberName)
+        {
+            return GetInventoryMember(inventory, memberName) is bool value && value;
+        }
+
+        private static int GetInventoryInt(S1NPCs.NPCInventory inventory, string memberName, int fallback)
+        {
+            return GetInventoryMember(inventory, memberName) is int value ? value : fallback;
+        }
+
+        private static int GetArrayLength(object? value)
+        {
+            if (value == null)
+                return 0;
+
+            if (value is Array array)
+                return array.Length;
+
+            var length = value.GetType().GetProperty("Length", BindingFlags.Public | BindingFlags.Instance)?.GetValue(value);
+            return length is int intLength ? intLength : 0;
+        }
+
+        private static void EnsureInventoryArray(S1NPCs.NPCInventory inventory, string memberName)
+        {
+            if (inventory == null || GetInventoryMember(inventory, memberName) != null)
+                return;
+
+            var memberType = GetMemberType(inventory.GetType(), memberName);
+            if (memberType == null)
+                return;
+
+            object? empty = null;
+            try
+            {
+                if (memberType.IsArray)
+                {
+                    var elementType = memberType.GetElementType();
+                    if (elementType != null)
+                        empty = Array.CreateInstance(elementType, 0);
+                }
+                else
+                {
+                    empty = Activator.CreateInstance(memberType, 0);
+                }
+            }
+            catch
+            {
+                empty = null;
+            }
+
+            if (empty != null)
+                SetInventoryMember(inventory, memberName, empty);
+        }
+
+        private static void ClearInventoryArray(S1NPCs.NPCInventory inventory, string memberName)
+        {
+            if (inventory == null)
+                return;
+
+            var current = GetInventoryMember(inventory, memberName);
+            if (GetArrayLength(current) == 0)
+                return;
+
+            var memberType = GetMemberType(inventory.GetType(), memberName);
+            if (memberType == null)
+                return;
+
+            object? empty = null;
+            try
+            {
+                if (memberType.IsArray)
+                {
+                    var elementType = memberType.GetElementType();
+                    if (elementType != null)
+                        empty = Array.CreateInstance(elementType, 0);
+                }
+                else
+                {
+                    empty = Activator.CreateInstance(memberType, 0);
+                }
+            }
+            catch
+            {
+                empty = null;
+            }
+
+            if (empty != null)
+                SetInventoryMember(inventory, memberName, empty);
+        }
+
+        private static Type? GetMemberType(Type? type, string memberName)
+        {
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            while (type != null && type != typeof(object))
+            {
+                var field = type.GetField(memberName, flags);
+                if (field != null)
+                    return field.FieldType;
+
+                var property = type.GetProperty(memberName, flags);
+                if (property != null)
+                    return property.PropertyType;
+
+                type = type.BaseType;
+            }
+
+            return null;
+        }
 
         /// <summary>
         /// Resets static state that can leak across save loads.
@@ -549,25 +676,10 @@ namespace S1API.Internal.Patches
             }
             catch { }
 
-            // Ensure definition arrays are not null before length/enumeration in Awake_UserLogic
-#if (IL2CPPMELON || IL2CPPBEPINEX)
-            if (__instance.TestItems == null)
-                __instance.TestItems =
- new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Il2CppScheduleOne.ItemFramework.ItemDefinition>(0);
-            if (__instance.StartupItems == null)
-                __instance.StartupItems =
- new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Il2CppScheduleOne.ItemFramework.ItemDefinition>(0);
-            if (__instance.RandomInventoryItems == null)
-                __instance.RandomInventoryItems =
- new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Il2CppScheduleOne.NPCs.NPCInventory.RandomInventoryItem>(0);
-#else
-            if (__instance.TestItems == null)
-                __instance.TestItems = Array.Empty<ScheduleOne.ItemFramework.ItemDefinition>();
-            if (__instance.StartupItems == null)
-                __instance.StartupItems = Array.Empty<ScheduleOne.ItemFramework.ItemDefinition>();
-            if (__instance.RandomInventoryItems == null)
-                __instance.RandomInventoryItems = Array.Empty<ScheduleOne.NPCs.NPCInventory.RandomInventoryItem>();
-#endif
+            // Ensure definition arrays are not null before length/enumeration in Awake_UserLogic.
+            EnsureInventoryArray(__instance, "TestItems");
+            EnsureInventoryArray(__instance, "StartupItems");
+            EnsureInventoryArray(__instance, "RandomInventoryItems");
 
             // For custom NPCs, clear StartupItems if they're empty/null to prevent Awake from processing stale data
             // ApplyRandomInventoryDefaults() handles inserting items directly and clearing StartupItems,
@@ -582,7 +694,7 @@ namespace S1API.Internal.Patches
                 {
                     // If StartupItems are set but items already exist in inventory, clear StartupItems
                     // This handles the case where ApplyRandomInventoryDefaults() inserted items before Awake ran
-                    if (__instance.StartupItems != null && __instance.ItemSlots != null)
+                    if (GetInventoryMember(__instance, "StartupItems") != null && __instance.ItemSlots != null)
                     {
                         bool hasItems = false;
                         try
@@ -601,21 +713,7 @@ namespace S1API.Internal.Patches
 
                         if (hasItems)
                         {
-#if (IL2CPPMELON || IL2CPPBEPINEX)
-                            var il2cppArray = __instance.StartupItems as Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>;
-                            if (il2cppArray != null && il2cppArray.Length > 0)
-                            {
-                                // Items already exist, clear StartupItems to prevent duplicate insertion
-                                __instance.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(0);
-                            }
-#else
-                            var array = __instance.StartupItems as S1Items.ItemDefinition[];
-                            if (array != null && array.Length > 0)
-                            {
-                                // Items already exist, clear StartupItems to prevent duplicate insertion
-                                __instance.StartupItems = Array.Empty<S1Items.ItemDefinition>();
-                            }
-#endif
+                            ClearInventoryArray(__instance, "StartupItems");
                         }
                     }
                 }
@@ -671,22 +769,7 @@ namespace S1API.Internal.Patches
 
                 // Clear StartupItems after processing to prevent duplicate insertion on subsequent Awake calls
                 // This ensures startup items are only inserted once, even if Awake runs multiple times
-                if (__instance.StartupItems != null)
-                {
-#if (IL2CPPMELON || IL2CPPBEPINEX)
-                    var il2cppArray = __instance.StartupItems as Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>;
-                    if (il2cppArray != null && il2cppArray.Length > 0)
-                    {
-                        __instance.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(0);
-                    }
-#else
-                    var array = __instance.StartupItems as S1Items.ItemDefinition[];
-                    if (array != null && array.Length > 0)
-                    {
-                        __instance.StartupItems = Array.Empty<S1Items.ItemDefinition>();
-                    }
-#endif
-                }
+                ClearInventoryArray(__instance, "StartupItems");
             }
             catch (Exception ex)
             {
@@ -699,23 +782,53 @@ namespace S1API.Internal.Patches
         /// GraffitiBehaviour from NPCPrefabBuilder) are included. Also ensures each Behaviour has beh and Npc set
         /// (Enable_Server requires beh; prefab build may run before Awake so these can be null on spawn).
         /// </summary>
+        [HarmonyPatch(typeof(S1NPCsBehaviour.NPCBehaviour), "Awake")]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static bool NPCBehaviour_Awake_Prefix(S1NPCsBehaviour.NPCBehaviour __instance)
+        {
+#if (IL2CPPMELON)
+            if (IsS1ApiCustomNpcComponent(__instance))
+            {
+                Logger.Msg("NPCBehaviour_Awake_Prefix: Suppressed beta NPCBehaviour.Awake for S1API custom NPC.");
+                return false;
+            }
+#endif
+            return true;
+        }
+
         [HarmonyPatch(typeof(S1NPCsBehaviour.NPCBehaviour), "Start")]
         [HarmonyPrefix]
         [HarmonyPriority(Priority.First)]
-        private static void NPCBehaviour_Start_Prefix(S1NPCsBehaviour.NPCBehaviour __instance)
+        private static bool NPCBehaviour_Start_Prefix(S1NPCsBehaviour.NPCBehaviour __instance)
         {
+            bool isCustomNpcBehaviour = IsS1ApiCustomNpcComponent(__instance);
+            if (isCustomNpcBehaviour)
+            {
+                Logger.Msg("NPCBehaviour_Start_Prefix: Suppressed beta BaseEmployee behaviour startup for S1API custom NPC.");
+                return false;
+            }
+
             try
             {
                 var behaviours = __instance.GetComponentsInChildren<S1NPCsBehaviour.Behaviour>(true);
 #if (IL2CPPMELON || IL2CPPBEPINEX)
-                var list = new Il2CppSystem.Collections.Generic.List<S1NPCsBehaviour.Behaviour>();
+                var ordered = new System.Collections.Generic.List<S1NPCsBehaviour.Behaviour>();
                 for (int i = 0; i < behaviours.Length; i++)
-                    list.Add(behaviours[i]);
+                {
+                    var behaviour = behaviours[i];
+                    if (behaviour != null)
+                        ordered.Add(behaviour);
+                }
+                ordered.Sort((left, right) => left.Priority.CompareTo(right.Priority));
+
+                var list = new Il2CppSystem.Collections.Generic.List<S1NPCsBehaviour.Behaviour>();
+                for (int i = 0; i < ordered.Count; i++)
+                    list.Add(ordered[i]);
 #else
-                var list = new System.Collections.Generic.List<S1NPCsBehaviour.Behaviour>(behaviours);
+                var list = new System.Collections.Generic.List<S1NPCsBehaviour.Behaviour>(behaviours.Where(b => b != null).OrderBy(b => b.Priority));
 #endif
                 ReflectionUtils.TrySetFieldOrProperty(__instance, "behaviourStack", list);
-                __instance.SortBehaviourStack();
 
                 var npc = __instance.Npc;
                 if (npc == null)
@@ -736,6 +849,237 @@ namespace S1API.Internal.Patches
             {
                 Logger.Warning($"NPCBehaviour_Start_Prefix: Failed to refresh behaviourStack: {ex.Message}");
             }
+
+            return true;
+        }
+
+        [HarmonyPatch(typeof(S1NPCs.NPC), "Awake")]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static bool NPC_Awake_Prefix(S1NPCs.NPC __instance)
+        {
+            try
+            {
+                var identity = __instance != null ? __instance.GetComponent<NPCPrefabIdentity>() : null;
+                if (identity != null)
+                {
+                    identity.ApplyCriticalIdentityBeforeAwake(__instance);
+#if (IL2CPPMELON)
+                    Logger.Msg("NPC_Awake_Prefix: Suppressed beta NPC.Awake for S1API custom NPC.");
+                    return false;
+#endif
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"NPC_Awake_Prefix: Failed to apply S1API identity before Awake: {ex.Message}");
+            }
+
+            return true;
+        }
+
+        [HarmonyPatch(typeof(S1Economy.Dealer), "Awake")]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static bool Dealer_Awake_Prefix(S1Economy.Dealer __instance)
+        {
+#if (IL2CPPMELON)
+            if (IsS1ApiCustomNpcComponent(__instance))
+            {
+                try
+                {
+                    var identity = __instance.GetComponent<NPCPrefabIdentity>();
+                    identity?.ApplyCriticalIdentityBeforeAwake(__instance);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"Dealer_Awake_Prefix: Failed to apply S1API identity before Awake: {ex.Message}");
+                }
+
+                Logger.Msg("Dealer_Awake_Prefix: Suppressed beta Dealer.Awake for S1API custom NPC.");
+                return false;
+            }
+#endif
+            return true;
+        }
+
+        [HarmonyPatch(typeof(S1NPCsBehaviour.NPCBehaviour), "Update")]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static bool NPCBehaviour_Update_Prefix(S1NPCsBehaviour.NPCBehaviour __instance)
+        {
+#if (IL2CPPMELON)
+            return !IsS1ApiCustomNpcComponent(__instance);
+#else
+            return true;
+#endif
+        }
+
+        [HarmonyPatch(typeof(S1Combat.CombatBehaviour), "Awake")]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static bool CombatBehaviour_Awake_Prefix(S1Combat.CombatBehaviour __instance)
+        {
+#if (IL2CPPMELON)
+            return !IsS1ApiCustomNpcComponent(__instance);
+#else
+            return true;
+#endif
+        }
+
+        [HarmonyPatch(typeof(S1NPCsBehaviour.CustomerAttendDealBehaviour), "Awake")]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static bool CustomerAttendDealBehaviour_Awake_Prefix(S1NPCsBehaviour.CustomerAttendDealBehaviour __instance)
+        {
+#if (IL2CPPMELON)
+            return !IsS1ApiCustomNpcComponent(__instance);
+#else
+            return true;
+#endif
+        }
+
+        [HarmonyPatch(typeof(S1Combat.CombatBehaviour), "Start")]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static bool CombatBehaviour_Start_Prefix(S1Combat.CombatBehaviour __instance)
+        {
+#if (IL2CPPMELON)
+            if (IsS1ApiCustomNpcComponent(__instance) || HasMissingBehaviourOwner(__instance))
+            {
+                LogOnce(ref _loggedSkippedUnsafeCombatStart, "CombatBehaviour_Start_Prefix: Suppressed beta CombatBehaviour.Start because the behaviour owner is not initialized.");
+                return false;
+            }
+#endif
+            return true;
+        }
+
+        [HarmonyPatch(typeof(S1Economy.Dealer), "Start")]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static bool Dealer_Start_Prefix(S1Economy.Dealer __instance)
+        {
+#if (IL2CPPMELON)
+            if (IsS1ApiCustomNpcComponent(__instance))
+            {
+                LogOnce(ref _loggedSkippedUnsafeDealerStart, "Dealer_Start_Prefix: Suppressed beta Dealer.Start for S1API custom NPC.");
+                return false;
+            }
+#endif
+            return true;
+        }
+
+        [HarmonyPatch(typeof(S1NPCsActions.NPCActions), "Start")]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static bool NPCActions_Start_Prefix(S1NPCsActions.NPCActions __instance)
+        {
+#if (IL2CPPMELON)
+            return !IsS1ApiCustomNpcComponent(__instance);
+#else
+            return true;
+#endif
+        }
+
+        [HarmonyPatch(typeof(S1NPCsBehaviour.ConsumeProductBehaviour), "Start")]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static bool ConsumeProductBehaviour_Start_Prefix(S1NPCsBehaviour.ConsumeProductBehaviour __instance)
+        {
+#if (IL2CPPMELON)
+            return !IsS1ApiCustomNpcComponent(__instance);
+#else
+            return true;
+#endif
+        }
+
+        [HarmonyPatch(typeof(S1NPCsBehaviour.RequestProductBehaviour), "SetUpDialogue")]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static bool RequestProductBehaviour_SetUpDialogue_Prefix(S1NPCsBehaviour.RequestProductBehaviour __instance)
+        {
+#if (IL2CPPMELON)
+            return !IsS1ApiCustomNpcComponent(__instance);
+#else
+            return true;
+#endif
+        }
+
+        [HarmonyPatch(typeof(S1NPCsBehaviour.RequestProductBehaviour), "Activate")]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static bool RequestProductBehaviour_Activate_Prefix(S1NPCsBehaviour.RequestProductBehaviour __instance)
+        {
+#if (IL2CPPMELON)
+            LogOnce(ref _loggedSkippedUnsafeRequestProductActivate, "RequestProductBehaviour_Activate_Prefix: Suppressed beta RequestProductBehaviour.Activate globally for IL2CPP beta stability.");
+            return false;
+#else
+            return true;
+#endif
+        }
+
+        private static bool HasMissingBehaviourOwner(S1NPCsBehaviour.Behaviour behaviour)
+        {
+            if (behaviour == null)
+                return true;
+
+            try
+            {
+                return behaviour.Npc == null || behaviour.beh == null;
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        private static void LogOnce(ref bool flag, string message)
+        {
+            if (flag)
+                return;
+
+            flag = true;
+            Logger.Msg(message);
+        }
+
+        private static bool IsS1ApiCustomNpcComponent(Component component)
+        {
+            if (component == null)
+                return false;
+
+            try
+            {
+                for (Transform current = component.transform; current != null; current = current.parent)
+                {
+                    if (current.gameObject != null)
+                    {
+                        string name = current.gameObject.name ?? string.Empty;
+                        if (name.StartsWith("S1API_", StringComparison.OrdinalIgnoreCase))
+                            return true;
+
+                        if (current.gameObject.GetComponent<NPCPrefabIdentity>() != null)
+                            return true;
+                    }
+                }
+
+                if (component.GetComponent<NPCPrefabIdentity>() != null)
+                    return true;
+
+                if (component.GetComponentInParent<NPCPrefabIdentity>(true) != null)
+                    return true;
+
+                var npc = component as S1NPCs.NPC ?? component.GetComponentInParent<S1NPCs.NPC>(true);
+                if (npc != null)
+                {
+                    var apiNpc = FindWrapperForS1Npc(npc);
+                    return apiNpc != null && apiNpc.IsCustomNPC;
+                }
+            }
+            catch
+            {
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -1163,7 +1507,7 @@ namespace S1API.Internal.Patches
                             // Preserve relationship delta if it was loaded from save (non-default value)
                             // Default relationship delta is 2.0, so if it's different, it came from save
                             float currentDelta = rel.RelationDelta;
-                            bool deltaWasLoadedFromSave = Math.Abs(currentDelta - S1Relation.NPCRelationData.DEFAULT_RELATION_DELTA) > 0.01f;
+                            bool deltaWasLoadedFromSave = Math.Abs(currentDelta - DefaultRelationDelta) > 0.01f;
                             
                             // Store the loaded delta before applying defaults
                             float savedDelta = currentDelta;
@@ -1554,7 +1898,7 @@ namespace S1API.Internal.Patches
             try
             {
                 // Clear inventory without networking
-                if (__instance.ClearInventoryEachNight)
+                if (GetInventoryBool(__instance, "ClearInventoryEachNight"))
                 {
                     for (int i = 0; i < __instance.ItemSlots.Count; i++)
                     {
@@ -1575,9 +1919,11 @@ namespace S1API.Internal.Patches
                     return false;
 
                 // Random cash (local-only)
-                if (__instance.RandomCash)
+                if (GetInventoryBool(__instance, "RandomCash"))
                 {
-                    int amount = UnityEngine.Random.Range(__instance.RandomCashMin, __instance.RandomCashMax);
+                    int amount = UnityEngine.Random.Range(
+                        GetInventoryInt(__instance, "RandomCashMin", 0),
+                        GetInventoryInt(__instance, "RandomCashMax", 0));
                     if (amount > 0)
                     {
                         var cash = NetworkSingleton<S1Money.MoneyManager>.Instance.GetCashInstance(amount);
@@ -1586,8 +1932,8 @@ namespace S1API.Internal.Patches
                 }
 
                 // Random items (local-only) - Use AddRandomItemsToInventory which handles the new API
-                if (__instance.RandomItems && __instance.RandomInventoryItems != null &&
-                    __instance.RandomInventoryItems.Length > 0)
+                if (GetInventoryBool(__instance, "RandomItems") &&
+                    GetArrayLength(GetInventoryMember(__instance, "RandomInventoryItems")) > 0)
                 {
                     // v0.4.2f4 changed GetRandomInventoryItem to require excludeIDs parameter
                     // and added AddRandomItemsToInventory() as a public method - use that instead
@@ -2599,7 +2945,10 @@ namespace S1API.Internal.Patches
 
                 if (customer == null)
                 {
-                    Logger.Warning($"NPC {npc.fullName} (ID: {customerID}) is not a customer");
+                    string npcName = ReflectionUtils.TryGetFieldOrProperty(npc, "fullName") as string
+                        ?? ReflectionUtils.TryGetFieldOrProperty(npc, "FullName") as string
+                        ?? npc.name;
+                    Logger.Warning($"NPC {npcName} (ID: {customerID}) is not a customer");
                     continue;
                 }
 

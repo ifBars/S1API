@@ -1,6 +1,6 @@
 #if (IL2CPPMELON)
 using S1UIShop = Il2CppScheduleOne.UI.Shop;
-using Il2CppSystem;
+using Il2CppInterop.Runtime;
 #elif (MONOMELON || MONOBEPINEX || IL2CPPBEPINEX)
 using S1UIShop = ScheduleOne.UI.Shop;
 using System;
@@ -146,10 +146,10 @@ namespace S1API.Internal.Shops
         {
 #if (IL2CPPMELON || IL2CPPBEPINEX)
             // Il2Cpp: Direct Action assignment
-            listingUI.onClicked = (Action)(() => shop.ListingClicked(listingUI));
-            listingUI.onDropdownClicked = (Action)(() => shop.DropdownClicked(listingUI));
-            listingUI.hoverStart = (Action)(() => shop.EntryHovered(listingUI));
-            listingUI.hoverEnd = (Action)(() => shop.EntryUnhovered());
+            listingUI.onClicked = DelegateSupport.ConvertDelegate<Il2CppSystem.Action>(new System.Action(() => shop.OpenAmountSelector(listingUI)));
+            listingUI.onDropdownClicked = DelegateSupport.ConvertDelegate<Il2CppSystem.Action>(new System.Action(() => shop.DropdownClicked(listingUI)));
+            listingUI.hoverStart = DelegateSupport.ConvertDelegate<Il2CppSystem.Action>(new System.Action(() => shop.EntryHovered(listingUI)));
+            listingUI.hoverEnd = DelegateSupport.ConvertDelegate<Il2CppSystem.Action>(new System.Action(() => shop.EntryUnhovered()));
 #else
             // Mono: Reflection-based method invocation
             var listingClickedMethod = GetShopMethod(shop, "ListingClicked");

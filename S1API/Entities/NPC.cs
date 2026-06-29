@@ -14,6 +14,9 @@ using S1Behaviour = Il2CppScheduleOne.NPCs.Behaviour;
 using S1Vehicles = Il2CppScheduleOne.Vehicles;
 using S1Vision = Il2CppScheduleOne.Vision;
 using S1NPCs = Il2CppScheduleOne.NPCs;
+using S1Employees = Il2CppScheduleOne.Employees;
+using S1NPCFramework = Il2CppScheduleOne.NPCs.Framework;
+using S1Core = Il2CppScheduleOne.Core;
 using S1Combat = Il2CppScheduleOne.Combat;
 using S1Items = Il2CppScheduleOne.ItemFramework;
 using S1MapBase = Il2CppScheduleOne.Map;
@@ -37,6 +40,7 @@ using S1Behaviour = ScheduleOne.NPCs.Behaviour;
 using S1Vehicles = ScheduleOne.Vehicles;
 using S1Vision = ScheduleOne.Vision;
 using S1NPCs = ScheduleOne.NPCs;
+using S1Employees = ScheduleOne.Employees;
 using S1Combat = ScheduleOne.Combat;
 using S1Items = ScheduleOne.ItemFramework;
 using S1MapBase = ScheduleOne.Map;
@@ -65,6 +69,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization;
+using System.Text;
 using HarmonyLib;
 #if (IL2CPPMELON)
 using Il2CppFishNet;
@@ -122,7 +127,55 @@ namespace S1API.Entities
         private static readonly System.Collections.Generic.Dictionary<System.Type, (Vector3 position, Quaternion rotation)> TypeToSpawnPosition = new System.Collections.Generic.Dictionary<System.Type, (Vector3, Quaternion)>();
         private static readonly System.Collections.Generic.HashSet<System.Type> CustomerTypes = new System.Collections.Generic.HashSet<System.Type>();
         private static readonly System.Collections.Generic.HashSet<System.Type> DealerTypes = new System.Collections.Generic.HashSet<System.Type>();
+        private const float DefaultRelationDelta = 2f;
+        private const string DealerPrefabName = "Dealer";
+        private const string CivilianNpcPrefabName = "CivilianNPC";
+        private const string BaseNpcPrefabName = "BaseNPC";
+        private const string BaseEmployeePrefabName = "BaseEmployee";
+        private const bool LogBetaNpcPrefabDiagnostics = false;
+        private static readonly string[] BaseNpcMembersToCopy =
+        {
+            "NPCData",
+            "Scale",
+            "Region",
+            "BakedGUID",
+            "GUID",
+            "AggressionController",
+            "Movement",
+            "DialogueHandler",
+            "Avatar",
+            "Awareness",
+            "Responses",
+            "Actions",
+            "Behaviour",
+            "Inventory",
+            "VoiceOverEmitter",
+            "Health",
+            "Visibility",
+            "CurrentVehicle",
+            "RelationData",
+            "MSGConversation",
+            "ConversationCategories",
+            "ConversationCanBeHidden",
+            "MugshotSprite",
+            "FirstName",
+            "LastName",
+            "hasLastName",
+            "ID"
+        };
+        private static readonly string[] ChildNpcReferenceMemberNames =
+        {
+            "Npc",
+            "NPC",
+            "npc",
+            "nPC",
+            "baseNpc",
+            "BaseNpc",
+            "baseNPC",
+            "BaseNPC"
+        };
         private static volatile bool _prefabsConfiguredForLocalProcess;
+        private static bool _loggedBaseEmployeeNormalization;
         internal static bool PrefabsConfiguredForLocalProcess => _prefabsConfiguredForLocalProcess;
         private S1AvatarFramework.Avatar? _runtimeAvatar;
         
@@ -183,7 +236,570 @@ namespace S1API.Entities
                     instance.transform.SetParent(parent, false);
             }
             instance.name = prefab.name;
+            S1NPCs.NPC? instanceNpc = GetPreferredNpcComponent(instance);
+            if (instanceNpc != null)
+                RepairNpcPrefabReferences(instance, instanceNpc);
+
             return instance;
+        }
+
+        private static NetworkObject? FindSpawnablePrefabByName(PrefabObjects spawnablePrefabs, int count, params string[] prefabNames)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                NetworkObject obj = spawnablePrefabs.GetObject(true, i);
+                if (obj == null || obj.gameObject == null)
+                    continue;
+
+                for (int nameIndex = 0; nameIndex < prefabNames.Length; nameIndex++)
+                {
+                    if (obj.gameObject.name == prefabNames[nameIndex])
+                        return obj;
+                }
+            }
+
+            return null;
+        }
+
+        private static NetworkObject? FindSpawnablePrefabWithComponent<T>(PrefabObjects spawnablePrefabs, int count) where T : Component
+        {
+            for (int i = 0; i < count; i++)
+            {
+                NetworkObject obj = spawnablePrefabs.GetObject(true, i);
+                if (obj != null && obj.gameObject != null && obj.gameObject.GetComponent<T>() != null)
+                    return obj;
+            }
+
+            return null;
+        }
+
+        private static NetworkObject? FindSpawnablePrefabWithPlainNpcComponent(PrefabObjects spawnablePrefabs, int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                NetworkObject obj = spawnablePrefabs.GetObject(true, i);
+                if (obj == null || obj.gameObject == null)
+                    continue;
+
+                if (IsGeneratedS1ApiPrefab(obj.gameObject))
+                    continue;
+
+                if (FindPlainNpcComponent(obj.gameObject) != null)
+                    return obj;
+            }
+
+            return null;
+        }
+
+        private static bool IsGeneratedS1ApiPrefab(GameObject prefabRoot)
+        {
+            return prefabRoot != null
+                   && !string.IsNullOrEmpty(prefabRoot.name)
+                   && prefabRoot.name.StartsWith("S1API_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static NetworkObject? ResolveNpcSpawnablePrefab(PrefabObjects spawnablePrefabs, int count, bool isDealerType)
+        {
+            if (isDealerType)
+            {
+                NetworkObject? dealerPrefab = FindSpawnablePrefabByName(spawnablePrefabs, count, DealerPrefabName)
+                    ?? FindSpawnablePrefabWithComponent<S1Economy.Dealer>(spawnablePrefabs, count);
+
+                if (dealerPrefab != null)
+                    return dealerPrefab;
+            }
+
+            return FindSpawnablePrefabByName(
+                    spawnablePrefabs,
+                    count,
+                    CivilianNpcPrefabName,
+                    BaseNpcPrefabName)
+                ?? FindSpawnablePrefabWithPlainNpcComponent(spawnablePrefabs, count)
+                ?? FindSpawnablePrefabByName(spawnablePrefabs, count, BaseEmployeePrefabName)
+                ?? FindSpawnablePrefabWithComponent<S1NPCs.NPC>(spawnablePrefabs, count);
+        }
+
+        private static S1NPCs.NPC? FindPlainNpcComponent(GameObject prefabRoot)
+        {
+            if (prefabRoot == null)
+                return null;
+
+            try
+            {
+                var employeeInstanceIds = GetEmployeeComponentInstanceIds(prefabRoot);
+                var components = prefabRoot.GetComponents<S1NPCs.NPC>();
+                foreach (var component in components)
+                {
+                    if (IsPlainNpcComponent(component, employeeInstanceIds))
+                        return component;
+                }
+            }
+            catch
+            {
+            }
+
+            return null;
+        }
+
+        private static S1NPCs.NPC? FindEmployeeNpcComponent(GameObject prefabRoot)
+        {
+            if (prefabRoot == null)
+                return null;
+
+            var employee = prefabRoot.GetComponent<S1Employees.Employee>();
+            if (employee != null)
+                return employee;
+
+            try
+            {
+                var components = prefabRoot.GetComponents<S1NPCs.NPC>();
+                foreach (var component in components)
+                {
+                    if (IsEmployeeNpcComponent(component))
+                        return component;
+                }
+            }
+            catch
+            {
+            }
+
+            return null;
+        }
+
+        private static System.Collections.Generic.HashSet<int> GetEmployeeComponentInstanceIds(GameObject prefabRoot)
+        {
+            var ids = new System.Collections.Generic.HashSet<int>();
+            if (prefabRoot == null)
+                return ids;
+
+            try
+            {
+                var employees = prefabRoot.GetComponents<S1Employees.Employee>();
+                foreach (var employee in employees)
+                {
+                    if (employee != null)
+                        ids.Add(employee.GetInstanceID());
+                }
+            }
+            catch
+            {
+            }
+
+            return ids;
+        }
+
+        private static bool IsPlainNpcComponent(S1NPCs.NPC? component)
+        {
+            return IsPlainNpcComponent(component, null);
+        }
+
+        private static bool IsPlainNpcComponent(S1NPCs.NPC? component, System.Collections.Generic.ISet<int>? employeeInstanceIds)
+        {
+            if (component == null)
+                return false;
+
+            if (employeeInstanceIds != null && employeeInstanceIds.Contains(component.GetInstanceID()))
+                return false;
+
+            return component.GetType().FullName == typeof(S1NPCs.NPC).FullName;
+        }
+
+        private static bool IsEmployeeNpcComponent(S1NPCs.NPC? component)
+        {
+            if (component == null)
+                return false;
+
+            if (component is S1Employees.Employee)
+                return true;
+
+            string? fullName = component.GetType().FullName;
+            return fullName == "ScheduleOne.Employees.Employee"
+                   || fullName == "Il2CppScheduleOne.Employees.Employee";
+        }
+
+        private static S1NPCs.NPC? GetPreferredNpcComponent(GameObject prefabRoot)
+        {
+            return FindPlainNpcComponent(prefabRoot)
+                   ?? prefabRoot.GetComponent<S1Economy.Dealer>()
+                   ?? prefabRoot.GetComponent<S1NPCs.NPC>();
+        }
+
+        private static void NormalizeBaseEmployeePrefab(GameObject prefabRoot, string sourcePrefabName, bool preferDealerComponent)
+        {
+            if (prefabRoot == null || sourcePrefabName != BaseEmployeePrefabName)
+                return;
+
+            S1Economy.Dealer? existingDealer = prefabRoot.GetComponent<S1Economy.Dealer>();
+            S1NPCs.NPC? existingPlainNpc = FindPlainNpcComponent(prefabRoot);
+            S1NPCs.NPC? sourceNpc = FindEmployeeNpcComponent(prefabRoot);
+            if (sourceNpc == null && existingPlainNpc != null)
+            {
+                RepairNpcPrefabReferences(prefabRoot, existingPlainNpc);
+                if (preferDealerComponent)
+                    EnsureDealerComponentOnPrefab(prefabRoot);
+                return;
+            }
+
+            if (sourceNpc == null && preferDealerComponent && existingDealer != null)
+            {
+                S1NPCs.NPC coreNpc = existingPlainNpc ?? existingDealer;
+                RewireChildNpcReferences(prefabRoot, coreNpc);
+                RepairNpcPrefabReferences(prefabRoot, coreNpc);
+                LogBaseEmployeeNormalization();
+                return;
+            }
+
+            if (sourceNpc == null)
+                sourceNpc = prefabRoot.GetComponent<S1NPCs.NPC>();
+
+            if (sourceNpc == null)
+                return;
+
+            try
+            {
+                LogBaseEmployeeComponentState("before plain NPC AddComponent", prefabRoot);
+
+                S1NPCs.NPC replacementNpc = preferDealerComponent
+                    ? prefabRoot.GetComponent<S1Economy.Dealer>()
+                    : existingPlainNpc;
+
+                if (replacementNpc == null)
+                {
+                    Type replacementType = preferDealerComponent ? typeof(S1Economy.Dealer) : typeof(S1NPCs.NPC);
+                    LogBetaNpcPrefabDiagnostic($"[S1API][BaseEmployeeFallback] Adding {replacementType.FullName} to cloned prefab '{prefabRoot.name}'. Source={DescribeComponent(sourceNpc)}");
+                    replacementNpc = preferDealerComponent
+                        ? prefabRoot.AddComponent<S1Economy.Dealer>()
+                        : prefabRoot.AddComponent<S1NPCs.NPC>();
+                    LogBetaNpcPrefabDiagnostic($"[S1API][BaseEmployeeFallback] AddComponent returned {DescribeComponent(replacementNpc)}. IsPlain={IsPlainNpcComponent(replacementNpc)}, IsEmployee={IsEmployeeNpcComponent(replacementNpc)}");
+                    LogBetaNpcPrefabDiagnostic($"[S1API][BaseEmployeeFallback] Immediate FindPlainNpcComponent returned {DescribeComponent(FindPlainNpcComponent(prefabRoot))}");
+                    LogBaseEmployeeComponentState("after plain NPC AddComponent", prefabRoot);
+                }
+
+                if (sourceNpc != replacementNpc)
+                {
+                    CopyBaseNpcState(sourceNpc, replacementNpc);
+                    LogBetaNpcPrefabDiagnostic($"[S1API][BaseEmployeeFallback] Copied base NPC state from {DescribeComponent(sourceNpc)} to {DescribeComponent(replacementNpc)}.");
+                    RemoveComponentImmediate(sourceNpc);
+                    LogBetaNpcPrefabDiagnostic($"[S1API][BaseEmployeeFallback] Removed source NPC component {DescribeComponent(sourceNpc)}.");
+                    LogBaseEmployeeComponentState("after source NPC removal", prefabRoot);
+                }
+
+                RemoveEmployeeComponentsFromBaseEmployeeFallback(prefabRoot);
+                LogBaseEmployeeComponentState("after employee cleanup", prefabRoot);
+                RewireChildNpcReferences(prefabRoot, replacementNpc);
+                RepairNpcPrefabReferences(prefabRoot, replacementNpc);
+                LogBaseEmployeeNormalization();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[S1API] Failed to normalize {BaseEmployeePrefabName} source prefab; using inherited NPC component fallback: {ex.Message}");
+            }
+        }
+
+        private static void LogBaseEmployeeNormalization()
+        {
+            if (_loggedBaseEmployeeNormalization)
+                return;
+
+            _loggedBaseEmployeeNormalization = true;
+            Logger.Msg($"[S1API] Normalized {BaseEmployeePrefabName} source prefab for beta NPC fallback.");
+        }
+
+        private static void LogBetaNpcPrefabDiagnostic(string message)
+        {
+            if (LogBetaNpcPrefabDiagnostics)
+                Logger.Msg(message);
+        }
+
+        private static void CopyBaseNpcState(S1NPCs.NPC sourceNpc, S1NPCs.NPC replacementNpc)
+        {
+            foreach (string memberName in BaseNpcMembersToCopy)
+            {
+                object? value = GetGameMember(sourceNpc, memberName);
+                if (value != null)
+                    SetGameMember(replacementNpc, memberName, value);
+            }
+        }
+
+        private static void RewireChildNpcReferences(GameObject prefabRoot, S1NPCs.NPC replacementNpc)
+        {
+            Component[] components = prefabRoot.GetComponentsInChildren<Component>(true);
+            foreach (Component component in components)
+            {
+                if (component == null || component == replacementNpc)
+                    continue;
+
+                foreach (string memberName in ChildNpcReferenceMemberNames)
+                {
+                    SetGameMember(component, memberName, replacementNpc);
+                }
+            }
+        }
+
+        private static void RepairNpcPrefabReferences(GameObject prefabRoot, S1NPCs.NPC npc)
+        {
+            if (prefabRoot == null || npc == null)
+                return;
+
+            var movement = prefabRoot.GetComponent<S1NPCs.NPCMovement>()
+                           ?? prefabRoot.GetComponentInChildren<S1NPCs.NPCMovement>(true);
+            if (movement != null)
+            {
+                SetGameMember(npc, "Movement", movement);
+                SetGameMember(movement, "npc", npc);
+
+                movement.Agent = EnsureRootNavMeshAgent(prefabRoot);
+
+                var speedController = prefabRoot.GetComponent<S1NPCs.NPCSpeedController>()
+                                      ?? prefabRoot.GetComponentInChildren<S1NPCs.NPCSpeedController>(true);
+                if (speedController != null)
+                {
+                    movement.SpeedController = speedController;
+                    SetGameMember(speedController, "Movement", movement);
+                }
+            }
+        }
+
+        private static UnityEngine.AI.NavMeshAgent EnsureRootNavMeshAgent(GameObject prefabRoot)
+        {
+            return prefabRoot.GetComponent<UnityEngine.AI.NavMeshAgent>()
+                   ?? prefabRoot.AddComponent<UnityEngine.AI.NavMeshAgent>();
+        }
+
+        private static S1Economy.Dealer? EnsureDealerComponentOnPrefab(GameObject prefabRoot)
+        {
+            if (prefabRoot == null)
+                return null;
+
+            var existingDealer = prefabRoot.GetComponent<S1Economy.Dealer>();
+            if (existingDealer != null)
+            {
+                RepairNpcPrefabReferences(prefabRoot, existingDealer);
+                return existingDealer;
+            }
+
+            S1NPCs.NPC? sourceNpc = GetPreferredNpcComponent(prefabRoot);
+            if (sourceNpc == null)
+                return null;
+
+            var dealer = prefabRoot.AddComponent<S1Economy.Dealer>();
+            CopyBaseNpcState(sourceNpc, dealer);
+
+            RewireChildNpcReferences(prefabRoot, dealer);
+            RepairNpcPrefabReferences(prefabRoot, dealer);
+            return dealer;
+        }
+
+        private static string DescribeComponent(Component? component)
+        {
+            if (component == null)
+                return "<null>";
+
+            try
+            {
+                var type = component.GetType();
+                return $"{type.FullName ?? type.Name}#{component.GetInstanceID()}";
+            }
+            catch (Exception ex)
+            {
+                return $"<component describe failed: {ex.Message}>";
+            }
+        }
+
+        private static void LogBaseEmployeeComponentState(string stage, GameObject prefabRoot)
+        {
+            if (!LogBetaNpcPrefabDiagnostics)
+                return;
+
+            if (prefabRoot == null)
+            {
+                Logger.Msg($"[S1API][BaseEmployeeFallback] {stage}: prefabRoot=<null>");
+                return;
+            }
+
+            try
+            {
+                var sb = new StringBuilder();
+                sb.Append($"[S1API][BaseEmployeeFallback] {stage}: root='{prefabRoot.name}', activeSelf={prefabRoot.activeSelf}, activeInHierarchy={prefabRoot.activeInHierarchy}");
+
+                var employeeInstanceIds = GetEmployeeComponentInstanceIds(prefabRoot);
+                var npcComponents = prefabRoot.GetComponents<S1NPCs.NPC>();
+                sb.Append($", npcComponents={npcComponents.Length}[");
+                for (int i = 0; i < npcComponents.Length; i++)
+                {
+                    if (i > 0)
+                        sb.Append("; ");
+
+                    var npcComponent = npcComponents[i];
+                    sb.Append(DescribeComponent(npcComponent));
+                    sb.Append($", plain={IsPlainNpcComponent(npcComponent, employeeInstanceIds)}, employee={employeeInstanceIds.Contains(npcComponent.GetInstanceID()) || IsEmployeeNpcComponent(npcComponent)}, dealer={npcComponent is S1Economy.Dealer}");
+                }
+                sb.Append(']');
+
+                var employeeComponents = prefabRoot.GetComponents<S1Employees.Employee>();
+                sb.Append($", employeeComponents={employeeComponents.Length}[");
+                for (int i = 0; i < employeeComponents.Length; i++)
+                {
+                    if (i > 0)
+                        sb.Append("; ");
+                    sb.Append(DescribeComponent(employeeComponents[i]));
+                }
+                sb.Append(']');
+
+                var dealerComponents = prefabRoot.GetComponents<S1Economy.Dealer>();
+                sb.Append($", dealerComponents={dealerComponents.Length}[");
+                for (int i = 0; i < dealerComponents.Length; i++)
+                {
+                    if (i > 0)
+                        sb.Append("; ");
+                    sb.Append(DescribeComponent(dealerComponents[i]));
+                }
+                sb.Append(']');
+
+                Logger.Msg(sb.ToString());
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[S1API][BaseEmployeeFallback] Failed to log component state at '{stage}': {ex.Message}");
+            }
+        }
+
+        private static void RemoveEmployeeComponentsFromBaseEmployeeFallback(GameObject prefabRoot)
+        {
+            if (prefabRoot == null)
+                return;
+
+            if (FindPlainNpcComponent(prefabRoot) == null)
+                return;
+
+            try
+            {
+                int removed = 0;
+                var employees = prefabRoot.GetComponents<S1Employees.Employee>();
+                foreach (var employee in employees)
+                {
+                    if (employee == null)
+                        continue;
+
+                    RemoveComponentImmediate(employee);
+                    removed++;
+                }
+
+                var npcComponents = prefabRoot.GetComponents<S1NPCs.NPC>();
+                foreach (var npcComponent in npcComponents)
+                {
+                    if (npcComponent == null || !IsEmployeeNpcComponent(npcComponent))
+                        continue;
+
+                    RemoveComponentImmediate(npcComponent);
+                    removed++;
+                }
+
+                if (removed > 0)
+                    Logger.Msg($"[S1API] Removed {removed} Employee component(s) from {BaseEmployeePrefabName} NPC fallback prefab.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[S1API] Failed to remove Employee component(s) from {BaseEmployeePrefabName} fallback prefab: {ex.Message}");
+            }
+        }
+
+        private static void DisableBaseEmployeeFallbackBehaviourStartup(GameObject prefabRoot)
+        {
+            if (prefabRoot == null)
+                return;
+
+            try
+            {
+                var behaviours = prefabRoot.GetComponentsInChildren<S1Behaviour.Behaviour>(true);
+                int disabled = 0;
+                foreach (var behaviour in behaviours)
+                {
+                    if (behaviour == null)
+                        continue;
+
+                    SetGameMember(behaviour, "EnabledOnAwake", false);
+                    SetGameMember(behaviour, "_Enabled_k__BackingField", false);
+                    SetGameMember(behaviour, "_Active_k__BackingField", false);
+                    disabled++;
+                }
+
+                var npcBehaviour = prefabRoot.GetComponent<S1Behaviour.NPCBehaviour>()
+                                   ?? prefabRoot.GetComponentInChildren<S1Behaviour.NPCBehaviour>(true);
+                int removedUnsafe = RemoveUnsafeBaseEmployeeFallbackBehaviours(prefabRoot, npcBehaviour);
+                if (npcBehaviour != null)
+                {
+#if (IL2CPPMELON || IL2CPPBEPINEX)
+                    npcBehaviour.enabledBehaviours = new Il2CppSystem.Collections.Generic.List<S1Behaviour.Behaviour>();
+#else
+                    npcBehaviour.enabledBehaviours = new System.Collections.Generic.List<S1Behaviour.Behaviour>();
+#endif
+                    SetGameMember(npcBehaviour, "activeBehaviour", null);
+                    SetGameMember(npcBehaviour, "_activeBehaviour_k__BackingField", null);
+                }
+
+                if (disabled > 0)
+                    Logger.Msg($"[S1API] Disabled {disabled} BaseEmployee fallback behaviour(s) from auto-starting on custom NPC prefab.");
+                if (removedUnsafe > 0)
+                    Logger.Msg($"[S1API] Removed {removedUnsafe} inherited BaseEmployee behaviour component(s) that are unsafe on beta custom NPC prefabs.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[S1API] Failed to disable BaseEmployee fallback behaviour startup: {ex.Message}");
+            }
+        }
+
+        private static int RemoveUnsafeBaseEmployeeFallbackBehaviours(GameObject prefabRoot, S1Behaviour.NPCBehaviour? npcBehaviour)
+        {
+            if (prefabRoot == null)
+                return 0;
+
+            int removed = 0;
+            removed += RemoveComponentsInChildren<S1Behaviour.CustomerAttendDealBehaviour>(prefabRoot);
+            removed += RemoveComponentsInChildren<S1Behaviour.RequestProductBehaviour>(prefabRoot);
+            removed += RemoveComponentsInChildren<S1Behaviour.ConsumeProductBehaviour>(prefabRoot);
+            removed += RemoveComponentsInChildren<S1Combat.CombatBehaviour>(prefabRoot);
+
+            if (npcBehaviour != null)
+            {
+                SetGameMember(npcBehaviour, "CustomerAttendDealBehaviour", null);
+                SetGameMember(npcBehaviour, "RequestProductBehaviour", null);
+                SetGameMember(npcBehaviour, "ConsumeProductBehaviour", null);
+                SetGameMember(npcBehaviour, "CombatBehaviour", null);
+            }
+
+            return removed;
+        }
+
+        private static int RemoveComponentsInChildren<TComponent>(GameObject prefabRoot) where TComponent : Component
+        {
+            if (prefabRoot == null)
+                return 0;
+
+            int removed = 0;
+            var components = prefabRoot.GetComponentsInChildren<TComponent>(true);
+            foreach (var component in components)
+            {
+                if (component == null)
+                    continue;
+
+                RemoveComponentImmediate(component);
+                removed++;
+            }
+
+            return removed;
+        }
+
+        private static void RemoveComponentImmediate(Component component)
+        {
+            try
+            {
+                UnityEngine.Object.DestroyImmediate(component);
+            }
+            catch
+            {
+                UnityEngine.Object.Destroy(component);
+            }
         }
 
         private static GameObject GetOrCreatePerNpcPrefab(System.Type npcType, NPC owner)
@@ -231,73 +847,45 @@ namespace S1API.Entities
                     isDealerType = IsDealerType(npcType);
                 }
                 
-                if (isDealerType)
-                {
-                    // First, try to find a prefab named "Dealer"
-                    for (int i = 0; i < count; i++)
-                    {
-                        NetworkObject obj = spawnablePrefabs.GetObject(true, i);
-                        if (obj != null && obj.gameObject != null && obj.gameObject.name == "Dealer")
-                        {
-                            chosen = obj;
-                            break;
-                        }
-                    }
-                    
-                    // If "Dealer" was not found, look for any spawnable containing a Dealer component
-                    if (chosen == null)
-                    {
-                        for (int i = 0; i < count; i++)
-                        {
-                            NetworkObject obj = spawnablePrefabs.GetObject(true, i);
-                            if (obj != null && obj.gameObject != null && obj.gameObject.GetComponent<S1Economy.Dealer>() != null)
-                            {
-                                chosen = obj;
-                                break;
-                            }
-                        }
-                    }
-                }
-                
-                // If not a dealer type or dealer prefab not found, use CivilianNPC logic
-                if (chosen == null)
-                {
-                    for (int i = 0; i < count; i++)
-                    {
-                        NetworkObject obj = spawnablePrefabs.GetObject(true, i);
-                        if (obj != null && obj.gameObject != null && obj.gameObject.name == "CivilianNPC")
-                        {
-                            chosen = obj;
-                            break;
-                        }
-                    }
-                }
-
-                // If "CivilianNPC" was not found, look for any spawnable containing the base NPC component.
-                // TODO: Migrate to falling back to "BaseNPC"
-                if (chosen == null)
-                {
-                    for (int i = 0; i < count; i++)
-                    {
-                        NetworkObject obj = spawnablePrefabs.GetObject(true, i);
-                        if (obj != null && obj.gameObject != null && obj.gameObject.GetComponent<S1NPCs.NPC>() != null)
-                        {
-                            chosen = obj;
-                            break;
-                        }
-                    }
-                }
+                chosen = ResolveNpcSpawnablePrefab(spawnablePrefabs, count, isDealerType);
 
                 if (chosen == null)
                 {
-                    string expectedPrefabName = isDealerType ? "Dealer" : "CivilianNPC";
-                    string expectedComponent = isDealerType ? "Dealer" : "NPC";
-                    throw new Exception($"Failed to locate a suitable NPC spawnable prefab ({expectedPrefabName} or any with {expectedComponent} component).");
+                    throw new Exception($"Failed to locate a suitable NPC spawnable prefab ({DealerPrefabName}, {CivilianNpcPrefabName}, {BaseNpcPrefabName}, {BaseEmployeePrefabName}, or any with NPC component).");
+                }
+
+                string sourcePrefabName = chosen.gameObject != null ? chosen.gameObject.name : string.Empty;
+                LogBetaNpcPrefabDiagnostic($"[S1API][NPCPrefabSelection] Type={npcType.FullName}, IsDealer={isDealerType}, SourcePrefab='{sourcePrefabName}', Source={DescribeComponent(chosen)}");
+                if (chosen.gameObject != null)
+                    LogBaseEmployeeComponentState("selected source prefab before clone", chosen.gameObject);
+
+                string prefabName = GetPrefabNameForType(npcType);
+                bool restoreChosenActive = false;
+                bool chosenWasActive = false;
+                if (sourcePrefabName == BaseEmployeePrefabName && chosen.gameObject != null)
+                {
+                    chosenWasActive = chosen.gameObject.activeSelf;
+                    restoreChosenActive = chosenWasActive;
+                    if (chosenWasActive)
+                        chosen.gameObject.SetActive(false);
                 }
 
                 // Build a unique per-NPC prefab based on type
-                NetworkObject prefabNO = UnityEngine.Object.Instantiate<NetworkObject>(chosen);
-                string prefabName = GetPrefabNameForType(npcType);
+                NetworkObject prefabNO;
+                try
+                {
+                    prefabNO = UnityEngine.Object.Instantiate<NetworkObject>(chosen);
+                    LogBetaNpcPrefabDiagnostic($"[S1API][NPCPrefabSelection] Cloned source '{sourcePrefabName}' into '{prefabNO.gameObject?.name ?? "<null>"}' for type {npcType.FullName}.");
+                    if (prefabNO.gameObject != null)
+                        LogBaseEmployeeComponentState("cloned prefab before normalization", prefabNO.gameObject);
+                }
+                finally
+                {
+                    if (restoreChosenActive && chosen.gameObject != null)
+                        chosen.gameObject.SetActive(chosenWasActive);
+                }
+
+                NormalizeBaseEmployeePrefab(prefabNO.gameObject, sourcePrefabName, isDealerType);
                 prefabNO.gameObject.name = prefabName;
 
                 // Ensure template prefab does not execute runtime logic or remain in NPC registry
@@ -349,6 +937,12 @@ namespace S1API.Entities
                 }
                 catch { }
 
+                if (sourcePrefabName == BaseEmployeePrefabName)
+                {
+                    RemoveEmployeeComponentsFromBaseEmployeeFallback(prefabNO.gameObject);
+                    DisableBaseEmployeeFallbackBehaviourStartup(prefabNO.gameObject);
+                }
+
                 // If we are pre-registering without an instance owner, ensure baseline Customer exists when applicable
                 if (owner == null)
                 {
@@ -375,21 +969,18 @@ namespace S1API.Entities
                         // Handle dealer conversion: if dealer type, check if we already have a Dealer component
                         if (IsDealerType(npcType))
                         {
-                            var existingDealer = prefabNO.gameObject.GetComponent<S1Economy.Dealer>();
-                            
-                            // If Dealer already exists (from using Dealer prefab), apply dealer defaults
-                            if (existingDealer != null)
+                            var dealerComponent = EnsureDealerComponentOnPrefab(prefabNO.gameObject);
+                            if (dealerComponent != null)
                             {
                                 var dealerDefaults = BuildDealerDefaultsForType(npcType);
                                 if (dealerDefaults != null)
                                 {
-                                    TryApplyDealerDefaults(existingDealer, dealerDefaults);
+                                    TryApplyDealerDefaults(dealerComponent, dealerDefaults);
                                 }
                             }
                             else
                             {
-                                // If we're using CivilianNPC prefab but need dealer functionality, warn
-                                Logger.Warning($"[S1API] NPC {npcType.Name} requested dealer functionality but prefab does not have Dealer component. EnsureDealer() was called before prefab creation.");
+                                Logger.Warning($"[S1API] NPC {npcType.Name} requested dealer functionality, but no Dealer component could be created for source prefab '{sourcePrefabName}'. Dealer defaults will be skipped for this prefab.");
                             }
                         }
                     }
@@ -648,7 +1239,7 @@ namespace S1API.Entities
             }
             catch (Exception ex)
             {
-                Logger.Warning($"RefreshMessagingIcons failed for '{S1NPC?.ID ?? "<null>"}': {ex.Message}");
+                Logger.Warning($"RefreshMessagingIcons failed for '{GetSafeNpcId()}': {ex.Message}");
             }
         }
 
@@ -850,8 +1441,8 @@ namespace S1API.Entities
                     dealerId = "<unknown-dealer>";
                 }
 
-                dealerComponent.SigningFee = data.SigningFee;
-                dealerComponent.Cut = data.Cut;
+                Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(dealerComponent, "SigningFee", data.SigningFee);
+                Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(dealerComponent, "Cut", data.Cut);
 #if MONOMELON
                 var dealerTypeField = typeof(S1Economy.Dealer).GetField("DealerType", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
                 if (dealerTypeField != null)
@@ -860,7 +1451,7 @@ namespace S1API.Entities
                     dealerTypeField.SetValue(dealerComponent, dealerTypeEnum);
                 }
 #else
-                dealerComponent.DealerType = (S1Economy.EDealerType)(int)data.DealerType;
+                Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(dealerComponent, "DealerType", (S1Economy.EDealerType)(int)data.DealerType);
 #endif
                 // Note: SellInsufficientQualityItems and SellExcessQualityItems were removed in v0.4.3
 
@@ -1069,7 +1660,7 @@ namespace S1API.Entities
             gameObject = InstantiateTemplateInstance(this.GetType(), this);
             gameObject.SetActive(false);
 
-            S1NPCs.NPC? prefabNpc = gameObject.GetComponent<S1NPCs.NPC>();
+            S1NPCs.NPC? prefabNpc = GetPreferredNpcComponent(gameObject);
             if (prefabNpc == null)
                 throw new Exception("NPC template is missing the core ScheduleOne.NPCs.NPC component.");
 
@@ -1090,6 +1681,10 @@ namespace S1API.Entities
             if (identity != null)
             {
                 string prefabName = gameObject.name;
+                if (prefabName.EndsWith("(Clone)"))
+                    prefabName = prefabName.Substring(0, prefabName.Length - 7);
+                identity.PrefabName = prefabName;
+
                 if (NPCPrefabIdentity.TryGetIdentityFromRegistry(prefabName, out string regId, out string regFirstName, out string regLastName, out Sprite regIcon))
                 {
                     id = regId;
@@ -1107,25 +1702,30 @@ namespace S1API.Entities
                 }
             }
 
+            EnsureFrameworkNpcDataIdentity(id, firstName, lastName);
+
             // Apply identity values
             if (!string.IsNullOrEmpty(id))
-                S1NPC.ID = id;
+                SetNpcMember("ID", id);
             if (!string.IsNullOrEmpty(firstName))
-                S1NPC.FirstName = firstName;
+                SetNpcMember("FirstName", firstName);
             if (!string.IsNullOrEmpty(lastName))
-                S1NPC.LastName = lastName;
+                SetNpcMember("LastName", lastName);
             else
-                S1NPC.hasLastName = false; // Ensure hasLastName is false when lastName is empty/null
+                SetNpcMember("hasLastName", false); // Ensure hasLastName is false when lastName is empty/null
             if (icon != null)
-                S1NPC.MugshotSprite = icon;
+                SetNpcMember("MugshotSprite", icon);
 
             // Use default icon if none was set
-            if (S1NPC.MugshotSprite == null)
-                S1NPC.MugshotSprite = S1DevUtilities.PlayerSingleton<S1ContactApps.ContactsApp>.Instance.AppIcon;
+            if (Icon == null)
+                SetNpcMember("MugshotSprite", S1DevUtilities.PlayerSingleton<S1ContactApps.ContactsApp>.Instance.AppIcon);
 
             S1NPC.BakedGUID = Guid.NewGuid().ToString();
             
-            EnsureMessageConversationReady(resetDefaults: true);
+            if (IsPhysical)
+                ResetConversationCategoriesToDefaults();
+            else
+                EnsureMessageConversationReady(resetDefaults: true);
             InitializeHealthComponent();
             InitializeAwarenessComponent();
             InitializeBehaviourComponents();
@@ -1138,7 +1738,10 @@ namespace S1API.Entities
             Appearance = new NPCAppearance(this, _runtimeAvatar);
             RestoreRuntimeAvatarAppearance();
 
-            gameObject.name = S1NPC.FirstName ?? "UnknownNPC";
+            string displayName = FirstName;
+            if (string.IsNullOrWhiteSpace(displayName))
+                displayName = !string.IsNullOrWhiteSpace(id) ? id : GetPrefabNameForType(GetType());
+            gameObject.name = displayName;
 
             // Ensure the base game NPC is added to the registry manually since Awake isn't called when inactive
             if (!S1NPCs.NPCManager.NPCRegistry.Contains(S1NPC))
@@ -1175,15 +1778,15 @@ namespace S1API.Entities
             bool hasLastName = !string.IsNullOrEmpty(lastName);
 
             if (hasId)
-                S1NPC.ID = id!;
+                SetNpcMember("ID", id!);
             if (hasFirstName)
-                S1NPC.FirstName = firstName!;
+                SetNpcMember("FirstName", firstName!);
             if (hasLastName)
-                S1NPC.LastName = lastName!;
+                SetNpcMember("LastName", lastName!);
             else
-                S1NPC.hasLastName = false;
+                SetNpcMember("hasLastName", false);
             if (icon != null)
-                S1NPC.MugshotSprite = icon;
+                SetNpcMember("MugshotSprite", icon);
 
             var identity = gameObject.GetComponent<NPCPrefabIdentity>();
             if (identity != null)
@@ -1200,10 +1803,10 @@ namespace S1API.Entities
                 identity.RegisterToStaticCache(gameObject.name);
             }
 
-            if (S1NPC.MugshotSprite == null)
-                S1NPC.MugshotSprite = S1DevUtilities.PlayerSingleton<S1ContactApps.ContactsApp>.Instance.AppIcon;
+            if (Icon == null)
+                SetNpcMember("MugshotSprite", S1DevUtilities.PlayerSingleton<S1ContactApps.ContactsApp>.Instance.AppIcon);
 
-            string displayName = S1NPC.FirstName;
+            string displayName = FirstName;
             if (string.IsNullOrEmpty(displayName))
                 displayName = hasId ? id! : "UnknownNPC";
             gameObject.name = displayName;
@@ -1214,7 +1817,7 @@ namespace S1API.Entities
                 try
                 {
                     // Update contactName field/property in MSGConversation
-                    string newContactName = S1NPC.fullName;
+                    string newContactName = GetNpcFullName();
                     if (string.IsNullOrEmpty(newContactName))
                         newContactName = hasFirstName ? firstName! : (hasId ? id! : "Unknown");
                     
@@ -1234,7 +1837,7 @@ namespace S1API.Entities
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warning($"Failed to update MSGConversation contactName for '{S1NPC?.ID ?? "<null>"}': {ex.Message}");
+                    Logger.Warning($"Failed to update MSGConversation contactName for '{GetSafeNpcId()}': {ex.Message}");
                 }
             }
         }
@@ -1268,6 +1871,7 @@ namespace S1API.Entities
         {
             Appearance.GenerateMugshot();
             RestoreRuntimeAvatarAppearance();
+            RepairNpcPrefabReferences(gameObject, S1NPC);
             // Adding a movement component when NPC is created prevents it from disabling
             if (S1NPC.Movement == null)
                 S1NPC.Movement = gameObject.GetComponent<S1NPCs.NPCMovement>();
@@ -1324,8 +1928,8 @@ namespace S1API.Entities
         /// </summary>
         public string FirstName
         {
-            get => S1NPC.FirstName;
-            set => S1NPC.FirstName = value;
+            get => GetNpcString("FirstName");
+            set => SetNpcMember("FirstName", value);
         }
 
         /// <summary>
@@ -1333,8 +1937,8 @@ namespace S1API.Entities
         /// </summary>
         public string LastName
         {
-            get => S1NPC.LastName;
-            set => S1NPC.LastName = value;
+            get => GetNpcString("LastName");
+            set => SetNpcMember("LastName", value);
         }
 
         /// <summary>
@@ -1342,7 +1946,7 @@ namespace S1API.Entities
         /// If there is no last name, it will just return the first name.
         /// </summary>
         public string FullName =>
-            S1NPC.fullName;
+            GetNpcFullName();
 
         /// <summary>
         /// The unique identifier to assign to this NPC.
@@ -1350,8 +1954,8 @@ namespace S1API.Entities
         /// </summary>
         public string ID
         {
-            get => S1NPC.ID;
-            protected set => S1NPC.ID = value;
+            get => GetNpcString("ID");
+            protected set => SetNpcMember("ID", value);
         }
 
         /// <summary>
@@ -1370,8 +1974,8 @@ namespace S1API.Entities
         /// </summary>
         public Sprite Icon
         {
-            get => S1NPC.MugshotSprite;
-            set => S1NPC.MugshotSprite = value;
+            get => GetGameMember<Sprite>(S1NPC, "MugshotSprite");
+            set => SetNpcMember("MugshotSprite", value);
         }
 
         /// <summary>
@@ -1442,18 +2046,21 @@ namespace S1API.Entities
             }
             catch (Exception ex)
             {
-                Logger.Warning($"EnsureMessageConversationReady exception for '{S1NPC?.ID ?? "<null>"}': {ex.Message}");
+                if (IsCustomNPC && (ex is ArgumentNullException || ex.Message.Contains("ArgumentNullException")))
+                    return;
+
+                Logger.Warning($"EnsureMessageConversationReady exception for '{GetSafeNpcId()}': {ex.Message}");
             }
         }
 
         private ConversationCategoryList EnsureConversationCategoriesInitialized()
         {
-            var categories = S1NPC.ConversationCategories as ConversationCategoryList;
+            var categories = GetConversationCategories();
 
             if (categories == null)
             {
                 categories = new ConversationCategoryList();
-                S1NPC.ConversationCategories = categories;
+                SetConversationCategories(categories);
             }
 
             if (categories.Count == 0)
@@ -1466,12 +2073,12 @@ namespace S1API.Entities
 
         private ConversationCategoryList ResetConversationCategoriesToDefaults()
         {
-            var categories = S1NPC.ConversationCategories as ConversationCategoryList;
+            var categories = GetConversationCategories();
 
             if (categories == null)
             {
                 categories = new ConversationCategoryList();
-                S1NPC.ConversationCategories = categories;
+                SetConversationCategories(categories);
             }
             else
             {
@@ -1538,20 +2145,20 @@ namespace S1API.Entities
 #endif
                 if (S1NPC.MSGConversation == null)
                 {
-                    Logger.Warning($"EnsureMessageConversationInstance: creation failed for '{S1NPC?.ID ?? "<null>"}'.");
+                    Logger.Warning($"EnsureMessageConversationInstance: creation failed for '{GetSafeNpcId()}'.");
                 }
             }
 
             var convo = S1NPC.MSGConversation;
             if (convo == null)
             {
-                Logger.Warning($"EnsureMessageConversationInstance: conversation still null for '{S1NPC?.ID ?? "<null>"}'.");
+                Logger.Warning($"EnsureMessageConversationInstance: conversation still null for '{GetSafeNpcId()}'.");
                 return;
             }
 
             if (categories == null)
             {
-                Logger.Warning($"EnsureMessageConversationInstance: categories null for '{S1NPC?.ID ?? "<null>"}'.");
+                Logger.Warning($"EnsureMessageConversationInstance: categories null for '{GetSafeNpcId()}'.");
                 return;
             }
 
@@ -1561,7 +2168,7 @@ namespace S1API.Entities
             }
             catch (Exception ex)
             {
-                Logger.Warning($"EnsureMessageConversationInstance: failed to apply categories for '{S1NPC?.ID ?? "<null>"}': {ex.Message}");
+                Logger.Warning($"EnsureMessageConversationInstance: failed to apply categories for '{GetSafeNpcId()}': {ex.Message}");
             }
         }
 
@@ -1577,6 +2184,155 @@ namespace S1API.Entities
                 return false;
             }
         }
+
+        private static object? GetGameMember(object? target, string memberName)
+        {
+            return target == null
+                ? null
+                : Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(target, memberName);
+        }
+
+        private static T? GetGameMember<T>(object? target, string memberName)
+        {
+            var value = GetGameMember(target, memberName);
+            return value is T typed ? typed : default;
+        }
+
+        private static bool SetGameMember(object? target, string memberName, object? value)
+        {
+            if (target == null)
+                return false;
+
+            return Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(target, memberName, value)
+                   || Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(target, $"<{memberName}>k__BackingField", value)
+                   || Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(target, $"_{memberName}_k__BackingField", value);
+        }
+
+        private string GetNpcString(string memberName)
+        {
+            return GetGameMember<string>(S1NPC, memberName) ?? string.Empty;
+        }
+
+        private string GetSafeNpcId()
+        {
+            try
+            {
+                string id = GetNpcString("ID");
+                if (!string.IsNullOrEmpty(id))
+                    return id;
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                var identity = gameObject != null ? gameObject.GetComponent<NPCPrefabIdentity>() : null;
+                if (!string.IsNullOrEmpty(identity?.Id))
+                    return identity.Id;
+            }
+            catch
+            {
+            }
+
+            return "<null>";
+        }
+
+        private void SetNpcMember(string memberName, object? value)
+        {
+            SetGameMember(S1NPC, memberName, value);
+        }
+
+        private void EnsureFrameworkNpcDataIdentity(string? id, string? firstName, string? lastName)
+        {
+#if IL2CPPMELON
+            if (S1NPC == null)
+                return;
+
+            if (string.IsNullOrWhiteSpace(id) && string.IsNullOrWhiteSpace(firstName))
+                return;
+
+            try
+            {
+                var npcData = S1NPC.NPCData ?? new S1NPCFramework.NPCData();
+                var basicInfo = npcData.BasicInfo ?? new S1NPCFramework.BasicInfo();
+
+                if (!string.IsNullOrWhiteSpace(id))
+                    basicInfo.ID = id;
+                if (!string.IsNullOrWhiteSpace(firstName))
+                    basicInfo.FirstName = firstName;
+
+                bool hasLastName = !string.IsNullOrWhiteSpace(lastName);
+                basicInfo.HasLastName = hasLastName;
+                basicInfo.LastName = hasLastName ? lastName : string.Empty;
+
+                npcData._basicInfo = new S1Core.ValueOrReference<S1NPCFramework.BasicInfo, S1NPCFramework.BasicInfoPreset>(basicInfo);
+                SetGameMember(S1NPC, "NPCData", npcData);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[S1API][NPCIdentity] Failed to initialize framework NPCData identity for '{id ?? firstName ?? "<unknown>"}': {ex.Message}");
+            }
+#endif
+        }
+
+        private string GetNpcFullName()
+        {
+            var fullName = GetGameMember<string>(S1NPC, "fullName");
+            if (!string.IsNullOrWhiteSpace(fullName))
+                return fullName;
+
+            var firstName = FirstName;
+            var lastName = LastName;
+            return string.IsNullOrWhiteSpace(lastName)
+                ? firstName
+                : $"{firstName} {lastName}".Trim();
+        }
+
+        private ConversationCategoryList? GetConversationCategories()
+        {
+            return GetGameMember(S1NPC, "ConversationCategories") as ConversationCategoryList;
+        }
+
+        private void SetConversationCategories(ConversationCategoryList categories)
+        {
+            SetGameMember(S1NPC, "ConversationCategories", categories);
+        }
+
+        private static UnityEvent? GetInventoryContentsChanged(S1NPCs.NPCInventory? inventory)
+        {
+            return GetGameMember(inventory, "onContentsChanged") as UnityEvent;
+        }
+
+        private S1Interaction.InteractableObject? GetNpcInteractable()
+        {
+            return GetGameMember(S1NPC, "intObj") as S1Interaction.InteractableObject;
+        }
+
+        private void SetNpcInteractable(S1Interaction.InteractableObject interactable)
+        {
+            SetGameMember(S1NPC, "intObj", interactable);
+        }
+
+        private static S1Interaction.InteractableObject? GetInventoryPickpocketInteractable(S1NPCs.NPCInventory? inventory)
+        {
+            return GetGameMember(inventory, "PickpocketIntObj") as S1Interaction.InteractableObject;
+        }
+
+        private static void SetInventoryPickpocketInteractable(S1NPCs.NPCInventory? inventory, S1Interaction.InteractableObject interactable)
+        {
+            SetGameMember(inventory, "PickpocketIntObj", interactable);
+        }
+
+        private static void SetInventoryMember(S1NPCs.NPCInventory? inventory, string memberName, object? value)
+        {
+            SetGameMember(inventory, memberName, value);
+        }
+
+        private static object? GetInventoryMember(S1NPCs.NPCInventory? inventory, string memberName)
+        {
+            return GetGameMember(inventory, memberName);
+        }
         
         /// <summary>
         /// How aggressive this NPC is towards others.
@@ -1584,7 +2340,7 @@ namespace S1API.Entities
         public float Aggressiveness
         {
             get => S1NPC.Aggression;
-            set => S1NPC.Aggression = value;
+            set => SetNpcMember("Aggression", value);
         }
 
         /// <summary>
@@ -1662,7 +2418,7 @@ namespace S1API.Entities
         public float MaxHealth
         {
             get => S1NPC.Health.MaxHealth;
-            set => S1NPC.Health.MaxHealth = value;
+            set => SetGameMember(S1NPC.Health, "MaxHealth", value);
         }
 
         /// <summary>
@@ -1676,8 +2432,8 @@ namespace S1API.Entities
         /// </summary>
         public bool IsInvincible
         {
-            get => S1NPC.Health.Invincible;
-            set => S1NPC.Health.Invincible = value;
+            get => GetGameMember<bool>(S1NPC.Health, "Invincible");
+            set => SetGameMember(S1NPC.Health, "Invincible", value);
         }
 
         /// <summary>
@@ -1778,7 +2534,7 @@ namespace S1API.Entities
         {
             try
             {
-                S1NPC.ConversationCategories?.Clear();
+                GetConversationCategories()?.Clear();
                 S1NPC.MSGConversation?.Categories?.Clear();
             }
             catch (Exception ex)
@@ -1831,8 +2587,18 @@ namespace S1API.Entities
         /// </summary>
         public event Action OnInventoryChanged
         {
-            add => EventHelper.AddListener(value, S1NPC.Inventory.onContentsChanged);
-            remove => EventHelper.RemoveListener(value, S1NPC.Inventory.onContentsChanged);
+            add
+            {
+                var evt = GetInventoryContentsChanged(S1NPC.Inventory);
+                if (evt != null)
+                    EventHelper.AddListener(value, evt);
+            }
+            remove
+            {
+                var evt = GetInventoryContentsChanged(S1NPC.Inventory);
+                if (evt != null)
+                    EventHelper.RemoveListener(value, evt);
+            }
         }
 
         /// <summary>
@@ -1912,7 +2678,7 @@ namespace S1API.Entities
         {
             if (S1NPC.MSGConversation == null)
             {
-                Logger.Warning($"SendTextMessage: MSGConversation null before send for '{S1NPC.ID}'. Trying to ensure.");
+                Logger.Warning($"SendTextMessage: MSGConversation null before send for '{GetSafeNpcId()}'. Trying to ensure.");
                 EnsureMessageConversationReady(resetDefaults: false);
             }
 
@@ -1921,14 +2687,14 @@ namespace S1API.Entities
             {
                 if (S1NPC.MSGConversation == null)
                 {
-                    Logger.Warning($"SendTextMessage: Conversation still null after send for '{S1NPC.ID}'.");
+                    Logger.Warning($"SendTextMessage: Conversation still null after send for '{GetSafeNpcId()}'.");
                 }
                 return;
             }
 
             if (S1NPC.MSGConversation == null)
             {
-                Logger.Warning($"SendTextMessage: Unable to show responses because MSGConversation is null for '{S1NPC.ID}'.");
+                Logger.Warning($"SendTextMessage: Unable to show responses because MSGConversation is null for '{GetSafeNpcId()}'.");
                 return;
             }
 
@@ -1955,8 +2721,8 @@ namespace S1API.Entities
         /// </summary>
         public bool ConversationCanBeHidden
         {
-            get => S1NPC.ConversationCanBeHidden;
-            set => S1NPC.ConversationCanBeHidden = value;
+            get => GetGameMember<bool>(S1NPC, "ConversationCanBeHidden");
+            set => SetNpcMember("ConversationCanBeHidden", value);
         }
 
         /// <summary>
@@ -2085,7 +2851,7 @@ namespace S1API.Entities
             }
             catch (Exception ex)
             {
-                Logger.Warning($"[NPC] CreateInternal: Failed to ensure inventory initialized for '{S1NPC?.ID ?? "null"}': {ex.Message}");
+                Logger.Warning($"[NPC] CreateInternal: Failed to ensure inventory initialized for '{GetSafeNpcId()}': {ex.Message}");
             }
 
             // Apply random inventory defaults AFTER slots are initialized
@@ -2096,7 +2862,7 @@ namespace S1API.Entities
             }
             catch (Exception ex)
             {
-                Logger.Warning($"[NPC] CreateInternal: Failed to apply inventory defaults for '{S1NPC?.ID ?? "null"}': {ex.Message}");
+                Logger.Warning($"[NPC] CreateInternal: Failed to apply inventory defaults for '{GetSafeNpcId()}': {ex.Message}");
             }
 
             base.CreateInternal();
@@ -2106,7 +2872,7 @@ namespace S1API.Entities
         {
             // Trim whitespace from SaveFolderName to prevent trailing spaces in folder paths
             // This handles cases where lastName is empty but hasLastName is still true
-            string saveFolderName = S1NPC.SaveFolderName?.Trim() ?? "UnknownNPC";
+            string saveFolderName = GetGameMember<string>(S1NPC, "SaveFolderName")?.Trim() ?? "UnknownNPC";
             string npcPath = Path.Combine(folderPath, saveFolderName);
             base.SaveInternal(npcPath, ref extraSaveables);
         }
@@ -2128,7 +2894,7 @@ namespace S1API.Entities
                 S1NPC.Health.onKnockedOut = new UnityEvent();
 
             // S1NPC.Health.Invincible = true;
-            S1NPC.Health.MaxHealth = 100f;
+            SetGameMember(S1NPC.Health, "MaxHealth", 100f);
         }
 
         private void InitializeAwarenessComponent()
@@ -2199,6 +2965,8 @@ namespace S1API.Entities
 
         private void InitializeBehaviourComponents()
         {
+            bool suppressUnsafeBetaBehaviours = ShouldSuppressUnsafeBetaBehaviours();
+
             if (S1NPC.Behaviour == null)
             {
                 GameObject behaviourObject = new GameObject("NPCBehaviour");
@@ -2258,7 +3026,7 @@ namespace S1API.Entities
                 S1NPC.Behaviour.GenericDialogueBehaviour = existing;
             }
 
-            if (S1NPC.Behaviour.RequestProductBehaviour == null)
+            if (!suppressUnsafeBetaBehaviours && S1NPC.Behaviour.RequestProductBehaviour == null)
             {
                 var existing = S1NPC.Behaviour.GetComponentInChildren<S1Behaviour.RequestProductBehaviour>(true);
                 if (existing == null)
@@ -2282,7 +3050,7 @@ namespace S1API.Entities
                 S1NPC.Behaviour.CallPoliceBehaviour = existing;
             }
 
-            if (S1NPC.Behaviour.CombatBehaviour == null)
+            if (!suppressUnsafeBetaBehaviours && S1NPC.Behaviour.CombatBehaviour == null)
             {
                 var existing = S1NPC.Behaviour.GetComponentInChildren<S1Combat.CombatBehaviour>(true);
                 if (existing == null)
@@ -2318,7 +3086,7 @@ namespace S1API.Entities
                 S1NPC.Behaviour.FaceTargetBehaviour = existing;
             }
 
-            if (S1NPC.Behaviour.ConsumeProductBehaviour == null)
+            if (!suppressUnsafeBetaBehaviours && S1NPC.Behaviour.ConsumeProductBehaviour == null)
             {
                 var existing = S1NPC.Behaviour.GetComponentInChildren<S1Behaviour.ConsumeProductBehaviour>(true);
                 if (existing == null)
@@ -2357,6 +3125,25 @@ namespace S1API.Entities
             }
 
             TryRegisterBehaviourEventLinks();
+        }
+
+        private bool ShouldSuppressUnsafeBetaBehaviours()
+        {
+#if (IL2CPPMELON)
+            try
+            {
+                return IsCustomNPC
+                       && (gameObject.GetComponent<NPCPrefabIdentity>() != null
+                           || (gameObject.name ?? string.Empty).StartsWith("S1API_", StringComparison.OrdinalIgnoreCase)
+                           || S1NPC?.GetComponent<NPCPrefabIdentity>() != null);
+            }
+            catch
+            {
+                return IsCustomNPC;
+            }
+#else
+            return false;
+#endif
         }
 
         private void TryRegisterBehaviourEventLinks()
@@ -2458,11 +3245,11 @@ namespace S1API.Entities
         private void InitializeInteractables()
         {
 #if (IL2CPPMELON || IL2CPPBEPINEX)
-            if (S1NPC.intObj == null)
+            if (GetNpcInteractable() == null)
             {
                 S1Interaction.InteractableObject interactable = gameObject.GetComponentInChildren<S1Interaction.InteractableObject>(true) ??
                     gameObject.AddComponent<S1Interaction.InteractableObject>();
-                S1NPC.intObj = interactable;
+                SetNpcInteractable(interactable);
             }
 #elif (MONOMELON || MONOBEPINEX)
             FieldInfo intObjField = AccessTools.Field(typeof(S1NPCs.NPC), "intObj");
@@ -2480,7 +3267,7 @@ namespace S1API.Entities
             if (S1NPC.Inventory == null)
                 S1NPC.Inventory = gameObject.GetComponentInChildren<S1NPCs.NPCInventory>(true) ?? gameObject.AddComponent<S1NPCs.NPCInventory>();
 
-            if (S1NPC.Inventory.PickpocketIntObj == null)
+            if (GetInventoryPickpocketInteractable(S1NPC.Inventory) == null)
             {
                 S1Interaction.InteractableObject? talkInteractable = GetPrimaryInteractable();
                 S1Interaction.InteractableObject[] interactables = gameObject.GetComponentsInChildren<S1Interaction.InteractableObject>(true);
@@ -2488,7 +3275,7 @@ namespace S1API.Entities
                 if (pickpocket == null)
                     pickpocket = gameObject.AddComponent<S1Interaction.InteractableObject>();
 
-                S1NPC.Inventory.PickpocketIntObj = pickpocket;
+                SetInventoryPickpocketInteractable(S1NPC.Inventory, pickpocket);
             }
 
             // NOTE: ApplyRandomInventoryDefaults() moved to CreateInternal() to ensure slots exist before adding items/cash
@@ -2496,7 +3283,7 @@ namespace S1API.Entities
 
         private void InitializeRelationshipData()
         {
-            string npcId = S1NPC?.ID ?? "<null>";
+            string npcId = GetSafeNpcId();
             bool relationDataExisted = S1NPC.RelationData != null;
 
             if (S1NPC.RelationData == null)
@@ -2531,7 +3318,7 @@ namespace S1API.Entities
 
             try
             {
-                string npcId = S1NPC?.ID ?? "<null>";
+                string npcId = GetSafeNpcId();
                 var data = BuildRandomInventoryDefaultsForType(GetType());
                 if (data == null)
                     return;
@@ -2543,11 +3330,11 @@ namespace S1API.Entities
                 // Apply random cash configuration
                 if (data.RandomCashMin.HasValue || data.RandomCashMax.HasValue)
                 {
-                    inventory.RandomCash = true;
+                    SetInventoryMember(inventory, "RandomCash", true);
                     if (data.RandomCashMin.HasValue)
-                        inventory.RandomCashMin = data.RandomCashMin.Value;
+                        SetInventoryMember(inventory, "RandomCashMin", data.RandomCashMin.Value);
                     if (data.RandomCashMax.HasValue)
-                        inventory.RandomCashMax = data.RandomCashMax.Value;
+                        SetInventoryMember(inventory, "RandomCashMax", data.RandomCashMax.Value);
                     
                     // Actually add cash to inventory immediately (not just configure for later)
                     // Check if slots exist (Awake has run) before adding cash
@@ -2640,7 +3427,7 @@ namespace S1API.Entities
 
                 // Apply ClearInventoryEachNight setting
                 if (data.ClearInventoryEachNight.HasValue)
-                    inventory.ClearInventoryEachNight = data.ClearInventoryEachNight.Value;
+                    SetInventoryMember(inventory, "ClearInventoryEachNight", data.ClearInventoryEachNight.Value);
 
                 // Apply startup items
                 // Always insert items directly and clear StartupItems immediately to prevent Awake from processing them
@@ -2683,9 +3470,9 @@ namespace S1API.Entities
                             
                             // Clear StartupItems to prevent Awake from processing them again
 #if (IL2CPPMELON)
-                            inventory.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(0);
+                            SetInventoryMember(inventory, "StartupItems", new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(0));
 #else
-                            inventory.StartupItems = Array.Empty<S1Items.ItemDefinition>();
+                            SetInventoryMember(inventory, "StartupItems", Array.Empty<S1Items.ItemDefinition>());
 #endif
                         }
                         else
@@ -2695,13 +3482,14 @@ namespace S1API.Entities
                             bool startupItemsAlreadySet = false;
                             try
                             {
-                                if (inventory.StartupItems != null)
+                                var startupItems = GetInventoryMember(inventory, "StartupItems");
+                                if (startupItems != null)
                                 {
 #if (IL2CPPMELON)
-                                    var il2cppArray = inventory.StartupItems as Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>;
+                                    var il2cppArray = startupItems as Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>;
                                     startupItemsAlreadySet = il2cppArray != null && il2cppArray.Length > 0;
 #else
-                                    var array = inventory.StartupItems as S1Items.ItemDefinition[];
+                                    var array = startupItems as S1Items.ItemDefinition[];
                                     startupItemsAlreadySet = array != null && array.Length > 0;
 #endif
                                 }
@@ -2714,9 +3502,9 @@ namespace S1API.Entities
                             if (!startupItemsAlreadySet)
                             {
 #if (IL2CPPMELON)
-                                inventory.StartupItems = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(startupItemsList.ToArray());
+                                SetInventoryMember(inventory, "StartupItems", new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemDefinition>(startupItemsList.ToArray()));
 #else
-                                inventory.StartupItems = startupItemsList.ToArray();
+                                SetInventoryMember(inventory, "StartupItems", startupItemsList.ToArray());
 #endif
                             }
                         }
@@ -2729,7 +3517,7 @@ namespace S1API.Entities
             }
             catch (Exception ex)
             {
-                Logger.Warning($"[NPC] ApplyRandomInventoryDefaults: '{S1NPC?.ID ?? GetType().Name}' failed with exception: {ex.Message}");
+                Logger.Warning($"[NPC] ApplyRandomInventoryDefaults: '{GetSafeNpcId()}' failed with exception: {ex.Message}");
                 Logger.Warning($"[NPC] ApplyRandomInventoryDefaults: Stack trace: {ex.StackTrace}");
             }
         }
@@ -2737,7 +3525,7 @@ namespace S1API.Entities
         private S1Interaction.InteractableObject? GetPrimaryInteractable()
         {
 #if (IL2CPPMELON || IL2CPPBEPINEX)
-            return S1NPC.intObj;
+            return GetNpcInteractable();
 #elif (MONOMELON || MONOBEPINEX)
             FieldInfo intObjField = AccessTools.Field(typeof(S1NPCs.NPC), "intObj");
             return intObjField.GetValue(S1NPC) as S1Interaction.InteractableObject;
@@ -2862,6 +3650,8 @@ namespace S1API.Entities
 
                 // Always set visibility locally first (for host/client consistency)
                 S1NPC.SetVisible(IsPhysical, networked: false);
+
+                EnsureMessageConversationReady(resetDefaults: false);
                 
                 // If we're the server, also broadcast to clients via RPC after a delay
                 // This ensures the NPC is fully spawned before the RPC is sent
@@ -2947,7 +3737,7 @@ namespace S1API.Entities
                     
                     // If NPC is unlocked or delta is not default (2.0), it likely came from save data
                     // This prevents defaults from overwriting loaded relationship data
-                    appearsLoadedFromSave = isUnlocked || (Math.Abs(delta - S1Relation.NPCRelationData.DEFAULT_RELATION_DELTA) > 0.01f);
+                    appearsLoadedFromSave = isUnlocked || (Math.Abs(delta - DefaultRelationDelta) > 0.01f);
                 }
                 
                 if (!_wasLoadedFromSave && !appearsLoadedFromSave)
@@ -2969,14 +3759,14 @@ namespace S1API.Entities
                                 // Verify unlock state wasn't accidentally overwritten
                                 if (alreadyUnlocked && !rel.Unlocked)
                                 {
-                                    Logger.Warning($"[NPC] FinalizeNetworkSpawn: WARNING - Unlock state was lost for NPC '{S1NPC.ID}' after applying prefab defaults. Restoring...");
+                                    Logger.Warning($"[NPC] FinalizeNetworkSpawn: WARNING - Unlock state was lost for NPC '{GetSafeNpcId()}' after applying prefab defaults. Restoring...");
                                     var unlockType = _loadedUnlockType ?? S1Relation.NPCRelationData.EUnlockType.DirectApproach;
                                     rel.Unlock(unlockType, notify: false);
                                 }
                             }
                             else
                             {
-                                Logger.Warning($"[Relationship Data] FinalizeNetworkSpawn: RelationData is null for NPC '{S1NPC.ID}'");
+                                Logger.Warning($"[Relationship Data] FinalizeNetworkSpawn: RelationData is null for NPC '{GetSafeNpcId()}'");
                             }
                         }
                         
@@ -3001,7 +3791,7 @@ namespace S1API.Entities
                                     // Verify unlock state wasn't accidentally overwritten
                                     if (alreadyUnlocked && !rel.Unlocked)
                                     {
-                                        Logger.Warning($"[NPC] FinalizeNetworkSpawn: WARNING - Unlock state was lost for NPC '{S1NPC.ID}' after applying defaults. Restoring...");
+                                        Logger.Warning($"[NPC] FinalizeNetworkSpawn: WARNING - Unlock state was lost for NPC '{GetSafeNpcId()}' after applying defaults. Restoring...");
                                         // Restore unlock state using stored unlock type, or default to DirectApproach
                                         var unlockType = _loadedUnlockType ?? S1Relation.NPCRelationData.EUnlockType.DirectApproach;
                                         rel.Unlock(unlockType, notify: false);
@@ -3009,7 +3799,7 @@ namespace S1API.Entities
                                 }
                                 else
                                 {
-                                    Logger.Warning($"[NPC] FinalizeNetworkSpawn: RelationData is null for NPC '{S1NPC.ID}' - cannot apply defaults!");
+                                    Logger.Warning($"[NPC] FinalizeNetworkSpawn: RelationData is null for NPC '{GetSafeNpcId()}' - cannot apply defaults!");
                                 }
                             }
                             else
@@ -3021,7 +3811,7 @@ namespace S1API.Entities
                     }
                     catch (Exception ex)
                     {
-                        Logger.Error($"[NPC] FinalizeNetworkSpawn: Failed to apply relationship defaults for NPC '{S1NPC.ID}': {ex.Message}");
+                        Logger.Error($"[NPC] FinalizeNetworkSpawn: Failed to apply relationship defaults for NPC '{GetSafeNpcId()}': {ex.Message}");
                         Logger.Error($"[NPC] FinalizeNetworkSpawn: Stack trace: {ex.StackTrace}");
                     }
                 }
@@ -3040,7 +3830,7 @@ namespace S1API.Entities
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warning($"[S1API] Failed to apply dealer recommendation defaults for '{S1NPC.ID}': {ex.Message}");
+                    Logger.Warning($"[S1API] Failed to apply dealer recommendation defaults for '{GetSafeNpcId()}': {ex.Message}");
                 }
 
                 // Apply spawn position for this NPC type (always applied, regardless of save state)
@@ -3137,7 +3927,7 @@ namespace S1API.Entities
                 if (customerNpc == null)
                 {
                     Logger.Warning(
-                        $"[S1API] Could not resolve recommending customer '{recommendation.CustomerId}' for dealer '{S1NPC.ID}'.");
+                        $"[S1API] Could not resolve recommending customer '{recommendation.CustomerId}' for dealer '{GetSafeNpcId()}'.");
                     continue;
                 }
 
@@ -3155,7 +3945,7 @@ namespace S1API.Entities
                             catch (Exception ex)
                             {
                                 Logger.Warning(
-                                    $"[S1API] Failed to auto-recommend dealer '{S1NPC.ID}' from customer '{customerNpc.ID}': {ex.Message}");
+                                    $"[S1API] Failed to auto-recommend dealer '{GetSafeNpcId()}' from customer '{customerNpc.ID}': {ex.Message}");
                             }
                         };
 
@@ -3230,7 +4020,7 @@ namespace S1API.Entities
             }
             catch (Exception ex)
             {
-                Logger.Warning($"[S1API] Failed to send visibility RPC for NPC '{S1NPC?.ID}': {ex.Message}");
+                Logger.Warning($"[S1API] Failed to send visibility RPC for NPC '{GetSafeNpcId()}': {ex.Message}");
             }
         }
 
