@@ -1,0 +1,1055 @@
+{
+  "version": "1.0",
+  "features": {
+    "add_money": {
+      "description": "Dem Spieler Bargeld geben",
+      "api": "Api.Money.Add",
+      "params": "amount: float (Dollar)",
+      "example": "Api.Money.Add(1000);",
+      "keywords": [
+        "geld",
+        "money",
+        "reich",
+        "rich",
+        "cash",
+        "cheat",
+        "geben",
+        "add",
+        "dollar"
+      ],
+      "category": "money"
+    },
+    "remove_money": {
+      "description": "Bargeld vom Spieler abziehen",
+      "api": "Api.Money.Remove",
+      "params": "amount: float (Dollar)",
+      "example": "Api.Money.Remove(500);",
+      "keywords": [
+        "geld",
+        "money",
+        "abziehen",
+        "remove",
+        "bezahlen",
+        "pay",
+        "kosten",
+        "cost"
+      ],
+      "category": "money"
+    },
+    "get_money": {
+      "description": "Aktuellen Bargeld-Betrag abfragen",
+      "api": "Api.Money.GetBalance",
+      "params": "keine",
+      "example": "float cash = Api.Money.GetBalance();",
+      "keywords": [
+        "geld",
+        "money",
+        "cash",
+        "balance",
+        "kontostand",
+        "abfragen",
+        "get",
+        "check"
+      ],
+      "category": "money"
+    },
+    "get_online_money": {
+      "description": "Online-Bankguthaben abfragen",
+      "api": "Api.Money.GetOnlineBalance",
+      "params": "keine",
+      "example": "float online = Api.Money.GetOnlineBalance();",
+      "keywords": [
+        "geld",
+        "money",
+        "online",
+        "bank",
+        "konto",
+        "account",
+        "balance",
+        "guthaben"
+      ],
+      "category": "money"
+    },
+    "add_online_money": {
+      "description": "Online-Bankguthaben erhöhen",
+      "api": "Api.Money.TransferToOnline",
+      "params": "amount: float (Dollar)",
+      "example": "Api.Money.TransferToOnline(5000);",
+      "keywords": [
+        "geld",
+        "money",
+        "online",
+        "bank",
+        "add",
+        "überweisen",
+        "transfer"
+      ],
+      "category": "money"
+    },
+    "set_health": {
+      "description": "Gesundheit des Spielers setzen",
+      "api": "Api.Player.SetHealth",
+      "params": "value: float (0-100)",
+      "example": "Api.Player.SetHealth(100);",
+      "keywords": [
+        "gesundheit",
+        "health",
+        "hp",
+        "heilen",
+        "heal",
+        "leben",
+        "life",
+        "setzen",
+        "set",
+        "god",
+        "unsterblich",
+        "immortal"
+      ],
+      "category": "player"
+    },
+    "get_health": {
+      "description": "Aktuelle Gesundheit abfragen",
+      "api": "Api.Player.GetHealth",
+      "params": "keine",
+      "example": "float hp = Api.Player.GetHealth();",
+      "keywords": [
+        "gesundheit",
+        "health",
+        "hp",
+        "leben",
+        "life",
+        "abfragen",
+        "get"
+      ],
+      "category": "player"
+    },
+    "set_energy": {
+      "description": "Energie des Spielers setzen",
+      "api": "Api.Player.SetEnergy",
+      "params": "value: float (0-100)",
+      "example": "Api.Player.SetEnergy(100);",
+      "keywords": [
+        "energie",
+        "energy",
+        "ausdauer",
+        "stamina",
+        "müde",
+        "tired",
+        "schlaf",
+        "sleep",
+        "setzen",
+        "set"
+      ],
+      "category": "player"
+    },
+    "get_energy": {
+      "description": "Aktuelle Energie abfragen",
+      "api": "Api.Player.GetEnergy",
+      "params": "keine",
+      "example": "float energy = Api.Player.GetEnergy();",
+      "keywords": [
+        "energie",
+        "energy",
+        "ausdauer",
+        "stamina",
+        "abfragen",
+        "get"
+      ],
+      "category": "player"
+    },
+    "god_mode": {
+      "description": "Unverwundbar machen (Gesundheit auf Maximum halten)",
+      "api": "Api.Player.SetHealth",
+      "params": "value: float (100 = voll)",
+      "example": "Api.Player.SetHealth(100);",
+      "keywords": [
+        "god",
+        "unsterblich",
+        "immortal",
+        "unverwundbar",
+        "invincible",
+        "cheat"
+      ],
+      "category": "player"
+    },
+    "teleport": {
+      "description": "Spieler zu Koordinaten teleportieren",
+      "api": "Api.Player.Teleport",
+      "params": "x: float, y: float, z: float",
+      "example": "Api.Player.Teleport(0, 0, 0);",
+      "keywords": [
+        "teleport",
+        "bewegen",
+        "move",
+        "position",
+        "tp",
+        "koordinaten",
+        "coordinates"
+      ],
+      "category": "player"
+    },
+    "heal_player": {
+      "description": "Spieler vollständig heilen (Gesundheit + Energie auf 100)",
+      "api": "Api.Player.SetHealth",
+      "params": "keine",
+      "example": "Api.Player.SetHealth();",
+      "keywords": [
+        "heilen",
+        "heal",
+        "voll",
+        "full",
+        "restore",
+        "wiederherstellen",
+        "health",
+        "energy"
+      ],
+      "category": "player"
+    },
+    "is_player_alive": {
+      "description": "Prüfen ob der Spieler lebt",
+      "api": "Api.Player.IsAlive",
+      "params": "keine",
+      "example": "bool alive = Api.Player.IsAlive();",
+      "keywords": [
+        "leben",
+        "alive",
+        "tot",
+        "dead",
+        "check",
+        "prüfen"
+      ],
+      "category": "player"
+    },
+    "give_item": {
+      "description": "Item anhand der ID ins Inventar geben",
+      "api": "Api.Inventory.Add",
+      "params": "itemId: string, quantity: int (Default 1)",
+      "example": "Api.Inventory.Add(\"weed_seed\", 10);",
+      "keywords": [
+        "item",
+        "gegenstand",
+        "inventar",
+        "inventory",
+        "geben",
+        "give",
+        "add",
+        "spawn",
+        "cheat"
+      ],
+      "category": "inventory"
+    },
+    "remove_item": {
+      "description": "Item aus dem Inventar entfernen",
+      "api": "Api.Inventory.Remove",
+      "params": "itemId: string, quantity: int (Default 1)",
+      "example": "Api.Inventory.Remove(\"weed_seed\", 5);",
+      "keywords": [
+        "item",
+        "gegenstand",
+        "entfernen",
+        "remove",
+        "löschen",
+        "delete",
+        "weg",
+        "inventar",
+        "inventory"
+      ],
+      "category": "inventory"
+    },
+    "get_item_count": {
+      "description": "Anzahl eines Items im Inventar zählen",
+      "api": "Api.Inventory.GetQuantity",
+      "params": "itemId: string",
+      "example": "int count = Api.Inventory.GetQuantity(\"cash\");",
+      "keywords": [
+        "item",
+        "anzahl",
+        "count",
+        "zählen",
+        "inventar",
+        "inventory",
+        "haben",
+        "have"
+      ],
+      "category": "inventory"
+    },
+    "has_item": {
+      "description": "Prüfen ob ein Item im Inventar vorhanden ist",
+      "api": "Api.Inventory.HasItem",
+      "params": "itemId: string, minQuantity: int (Default 1)",
+      "example": "bool has = Api.Inventory.HasItem(\"weed_seed\", 5);",
+      "keywords": [
+        "item",
+        "gegenstand",
+        "haben",
+        "has",
+        "contains",
+        "check",
+        "prüfen",
+        "inventar"
+      ],
+      "category": "inventory"
+    },
+    "select_hotbar_slot": {
+      "description": "Hotbar-Slot per Index auswählen",
+      "api": "Api.Inventory.EquipSlot",
+      "params": "index: int (0-basiert)",
+      "example": "Api.Inventory.EquipSlot(0);",
+      "keywords": [
+        "hotbar",
+        "slot",
+        "auswählen",
+        "select",
+        "waffe",
+        "weapon",
+        "werkzeug",
+        "tool"
+      ],
+      "category": "inventory"
+    },
+    "get_item_info": {
+      "description": "Metadaten eines Items aus der Registry lesen",
+      "api": "Api.Item.GetName",
+      "params": "itemId: string",
+      "example": "var info = Api.Item.GetName(\"weed_seed\");",
+      "keywords": [
+        "item",
+        "info",
+        "metadaten",
+        "registry",
+        "name",
+        "description",
+        "typ",
+        "type"
+      ],
+      "category": "inventory"
+    },
+    "item_exists": {
+      "description": "Prüfen ob eine Item-ID in der Registry existiert",
+      "api": "Api.Item.Exists",
+      "params": "itemId: string",
+      "example": "bool exists = Api.Item.Exists(\"super_rare_item\");",
+      "keywords": [
+        "item",
+        "existiert",
+        "exists",
+        "valid",
+        "registry",
+        "id",
+        "check"
+      ],
+      "category": "inventory"
+    },
+    "set_time": {
+      "description": "Tageszeit setzen (0-23 Uhr)",
+      "api": "Api.Time.SetTime",
+      "params": "hour: int (0-23), minute: int (Default 0)",
+      "example": "Api.Time.SetTime(12, 30);",
+      "keywords": [
+        "zeit",
+        "time",
+        "uhr",
+        "clock",
+        "tag",
+        "day",
+        "nacht",
+        "night",
+        "setzen",
+        "set"
+      ],
+      "category": "time"
+    },
+    "get_time": {
+      "description": "Aktuelle Tageszeit abfragen",
+      "api": "Api.Time.GetCurrentMinute",
+      "params": "keine",
+      "example": "float time = Api.Time.GetCurrentMinute();",
+      "keywords": [
+        "zeit",
+        "time",
+        "uhrzeit",
+        "clock",
+        "jetzt",
+        "now",
+        "abfragen",
+        "get"
+      ],
+      "category": "time"
+    },
+    "get_day": {
+      "description": "Aktuellen Tag (seit Spielstart) abfragen",
+      "api": "Api.Time.GetDayName",
+      "params": "keine",
+      "example": "int day = Api.Time.GetDayName();",
+      "keywords": [
+        "zeit",
+        "time",
+        "tag",
+        "day",
+        "elapsed",
+        "vergangen",
+        "abfragen",
+        "get"
+      ],
+      "category": "time"
+    },
+    "is_server": {
+      "description": "Prüfen ob lokale Instanz Server/Host ist",
+      "api": "Api.Session.IsHost",
+      "params": "keine",
+      "example": "bool server = Api.Session.IsHost();",
+      "keywords": [
+        "server",
+        "host",
+        "singleplayer",
+        "coop",
+        "netzwerk",
+        "network",
+        "prüfen",
+        "check"
+      ],
+      "category": "player"
+    },
+    "is_client": {
+      "description": "Prüfen ob lokale Instanz nur Client ist",
+      "api": "Api.Session.IsClient",
+      "params": "keine",
+      "example": "bool client = Api.Session.IsClient();",
+      "keywords": [
+        "client",
+        "guest",
+        "gast",
+        "coop",
+        "netzwerk",
+        "network",
+        "prüfen",
+        "check"
+      ],
+      "category": "player"
+    },
+    "is_multiplayer": {
+      "description": "Prüfen ob mehrere Spieler in der Welt sind",
+      "api": "Api.Session.IsMultiplayer",
+      "params": "keine",
+      "example": "bool mp = Api.Session.IsMultiplayer();",
+      "keywords": [
+        "multiplayer",
+        "coop",
+        "mehrspieler",
+        "netzwerk",
+        "network",
+        "prüfen",
+        "check"
+      ],
+      "category": "player"
+    },
+    "get_player_count": {
+      "description": "Anzahl der Spieler in der aktuellen Session",
+      "api": "Api.Session.GetPlayerCount",
+      "params": "keine",
+      "example": "int count = Api.Session.GetGetPlayerCount();",
+      "keywords": [
+        "spieler",
+        "player",
+        "anzahl",
+        "count",
+        "session",
+        "coop",
+        "alle",
+        "all"
+      ],
+      "category": "player"
+    },
+    "list_npcs": {
+      "description": "Alle NPCs in der Szene auflisten",
+      "api": "Api.NPC.GetAllNpcNames",
+      "params": "keine",
+      "example": "var npcs = Api.NPC.GetAllNpcNames();",
+      "keywords": [
+        "npc",
+        "liste",
+        "list",
+        "alle",
+        "all",
+        "personen",
+        "people",
+        "charaktere",
+        "characters"
+      ],
+      "category": "npc"
+    },
+    "set_npc_relationship": {
+      "description": "Beziehungsstatus eines NPCs setzen",
+      "api": "Api.NPC.SetRelationship",
+      "params": "npcName: string, value: float (0-100)",
+      "example": "Api.NPC.SetRelationship(\"Benji\", 100);",
+      "keywords": [
+        "npc",
+        "beziehung",
+        "relationship",
+        "freund",
+        "friend",
+        "feind",
+        "enemy",
+        "likability"
+      ],
+      "category": "npc"
+    },
+    "kill_npc": {
+      "description": "Einen NPC töten",
+      "api": "Api.Combat.Kill",
+      "params": "npcName: string",
+      "example": "Api.Combat.Kill(\"Benji\");",
+      "keywords": [
+        "npc",
+        "töten",
+        "kill",
+        "mord",
+        "murder",
+        "tod",
+        "death",
+        "eliminieren",
+        "eliminate"
+      ],
+      "category": "npc"
+    },
+    "get_npc_behaviour": {
+      "description": "Aktuelles Verhalten eines NPCs abfragen",
+      "api": "Api.NPC.GetCurrentBehaviour",
+      "params": "npcName: string",
+      "example": "string state = Api.NPC.GetCurrentBehaviour(\"Benji\");",
+      "keywords": [
+        "npc",
+        "verhalten",
+        "behaviour",
+        "behavior",
+        "state",
+        "zustand",
+        "idle",
+        "walking"
+      ],
+      "category": "npc"
+    },
+    "set_npc_behaviour": {
+      "description": "Verhalten eines NPCs ändern",
+      "api": "Api.NpcBehaviour.SetBehaviour",
+      "params": "npcName: string, behaviour: string",
+      "example": "Api.NpcBehaviour.SetBehaviour(\"Benji\", \"Idle\");",
+      "keywords": [
+        "npc",
+        "verhalten",
+        "behaviour",
+        "behavior",
+        "ändern",
+        "change",
+        "set",
+        "control"
+      ],
+      "category": "npc"
+    },
+    "clear_wanted": {
+      "description": "Fahndungslevel auf 0 setzen",
+      "api": "Api.Police.ClearWarrant",
+      "params": "keine",
+      "example": "Api.Police.ClearWarrant();",
+      "keywords": [
+        "polizei",
+        "police",
+        "fahndung",
+        "wanted",
+        "gesucht",
+        "sterne",
+        "stars",
+        "löschen",
+        "clear",
+        "reset"
+      ],
+      "category": "police"
+    },
+    "get_wanted_level": {
+      "description": "Aktuellen Fahndungslevel abfragen",
+      "api": "Api.Police.GetPursuitLevel",
+      "params": "keine",
+      "example": "int stars = Api.Police.GetPursuitLevel();",
+      "keywords": [
+        "polizei",
+        "police",
+        "wanted",
+        "gesucht",
+        "sterne",
+        "stars",
+        "fahndung",
+        "level",
+        "abfragen",
+        "get"
+      ],
+      "category": "police"
+    },
+    "deal_damage": {
+      "description": "Schaden am Spieler verursachen",
+      "api": "Api.Combat.ApplyDamage",
+      "params": "amount: float (Schadenspunkte)",
+      "example": "Api.Combat.ApplyApplyDamage(25);",
+      "keywords": [
+        "schaden",
+        "damage",
+        "kampf",
+        "combat",
+        "verletzen",
+        "hurt",
+        "hit",
+        "angriff",
+        "attack"
+      ],
+      "category": "police"
+    },
+    "set_invulnerable": {
+      "description": "Spieler unverwundbar machen (kein Schaden)",
+      "api": "Api.Combat.SetInvincible",
+      "params": "invulnerable: bool",
+      "example": "Api.Combat.SetInvincible(true);",
+      "keywords": [
+        "unverwundbar",
+        "invulnerable",
+        "god",
+        "kein",
+        "no",
+        "damage",
+        "schaden",
+        "immun"
+      ],
+      "category": "police"
+    },
+    "get_active_quests": {
+      "description": "Alle aktiven Quests auflisten",
+      "api": "Api.Quest.GetActiveQuests",
+      "params": "keine",
+      "example": "var quests = Api.Quest.GetActiveQuests();",
+      "keywords": [
+        "quest",
+        "auftrag",
+        "mission",
+        "aktiv",
+        "active",
+        "liste",
+        "list",
+        "offen",
+        "open"
+      ],
+      "category": "quest"
+    },
+    "spawn_vehicle": {
+      "description": "Fahrzeug in Spielernähe spawnen",
+      "api": "Api.Vehicle.Spawn",
+      "params": "vehicleType: string (z.B. \"Car\", \"Bike\")",
+      "example": "Api.Vehicle.Spawn(\"Car\");",
+      "keywords": [
+        "fahrzeug",
+        "vehicle",
+        "auto",
+        "car",
+        "spawn",
+        "erstellen",
+        "create",
+        "motorrad",
+        "bike"
+      ],
+      "category": "vehicle"
+    },
+    "list_vehicles": {
+      "description": "Alle vorhandenen Fahrzeuge auflisten",
+      "api": "Api.Vehicle.GetOwnedVehicles",
+      "params": "keine",
+      "example": "var vehicles = Api.Vehicle.GetOwnedVehicles();",
+      "keywords": [
+        "fahrzeug",
+        "vehicle",
+        "auto",
+        "car",
+        "liste",
+        "list",
+        "alle",
+        "all"
+      ],
+      "category": "vehicle"
+    },
+    "get_plant_info": {
+      "description": "Informationen über eine Pflanze abrufen",
+      "api": "Api.Growing.GetGrowthProgress",
+      "params": "plantIndex: int (0-basiert)",
+      "example": "var info = Api.Growing.GetGrowthProgress(0);",
+      "keywords": [
+        "pflanzen",
+        "plants",
+        "info",
+        "wachstum",
+        "growth",
+        "stadium",
+        "abfragen",
+        "get"
+      ],
+      "category": "growing"
+    },
+    "list_properties": {
+      "description": "Alle Immobilien auflisten",
+      "api": "Api.Property.GetOwnedProperties",
+      "params": "keine",
+      "example": "var props = Api.Property.GetOwnedProperties();",
+      "keywords": [
+        "immobilie",
+        "property",
+        "haus",
+        "house",
+        "gebäude",
+        "building",
+        "liste",
+        "list",
+        "besitz"
+      ],
+      "category": "growing"
+    },
+    "buy_property": {
+      "description": "Immobilie kaufen",
+      "api": "Api.Property.Buy",
+      "params": "propertyId: string",
+      "example": "Api.Property.Buy(\"warehouse_01\");",
+      "keywords": [
+        "immobilie",
+        "property",
+        "kaufen",
+        "buy",
+        "erwerben",
+        "purchase",
+        "haus",
+        "house"
+      ],
+      "category": "growing"
+    },
+    "get_property_info": {
+      "description": "Details einer Immobilie abrufen",
+      "api": "Api.Property.GetPropertyLocation",
+      "params": "propertyId: string",
+      "example": "var info = Api.Property.GetPropertyLocation(\"warehouse_01\");",
+      "keywords": [
+        "immobilie",
+        "property",
+        "info",
+        "details",
+        "haus",
+        "house"
+      ],
+      "category": "growing"
+    },
+    "get_recipes": {
+      "description": "Alle verfügbaren Rezepte auflisten",
+      "api": "Api.Crafting.GetAvailableRecipes",
+      "params": "keine",
+      "example": "var recipes = Api.Crafting.GetAvailableRecipes();",
+      "keywords": [
+        "rezept",
+        "recipe",
+        "crafting",
+        "herstellen",
+        "liste",
+        "list",
+        "verfügbar",
+        "available"
+      ],
+      "category": "crafting"
+    },
+    "start_crafting": {
+      "description": "Crafting-Prozess starten",
+      "api": "Api.Crafting.StartMix",
+      "params": "recipeId: string, quantity: int (Default 1)",
+      "example": "Api.Crafting.StartMix(\"meth\", 5);",
+      "keywords": [
+        "crafting",
+        "herstellen",
+        "produzieren",
+        "cook",
+        "kochen",
+        "start",
+        "beginnen"
+      ],
+      "category": "crafting"
+    },
+    "get_product_price": {
+      "description": "Preis eines Produkts abfragen",
+      "api": "Api.Product.GetPrice",
+      "params": "productId: string",
+      "example": "float price = Api.Product.GetPrice(\"weed\");",
+      "keywords": [
+        "preis",
+        "price",
+        "produkt",
+        "product",
+        "markt",
+        "market",
+        "wert",
+        "value",
+        "check"
+      ],
+      "category": "crafting"
+    },
+    "set_product_price": {
+      "description": "Produktpreis setzen",
+      "api": "Api.Product.SetPrice",
+      "params": "productId: string, price: float",
+      "example": "Api.Product.SetPrice(\"weed\", 100);",
+      "keywords": [
+        "preis",
+        "price",
+        "produkt",
+        "product",
+        "setzen",
+        "set",
+        "markt",
+        "market",
+        "ändern"
+      ],
+      "category": "crafting"
+    },
+    "list_products": {
+      "description": "Alle registrierten Produkte auflisten",
+      "api": "Api.Product.GetProductList",
+      "params": "keine",
+      "example": "var products = Api.Product.GetProductGetProductList();",
+      "keywords": [
+        "produkt",
+        "product",
+        "liste",
+        "list",
+        "alle",
+        "all"
+      ],
+      "category": "crafting"
+    },
+    "list_employees": {
+      "description": "Alle Angestellten auflisten",
+      "api": "Api.Employees.GetEmployeeCount",
+      "params": "keine",
+      "example": "var employees = Api.Employees.GetEmployeeCount();",
+      "keywords": [
+        "angestellte",
+        "employees",
+        "arbeiter",
+        "workers",
+        "personal",
+        "staff",
+        "liste",
+        "list"
+      ],
+      "category": "other"
+    },
+    "hire_employee": {
+      "description": "Angestellten einstellen",
+      "api": "Api.Employees.Hire",
+      "params": "npcName: string",
+      "example": "Api.Employees.Hire(\"Benji\");",
+      "keywords": [
+        "angestellte",
+        "employees",
+        "einstellen",
+        "hire",
+        "anheuern",
+        "recruit"
+      ],
+      "category": "other"
+    },
+    "fire_employee": {
+      "description": "Angestellten feuern",
+      "api": "Api.Employees.Fire",
+      "params": "employeeIndex: int",
+      "example": "Api.Employees.Fire(0);",
+      "keywords": [
+        "angestellte",
+        "employees",
+        "feuern",
+        "fire",
+        "kündigen",
+        "entlassen"
+      ],
+      "category": "other"
+    },
+    "add_to_storage": {
+      "description": "Item in Lager legen",
+      "api": "Api.Storage.Store",
+      "params": "storageId: string, itemId: string, quantity: int",
+      "example": "Api.Storage.Store(\"warehouse_01\", \"weed\", 100);",
+      "keywords": [
+        "lager",
+        "storage",
+        "ablegen",
+        "add",
+        "lagern",
+        "store"
+      ],
+      "category": "other"
+    },
+    "show_notification": {
+      "description": "Benachrichtigung auf dem Bildschirm anzeigen",
+      "api": "Api.UI.Notify",
+      "params": "message: string, type: string (info/warning/error)",
+      "example": "Api.UI.Notify(\"Cheat aktiviert!\", \"info\");",
+      "keywords": [
+        "notification",
+        "benachrichtigung",
+        "nachricht",
+        "message",
+        "anzeigen",
+        "show",
+        "display",
+        "hud",
+        "popup"
+      ],
+      "category": "phone"
+    },
+    "show_message_box": {
+      "description": "Dialog-Fenster mit Text anzeigen",
+      "api": "Api.UI.ShowNotification",
+      "params": "title: string, message: string",
+      "example": "Api.UI.ShowNotification(\"Mod\", \"Hallo Welt!\");",
+      "keywords": [
+        "message",
+        "dialog",
+        "fenster",
+        "window",
+        "anzeigen",
+        "show",
+        "popup",
+        "modal"
+      ],
+      "category": "phone"
+    },
+    "add_xp": {
+      "description": "Erfahrungspunkte hinzufügen",
+      "api": "Api.Progression.AddXP",
+      "params": "amount: int",
+      "example": "Api.Progression.AddXP(5000);",
+      "keywords": [
+        "xp",
+        "erfahrung",
+        "experience",
+        "level",
+        "stufe",
+        "aufstieg",
+        "levelup"
+      ],
+      "category": "player"
+    },
+    "get_level": {
+      "description": "Aktuellen Spieler-Level abfragen",
+      "api": "Api.Progression.GetLevel",
+      "params": "keine",
+      "example": "int level = Api.Progression.GetLevel();",
+      "keywords": [
+        "level",
+        "stufe",
+        "fortschritt",
+        "progression",
+        "abfragen",
+        "get",
+        "rang",
+        "rank"
+      ],
+      "category": "player"
+    },
+    "save_game": {
+      "description": "Spiel speichern",
+      "api": "Api.Save.SaveData",
+      "params": "saveName: string (optional, Default = aktueller Save)",
+      "example": "Api.Save.SaveData(\"mein_save\");",
+      "keywords": [
+        "speichern",
+        "save",
+        "sichern",
+        "speicherstand",
+        "checkpoint"
+      ],
+      "category": "other"
+    },
+    "load_game": {
+      "description": "Spielstand laden",
+      "api": "Api.Save.LoadData",
+      "params": "saveName: string",
+      "example": "Api.Save.LoadData(\"mein_save\");",
+      "keywords": [
+        "laden",
+        "load",
+        "speicherstand",
+        "save",
+        "wiederherstellen",
+        "restore"
+      ],
+      "category": "other"
+    },
+    "get_config": {
+      "description": "Konfigurationswert eines Mods laden",
+      "api": "Api.Config.Get",
+      "params": "category: string, key: string, defaultValue: T",
+      "example": "float speed = Api.Config.Get<float>(\"Speed\", \"multiplier\", 1.0f);",
+      "keywords": [
+        "config",
+        "einstellungen",
+        "settings",
+        "konfiguration",
+        "laden",
+        "load",
+        "get",
+        "read"
+      ],
+      "category": "other"
+    },
+    "save_config": {
+      "description": "Konfigurationswerte speichern",
+      "api": "Api.Config.Save",
+      "params": "category: string",
+      "example": "Api.Config.Save(\"Speed\");",
+      "keywords": [
+        "config",
+        "einstellungen",
+        "settings",
+        "speichern",
+        "save",
+        "persist",
+        "write"
+      ],
+      "category": "other"
+    },
+    "on_scene_loaded": {
+      "description": "Code nach Szenenwechsel ausführen",
+      "api": "Api.Events.OnSceneLoaded",
+      "params": "action: Action<string> (bekommt Scene-Namen)",
+      "example": "Api.Events.OnSceneLoaded(name => { if(name==\"Main\") InitMod(); });",
+      "keywords": [
+        "event",
+        "scene",
+        "szene",
+        "laden",
+        "load",
+        "init",
+        "initialisierung"
+      ],
+      "category": "other"
+    },
+    "set_weather": {
+      "description": "Wetter ändern",
+      "api": "Api.Weather.SetWeather",
+      "params": "weather: string (Clear/Rain/Storm)",
+      "example": "Api.Weather.SetWeather(\"Clear\");",
+      "keywords": [
+        "wetter",
+        "weather",
+        "regen",
+        "rain",
+        "sonne",
+        "sun",
+        "sturm",
+        "storm",
+        "klar",
+        "clear"
+      ],
+      "category": "other"
+    }
+  }
+}

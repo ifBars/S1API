@@ -20,24 +20,17 @@ yt-series/
 nuget-upload.txt
 AGENTS.md
 .claude/
+.opencode/
 
 # DocFX
-**/S1API/_site/
-**/S1API/api/
-**/S1API/.docfx/
-**/.docfx/
-**/docfx.json.bak
-**/xrefmap.yml
+**_site/
+**_site/**
+api/
+.docfx/
+docfx.json.bak
+xrefmap.yml
 
-# Coverage Analyzer outputs
-tools/S1APICoverageAnalyzer/bin/
-tools/S1APICoverageAnalyzer/obj/
-tools/S1APICoverageAnalyzer/coverage-report.json
-tools/S1APICoverageAnalyzer/coverage-report.txt
+# Coverage
 coverage-report.json
 coverage-badge.md
 coverage-chart.md
-
-# Coverage history is tracked to show progress over time
-!tools/S1APICoverageAnalyzer/coverage-history.json
-/S1API/.spark-runs

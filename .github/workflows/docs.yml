@@ -2,19 +2,8 @@ name: Build and Deploy Documentation
 
 on:
   push:
-    branches: [ master, main, stable, beta, npc-prefabs ]
-  pull_request:
-    branches: [ master, main, stable, beta, npc-prefabs ]
+    branches: [ main ]
   workflow_dispatch:
-    inputs:
-      assembly_branch:
-        description: 'Assembly branch to use (main or beta)'
-        required: false
-        default: 'main'
-        type: choice
-        options:
-          - main
-          - beta
 
 permissions:
   contents: read
@@ -29,243 +18,26 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout S1API
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      # Determine which assembly branch to use (beta or main) - MUST run before cache
-      - name: Determine Assembly Branch
-        id: assembly-branch
-        run: |
-          # Manual workflow dispatch takes precedence
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && [[ -n "${{ inputs.assembly_branch }}" ]]; then
-            echo "branch=${{ inputs.assembly_branch }}" >> $GITHUB_OUTPUT
-            echo "Using ${{ inputs.assembly_branch }} assemblies (manual trigger)"
-          elif [[ "${{ github.ref_name }}" == "beta" ]] || [[ "${{ github.base_ref }}" == "beta" ]]; then
-            echo "branch=beta" >> $GITHUB_OUTPUT
-            echo "Using beta assemblies for beta branch workflow"
-          elif [[ "${{ github.event_name }}" == "pull_request" ]] && [[ "${{ contains(github.event.pull_request.labels.*.name, 'beta') }}" == "true" ]]; then
-            echo "branch=beta" >> $GITHUB_OUTPUT
-            echo "Using beta assemblies for PR with beta label"
-          else
-            echo "branch=main" >> $GITHUB_OUTPUT
-            echo "Using main/stable assemblies"
-          fi
-
-      - name: Create Assembly Directory Structure
-        run: |
-          mkdir -p S1API/ScheduleOneAssemblies/Managed
-          mkdir -p S1API/ScheduleOneAssemblies/MelonLoader
-
-      # Try to restore assemblies from cache first (for external PRs)
-      # Cache key includes assembly branch to separate beta from main
-      # v3 suffix allows cache invalidation by bumping version
-      # Only use cache for PR events to avoid stale assemblies after merges
-      - name: Restore Game Assemblies from Cache
-        id: cache-assemblies
-        if: github.event_name == 'pull_request'
-        uses: actions/cache/restore@v4
-        with:
-          path: S1API/ScheduleOneAssemblies
-          key: game-assemblies-v3-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
-          restore-keys: |
-            game-assemblies-v3-${{ steps.assembly-branch.outputs.branch }}-
-
-      # Only checkout game assemblies if cache miss AND we have access to secrets
-      - name: Checkout Game Assemblies
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ secrets.GAME_ASSEMBLIES_REPO }}
-          token: ${{ secrets.GAME_ASSEMBLIES_TOKEN }}
-          ref: ${{ steps.assembly-branch.outputs.branch }}
-          path: game-assemblies
-          fetch-depth: 1
-        if: steps.cache-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-
-      - name: Debug Game Assemblies Structure
-        run: |
-          echo "=== Game Assemblies Repository Structure ==="
-          find game-assemblies -type f -name "*.dll" | head -20
-          echo ""
-          echo "=== Looking for Assembly-CSharp.dll ==="
-          find game-assemblies -name "Assembly-CSharp.dll" -type f
-        if: steps.cache-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-
-      - name: Copy Game Assemblies
-        run: |
-          # Copy Mono assemblies
-          if [ -d "game-assemblies/Managed" ]; then
-            cp -r game-assemblies/Managed/* S1API/ScheduleOneAssemblies/Managed/ || echo "Failed to copy Mono assemblies"
-            echo "Copied Mono assemblies from game-assemblies/Managed/"
-          else
-            echo "No game-assemblies/Managed directory found"
-          fi
-
-          # Copy mod loader assemblies
-          if [ -d "game-assemblies/MelonLoader" ]; then
-            cp -r game-assemblies/MelonLoader/* S1API/ScheduleOneAssemblies/MelonLoader/ || echo "Failed to copy MelonLoader assemblies"
-            echo "Copied MelonLoader assemblies"
-          else
-            echo "No game-assemblies/MelonLoader directory found"
-          fi
-
-          # Ensure Unity.TextMeshPro.dll is available
-          if [ ! -f "S1API/ScheduleOneAssemblies/Managed/Unity.TextMeshPro.dll" ]; then
-            echo "Unity.TextMeshPro.dll not found in Managed folder, searching for it..."
-            TMPRO_PATH=$(find game-assemblies -name "Unity.TextMeshPro.dll" -type f | head -1)
-            if [ -n "$TMPRO_PATH" ]; then
-              echo "Found Unity.TextMeshPro.dll at: $TMPRO_PATH"
-              cp "$TMPRO_PATH" S1API/ScheduleOneAssemblies/Managed/ || echo "Failed to copy Unity.TextMeshPro.dll"
-              echo "Copied Unity.TextMeshPro.dll to Managed folder"
-            else
-              echo "Warning: Unity.TextMeshPro.dll not found in game-assemblies repository"
-              echo "This may cause build failures for files that use TMPro"
-            fi
-          fi
-        if: steps.cache-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-
-      - name: Verify Assembly Copies
-        run: |
-          echo "=== Verifying Assembly Structure ==="
-          ls -la S1API/ScheduleOneAssemblies/
-          echo ""
-          echo "=== Managed Assemblies ==="
-          ls -la S1API/ScheduleOneAssemblies/Managed/ | head -10
-          echo ""
-          echo "=== MelonLoader Assemblies ==="
-          ls -la S1API/ScheduleOneAssemblies/MelonLoader/ | head -10
-          echo ""
-          echo "=== Critical Assembly Check ==="
-          if [ -f S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll ]; then
-            echo "✓ Found Assembly-CSharp.dll"
-            ls -l S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll
-          else
-            echo "✗ Missing Assembly-CSharp.dll"
-            if [ -d "game-assemblies" ]; then
-              echo "Attempting auto-discovery..."
-              find game-assemblies -name "Assembly-CSharp.dll" -type f -exec ls -l {} \;
-            fi
-          fi
-          echo ""
-          echo "=== TextMeshPro Assembly Check ==="
-          if [ -f S1API/ScheduleOneAssemblies/Managed/Unity.TextMeshPro.dll ]; then
-            echo "✓ Found Unity.TextMeshPro.dll"
-            ls -l S1API/ScheduleOneAssemblies/Managed/Unity.TextMeshPro.dll
-          else
-            echo "✗ Missing Unity.TextMeshPro.dll"
-            if [ -d "game-assemblies" ]; then
-              echo "Attempting auto-discovery..."
-              find game-assemblies -name "Unity.TextMeshPro.dll" -type f -exec ls -l {} \;
-              echo "Searching for TextMeshPro assemblies..."
-              find game-assemblies -name "*TextMeshPro*" -type f -exec ls -l {} \;
-            fi
-          fi
-          echo ""
-          echo "=== MelonLoader Assembly Check ==="
-          if [ -f S1API/ScheduleOneAssemblies/MelonLoader/0Harmony.dll ]; then
-            echo "✓ Found 0Harmony.dll"
-            ls -l S1API/ScheduleOneAssemblies/MelonLoader/0Harmony.dll
-          else
-            echo "✗ Missing 0Harmony.dll"
-            if [ -d "game-assemblies" ]; then
-              echo "Looking for MelonLoader assemblies..."
-              find game-assemblies -name "0Harmony.dll" -type f -exec ls -l {} \;
-            fi
-          fi
-          echo ""
-          if [ "${{ steps.cache-assemblies.outputs.cache-hit }}" == "true" ]; then
-            echo "✓ Using cached assemblies for build"
-          else
-            echo "✓ Using fresh assemblies from repository"
-          fi
-
-      - name: Create CI Build Properties
-        run: |
-          cat > ci.build.props << 'EOF'
-          <Project>
-              <PropertyGroup>
-                  <AutomateLocalDeployment>false</AutomateLocalDeployment>
-
-                  <!-- CI Assembly Paths (relative to S1API/S1API.csproj) -->
-                  <MelonLoaderAssembliesPath>../ScheduleOneAssemblies/MelonLoader</MelonLoaderAssembliesPath>
-
-                  <!-- Mono Configuration -->
-                  <LocalMonoDeploymentPath>null</LocalMonoDeploymentPath>
-                  <MonoAssembliesPath>../ScheduleOneAssemblies/Managed</MonoAssembliesPath>
-              </PropertyGroup>
-          </Project>
-          EOF
-
-      - name: Verify Build Properties
-        run: |
-          echo "=== CI Build Properties ==="
-          cat ci.build.props
-          echo ""
-          echo "=== MSBuild Property Resolution Test ==="
-          cd S1API
-          echo "Testing MonoAssembliesPath resolution (expect ./ScheduleOneAssemblies from project dir)..."
-          if [ -f "./ScheduleOneAssemblies/Managed/Assembly-CSharp.dll" ]; then
-            echo "✓ Assembly-CSharp.dll accessible from build context"
-            ls -l ./ScheduleOneAssemblies/Managed/Assembly-CSharp.dll
-          else
-            echo "✗ Assembly-CSharp.dll NOT accessible from build context"
-            echo "Current directory: $(pwd)"
-            echo "Looking for: ./ScheduleOneAssemblies/Managed/Assembly-CSharp.dll"
-            ls -la ./ScheduleOneAssemblies/Managed/ || echo "Directory doesn't exist"
-          fi
-          echo ""
-          echo "Testing MelonLoaderAssembliesPath resolution..."
-          if [ -f "./ScheduleOneAssemblies/MelonLoader/0Harmony.dll" ]; then
-            echo "✓ 0Harmony.dll accessible from build context"
-            ls -l ./ScheduleOneAssemblies/MelonLoader/0Harmony.dll
-          else
-            echo "✗ 0Harmony.dll NOT accessible from build context"
-            echo "Current directory: $(pwd)"
-            echo "Looking for: ./ScheduleOneAssemblies/MelonLoader/0Harmony.dll"
-            ls -la ./ScheduleOneAssemblies/MelonLoader/ || echo "Directory doesn't exist"
-          fi
-
-      - name: Restore dependencies
-        run: dotnet restore S1API.sln
-
-      - name: Build S1API
-        run: dotnet build S1API/S1API.csproj --no-restore -c MonoMelon -v normal
-
-      - name: Upload S1API Mono Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: S1API-Mono
-          path: S1API/bin/MonoMelon/netstandard2.1/S1API.dll
-
       - name: Install DocFX
         run: dotnet tool install -g docfx
 
       - name: Build documentation
         run: |
-          cd S1API
+          cd S1Toolkit
           docfx docfx.json
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./S1API/_site
-        if: github.event_name != 'pull_request' && github.ref != 'refs/heads/beta'
-
-      # Save cache even if build fails (to enable beta cache priming)
-      # Save on PR events AND on pushes to main branches (to update cache after assembly updates)
-      - name: Save Game Assemblies to Cache
-        uses: actions/cache/save@v4
-        if: always() && (github.event_name == 'pull_request' || (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable' || github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/npc-prefabs'))) && steps.cache-assemblies.outputs.cache-hit != 'true'
-        with:
-          path: S1API/ScheduleOneAssemblies
-          key: game-assemblies-v3-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
+          path: ./S1Toolkit/_site
 
   deploy:
     environment:
@@ -273,7 +45,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable' || github.ref == 'refs/heads/npc-prefabs'
+    if: github.ref == 'refs/heads/main'
     steps:
       - name: Deploy to GitHub Pages
         id: deployment

@@ -7,13 +7,14 @@ using S1API.Internal.Lifecycle;
 using S1API.Lifecycle;
 using S1API.Map;
 
-[assembly: MelonInfo(typeof(S1API.S1API), "S1API (Forked by Bars)", "3.0.5", "KaBooMa")]
+[assembly: MelonInfo(typeof(S1API.S1API), "S1Toolkit", "3.0.5", "domi7602")]
 [assembly: MelonPriority(Int32.MinValue)]
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 namespace S1API
 {
     /// <summary>
-    /// S1API root MelonMod. Provides lifecycle hooks for internal systems.
+    /// S1Toolkit root MelonMod. Forked from S1API (KaBooMa/ifBars).
+    /// Provides lifecycle hooks for internal systems.
     /// </summary>
     public class S1API : MelonMod
     {

@@ -1,0 +1,78 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <Import Project="../github.build.props" Condition="Exists('../github.build.props')" />
+    <Import Project="../local.build.props" Condition="Exists('../local.build.props')" />
+    <Import Project="../ci.build.props" Condition="Exists('../ci.build.props')" />
+
+    <PropertyGroup>
+        <Authors>domi7602</Authors>
+        <PackageId>S1Toolkit.Forked</PackageId>
+        <Description>Write Schedule I mods without touching Il2Cpp. Forked from S1API (KaBooMa/ifBars).</Description>
+        <RepositoryUrl>https://github.com/domi7602/S1Toolkit</RepositoryUrl>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <Nullable>enable</Nullable>
+        <Configurations>Release</Configurations>
+        <Platforms>AnyCPU</Platforms>
+        <RootNamespace>S1Toolkit</RootNamespace>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <LangVersion>latest</LangVersion>
+        <Version>3.0.5</Version>
+        <TargetFramework>net6.0</TargetFramework>
+        <DefineConstants>IL2CPPMELON</DefineConstants>
+    </PropertyGroup>
+
+    <!-- IL2CPP MelonLoader Dependencies -->
+    <ItemGroup>
+        <Reference Include="$(MelonLoaderAssembliesPath)\Il2CppInterop.Runtime.dll" />
+        <Reference Include="$(MelonLoaderAssembliesPath)\Il2CppInterop.Common.dll" />
+        <Reference Include="$(MelonLoaderAssembliesPath)\Il2CppInterop.HarmonySupport.dll" />
+        <Reference Include="$(MelonLoaderAssembliesPath)\Il2CppInterop.Generator.dll" />
+        <Reference Include="$(MelonLoaderAssembliesPath)\UnityEngine.Il2CppAssetBundleManager.dll" />
+        <Reference Include="$(MelonLoaderAssembliesPath)\0Harmony.dll" />
+        <Reference Include="$(MelonLoaderAssembliesPath)\MelonLoader.dll" />
+
+        <Reference Include="$(Il2CppAssembliesPath)\Assembly-CSharp.dll" />
+        <Reference Include="$(Il2CppAssembliesPath)\Il2CppScheduleOne.Core.dll" />
+        <Reference Include="$(Il2CppAssembliesPath)\Il2Cppmscorlib.dll" />
+        <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.dll" />
+        <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.CoreModule.dll" />
+        <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.UI.dll" />
+        <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.InputLegacyModule.dll" />
+        <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.UIModule.dll" />
+        <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.JSONSerializeModule.dll" />
+        <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.TextRenderingModule.dll" />
+        <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.ImageConversionModule.dll" />
+        <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.PhysicsModule.dll" />
+        <Reference Include="$(Il2CppAssembliesPath)\Unity.TextMeshPro.dll" />
+        <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.AIModule.dll" />
+        <Reference Include="$(Il2CppAssembliesPath)\Il2CppFishNet.Runtime.dll" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Remove="api\**" />
+      <Compile Remove="docs\**" />
+      <Compile Remove="templates\**" />
+      <Compile Remove="_site\**" />
+      <EmbeddedResource Remove="api\**" />
+      <EmbeddedResource Remove="docs\**" />
+      <EmbeddedResource Remove="templates\**" />
+      <EmbeddedResource Remove="_site\**" />
+      <None Remove="api\**" />
+      <None Remove="docs\**" />
+      <None Remove="templates\**" />
+      <None Remove="_site\**" />
+    </ItemGroup>
+    <ItemGroup>
+      <None Remove="toc.yml" />
+    </ItemGroup>
+
+    <!-- Automated local deployment -->
+    <Target Name="PostBuildDeploy" AfterTargets="Build" Condition="'$(AutomateLocalDeployment)' == 'true'">
+        <Message Text="[S1Toolkit] Deploying to local Il2Cpp plugins folder" Importance="high" />
+        <Copy SourceFiles=".\bin\Release\net6.0\S1Toolkit.dll" DestinationFiles="$(LocalIl2CppDeploymentPath)\Plugins\S1Toolkit\S1Toolkit.dll" />
+    </Target>
+</Project>

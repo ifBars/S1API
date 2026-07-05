@@ -1,0 +1,26 @@
+{
+  "_meta": {
+    "description": "Valid Schedule I registry IDs for mod code validation (check.ps1 rule 9) and LLM prompts.",
+    "source": "docs/reference/data-references.md, cross-checked against decompiled game code (game-source/scripts)",
+    "gameVersion": "0.4.3+",
+    "verification": "IDs marked here are curated; only a subset appears literally in decompiled code (item data lives in Unity asset bundles). 'baggie' confirmed singular in Employee.cs (docs previously said 'baggies').",
+    "updated": "2026-07-05"
+  },
+  "items": {
+    "products": ["ogkush", "sour_diesel", "green_crack", "grandaddy_purple", "cocaine", "meth", "shrooms", "liquid_meth"],
+    "packaging": ["baggie", "jar", "brick"],
+    "seeds": ["weed_seed", "coca_seed", "shroom_spores"],
+    "additives": ["fertilizer_basic", "fertilizer_advanced", "growth_booster"],
+    "tools": ["trimmers", "watering_can", "skateboard"],
+    "weapons": ["baseball_bat", "pistol", "revolver", "shotgun", "rifle", "ak47", "minigun", "m1911", "m1911_gold"],
+    "clothing": ["cap", "beanie", "sunglasses", "shirt", "jacket", "pants", "shoes"],
+    "misc": ["cash"]
+  },
+  "npcs": ["uncle_nelson", "billy", "dan", "jen", "ming", "oscar", "sam", "thomas_benzies", "greg_fliggle", "shirley_watts", "fungal_phil", "salvador"],
+  "npcPatterns": ["dealer_*"],
+  "npcNote": "Customer NPCs are generated at runtime with unique IDs - any NPC key not listed here may still be valid.",
+  "properties": ["bungalow", "manor", "motel_room", "rv", "west_storage", "sewer_office", "sweatshop"],
+  "vehicles": ["shitbox"],
+  "questGuids": ["welcome_to_hyland_point", "getting_started", "we_need_to_cook", "down_to_business", "needing_the_green", "on_the_grind", "gearing_up", "connections", "securing_supplies", "expanding_operations", "warehouse", "grow_shrooms", "moving_up", "employees", "botanists", "chemists", "cleaners", "packagers", "clean_cash", "unfavourable_agreements", "deal_for_cartel", "the_deep_end", "sink_or_swim", "defeat_cartel"],
+  "scenes": ["Main", "Tutorial", "MainMenu", "LoadingScreen"]
+}
