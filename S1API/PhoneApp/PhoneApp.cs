@@ -394,6 +394,8 @@ namespace S1API.PhoneApp
             }
 
             GameObject iconObject = Object.Instantiate(iconPrefab, parent);
+            iconObject.transform.Find("Notifications")?.gameObject.SetActive(false);
+
             Button? button = iconObject.GetComponent<Button>();
             UISelectable? selectable = iconObject.GetComponent<UISelectable>();
             if (button == null || selectable == null)
