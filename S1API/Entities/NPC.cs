@@ -2852,9 +2852,9 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Revives the NPC.
-        /// Note: custom NPC revive currently routes through a temporary NPCHealth patch with a reflective fallback meant
-        /// for pre-network-init safety; live multiplayer calls should eventually stay on the authoritative network path.
+        /// Revives the NPC. For a network-spawned custom NPC, the server uses the native revive method.
+        /// A client call does not alter local state.
+        /// Unspawned custom NPCs use a temporary compatibility fallback until FishNet initializes.
         /// </summary>
         public void Revive() =>
             S1NPC.Health.Revive();
