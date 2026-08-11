@@ -47,6 +47,16 @@ public sealed class NPCDiagnosticCompatibilityTests
     }
 
     [Fact]
+    public void ReviveRetainsItsPublicShape()
+    {
+        MethodInfo? method = typeof(NPC).GetMethod(nameof(NPC.Revive), BindingFlags.Public | BindingFlags.Instance);
+
+        Assert.NotNull(method);
+        Assert.Equal(typeof(void), method.ReturnType);
+        Assert.Empty(method.GetParameters());
+    }
+
+    [Fact]
     public void DealerDefaultsRememberEveryExplicitUnsupportedOption()
     {
         var data = new DealerDataBuilder()

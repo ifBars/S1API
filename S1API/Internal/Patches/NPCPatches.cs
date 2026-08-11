@@ -2061,29 +2061,39 @@ namespace S1API.Internal.Patches
         }
 
         /// <summary>
-        /// Temporary patch while S1API NPCs are not networked
-        /// Guard Revive() for custom S1API NPCs to avoid Health SyncVar access before FishNet init.
-        /// Applies equivalent revive effects without touching the SyncVar setter path.
-        /// TODO: Restrict this reflective fallback to the pre-network-init window only.
-        /// Once a custom NPC is live/networked, revive should stay on the authoritative server/original path instead of
-        /// mutating local health/death state and skipping the replicated revive flow.
+        /// Guard Revive() for custom S1API NPCs before FishNet initialization.
+        /// Applies equivalent revive effects without touching the SyncVar setter path until the NPC is spawned.
         /// </summary>
         [HarmonyPatch(typeof(S1NPCs.NPCHealth), nameof(S1NPCs.NPCHealth.Revive))]
         [HarmonyPrefix]
         private static bool NPCHealth_Revive_Prefix(S1NPCs.NPCHealth __instance)
         {
-            if (!IsInMainScene())
-                return true; // allow original behaviour outside of Main
+            bool isInMainScene = IsInMainScene();
+            if (!isInMainScene)
+                return true;
+
             var baseNpc = __instance.GetComponent<S1NPCs.NPC>();
             var apiNpc = baseNpc != null ? FindWrapperForS1Npc(baseNpc) : null;
             if (apiNpc == null || !apiNpc.IsCustomNPC)
-                return true; // use original for base NPCs
+                return true;
+
+            if (NPCHealthRevivePolicy.ShouldSuppressSpawnedClientRevive(
+                    __instance.IsSpawned,
+                    InstanceFinder.IsServer))
+            {
+                return false;
+            }
+
+            if (!NPCHealthRevivePolicy.ShouldUsePreSpawnFallback(
+                    isInMainScene,
+                    true,
+                    __instance.IsSpawned))
+            {
+                return true;
+            }
 
             try
             {
-                // NOTE: This currently mutates revive state locally and then always skips the original revive call below.
-                // That is only safe before networking is initialized; on live/networked NPCs, client-side calls can revive
-                // only the local wrapper copy while server-side calls bypass the authoritative replicated revive path.
                 bool healthSet = Utils.ReflectionUtils.TrySetFieldOrProperty(
                     __instance, "<Health>k__BackingField", __instance.MaxHealth);
                 bool isDeadSet = Utils.ReflectionUtils.TrySetFieldOrProperty(__instance, "IsDead", false);
@@ -2104,7 +2114,7 @@ namespace S1API.Internal.Patches
                 // Fire revive event so downstream listeners still react
                 __instance.onRevive?.Invoke();
 
-                return false; // skip original to avoid SyncVar/networking calls; revisit for post-init/live NPC revives.
+                return false; // skip original to avoid SyncVar/networking calls before FishNet initialization.
             }
             catch (Exception ex)
             {
