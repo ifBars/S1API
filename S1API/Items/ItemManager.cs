@@ -276,13 +276,7 @@ namespace S1API.Items
                 return false;
             }
 
-            FieldInfo? runtimeItemsField = typeof(S1Registry).GetField("ItemsAddedAtRuntime", BindingFlags.NonPublic | BindingFlags.Instance);
-            if (runtimeItemsField == null)
-            {
-                return false;
-            }
-
-            object? runtimeItems = runtimeItemsField.GetValue(S1Registry.Instance);
+            object? runtimeItems = ReflectionUtils.TryGetFieldOrProperty(S1Registry.Instance, "ItemsAddedAtRuntime");
             if (runtimeItems == null)
             {
                 return false;
@@ -308,12 +302,8 @@ namespace S1API.Items
                     continue;
                 }
 
-                Type registerType = register.GetType();
-                FieldInfo? idField = registerType.GetField("ID", BindingFlags.Public | BindingFlags.Instance);
-                FieldInfo? definitionField = registerType.GetField("Definition", BindingFlags.Public | BindingFlags.Instance);
-
-                string? registeredId = idField?.GetValue(register) as string;
-                object? registeredDefinition = definitionField?.GetValue(register);
+                string? registeredId = ReflectionUtils.TryGetFieldOrProperty(register, "ID") as string;
+                object? registeredDefinition = ReflectionUtils.TryGetFieldOrProperty(register, "Definition");
                 if (!string.Equals(registeredId, itemId, StringComparison.OrdinalIgnoreCase) &&
                     !ReferenceEquals(registeredDefinition, nativeDefinition))
                 {

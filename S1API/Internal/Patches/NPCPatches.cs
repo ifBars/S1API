@@ -1675,58 +1675,31 @@ namespace S1API.Internal.Patches
                 // Ensure internal data structures exist first
                 try
                 {
-                    // Use reflection to access currentAffinityData field/property
-                    PropertyInfo? currentAffinityProp;
-                    FieldInfo? currentAffinityField;
-                    currentAffinityField = customerType.GetField("currentAffinityData",
-                        BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-                    currentAffinityProp = customerType.GetProperty("currentAffinityData",
-                        BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-
-                    S1Economy.CustomerAffinityData? currentAffinity = null;
-                    if (currentAffinityField != null)
-                    {
-                        if (currentAffinityField is FieldInfo field)
-                        {
-                            currentAffinity = field.GetValue(customerComponent) as S1Economy.CustomerAffinityData;
-                        }
-                        else if (currentAffinityProp is PropertyInfo prop)
-                        {
-                            currentAffinity = prop.GetValue(customerComponent) as S1Economy.CustomerAffinityData;
-                        }
-                    }
+                    var currentAffinity = Utils.ReflectionUtils.TryGetFieldOrProperty(
+                        customerComponent,
+                        "currentAffinityData") as S1Economy.CustomerAffinityData;
 
                     if (currentAffinity == null)
                     {
                         currentAffinity = new S1Economy.CustomerAffinityData();
-                        var customerDataProp = customerType.GetProperty("CustomerData",
-                            BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-                        if (customerDataProp != null)
+                        var customerData = Utils.ReflectionUtils.TryGetFieldOrProperty(customerComponent, "CustomerData");
+                        if (customerData != null)
                         {
-                            var customerData = customerDataProp.GetValue(customerComponent);
-                            if (customerData != null)
+                            var defaults = Utils.ReflectionUtils.TryGetFieldOrProperty(
+                                customerData,
+                                "DefaultAffinityData");
+                            if (defaults != null)
                             {
-                                var defaultAffinityProp = customerData.GetType().GetProperty("DefaultAffinityData",
-                                    BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-                                var defaults = defaultAffinityProp?.GetValue(customerData);
-                                if (defaults != null)
-                                {
-                                    var copyToMethod = defaults.GetType().GetMethod("CopyTo",
-                                        BindingFlags.Public | BindingFlags.Instance);
-                                    copyToMethod?.Invoke(defaults, new object[] { currentAffinity });
-                                }
+                                var copyToMethod = defaults.GetType().GetMethod("CopyTo",
+                                    BindingFlags.Public | BindingFlags.Instance);
+                                copyToMethod?.Invoke(defaults, new object[] { currentAffinity });
                             }
                         }
 
-                        // Set the new currentAffinityData back
-                        if (currentAffinityField is FieldInfo setField)
-                        {
-                            setField.SetValue(customerComponent, currentAffinity);
-                        }
-                        else if (currentAffinityProp is PropertyInfo setProp && setProp.CanWrite)
-                        {
-                            setProp.SetValue(customerComponent, currentAffinity);
-                        }
+                        Utils.ReflectionUtils.TrySetFieldOrProperty(
+                            customerComponent,
+                            "currentAffinityData",
+                            currentAffinity);
                     }
 
                     if (cust.ProductAffinities != null && currentAffinity != null)

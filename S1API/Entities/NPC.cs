@@ -4784,17 +4784,9 @@ namespace S1API.Entities
                 // Best-effort wire internal references so actions have context even while inactive
                 try
                 {
-#if MONOMELON
-                    var npcField = t.GetField("npc", BindingFlags.NonPublic | BindingFlags.Instance);
-                    var schedField = t.GetField("schedule", BindingFlags.NonPublic | BindingFlags.Instance);
-#else
-                    var npcField = t.GetField("npc", Il2CppSystem.Reflection.BindingFlags.NonPublic | Il2CppSystem.Reflection.BindingFlags.Public | Il2CppSystem.Reflection.BindingFlags.Instance);
-                    var schedField = t.GetField("schedule", Il2CppSystem.Reflection.BindingFlags.NonPublic | Il2CppSystem.Reflection.BindingFlags.Public | Il2CppSystem.Reflection.BindingFlags.Instance);
-#endif
                     var baseNpc = prefabRoot.GetComponent<S1NPCs.NPC>();
-                    
-                    npcField?.SetValue(comp, baseNpc);
-                    schedField?.SetValue(comp, existingMgr);
+                    Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(comp, "npc", baseNpc);
+                    Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(comp, "schedule", existingMgr);
                 }
                 catch { }
                 go.SetActive(false);

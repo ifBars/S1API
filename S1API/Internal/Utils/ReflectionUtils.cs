@@ -11,6 +11,16 @@ namespace S1API.Internal.Utils
     /// </summary>
     internal static class ReflectionUtils
     {
+        private const BindingFlags InstanceMemberFlags = BindingFlags.Public
+            | BindingFlags.NonPublic
+            | BindingFlags.Instance
+            | BindingFlags.DeclaredOnly;
+
+        private const BindingFlags StaticMemberFlags = BindingFlags.Public
+            | BindingFlags.NonPublic
+            | BindingFlags.Static
+            | BindingFlags.DeclaredOnly;
+
         /// <summary>
         /// Identifies all classes derived from another class.
         /// </summary>
@@ -283,7 +293,7 @@ namespace S1API.Internal.Utils
                 return false;
 
             var type = target.GetType();
-            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            const BindingFlags flags = InstanceMemberFlags;
             
             // Try field first
             var fi = GetField(type, memberName, flags);
@@ -321,13 +331,7 @@ namespace S1API.Internal.Utils
                 }
             }
 
-            string[] backingFieldNames =
-            {
-                $"<{memberName}>k__BackingField",
-                $"_{memberName}_k__BackingField"
-            };
-
-            foreach (string backingFieldName in backingFieldNames)
+            foreach (string backingFieldName in GetBackingFieldNames(memberName))
             {
                 var backingField = GetField(type, backingFieldName, flags);
                 if (backingField == null)
@@ -360,7 +364,7 @@ namespace S1API.Internal.Utils
         internal static object? TryGetFieldOrProperty(object target, string memberName)
         {
             var type = target.GetType();
-            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            const BindingFlags flags = InstanceMemberFlags;
             
             // Try field first
             var fi = GetField(type, memberName, flags);
@@ -390,13 +394,7 @@ namespace S1API.Internal.Utils
                 }
             }
 
-            string[] backingFieldNames =
-            {
-                $"<{memberName}>k__BackingField",
-                $"_{memberName}_k__BackingField"
-            };
-
-            foreach (string backingFieldName in backingFieldNames)
+            foreach (string backingFieldName in GetBackingFieldNames(memberName))
             {
                 var backingField = GetField(type, backingFieldName, flags);
                 if (backingField == null)
@@ -453,10 +451,10 @@ namespace S1API.Internal.Utils
         /// <returns>The value of the member, or <c>null</c> if not found or inaccessible.</returns>
         internal static object? TryGetStaticFieldOrProperty(Type type, string memberName)
         {
-            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+            const BindingFlags flags = StaticMemberFlags;
             
             // Try field first
-            var fi = type.GetField(memberName, flags);
+            var fi = GetField(type, memberName, flags);
             if (fi != null)
             {
                 try
@@ -470,15 +468,33 @@ namespace S1API.Internal.Utils
             }
             
             // Try property
-            var pi = type.GetProperty(memberName, flags);
-            if (pi == null || !pi.CanRead) return null;
-            try
+            var pi = GetProperty(type, memberName, flags);
+            if (pi != null && pi.CanRead)
             {
-                return pi.GetValue(null);
+                try
+                {
+                    return pi.GetValue(null);
+                }
+                catch
+                {
+                    // ignored
+                }
             }
-            catch
+
+            foreach (string backingFieldName in GetBackingFieldNames(memberName))
             {
-                // ignored
+                var backingField = GetField(type, backingFieldName, flags);
+                if (backingField == null)
+                    continue;
+
+                try
+                {
+                    return backingField.GetValue(null);
+                }
+                catch
+                {
+                    // ignored
+                }
             }
 
             return null;
@@ -494,10 +510,10 @@ namespace S1API.Internal.Utils
         /// <param name="value">The value to set.</param>
         internal static void TrySetStaticFieldOrProperty(Type type, string memberName, object? value)
         {
-            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+            const BindingFlags flags = StaticMemberFlags;
             
             // Try field first
-            var fi = type.GetField(memberName, flags);
+            var fi = GetField(type, memberName, flags);
             if (fi != null)
             {
                 try
@@ -515,20 +531,49 @@ namespace S1API.Internal.Utils
             }
             
             // Try property
-            var pi = type.GetProperty(memberName, flags);
-            if (pi == null || !pi.CanWrite) return;
-            try
+            var pi = GetProperty(type, memberName, flags);
+            if (pi != null && pi.CanWrite)
             {
-                if (CanAssignValue(pi.PropertyType, value))
+                try
                 {
-                    pi.SetValue(null, value);
+                    if (CanAssignValue(pi.PropertyType, value))
+                    {
+                        pi.SetValue(null, value);
+                        return;
+                    }
+                }
+                catch
+                {
+                    // ignored
                 }
             }
-            catch
+
+            foreach (string backingFieldName in GetBackingFieldNames(memberName))
             {
-                // ignored
+                var backingField = GetField(type, backingFieldName, flags);
+                if (backingField == null)
+                    continue;
+
+                try
+                {
+                    if (CanAssignValue(backingField.FieldType, value))
+                    {
+                        backingField.SetValue(null, value);
+                        return;
+                    }
+                }
+                catch
+                {
+                    // ignored
+                }
             }
         }
+
+        private static string[] GetBackingFieldNames(string memberName) =>
+        [
+            $"<{memberName}>k__BackingField",
+            $"_{memberName}_k__BackingField"
+        ];
 
         private static bool CanAssignValue(Type memberType, object? value)
         {

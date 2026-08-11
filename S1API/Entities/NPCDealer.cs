@@ -10,6 +10,7 @@ using S1Messaging = Il2CppScheduleOne.Messaging;
 using S1DevUtilities = Il2CppScheduleOne.DevUtilities;
 using S1UIPhoneMessages = Il2CppScheduleOne.UI.Phone.Messages;
 using S1Money = Il2CppScheduleOne.Money;
+using NativeDealerRecruitedAction = Il2CppSystem.Action<Il2CppScheduleOne.Economy.Dealer>;
 #elif MONOMELON
 using S1Quests = ScheduleOne.Quests;
 using S1NPCs = ScheduleOne.NPCs;
@@ -21,6 +22,7 @@ using S1Messaging = ScheduleOne.Messaging;
 using S1DevUtilities = ScheduleOne.DevUtilities;
 using S1UIPhoneMessages = ScheduleOne.UI.Phone.Messages;
 using S1Money = ScheduleOne.Money;
+using NativeDealerRecruitedAction = System.Action<ScheduleOne.Economy.Dealer>;
 #endif
 
 using System;
@@ -33,6 +35,7 @@ using UnityEngine.UI;
 using MelonLoader;
 using S1API.Economy;
 using S1API.Internal.Abstraction;
+using S1API.Internal.Utils;
 using S1API.Map;
 #if (IL2CPPMELON)
 using Il2CppFishNet;
@@ -62,9 +65,7 @@ namespace S1API.Entities
     {
         internal readonly NPC NPC;
         private static readonly Logging.Log Logger = new Logging.Log("NPCDealer");
-        private static readonly FieldInfo? DealerRecruitedField = typeof(S1Economy.Dealer).GetField("onDealerRecruited", BindingFlags.Public | BindingFlags.Static);
-
-        private readonly Dictionary<Action, Action<S1Economy.Dealer>> _dealerRecruitedHandlers = new Dictionary<Action, Action<S1Economy.Dealer>>();
+        private readonly ManagedEventRegistrationTracker<NativeDealerRecruitedAction> _dealerRecruitedHandlers = new ManagedEventRegistrationTracker<NativeDealerRecruitedAction>();
         private Action? _contractAcceptedHandlers;
         private bool _contractAcceptedHooked;
 
@@ -82,8 +83,10 @@ namespace S1API.Entities
         {
             try
             {
-                if (DealerRecruitedField != null)
-                    DealerRecruitedField.SetValue(null, null);
+                Internal.Utils.ReflectionUtils.TrySetStaticFieldOrProperty(
+                    typeof(S1Economy.Dealer),
+                    "onDealerRecruited",
+                    null);
             }
             catch { }
         }
@@ -161,18 +164,11 @@ namespace S1API.Entities
                 var convo = convoObj as S1Messaging.MSGConversation;
                 if (convo == null) return;
 
-                // Check if UI already exists (uiCreated field)
-                var uiCreatedField = typeof(S1Messaging.MSGConversation).GetField("uiCreated", 
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (uiCreatedField != null)
+                // Check if UI already exists (field on Mono, property on IL2CPP)
+                if (Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(convo, "uiCreated") is bool created && created)
                 {
-                    var uiCreated = uiCreatedField.GetValue(convo);
-                    
-                    if (uiCreated != null && uiCreated is bool created && created)
-                    {
-                        // UI already exists, refresh immediately
-                        RefreshDealerCategoryBadge();
-                    }
+                    // UI already exists, refresh immediately
+                    RefreshDealerCategoryBadge();
                 }
 
                 // Hook onLoaded (called after UI is loaded from save)
@@ -720,31 +716,26 @@ namespace S1API.Entities
                     }
                 }
 #else
-                // In IL2CPP, overflow slots are private fields - try to initialize via reflection
-                var overflowSlotsField = typeof(S1Economy.Dealer).GetField("overflowSlots", BindingFlags.NonPublic | BindingFlags.Instance);
-                if (overflowSlotsField != null)
+                var overflowSlots = dealer.overflowSlots;
+                if (overflowSlots == null || overflowSlots.Length == 0)
                 {
-                    var overflowSlots = overflowSlotsField.GetValue(dealer) as S1Items.ItemSlot[];
-                    if (overflowSlots == null || overflowSlots.Length == 0)
+                    overflowSlots = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<S1Items.ItemSlot>(10);
+                    for (int i = 0; i < 10; i++)
                     {
-                        overflowSlots = new S1Items.ItemSlot[10];
-                        for (int i = 0; i < 10; i++)
-                        {
-                            overflowSlots[i] = new S1Items.ItemSlot();
-                            // In IL2CPP, cast Dealer to IItemSlotOwner interface
-                            overflowSlots[i].SetSlotOwner(dealer.Cast<S1Items.IItemSlotOwner>());
-                        }
-                        overflowSlotsField.SetValue(dealer, overflowSlots);
+                        overflowSlots[i] = new S1Items.ItemSlot();
+                        overflowSlots[i].SetSlotOwner(dealer.Cast<S1Items.IItemSlotOwner>());
                     }
+                    dealer.overflowSlots = overflowSlots;
                 }
 #endif
 
                 // Ensure DealerAttendDealBehaviour exists (replaced NPCSignal_HandleDeal in v0.4.2f4)
                 try
                 {
-                    var attendDealField = typeof(S1Economy.Dealer).GetField("_attendDealBehaviour", BindingFlags.NonPublic | BindingFlags.Instance);
-                    var existingBehaviour = attendDealField?.GetValue(dealer) as S1NPCsBehaviour.DealerAttendDealBehaviour;
-                    if (existingBehaviour == null)
+                    var behaviour = Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(
+                        dealer,
+                        "_attendDealBehaviour") as S1NPCsBehaviour.DealerAttendDealBehaviour;
+                    if (behaviour == null)
                     {
                         // Get or create NPCBehaviour manager
                         var npcBehaviour = NPC.gameObject.GetComponentInChildren<S1NPCsBehaviour.NPCBehaviour>(true);
@@ -755,23 +746,24 @@ namespace S1API.Entities
                             npcBehaviour = behGo.AddComponent<S1NPCsBehaviour.NPCBehaviour>();
                         }
 
-                        var behaviour = NPC.gameObject.GetComponentInChildren<S1NPCsBehaviour.DealerAttendDealBehaviour>(true);
+                        behaviour = NPC.gameObject.GetComponentInChildren<S1NPCsBehaviour.DealerAttendDealBehaviour>(true);
                         if (behaviour == null)
                         {
                             var go = new GameObject("DealerAttendDealBehaviour");
+                            go.SetActive(false);
                             go.transform.SetParent(npcBehaviour.transform, false);
                             behaviour = go.AddComponent<S1NPCsBehaviour.DealerAttendDealBehaviour>();
-                            go.SetActive(false);
                         }
-                        behaviour.Name = "Attend deal";
-                        behaviour.Priority = NPCPrefabBuilder.DealerAttendDealPriority;
-                        attendDealField?.SetValue(dealer, behaviour);
+                        Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(behaviour, "beh", npcBehaviour);
+                        Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(npcBehaviour, "Npc", dealer);
+                        Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(
+                            dealer,
+                            "_attendDealBehaviour",
+                            behaviour);
                     }
-                    else
-                    {
-                        existingBehaviour.Name = "Attend deal";
-                        existingBehaviour.Priority = NPCPrefabBuilder.DealerAttendDealPriority;
-                    }
+                    behaviour.gameObject.SetActive(NPCPrefabBuilder.BehaviourObjectsRemainActive);
+                    behaviour.Name = "Attend deal";
+                    behaviour.Priority = NPCPrefabBuilder.DealerAttendDealPriority;
                 }
                 catch { /* ignore */ }
 
@@ -855,13 +847,11 @@ namespace S1API.Entities
             add
             {
                 EnsureDealer();
-                if (Component == null || value == null || DealerRecruitedField == null) return;
-                if (_dealerRecruitedHandlers.ContainsKey(value))
-                    return;
+                if (Component == null || value == null) return;
 
                 try
                 {
-                    Action<S1Economy.Dealer> wrapper = dealer =>
+                    Action<S1Economy.Dealer> managedWrapper = dealer =>
                     {
                         if (dealer != Component)
                             return;
@@ -869,12 +859,28 @@ namespace S1API.Entities
                         catch (Exception ex) { Logger.Warning($"Exception in OnRecruited handler for {NPC.ID}: {ex.Message}"); }
                     };
 
-                    var existingValue = DealerRecruitedField.GetValue(null) as Action<S1Economy.Dealer>;
+#if IL2CPPMELON
+                    var wrapper = DelegateSupport.ConvertDelegate<NativeDealerRecruitedAction>(managedWrapper)
+                        ?? throw new InvalidOperationException("Failed to create IL2CPP dealer recruitment delegate.");
+                    var existingValue = S1Economy.Dealer.onDealerRecruited;
                     var combined = existingValue != null
-                        ? (Action<S1Economy.Dealer>)Delegate.Combine(existingValue, wrapper)
+                        ? Il2CppSystem.Delegate.Combine(existingValue, wrapper).Cast<NativeDealerRecruitedAction>()
                         : wrapper;
-                    DealerRecruitedField.SetValue(null, combined);
-                    _dealerRecruitedHandlers[value] = wrapper;
+                    S1Economy.Dealer.onDealerRecruited = combined;
+#else
+                    NativeDealerRecruitedAction wrapper = managedWrapper;
+                    var existingValue = Internal.Utils.ReflectionUtils.TryGetStaticFieldOrProperty(
+                        typeof(S1Economy.Dealer),
+                        "onDealerRecruited") as NativeDealerRecruitedAction;
+                    var combined = existingValue != null
+                        ? (NativeDealerRecruitedAction)Delegate.Combine(existingValue, wrapper)
+                        : wrapper;
+                    Internal.Utils.ReflectionUtils.TrySetStaticFieldOrProperty(
+                        typeof(S1Economy.Dealer),
+                        "onDealerRecruited",
+                        combined);
+#endif
+                    _dealerRecruitedHandlers.Add(value, wrapper);
                 }
                 catch (Exception ex)
                 {
@@ -883,21 +889,33 @@ namespace S1API.Entities
             }
             remove
             {
-                if (value == null || DealerRecruitedField == null)
+                if (value == null)
                     return;
 
-                if (!_dealerRecruitedHandlers.TryGetValue(value, out var wrapper))
+                if (!_dealerRecruitedHandlers.TryTakeLast(value, out var wrapper))
                     return;
-
-                _dealerRecruitedHandlers.Remove(value);
                 try
                 {
-                    var existingValue = DealerRecruitedField.GetValue(null) as Action<S1Economy.Dealer>;
+#if IL2CPPMELON
+                    var existingValue = S1Economy.Dealer.onDealerRecruited;
                     if (existingValue == null)
                         return;
 
-                    var remaining = (Action<S1Economy.Dealer>?)Delegate.Remove(existingValue, wrapper);
-                    DealerRecruitedField.SetValue(null, remaining);
+                    var remaining = Il2CppSystem.Delegate.Remove(existingValue, wrapper);
+                    S1Economy.Dealer.onDealerRecruited = remaining?.Cast<NativeDealerRecruitedAction>();
+#else
+                    var existingValue = Internal.Utils.ReflectionUtils.TryGetStaticFieldOrProperty(
+                        typeof(S1Economy.Dealer),
+                        "onDealerRecruited") as NativeDealerRecruitedAction;
+                    if (existingValue == null)
+                        return;
+
+                    var remaining = (NativeDealerRecruitedAction?)Delegate.Remove(existingValue, wrapper);
+                    Internal.Utils.ReflectionUtils.TrySetStaticFieldOrProperty(
+                        typeof(S1Economy.Dealer),
+                        "onDealerRecruited",
+                        remaining);
+#endif
                 }
                 catch (Exception ex)
                 {
@@ -1058,19 +1076,8 @@ namespace S1API.Entities
 
         private static void SetNonPublicInstanceField(object target, string fieldName, object value)
         {
-            try
-            {
-                if (target == null || string.IsNullOrEmpty(fieldName)) return;
-                var type = target.GetType();
-                FieldInfo? field = null;
-                while (type != null && field == null)
-                {
-                    field = type.GetField(fieldName, BindingFlags.Instance | System.Reflection.BindingFlags.Public | BindingFlags.NonPublic);
-                    type = type.BaseType;
-                }
-                field?.SetValue(target, value);
-            }
-            catch (Exception) { }
+            if (target == null || string.IsNullOrEmpty(fieldName)) return;
+            Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(target, fieldName, value);
         }
     }
 }

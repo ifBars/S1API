@@ -611,6 +611,7 @@ namespace S1API.Entities
                 component = behaviourObject.AddComponent<S1NPCs.Behaviour.CustomerAttendDealBehaviour>();
             }
 
+            component.gameObject.SetActive(NPCPrefabBuilder.BehaviourObjectsRemainActive);
             component.EnabledOnAwake = false;
             component.Name = "Customer attend deal";
             component.Priority = 4;
@@ -770,8 +771,7 @@ namespace S1API.Entities
 
             try
             {
-                var onContractAssignedField = typeof(S1Economy.Customer).GetField("onContractAssigned", BindingFlags.Public | BindingFlags.Instance);
-                var evt = onContractAssignedField?.GetValue(Component);
+                var evt = Utils.ReflectionUtils.TryGetFieldOrProperty(Component, "onContractAssigned");
                 if (evt == null)
                     return false;
 
@@ -834,36 +834,35 @@ namespace S1API.Entities
                 int winStart = 0;
                 int winEnd = 0;
 
-                var contractType = contract.GetType();
-                var paymentProp = contractType.GetProperty("Payment", BindingFlags.Public | BindingFlags.Instance);
-                if (paymentProp != null)
-                    payment = Convert.ToSingle(paymentProp.GetValue(contract));
+                var paymentValue = Utils.ReflectionUtils.TryGetFieldOrProperty(contract, "Payment");
+                if (paymentValue != null)
+                    payment = Convert.ToSingle(paymentValue);
 
-                var productListProp = contractType.GetProperty("ProductList", BindingFlags.Public | BindingFlags.Instance);
-                var productList = productListProp?.GetValue(contract);
+                var productList = Utils.ReflectionUtils.TryGetFieldOrProperty(contract, "ProductList");
                 if (productList != null)
                 {
-                    var entriesField = productList.GetType().GetField("entries", BindingFlags.Public | BindingFlags.Instance);
-                    var entries = entriesField?.GetValue(productList) as System.Collections.IEnumerable;
+                    var entries = Utils.ReflectionUtils.TryGetFieldOrProperty(productList, "entries") as System.Collections.IEnumerable;
                     if (entries != null)
                     {
                         foreach (var e in entries)
                         {
-                            var qtyField = e.GetType().GetField("Quantity", BindingFlags.Public | BindingFlags.Instance);
-                            if (qtyField != null)
-                                totalQty += Convert.ToInt32(qtyField.GetValue(e));
+                            if (e != null)
+                            {
+                                var quantity = Utils.ReflectionUtils.TryGetFieldOrProperty(e, "Quantity");
+                                if (quantity != null)
+                                    totalQty += Convert.ToInt32(quantity);
+                            }
                         }
                     }
                 }
 
-                var windowProp = contractType.GetProperty("DeliveryWindow", BindingFlags.Public | BindingFlags.Instance);
-                var window = windowProp?.GetValue(contract);
+                var window = Utils.ReflectionUtils.TryGetFieldOrProperty(contract, "DeliveryWindow");
                 if (window != null)
                 {
-                    var startField = window.GetType().GetField("WindowStartTime", BindingFlags.Public | BindingFlags.Instance);
-                    var endField = window.GetType().GetField("WindowEndTime", BindingFlags.Public | BindingFlags.Instance);
-                    if (startField != null) winStart = Convert.ToInt32(startField.GetValue(window));
-                    if (endField != null) winEnd = Convert.ToInt32(endField.GetValue(window));
+                    var start = Utils.ReflectionUtils.TryGetFieldOrProperty(window, "WindowStartTime");
+                    var end = Utils.ReflectionUtils.TryGetFieldOrProperty(window, "WindowEndTime");
+                    if (start != null) winStart = Convert.ToInt32(start);
+                    if (end != null) winEnd = Convert.ToInt32(end);
                 }
 
                 foreach (Action<float, int, int, int> handler in handlers.GetInvocationList())
@@ -1113,19 +1112,8 @@ namespace S1API.Entities
 
         private static void SetNonPublicInstanceField(object target, string fieldName, object? value)
         {
-            try
-            {
-                if (target == null || string.IsNullOrEmpty(fieldName)) return;
-                var type = target.GetType();
-                FieldInfo? field = null;
-                while (type != null && field == null)
-                {
-                    field = type.GetField(fieldName, BindingFlags.Instance | System.Reflection.BindingFlags.Public | BindingFlags.NonPublic);
-                    type = type.BaseType;
-                }
-                field?.SetValue(target, value);
-            }
-            catch (Exception) { }
+            if (target == null || string.IsNullOrEmpty(fieldName)) return;
+            Utils.ReflectionUtils.TrySetFieldOrProperty(target, fieldName, value);
         }
     }
 }
