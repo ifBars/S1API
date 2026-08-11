@@ -35,6 +35,7 @@ using UnityEngine.UI;
 using MelonLoader;
 using S1API.Economy;
 using S1API.Internal.Abstraction;
+using S1API.Internal.Utils;
 using S1API.Map;
 #if (IL2CPPMELON)
 using Il2CppFishNet;
@@ -64,7 +65,7 @@ namespace S1API.Entities
     {
         internal readonly NPC NPC;
         private static readonly Logging.Log Logger = new Logging.Log("NPCDealer");
-        private readonly Dictionary<Action, NativeDealerRecruitedAction> _dealerRecruitedHandlers = new Dictionary<Action, NativeDealerRecruitedAction>();
+        private readonly ManagedEventRegistrationTracker<NativeDealerRecruitedAction> _dealerRecruitedHandlers = new ManagedEventRegistrationTracker<NativeDealerRecruitedAction>();
         private Action? _contractAcceptedHandlers;
         private bool _contractAcceptedHooked;
 
@@ -749,9 +750,12 @@ namespace S1API.Entities
                         if (behaviour == null)
                         {
                             var go = new GameObject("DealerAttendDealBehaviour");
+                            go.SetActive(false);
                             go.transform.SetParent(npcBehaviour.transform, false);
                             behaviour = go.AddComponent<S1NPCsBehaviour.DealerAttendDealBehaviour>();
                         }
+                        Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(behaviour, "beh", npcBehaviour);
+                        Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(npcBehaviour, "Npc", dealer);
                         Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(
                             dealer,
                             "_attendDealBehaviour",
@@ -844,8 +848,6 @@ namespace S1API.Entities
             {
                 EnsureDealer();
                 if (Component == null || value == null) return;
-                if (_dealerRecruitedHandlers.ContainsKey(value))
-                    return;
 
                 try
                 {
@@ -878,7 +880,7 @@ namespace S1API.Entities
                         "onDealerRecruited",
                         combined);
 #endif
-                    _dealerRecruitedHandlers[value] = wrapper;
+                    _dealerRecruitedHandlers.Add(value, wrapper);
                 }
                 catch (Exception ex)
                 {
@@ -890,10 +892,8 @@ namespace S1API.Entities
                 if (value == null)
                     return;
 
-                if (!_dealerRecruitedHandlers.TryGetValue(value, out var wrapper))
+                if (!_dealerRecruitedHandlers.TryTakeLast(value, out var wrapper))
                     return;
-
-                _dealerRecruitedHandlers.Remove(value);
                 try
                 {
 #if IL2CPPMELON
