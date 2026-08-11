@@ -67,10 +67,6 @@ namespace S1API.Internal.Patches
     {
         private static readonly Logging.Log Logger = new Logging.Log("NPCPatches");
         private static readonly HashSet<string> _loadingDealers = new HashSet<string>();
-        private static readonly FieldInfo? ScheduleActionNpcField =
-            AccessTools.Field(typeof(S1NPCsSchedules.NPCAction), "npc");
-        private static readonly PropertyInfo? ScheduleActionNpcProperty =
-            AccessTools.Property(typeof(S1NPCsSchedules.NPCAction), "npc");
         public static bool CustomNpcsReady = false;
         // Pending custom NPC types to instantiate when using consolidated NPCs.json saves (non-physical/custom contacts).
         private static readonly System.Collections.Generic.List<Type> _pendingCustomNpcTypes = new System.Collections.Generic.List<Type>();
@@ -316,8 +312,7 @@ namespace S1API.Internal.Patches
 
         internal static S1NPCs.NPC? GetScheduleActionNpc(S1NPCsSchedules.NPCAction action)
         {
-            return ScheduleActionNpcField?.GetValue(action) as S1NPCs.NPC
-                ?? ScheduleActionNpcProperty?.GetValue(action) as S1NPCs.NPC;
+            return ReflectionUtils.TryGetFieldOrProperty(action, "npc") as S1NPCs.NPC;
         }
 
         [HarmonyPatch]
