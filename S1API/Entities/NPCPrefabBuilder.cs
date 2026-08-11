@@ -1227,10 +1227,8 @@ namespace S1API.Entities
                 try
                 {
                     var baseNpc = prefabRoot.GetComponent<S1NPCs.NPC>();
-                    var npcField = typeof(T).GetField("npc", BindingFlags.NonPublic | BindingFlags.Instance);
-                    npcField?.SetValue(comp, baseNpc);
-                    var schedField = typeof(T).GetField("schedule", BindingFlags.NonPublic | BindingFlags.Instance);
-                    schedField?.SetValue(comp, mgr);
+                    Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(comp, "npc", baseNpc);
+                    Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(comp, "schedule", mgr);
                 }
                 catch (Exception ex)
                 {

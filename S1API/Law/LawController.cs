@@ -57,19 +57,10 @@ namespace S1API.Law
             get
             {
                 if (Internal == null) return 0f;
-#if (IL2CPPMELON)
-                // Access via reflection as it's a private field in IL2CPP
-                return 0f; // Safe fallback - modders should use Intensity property instead
-#else
-                // In Mono we can access the field directly through reflection if needed
-                var fieldInfo = typeof(S1Law.LawController).GetField("internalLawIntensity",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (fieldInfo != null)
-                {
-                    return (float)fieldInfo.GetValue(Internal);
-                }
-                return 0f;
-#endif
+                object? value = global::S1API.Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(
+                    Internal,
+                    "internalLawIntensity");
+                return value == null ? 0f : System.Convert.ToSingle(value);
             }
         }
 

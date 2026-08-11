@@ -13,6 +13,7 @@ using Guid = System.Guid;
 using System;
 using System.Reflection;
 using UnityEngine;
+using S1API.Internal.Utils;
 using S1API.Logging;
 using S1API.Storages;
 
@@ -55,7 +56,7 @@ namespace S1API.Vehicles
         public float VehiclePrice
         {
             get => S1LandVehicle.VehiclePrice;
-            set => VehiclePriceField?.SetValue(S1LandVehicle, value);
+            set => ReflectionUtils.TrySetFieldOrProperty(S1LandVehicle, "vehiclePrice", value);
         }
 
         /// <summary>
@@ -251,12 +252,6 @@ namespace S1API.Vehicles
         /// Logger for the LandVehicle class.
         /// </summary>
         private static readonly Log _logger = new Log("S1API.LandVehicle");
-
-        /// <summary>
-        /// The stored reference to protected vehiclePrice field in the land vehicle in-game.
-        /// </summary>
-        private static readonly FieldInfo? VehiclePriceField =
-            typeof(S1Vehicles.LandVehicle).GetField("vehiclePrice", BindingFlags.NonPublic);
 
         /// <summary>
         /// Connection to the player that owns the vehicle.

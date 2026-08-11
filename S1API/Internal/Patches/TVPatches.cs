@@ -256,14 +256,8 @@ namespace S1API.Internal.Patches
             if (!SkipInterfaceClose)
                 return;
 
-            // Set skipExit via reflection. If this fails on IL2CPP,
-            // TVInterface_Close_Patch will catch and skip Interface.Close()
-            var field = typeof(TVHomeScreen).GetField("skipExit",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-            if (field != null)
+            if (ReflectionUtils.TrySetFieldOrProperty(__instance, "skipExit", true))
             {
-                field.SetValue(__instance, true);
                 SkipInterfaceClose = false;
             }
         }
