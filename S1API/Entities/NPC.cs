@@ -2624,19 +2624,6 @@ namespace S1API.Entities
             }
         }
 
-        private static bool SafeIsServer()
-        {
-            try
-            {
-                var nm = InstanceFinder.NetworkManager;
-                return nm != null && nm.IsServer;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
         private static object? GetGameMember(object? target, string memberName)
         {
             return target == null
@@ -2907,19 +2894,10 @@ namespace S1API.Entities
             S1NPC.SetScale(scale, lerpTime);
 
         /// <summary>
-        /// Causes the NPC to become panicked.
-        /// Currently host/server-only: non-host clients hit the SafeIsServer guard below and this becomes a silent no-op,
-        /// which is inconsistent with other server-RPC-style wrappers in the API and with the runtime docs.
+        /// Requests that the NPC become panicked.
         /// </summary>
-        public void Panic()
-        {
-            // TODO: Revisit this guard. Unlike wrappers such as Cartel.SetStatus and CombatBehaviour.SetAndAttackTarget,
-            // Panic() can no longer be invoked meaningfully from multiplayer clients because non-host callers return here.
-            if (!SafeIsServer())
-                return;
-
+        public void Panic() =>
             S1NPC.SetPanicked_Server();
-        }
 
         /// <summary>
         /// Causes the NPC to stop panicking, if they are currently.
