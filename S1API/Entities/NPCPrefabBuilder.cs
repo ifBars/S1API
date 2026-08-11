@@ -60,6 +60,7 @@ namespace S1API.Entities
 
         internal const int DealerAttendDealPriority = 5;
         internal const string DealerHomeEventName = "DealerHomeEvent";
+        internal const bool BehaviourObjectsRemainActive = true;
 
         internal static bool IsDealerHomeEventName(string? name) =>
             string.Equals(name, DealerHomeEventName, StringComparison.OrdinalIgnoreCase)
@@ -367,8 +368,8 @@ namespace S1API.Entities
                 var go = new GameObject("DealerAttendDealBehaviour");
                 go.transform.SetParent(npcBehaviour.transform, false);
                 attendDeal = go.AddComponent<S1NPCsBehaviour.DealerAttendDealBehaviour>();
-                go.SetActive(false);
             }
+            attendDeal.gameObject.SetActive(BehaviourObjectsRemainActive);
             var baseNpcForDealer = prefabRoot.GetComponent<S1NPCs.NPC>();
             SetBehaviourRefs(attendDeal, npcBehaviour, baseNpcForDealer);
             attendDeal.Name = "Attend deal";
@@ -688,8 +689,8 @@ namespace S1API.Entities
                     var go = new GameObject("SmokeBreakBehaviour");
                     go.transform.SetParent(npcBehaviour.gameObject.transform, false);
                     smokeBreak = go.AddComponent<S1NPCsBehaviour.SmokeBreakBehaviour>();
-                    go.SetActive(false);
                 }
+                smokeBreak.gameObject.SetActive(BehaviourObjectsRemainActive);
                 smokeBreak.Name = "SmokeBreakBehaviour";
 
                 var smokeCigarette = smokeBreak.GetComponentInChildren<S1NPCsOther.SmokeCigarette>(true);
@@ -901,8 +902,8 @@ namespace S1API.Entities
                     var go = new GameObject("GraffitiBehaviour");
                     go.transform.SetParent(npcBehaviour.gameObject.transform, false);
                     graffiti = go.AddComponent<S1NPCsBehaviour.GraffitiBehaviour>();
-                    go.SetActive(false);
                 }
+                graffiti.gameObject.SetActive(BehaviourObjectsRemainActive);
                 graffiti.Name = "GraffitiBehaviour";
 
                 var sprayPaint = graffiti.GetComponentInChildren<S1NPCsOther.SprayPaint>(true);
@@ -1259,6 +1260,7 @@ namespace S1API.Entities
                 component = behaviourObject.AddComponent<S1NPCsBehaviour.CustomerAttendDealBehaviour>();
             }
 
+            component.gameObject.SetActive(BehaviourObjectsRemainActive);
             ReflectionUtils.TrySetFieldOrProperty(component, "EnabledOnAwake", false);
             ReflectionUtils.TrySetFieldOrProperty(component, "Name", "Customer attend deal");
             ReflectionUtils.TrySetFieldOrProperty(component, "Priority", 4);

@@ -611,6 +611,7 @@ namespace S1API.Entities
                 component = behaviourObject.AddComponent<S1NPCs.Behaviour.CustomerAttendDealBehaviour>();
             }
 
+            component.gameObject.SetActive(NPCPrefabBuilder.BehaviourObjectsRemainActive);
             component.EnabledOnAwake = false;
             component.Name = "Customer attend deal";
             component.Priority = 4;

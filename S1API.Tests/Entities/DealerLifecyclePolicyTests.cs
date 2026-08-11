@@ -39,6 +39,12 @@ public sealed class DealerLifecyclePolicyTests
         Assert.Equal(5, NPCPrefabBuilder.DealerAttendDealPriority);
     }
 
+    [Fact]
+    public void BehaviourStackObjectsRemainActiveWhileTheirInternalStateIsManaged()
+    {
+        Assert.True(NPCPrefabBuilder.BehaviourObjectsRemainActive);
+    }
+
     [Theory]
     [InlineData("DealerHomeEvent", true)]
     [InlineData("HomeEvent", true)]

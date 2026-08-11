@@ -743,8 +743,8 @@ namespace S1API.Entities
                 try
                 {
                     var attendDealField = typeof(S1Economy.Dealer).GetField("_attendDealBehaviour", BindingFlags.NonPublic | BindingFlags.Instance);
-                    var existingBehaviour = attendDealField?.GetValue(dealer) as S1NPCsBehaviour.DealerAttendDealBehaviour;
-                    if (existingBehaviour == null)
+                    var behaviour = attendDealField?.GetValue(dealer) as S1NPCsBehaviour.DealerAttendDealBehaviour;
+                    if (behaviour == null)
                     {
                         // Get or create NPCBehaviour manager
                         var npcBehaviour = NPC.gameObject.GetComponentInChildren<S1NPCsBehaviour.NPCBehaviour>(true);
@@ -755,23 +755,18 @@ namespace S1API.Entities
                             npcBehaviour = behGo.AddComponent<S1NPCsBehaviour.NPCBehaviour>();
                         }
 
-                        var behaviour = NPC.gameObject.GetComponentInChildren<S1NPCsBehaviour.DealerAttendDealBehaviour>(true);
+                        behaviour = NPC.gameObject.GetComponentInChildren<S1NPCsBehaviour.DealerAttendDealBehaviour>(true);
                         if (behaviour == null)
                         {
                             var go = new GameObject("DealerAttendDealBehaviour");
                             go.transform.SetParent(npcBehaviour.transform, false);
                             behaviour = go.AddComponent<S1NPCsBehaviour.DealerAttendDealBehaviour>();
-                            go.SetActive(false);
                         }
-                        behaviour.Name = "Attend deal";
-                        behaviour.Priority = NPCPrefabBuilder.DealerAttendDealPriority;
                         attendDealField?.SetValue(dealer, behaviour);
                     }
-                    else
-                    {
-                        existingBehaviour.Name = "Attend deal";
-                        existingBehaviour.Priority = NPCPrefabBuilder.DealerAttendDealPriority;
-                    }
+                    behaviour.gameObject.SetActive(NPCPrefabBuilder.BehaviourObjectsRemainActive);
+                    behaviour.Name = "Attend deal";
+                    behaviour.Priority = NPCPrefabBuilder.DealerAttendDealPriority;
                 }
                 catch { /* ignore */ }
 
