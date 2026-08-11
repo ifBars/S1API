@@ -14,7 +14,9 @@ namespace S1API.Items
 {
     /// <summary>
     /// Provides convenient static methods for creating custom items.
-    /// Use <see cref="CreateBuilder"/> for flexible configuration or <see cref="CreateItem"/> for quick creation.
+    /// Use <see cref="CreateBuilder"/> for flexible configuration or
+    /// <see cref="CreateItem(string,string,string,ItemCategory,int,float,float,LegalStatus,bool,FullRank?,Sprite?,Equippable?)"/>
+    /// for quick creation.
     /// </summary>
     /// <remarks>
     /// All items in Schedule One are storable items (StorableItemDefinition), so both methods create the same type.
@@ -141,6 +143,74 @@ namespace S1API.Items
 
             return builder.Build();
         }
+
+        /// <summary>
+        /// Creates an item using the parameter order from S1API 3.0.0 through 3.0.4, without a rank requirement.
+        /// Provided for source compatibility with nine-argument positional calls.
+        /// </summary>
+        /// <param name="id">Unique identifier for the item (e.g., "my_custom_tool").</param>
+        /// <param name="name">Display name shown in UI.</param>
+        /// <param name="description">Item description shown in tooltips.</param>
+        /// <param name="category">Item category for inventory organization.</param>
+        /// <param name="stackLimit">Maximum quantity per inventory slot.</param>
+        /// <param name="basePurchasePrice">Base price when buying from shops.</param>
+        /// <param name="resellMultiplier">Fraction of purchase price recovered when selling.</param>
+        /// <param name="legalStatus">Whether the item is legal or illegal.</param>
+        /// <param name="legacyIcon">Optional sprite to use as the item icon.</param>
+        /// <returns>A wrapper around the created item definition.</returns>
+        /// <remarks>
+        /// The distinct parameter name keeps calls that target the current overload with <c>icon:</c> unambiguous.
+        /// </remarks>
+        [Obsolete("Use the overload with requiresLevelToPurchase and requiredRank. This compatibility overload may be removed in a future S1API version.")]
+        public static StorableItemDefinition CreateItem(
+            string id,
+            string name,
+            string description,
+            ItemCategory category,
+            int stackLimit,
+            float basePurchasePrice,
+            float resellMultiplier,
+            LegalStatus legalStatus,
+            Sprite? legacyIcon) =>
+            CreateItem(id, name, description, category, stackLimit, basePurchasePrice,
+                resellMultiplier, legalStatus, requiresLevelToPurchase: false, requiredRank: null,
+                icon: legacyIcon, equippable: null);
+
+        /// <summary>
+        /// Creates an item using the parameter order from S1API 3.0.0 through 3.0.4, without a rank requirement.
+        /// Provided for binary compatibility with mods compiled against those versions.
+        /// </summary>
+        /// <param name="id">Unique identifier for the item (e.g., "my_custom_tool").</param>
+        /// <param name="name">Display name shown in UI.</param>
+        /// <param name="description">Item description shown in tooltips.</param>
+        /// <param name="category">Item category for inventory organization.</param>
+        /// <param name="stackLimit">Maximum quantity per inventory slot.</param>
+        /// <param name="basePurchasePrice">Base price when buying from shops.</param>
+        /// <param name="resellMultiplier">Fraction of purchase price recovered when selling.</param>
+        /// <param name="legalStatus">Whether the item is legal or illegal.</param>
+        /// <param name="icon">Optional sprite to use as the item icon.</param>
+        /// <param name="equippable">Optional equippable component to attach.</param>
+        /// <returns>A wrapper around the created item definition.</returns>
+        /// <remarks>
+        /// S1API 3.0.5 inserted <c>requiresLevelToPurchase</c> and <c>requiredRank</c> before <c>icon</c>.
+        /// This overload retains the former ten-parameter binary signature. Its parameters remain required
+        /// so current calls that use the named <c>icon</c> parameter continue to bind unambiguously.
+        /// </remarks>
+        [Obsolete("Use the overload with requiresLevelToPurchase and requiredRank. This compatibility overload may be removed in a future S1API version.")]
+        public static StorableItemDefinition CreateItem(
+            string id,
+            string name,
+            string description,
+            ItemCategory category,
+            int stackLimit,
+            float basePurchasePrice,
+            float resellMultiplier,
+            LegalStatus legalStatus,
+            Sprite? icon,
+            Equippable? equippable) =>
+            CreateItem(id, name, description, category, stackLimit, basePurchasePrice,
+                resellMultiplier, legalStatus, requiresLevelToPurchase: false, requiredRank: null,
+                icon: icon, equippable: equippable);
 
         /// <summary>
         /// Creates a new equippable builder for creating custom equippable components.
