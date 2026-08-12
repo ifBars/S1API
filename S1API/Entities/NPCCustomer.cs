@@ -581,7 +581,18 @@ namespace S1API.Entities
                 // Ensure the deal-attendance implementation used by this game version is present.
                 try
                 {
-                    EnsureDealAttendanceSupport(NPC?.gameObject, NPC?.GetType());
+                    if (EnsureDealAttendanceSupport(NPC?.gameObject, NPC?.GetType()))
+                    {
+                        var attendance = NPC?.gameObject
+                            .GetComponentInChildren<S1NPCs.Behaviour.CustomerAttendDealBehaviour>(true);
+                        if (attendance != null)
+                        {
+                            ReflectionUtils.TrySetFieldOrProperty(
+                                customer,
+                                "_attendDealBehaviour",
+                                attendance);
+                        }
+                    }
                 }
                 catch { /* ignore */ }
             }

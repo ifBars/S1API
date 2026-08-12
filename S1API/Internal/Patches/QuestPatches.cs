@@ -127,6 +127,8 @@ namespace S1API.Internal.Patches
         [HarmonyPrefix]
         private static void QuestsLoaderLoad_Prefix(string mainPath)
         {
+            NPCPatches.PrepareCustomNpcsForContractLoad();
+
             // Load and parse the Quests.json file to extract modded quest data
             if (!File.Exists(mainPath))
                 return;
