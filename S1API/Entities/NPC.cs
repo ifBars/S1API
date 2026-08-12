@@ -2805,20 +2805,9 @@ namespace S1API.Entities
             get
             {
                 object? currentBuilding = S1NPC.CurrentBuilding;
-                if (currentBuilding == null)
-                    return null;
-
-                var buildingName = ReflectionUtils.TryGetFieldOrProperty(currentBuilding, "BuildingName") as string;
-                if (!string.IsNullOrWhiteSpace(buildingName))
-                {
-                    Map.Building? building = Map.Building.GetByName(buildingName);
-                    if (building != null)
-                        return building;
-
-                    return new Map.Building(buildingName, currentBuilding);
-                }
-
-                return new Map.Building(currentBuilding.GetType().Name, currentBuilding);
+                return currentBuilding == null
+                    ? null
+                    : Map.Building.All.FirstOrDefault(building => ReferenceEquals(building._gameBuilding, currentBuilding));
             }
         }
 
