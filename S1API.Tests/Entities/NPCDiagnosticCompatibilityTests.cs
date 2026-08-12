@@ -1,5 +1,6 @@
 using System.Reflection;
 using S1API.Entities;
+using S1API.Map;
 using S1API.Entities.Dealer;
 
 namespace S1API.Tests.Entities;
@@ -32,7 +33,7 @@ public sealed class NPCDiagnosticCompatibilityTests
         {
             ParameterInfo parameter = Assert.Single(parameters);
             Assert.Equal("npcType", parameter.Name);
-            Assert.Equal(typeof(Type), parameter.ParameterType);
+            Assert.Equal(typeof(System.Type), parameter.ParameterType);
         }
     }
 
@@ -47,13 +48,18 @@ public sealed class NPCDiagnosticCompatibilityTests
     }
 
     [Fact]
-    public void ReviveRetainsItsPublicShape()
+    public void CurrentBuildingRetainsItsPublicShape()
     {
-        MethodInfo? method = typeof(NPC).GetMethod(nameof(NPC.Revive), BindingFlags.Public | BindingFlags.Instance);
+        var property = typeof(NPC).GetProperty(
+            nameof(NPC.CurrentBuilding),
+            BindingFlags.Public | BindingFlags.Instance);
 
-        Assert.NotNull(method);
-        Assert.Equal(typeof(void), method.ReturnType);
-        Assert.Empty(method.GetParameters());
+        Assert.NotNull(property);
+        Assert.Equal(typeof(Building), property!.PropertyType);
+        Assert.True(property.CanRead);
+        Assert.False(property.CanWrite);
+        Assert.NotNull(property.GetGetMethod());
+        Assert.True(property.GetGetMethod()!.IsPublic);
     }
 
     [Fact]
