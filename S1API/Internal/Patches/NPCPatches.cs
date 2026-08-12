@@ -574,7 +574,7 @@ namespace S1API.Internal.Patches
                 if (type.Assembly == Assembly.GetExecutingAssembly())
                     continue; // skip S1API internal wrapper types
 
-                if (!NPC.All.Any(npc => npc.GetType() == type))
+                if (CustomNpcPreparationPolicy.FindExactType(NPC.All, type) == null)
                     _pendingCustomNpcTypes.Add(type);
             }
         }
@@ -593,7 +593,7 @@ namespace S1API.Internal.Patches
                 if (type == null || type.IsAbstract || type.Assembly == Assembly.GetExecutingAssembly())
                     continue;
 
-                NPC? customNpc = NPC.All.FirstOrDefault(npc => npc.GetType() == type);
+                NPC? customNpc = CustomNpcPreparationPolicy.FindExactType(NPC.All, type);
                 if (customNpc == null)
                 {
                     try
@@ -606,6 +606,9 @@ namespace S1API.Internal.Patches
                         continue;
                     }
                 }
+
+                if (customNpc.gameObject.GetComponent<S1Economy.Customer>() != null)
+                    customNpc.Customer.EnsureCustomer();
 
                 customNpc.RegisterPersistentGuidForContractLoad();
             }
@@ -864,16 +867,19 @@ namespace S1API.Internal.Patches
             int createdCount = 0;
             foreach (Type type in ReflectionUtils.GetDerivedClasses<NPC>())
             {
-                if (type.IsAbstract)
+                if (type.IsAbstract || type.Assembly == Assembly.GetExecutingAssembly())
                     continue;
-                
-                NPC? customNPC = (NPC)Activator.CreateInstance(type, true)!;
-                if (customNPC == null)
-                    throw new Exception($"Unable to create instance of {type.FullName}!");
 
-                // We skip any S1API NPCs, as they are base NPC wrappers.
-                if (type.Assembly == Assembly.GetExecutingAssembly())
-                    continue;
+                // QuestsLoader may have prepared this instance already so accepted contracts can
+                // resolve its persistent GUID. Reuse it rather than creating a duplicate wrapper
+                // whose default state would later win during save serialization.
+                NPC? customNPC = CustomNpcPreparationPolicy.FindExactType(NPC.All, type);
+                if (customNPC == null)
+                {
+                    customNPC = (NPC?)Activator.CreateInstance(type, true);
+                    if (customNPC == null)
+                        throw new Exception($"Unable to create instance of {type.FullName}!");
+                }
 
                 var baseNpc = customNPC.S1NPC
                     ?? throw new InvalidOperationException(
