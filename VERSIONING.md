@@ -65,21 +65,23 @@ Patch numbers are ordinary integers, not single digits. That means `2.9.10` is t
 ### New release line
 
 1. Prepare the release changes and version bump on `releases/X.Y.Z`, based on the intended `stable` commit.
-2. Open a PR from `releases/X.Y.Z` into `stable` and complete validation.
-3. Merge the PR into `stable` with a merge commit.
-4. Fast-forward `releases/X.Y.Z` to that exact stable merge commit.
-5. Tag the shared commit as `vX.Y.Z` to publish the stable release.
-6. Treat both the tag and release branch as immutable release records.
-7. Continue forward development on `stable` toward the next version.
+2. Add curated release notes at `.github/release-notes/X.Y.Z.md`, following the grouped format used by recent releases.
+3. Open a PR from `releases/X.Y.Z` into `stable` and complete validation.
+4. Merge the PR into `stable` with a merge commit.
+5. Fast-forward `releases/X.Y.Z` to that exact stable merge commit.
+6. Tag the shared commit as `vX.Y.Z` to publish the stable release.
+7. Treat both the tag and release branch as immutable release records.
+8. Continue forward development on `stable` toward the next version.
 
 ### Hotfix release for an existing line
 
 1. Create `releases/X.Y.(Z+1)` from the current stable tree when it still matches the shipped version, or from the `vX.Y.Z` tag when stable has unrelated future work.
-2. Apply only the hotfix and the `X.Y.(Z+1)` version bump to that new release branch.
-3. Open a PR from `releases/X.Y.(Z+1)` into `stable` and merge it after validation.
-4. Fast-forward `releases/X.Y.(Z+1)` to the resulting stable merge commit.
-5. Tag that exact commit as `vX.Y.(Z+1)` to publish the new patch.
-6. Leave `releases/X.Y.Z` and its tag unchanged as the immutable record of the previous release.
+2. Apply only the intended hotfixes, release-tooling changes, and the `X.Y.(Z+1)` version bump to that new release branch.
+3. Add curated release notes at `.github/release-notes/X.Y.(Z+1).md` for the exact previous-tag comparison range.
+4. Open a PR from `releases/X.Y.(Z+1)` into `stable` and merge it after validation.
+5. Fast-forward `releases/X.Y.(Z+1)` to the resulting stable merge commit.
+6. Tag that exact commit as `vX.Y.(Z+1)` to publish the new patch.
+7. Leave `releases/X.Y.Z` and its tag unchanged as the immutable record of the previous release.
 
 Using the new version's branch as the PR head keeps review history attached to the release while ensuring every version branch continues to identify the assembly it shipped.
 
@@ -115,13 +117,15 @@ Before expecting a NuGet package to publish:
 The GitHub release workflow packages public mod archives and can publish the same release to mod distribution platforms.
 
 - `publish-github-release.yml` runs from release tags and can also be rerun with `workflow_dispatch`.
+- When `.github/release-notes/X.Y.Z.md` exists at the tagged commit, its curated Markdown is used as the GitHub release body. Historical tags and manual reruns without that file fall back to GitHub-generated notes.
+- Curated notes should use concise domain-specific change sections, a compatibility and validation section, PR-linked contributor credits, and release links, matching the structure of recent stable releases.
 - The GitHub/Nexus archive is `S1API-Forked-x.y.z.zip` and contains `Mods/` and `Plugins/` at the archive root.
 - GitHub Releases should only publish `S1API-Forked-x.y.z.zip` as a release asset.
 - The Thunderstore archive is `S1API-TS-x.y.z.zip` and contains `icon.png`, `README.md`, `manifest.json`, `Mods/`, and `Plugins/` at the archive root, but it is only used for Thunderstore publishing.
 - The uppercase `Mods/` and `Plugins/` paths are intentional so case-sensitive filesystems do not create parallel lowercase install folders.
 - The GitHub release asset is always uploaded by the workflow.
 - Nexus Mods upload runs when `NEXUSMODS_API_KEY`, `NEXUSMODS_FILE_GROUP_ID`, and `NEXUSMODS_MOD_ID` are configured.
-- Generated release notes are published on GitHub. The Nexus Mods upload intentionally omits the optional changelog input because Nexus handles file versions and changelogs through separate endpoints, and a rejected changelog request would otherwise fail the workflow after a successful file upload.
+- The workflow publishes versioned curated Markdown on GitHub when present and falls back to GitHub-generated notes only when it is absent. The Nexus Mods upload intentionally omits the optional changelog input because Nexus handles file versions and changelogs through separate endpoints, and a rejected changelog request would otherwise fail the workflow after a successful file upload.
 - Thunderstore upload runs when `THUNDERSTORE_TOKEN` is configured.
 - `workflow_dispatch` exposes `publish_nexus` and `publish_thunderstore` toggles for refreshing GitHub assets without re-publishing external platforms.
 

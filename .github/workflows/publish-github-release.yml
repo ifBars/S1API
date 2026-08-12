@@ -326,14 +326,18 @@ jobs:
         env:
           RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
           RELEASE_NAME: ${{ steps.metadata.outputs.release_name }}
+          RELEASE_VERSION: ${{ steps.metadata.outputs.release_version }}
           RELEASE_BRANCH: ${{ steps.metadata.outputs.release_branch }}
           PRERELEASE: ${{ steps.metadata.outputs.prerelease }}
         with:
           script: |
+            const fs = require("fs");
+            const path = require("path");
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const tag = process.env.RELEASE_TAG;
             const releaseName = process.env.RELEASE_NAME;
+            const releaseVersion = process.env.RELEASE_VERSION;
             const releaseBranch = process.env.RELEASE_BRANCH;
             const prerelease = process.env.PRERELEASE === "true";
 
@@ -371,13 +375,32 @@ jobs:
             };
 
             const targetCommitish = await resolveTargetCommitish();
-            const notes = await github.rest.repos.generateReleaseNotes({
-              owner,
-              repo,
-              tag_name: tag,
-              target_commitish: targetCommitish
-            });
-            core.setOutput("release_notes", notes.data.body);
+            const curatedNotesPath = path.join(
+              process.env.GITHUB_WORKSPACE,
+              ".github",
+              "release-notes",
+              `${releaseVersion}.md`
+            );
+            let releaseNotes;
+            if (fs.existsSync(curatedNotesPath)) {
+              releaseNotes = fs.readFileSync(curatedNotesPath, "utf8").trim();
+              if (!releaseNotes) {
+                throw new Error(`Curated release notes are empty: ${curatedNotesPath}`);
+              }
+              core.notice(`Using curated release notes from ${curatedNotesPath}`);
+            } else {
+              core.warning(
+                `No curated release notes found for ${releaseVersion}; using GitHub-generated notes.`
+              );
+              const generatedNotes = await github.rest.repos.generateReleaseNotes({
+                owner,
+                repo,
+                tag_name: tag,
+                target_commitish: targetCommitish
+              });
+              releaseNotes = generatedNotes.data.body;
+            }
+            core.setOutput("release_notes", releaseNotes);
 
             const payload = {
               owner,
@@ -385,7 +408,7 @@ jobs:
               tag_name: tag,
               target_commitish: targetCommitish,
               name: releaseName,
-              body: notes.data.body,
+              body: releaseNotes,
               draft: false,
               prerelease,
               make_latest: prerelease ? "false" : "legacy"
