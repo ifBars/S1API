@@ -574,7 +574,40 @@ namespace S1API.Internal.Patches
                 if (type.Assembly == Assembly.GetExecutingAssembly())
                     continue; // skip S1API internal wrapper types
 
-                _pendingCustomNpcTypes.Add(type);
+                if (!NPC.All.Any(npc => npc.GetType() == type))
+                    _pendingCustomNpcTypes.Add(type);
+            }
+        }
+
+        /// <summary>
+        /// Creates inactive custom NPCs and registers their persistent GUIDs before native contracts load.
+        /// NPCsLoader later hydrates and queues the same instances for network spawn.
+        /// </summary>
+        internal static void PrepareCustomNpcsForContractLoad()
+        {
+            if (!IsInMainScene() || !InstanceFinder.IsServer)
+                return;
+
+            foreach (Type type in ReflectionUtils.GetDerivedClasses<NPC>())
+            {
+                if (type == null || type.IsAbstract || type.Assembly == Assembly.GetExecutingAssembly())
+                    continue;
+
+                NPC? customNpc = NPC.All.FirstOrDefault(npc => npc.GetType() == type);
+                if (customNpc == null)
+                {
+                    try
+                    {
+                        customNpc = (NPC)Activator.CreateInstance(type, true)!;
+                    }
+                    catch (Exception ex)
+                    {
+                        LogCustomNpcInstantiationException(type, "before contract loading", ex);
+                        continue;
+                    }
+                }
+
+                customNpc.RegisterPersistentGuidForContractLoad();
             }
         }
 
@@ -781,6 +814,15 @@ namespace S1API.Internal.Patches
             }
         }
 
+        private static void RegisterPreparedCustomNpcsForNetworking()
+        {
+            foreach (NPC customNpc in NPC.All)
+            {
+                if (customNpc.IsCustomNPC)
+                    RegisterCustomNpcForNetworking(customNpc);
+            }
+        }
+
         /// <summary>
         /// Patching performed for when game NPCs are loaded.
         /// Creates custom NPC instances before the loader runs.
@@ -955,6 +997,7 @@ namespace S1API.Internal.Patches
 
                         // Instantiate any new custom NPCs that don't have save entries yet (e.g., newly added mods)
                         InstantiateRemainingCustomNpcs(mainPath);
+                        RegisterPreparedCustomNpcsForNetworking();
                         return false; // Skip original loader
                     }
                 }
@@ -1468,36 +1511,10 @@ namespace S1API.Internal.Patches
                 // Native relationship data is authoritative whenever a finite saved delta exists.
                 if (saveData.TryGetData("Relationship", out S1Datas.RelationshipData rel) && rel != null && s1BaseNpc.RelationData != null)
                 {
-                    if (NPCRelationshipPersistencePolicy.IsValidSavedDelta(rel.RelationDelta))
-                    {
-                        s1BaseNpc.RelationData.SetRelationship(
-                            rel.RelationDelta,
-                            false);
-                        apiNpc.MarkRelationshipLoadedFromSave();
-                    }
-                    
-                    if (rel.Unlocked)
-                    {
-                        s1BaseNpc.RelationData.Unlock(rel.UnlockType, notify: false);
-                        
-                        // Store unlock type for potential restoration
-                        try
-                        {
-                            apiNpc = FindWrapperForS1Npc(s1BaseNpc);
-                            if (apiNpc != null)
-                            {
-                                var unlockTypeField = typeof(NPC).GetField("_loadedUnlockType", BindingFlags.NonPublic | BindingFlags.Instance);
-                                if (unlockTypeField != null)
-                                {
-                                    var s1UnlockType = rel.UnlockType == S1Relation.NPCRelationData.EUnlockType.Recommendation
-                                        ? S1Relation.NPCRelationData.EUnlockType.Recommendation
-                                        : S1Relation.NPCRelationData.EUnlockType.DirectApproach;
-                                    unlockTypeField.SetValue(apiNpc, s1UnlockType);
-                                }
-                            }
-                        }
-                        catch { }
-                    }
+                    apiNpc.LoadRelationshipFromSave(
+                        rel.RelationDelta,
+                        rel.Unlocked,
+                        rel.UnlockType);
                 }
                 
                 if (saveData.TryGetData("MessageConversation", out S1Datas.MSGConversationData convo))
@@ -2139,11 +2156,12 @@ namespace S1API.Internal.Patches
             if (saveData.TryGetData(
                     "Relationship",
                     out S1Datas.RelationshipData relationshipData)
-                && relationshipData != null
-                && NPCRelationshipPersistencePolicy.IsValidSavedDelta(
-                    relationshipData.RelationDelta))
+                && relationshipData != null)
             {
-                apiNpc.MarkRelationshipLoadedFromSave();
+                apiNpc.LoadRelationshipFromSave(
+                    relationshipData.RelationDelta,
+                    relationshipData.Unlocked,
+                    relationshipData.UnlockType);
             }
         }
 

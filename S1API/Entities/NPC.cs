@@ -2111,7 +2111,7 @@ namespace S1API.Entities
             if (Icon == null)
                 NPCDataAccess.ApplyIcon(S1NPC, S1DevUtilities.PlayerSingleton<S1ContactApps.ContactsApp>.Instance.AppIcon);
 
-            S1NPC.BakedGUID = Guid.NewGuid().ToString();
+            AssignPersistentGuid(id);
             
             if (IsPhysical)
                 ResetConversationCategoriesToDefaults();
@@ -2170,6 +2170,7 @@ namespace S1API.Entities
             bool hasLastName = !string.IsNullOrEmpty(lastName);
 
             NPCDataAccess.ApplyIdentity(S1NPC, id, firstName, lastName);
+            AssignPersistentGuid(id);
             if (icon != null)
             {
                 NPCDataAccess.ApplyIcon(S1NPC, icon);
@@ -3239,10 +3240,22 @@ namespace S1API.Entities
         internal bool RelationshipLoadedFromSave { get; private set; }
 
         /// <summary>
-        /// INTERNAL: Marks native relationship state as hydrated from save data.
+        /// INTERNAL: Applies relationship data from a native save payload and retains it through activation.
         /// </summary>
-        internal void MarkRelationshipLoadedFromSave() =>
+        internal void LoadRelationshipFromSave(
+            float relationDelta,
+            bool unlocked,
+            S1Relation.NPCRelationData.EUnlockType unlockType)
+        {
+            if (!NPCRelationshipPersistencePolicy.IsValidSavedDelta(relationDelta))
+                return;
+
+            _loadedRelationshipDelta = relationDelta;
+            _loadedRelationshipUnlocked = unlocked;
+            _loadedRelationshipUnlockType = unlockType;
             RelationshipLoadedFromSave = true;
+            RestoreLoadedRelationship();
+        }
 
         /// <summary>
         /// INTERNAL: Constructor used for base game NPCs.
@@ -4044,6 +4057,48 @@ namespace S1API.Entities
             }
         }
 
+        private void AssignPersistentGuid(string? npcId)
+        {
+            Guid guid = NPCPersistentIds.TryGetGuid(npcId, out Guid persistentGuid)
+                ? persistentGuid
+                : Guid.NewGuid();
+            S1NPC.BakedGUID = guid.ToString();
+        }
+
+        internal void RegisterPersistentGuidForContractLoad()
+        {
+            if (!Guid.TryParse(S1NPC.BakedGUID, out Guid guid))
+                return;
+
+            try
+            {
+#if IL2CPPMELON
+                S1NPC.SetGUID(new Il2CppSystem.Guid(guid.ToString()));
+#else
+                S1NPC.SetGUID(guid);
+#endif
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning(
+                    $"[NPC] Failed to register persistent GUID for '{GetSafeNpcId()}': {ex.Message}");
+            }
+        }
+
+        private void RestoreLoadedRelationship()
+        {
+            if (!_loadedRelationshipDelta.HasValue || S1NPC.RelationData == null)
+                return;
+
+            S1NPC.RelationData.SetRelationship(_loadedRelationshipDelta.Value, false);
+            if (_loadedRelationshipUnlocked)
+            {
+                S1NPC.RelationData.Unlock(
+                    _loadedRelationshipUnlockType,
+                    notify: false);
+            }
+        }
+
         private void RestoreRuntimeAvatarAppearance()
         {
             if (_runtimeAvatar == null)
@@ -4081,6 +4136,9 @@ namespace S1API.Entities
         private NPCDrinking? _drinking;
         private NPCItemHolding? _itemHolding;
         private bool _relationshipDataAppliedFromPrefab;
+        private float? _loadedRelationshipDelta;
+        private bool _loadedRelationshipUnlocked;
+        private S1Relation.NPCRelationData.EUnlockType _loadedRelationshipUnlockType;
         private readonly System.Collections.Generic.List<DealerRecommendationSubscription> _recommendationSubscriptions =
             new System.Collections.Generic.List<DealerRecommendationSubscription>();
 
@@ -4117,6 +4175,7 @@ namespace S1API.Entities
                 }
 
                 NPCDataAccess.PrepareForRuntime(S1NPC);
+                RestoreLoadedRelationship();
 
                 var customer = gameObject.GetComponent<S1Economy.Customer>();
                 if (customer != null)
@@ -4199,6 +4258,8 @@ namespace S1API.Entities
         {
             try
             {
+                RestoreLoadedRelationship();
+
                 // Ensure NPCAwareness.Responses reference is valid after spawn
                 // Network spawning can sometimes break component references
                 if (S1NPC.Awareness != null && S1NPC.Responses is S1Responses.NPCResponses_Civilian validResponses)
