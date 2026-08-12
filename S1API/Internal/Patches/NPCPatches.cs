@@ -80,10 +80,6 @@ namespace S1API.Internal.Patches
         private static readonly System.Collections.Generic.Dictionary<S1Economy.Customer, float> _savedCurrentAddiction
             = new System.Collections.Generic.Dictionary<S1Economy.Customer, float>();
 
-        // Pending inventory loads for custom dealers - stored until NPCInventory.Awake creates slots
-        private static readonly System.Collections.Generic.Dictionary<string, S1Datas.DeserializedItemSet> _pendingInventoryLoads
-            = new System.Collections.Generic.Dictionary<string, S1Datas.DeserializedItemSet>();
-
         private static object? GetInventoryMember(S1NPCs.NPCInventory inventory, string memberName)
         {
             return ReflectionUtils.TryGetFieldOrProperty(inventory, memberName);
@@ -495,7 +491,14 @@ namespace S1API.Internal.Patches
         {
             _savedCurrentAddiction.Clear();
             _loadingDealers.Clear();
-            _pendingInventoryLoads.Clear();
+        }
+
+        internal static void RestoreInventoryAfterInitialization(
+            Action ensureInitialized,
+            Action restoreInventory)
+        {
+            ensureInitialized();
+            restoreInventory();
         }
 
         private static void LogCustomNpcInstantiationException(Type? type, string context, Exception? ex)
@@ -1065,13 +1068,6 @@ namespace S1API.Internal.Patches
                 {
                     var wrapperInventory = new NPCInventory(apiNpc);
                     wrapperInventory.EnsureInitialized();
-
-                    // Load pending inventory after slots are initialized
-                    if (baseNpc != null && _pendingInventoryLoads.TryGetValue(baseNpc.ID, out var pendingItemSet))
-                    {
-                        pendingItemSet.LoadTo(__instance.ItemSlots);
-                        _pendingInventoryLoads.Remove(baseNpc.ID);
-                    }
                 }
                 catch (Exception ex)
                 {
@@ -1405,8 +1401,8 @@ namespace S1API.Internal.Patches
 
         /// <summary>
         /// Temporary patch while S1API NPCs are not networked
-        /// Handle NPCLoader.Load for custom S1API NPCs to avoid inventory hydration which uses networking.
-        /// Replicates core parts of the original loader except Inventory and Health (Health already guarded).
+        /// Handles NPCLoader.Load for custom S1API NPCs without native networked inventory hydration.
+        /// Restores saved inventory after the final slot collection is initialized.
         /// </summary>
         [HarmonyPatch(typeof(S1Loaders.NPCLoader), nameof(S1Loaders.NPCLoader.Load))]
         [HarmonyPrefix]
@@ -1454,6 +1450,7 @@ namespace S1API.Internal.Patches
             {
                 return true; // run original for base NPCs
             }
+            var customNpc = apiNpc;
 
             // Custom S1API NPC: perform safe subset of loading and skip original
             try
@@ -1573,7 +1570,19 @@ namespace S1API.Internal.Patches
                     {
                         if (S1Datas.ItemSet.TryDeserialize(inventoryData, out var itemSet))
                         {
-                            itemSet.LoadTo(s1BaseNpc.Inventory.ItemSlots);
+                            RestoreInventoryAfterInitialization(
+                                customNpc.Inventory.EnsureInitialized,
+                                () =>
+                                {
+                                    var inventory = s1BaseNpc.GetComponent<S1NPCs.NPCInventory>();
+                                    if (inventory?.ItemSlots == null)
+                                    {
+                                        throw new InvalidOperationException(
+                                            $"Inventory slots were not initialized for custom NPC '{baseData.ID}'.");
+                                    }
+
+                                    itemSet.LoadTo(inventory.ItemSlots);
+                                });
                         }
                         else
                         {
@@ -1586,7 +1595,6 @@ namespace S1API.Internal.Patches
                             $"NPCLoader_Load_Prefix: Exception loading Inventory data for '{baseData.ID}': {ex.Message}");
                     }
                 }
-
             }
             catch (Exception ex)
             {
@@ -2728,16 +2736,6 @@ namespace S1API.Internal.Patches
                     }
                 }
 
-                if (isCustomNPC)
-                {
-                    if (dynamicData.TryGetData("Inventory", out var inventoryData))
-                    {
-                        if (S1Datas.ItemSet.TryDeserialize(inventoryData, out var itemSet))
-                            _pendingInventoryLoads[__instance.ID] = itemSet;
-                        else
-                            Logger.Warning($"Failed to deserialize inventory data for custom NPC dealer {__instance.ID}");
-                    }
-                }
             }
             catch (Exception ex)
             {
