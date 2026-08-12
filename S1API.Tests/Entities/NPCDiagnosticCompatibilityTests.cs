@@ -32,7 +32,7 @@ public sealed class NPCDiagnosticCompatibilityTests
         {
             ParameterInfo parameter = Assert.Single(parameters);
             Assert.Equal("npcType", parameter.Name);
-            Assert.Equal(typeof(System.Type), parameter.ParameterType);
+            Assert.Equal(typeof(Type), parameter.ParameterType);
         }
     }
 
@@ -49,12 +49,9 @@ public sealed class NPCDiagnosticCompatibilityTests
     [Fact]
     public void ReviveRetainsItsPublicShape()
     {
-        MethodInfo? method = typeof(NPC).GetMethod(
-            nameof(NPC.Revive),
-            BindingFlags.Public | BindingFlags.Instance);
+        MethodInfo? method = typeof(NPC).GetMethod(nameof(NPC.Revive), BindingFlags.Public | BindingFlags.Instance);
 
         Assert.NotNull(method);
-        Assert.False(method!.IsStatic);
         Assert.Equal(typeof(void), method.ReturnType);
         Assert.Empty(method.GetParameters());
     }
