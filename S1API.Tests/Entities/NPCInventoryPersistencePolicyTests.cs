@@ -1,4 +1,5 @@
 using S1API.Internal.Patches;
+using S1API.Entities;
 
 namespace S1API.Tests.Entities;
 
@@ -50,5 +51,65 @@ public sealed class NPCInventoryPersistencePolicyTests
                 () => restoreAttempted = true));
 
         Assert.False(restoreAttempted);
+    }
+
+    [Fact]
+    public void CurrentNpcDataSlotCountIsUsedWhenLegacyMemberIsMissing()
+    {
+        int result = NPCInventory.ResolveTargetSlotCount(
+            legacySlotCount: null,
+            npcDataSlotCount: 5,
+            fallback: 0,
+            isCustomNpc: true);
+
+        Assert.Equal(5, result);
+    }
+
+    [Fact]
+    public void LegacySlotCountRemainsPreferredForOlderGameVersions()
+    {
+        int result = NPCInventory.ResolveTargetSlotCount(
+            legacySlotCount: 6,
+            npcDataSlotCount: 5,
+            fallback: 0,
+            isCustomNpc: true);
+
+        Assert.Equal(6, result);
+    }
+
+    [Fact]
+    public void ExistingCollectionCountIsFinalFallback()
+    {
+        int result = NPCInventory.ResolveTargetSlotCount(
+            legacySlotCount: -1,
+            npcDataSlotCount: null,
+            fallback: 4,
+            isCustomNpc: true);
+
+        Assert.Equal(4, result);
+    }
+
+    [Fact]
+    public void CustomNpcUsesVanillaFiveSlotDefaultWhenNativeCountsAreZero()
+    {
+        int result = NPCInventory.ResolveTargetSlotCount(
+            legacySlotCount: null,
+            npcDataSlotCount: 0,
+            fallback: 0,
+            isCustomNpc: true);
+
+        Assert.Equal(5, result);
+    }
+
+    [Fact]
+    public void BaseNpcCanRetainAnIntentionallyEmptyInventory()
+    {
+        int result = NPCInventory.ResolveTargetSlotCount(
+            legacySlotCount: null,
+            npcDataSlotCount: 0,
+            fallback: 0,
+            isCustomNpc: false);
+
+        Assert.Equal(0, result);
     }
 }
