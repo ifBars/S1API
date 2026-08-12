@@ -125,7 +125,7 @@ The GitHub release workflow packages public mod archives and can publish the sam
 - The uppercase `Mods/` and `Plugins/` paths are intentional so case-sensitive filesystems do not create parallel lowercase install folders.
 - The GitHub release asset is always uploaded by the workflow.
 - Nexus Mods upload runs when `NEXUSMODS_API_KEY`, `NEXUSMODS_FILE_GROUP_ID`, and `NEXUSMODS_MOD_ID` are configured.
-- Generated release notes are published on GitHub. The Nexus Mods upload intentionally omits the optional changelog input because Nexus handles file versions and changelogs through separate endpoints, and a rejected changelog request would otherwise fail the workflow after a successful file upload.
+- The workflow publishes versioned curated Markdown on GitHub when present and falls back to GitHub-generated notes only when it is absent. The Nexus Mods upload intentionally omits the optional changelog input because Nexus handles file versions and changelogs through separate endpoints, and a rejected changelog request would otherwise fail the workflow after a successful file upload.
 - Thunderstore upload runs when `THUNDERSTORE_TOKEN` is configured.
 - `workflow_dispatch` exposes `publish_nexus` and `publish_thunderstore` toggles for refreshing GitHub assets without re-publishing external platforms.
 
