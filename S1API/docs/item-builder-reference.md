@@ -27,8 +27,10 @@ This page collects the main builder methods, advanced item-instance notes, and i
 
 ## FurnitureDefinitionBuilder Methods
 
+- `FurnitureCreator.CloneFrom(donor)` - Starts a presentation-only variant from native grid or surface furniture
 - `WithBasicInfo(id, name, description)` - Sets the stable ID and player-facing text
 - `WithModel(model)` - Supplies the model cloned into all native furniture representations
+- `ConfigureModel(callback)` - Modifies the isolated model owned by a `CloneFrom` builder
 - `WithPlacement(mode)` - Selects grid or surface placement
 - `WithFootprint(width, depth)` - Sets a grid footprint in 0.5 metre tiles
 - `WithSurfacePlacement(types, allowRotation)` - Selects wall/roof compatibility

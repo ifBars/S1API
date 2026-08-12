@@ -27,5 +27,17 @@ namespace S1API.Internal.Building
                 _ => throw new ArgumentOutOfRangeException(nameof(soundType)),
             };
         }
+
+        internal static BuildSoundType FromNative(
+            S1ItemFramework.BuildableItemDefinition.EBuildSoundType soundType)
+        {
+            return soundType switch
+            {
+                S1ItemFramework.BuildableItemDefinition.EBuildSoundType.Cardboard => BuildSoundType.Cardboard,
+                S1ItemFramework.BuildableItemDefinition.EBuildSoundType.Wood => BuildSoundType.Wood,
+                S1ItemFramework.BuildableItemDefinition.EBuildSoundType.Metal => BuildSoundType.Metal,
+                _ => throw new ArgumentOutOfRangeException(nameof(soundType)),
+            };
+        }
     }
 }

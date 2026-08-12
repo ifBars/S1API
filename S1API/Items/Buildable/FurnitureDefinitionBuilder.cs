@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using S1API.Internal.Building;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace S1API.Items.Buildable
 {
@@ -13,6 +15,12 @@ namespace S1API.Items.Buildable
         private string? _name;
         private string? _description;
         private GameObject? _model;
+        private string? _donorId;
+        private IReadOnlyList<FurnitureFootprintCoordinate>? _donorFootprint;
+        private bool _modelIsBuilderOwned;
+        private bool _modelConfigured;
+        private bool _centerModelOnFootprint = true;
+        private bool _isolateRepresentationMaterials;
         private FurniturePlacementMode _placementMode = FurniturePlacementMode.Grid;
         private int _footprintWidth = 1;
         private int _footprintDepth = 1;
@@ -23,11 +31,39 @@ namespace S1API.Items.Buildable
         private float _purchasePrice = 10f;
         private float _resellMultiplier = 0.5f;
         private Sprite? _icon;
+        private Sprite? _fallbackIcon;
         private bool _generateIcon = true;
         private int _generatedIconResolution = 512;
 
         internal FurnitureDefinitionBuilder()
         {
+        }
+
+        internal FurnitureDefinitionBuilder(FurnitureCloneSource source)
+        {
+            _donorId = source.DonorId;
+            _model = source.Model;
+            _modelIsBuilderOwned = true;
+            _centerModelOnFootprint = false;
+            _isolateRepresentationMaterials = true;
+            _placementMode = source.PlacementMode;
+            _donorFootprint = source.Footprint;
+            if (source.Footprint != null)
+            {
+                foreach (FurnitureFootprintCoordinate coordinate in source.Footprint)
+                {
+                    _footprintWidth = Math.Max(_footprintWidth, coordinate.X + 1);
+                    _footprintDepth = Math.Max(_footprintDepth, coordinate.Y + 1);
+                }
+            }
+
+            _surfaceTypes = source.SurfaceTypes;
+            _allowSurfaceRotation = source.AllowSurfaceRotation;
+            _buildSound = source.BuildSound;
+            _stackLimit = source.StackLimit;
+            _purchasePrice = source.PurchasePrice;
+            _resellMultiplier = source.ResellMultiplier;
+            _fallbackIcon = source.Icon;
         }
 
         /// <summary>Sets the stable registry ID and player-facing text.</summary>
@@ -55,8 +91,57 @@ namespace S1API.Items.Buildable
             if (ReferenceEquals(model, null) || model == null)
                 throw new ArgumentNullException(nameof(model));
 
+            if (_modelIsBuilderOwned && ReferenceEquals(_model, model))
+                return this;
+            if (_modelIsBuilderOwned && _model != null)
+                Object.DestroyImmediate(_model);
+
             _model = model;
+            _modelIsBuilderOwned = false;
+            _centerModelOnFootprint = true;
+            _isolateRepresentationMaterials = false;
             return this;
+        }
+
+        /// <summary>
+        /// Configures the isolated visual owned by a builder returned from
+        /// <see cref="FurnitureCreator.CloneFrom(string)"/>.
+        /// Renderer materials are independent from the donor before this callback runs.
+        /// </summary>
+        /// <param name="configure">A callback that modifies the builder-owned visual clone.</param>
+        /// <returns>This builder for fluent chaining.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="configure"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">
+        /// Thrown when this builder was not created by <c>CloneFrom</c>, or the model was already configured.
+        /// </exception>
+        public FurnitureDefinitionBuilder ConfigureModel(Action<GameObject> configure)
+        {
+            if (configure == null)
+                throw new ArgumentNullException(nameof(configure));
+            if (!_modelIsBuilderOwned || _model == null)
+            {
+                throw new InvalidOperationException(
+                    "ConfigureModel is available only for an unmodified FurnitureCreator.CloneFrom builder.");
+            }
+            if (_modelConfigured)
+                throw new InvalidOperationException("The cloned furniture model is already configured.");
+
+            try
+            {
+                configure(_model);
+                if (_model == null)
+                    throw new InvalidOperationException("The furniture model callback destroyed its visual root.");
+                _modelConfigured = true;
+                return this;
+            }
+            catch
+            {
+                if (_model != null)
+                    Object.DestroyImmediate(_model);
+                _model = null;
+                _modelIsBuilderOwned = false;
+                throw;
+            }
         }
 
         /// <summary>Chooses the native placement family.</summary>
@@ -86,6 +171,7 @@ namespace S1API.Items.Buildable
 
             _footprintWidth = width;
             _footprintDepth = depth;
+            _donorFootprint = null;
             return this;
         }
 
@@ -200,7 +286,10 @@ namespace S1API.Items.Buildable
                 _footprintWidth,
                 _footprintDepth,
                 _surfaceTypes,
-                _allowSurfaceRotation);
+                _allowSurfaceRotation,
+                _donorFootprint,
+                _centerModelOnFootprint,
+                _isolateRepresentationMaterials);
 
             var builder = new BuildableItemDefinitionBuilder(composition.TemplateDefinition)
                 .WithBasicInfo(_id!, _name!, _description!, ItemCategory.Furniture)
@@ -210,8 +299,9 @@ namespace S1API.Items.Buildable
                 .WithBuiltItem(composition.BuiltItem)
                 .WithStoredItem(composition.StoredItem.gameObject)
                 .WithEquippable(composition.Equippable);
-            if (_icon != null)
-                builder.WithIcon(_icon);
+            Sprite? initialIcon = _icon != null ? _icon : _fallbackIcon;
+            if (initialIcon != null)
+                builder.WithIcon(initialIcon);
 
             BuildableItemDefinition definition = builder.Build();
             Transform? visual = composition.BuiltItem.transform.Find(
@@ -219,14 +309,35 @@ namespace S1API.Items.Buildable
             if (visual == null)
                 throw new InvalidOperationException("Composed furniture has no placement visual source.");
 
-            BuildableGhostRuntime.RegisterVisualSource(
-                _id!,
-                visual.gameObject,
-                BuildableGhostRuntime.FurnitureGhostVisualName,
-                replaceExistingVisual: true);
+            if (_isolateRepresentationMaterials)
+            {
+                BuildableGhostRuntime.RegisterVisual(
+                    _id!,
+                    parent =>
+                    {
+                        GameObject ghostVisual = FurnitureVisualCloner.CloneOwnedVisual(
+                            visual.gameObject);
+                        ghostVisual.name = BuildableGhostRuntime.FurnitureGhostVisualName;
+                        ghostVisual.transform.SetParent(parent, false);
+                        return ghostVisual;
+                    },
+                    replaceExistingVisual: true);
+            }
+            else
+            {
+                BuildableGhostRuntime.RegisterVisualSource(
+                    _id!,
+                    visual.gameObject,
+                    BuildableGhostRuntime.FurnitureGhostVisualName,
+                    replaceExistingVisual: true);
+            }
             if (_generateIcon)
             {
-                FurnitureIconRuntime.Queue(definition, visual, _generatedIconResolution);
+                FurnitureIconRuntime.Queue(
+                    definition,
+                    visual,
+                    _generatedIconResolution,
+                    _isolateRepresentationMaterials);
             }
 
             return definition;
@@ -242,6 +353,7 @@ namespace S1API.Items.Buildable
                 throw new InvalidOperationException("Furniture description must be configured before Build().");
             if (_model == null)
                 throw new InvalidOperationException("Furniture model must be configured before Build().");
+            FurnitureClonePolicy.ValidateNewId(_id!, _donorId);
         }
     }
 }

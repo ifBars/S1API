@@ -38,6 +38,47 @@ var chair = FurnitureCreator.CreateBuilder()
 Grid footprint cells are 0.5 metres. Size the footprint to cover the model's horizontal bounds;
 for example, a model just under one metre wide and deep uses `WithFootprint(2, 2)`.
 
+## Native furniture variants
+
+Use `CloneFrom` when a variant should reuse an ordinary native furniture model. S1API accepts only
+donors whose placed prefab uses the exact native `GridItem` or `SurfaceItem` type. Machines,
+stations, storage, toggleable objects, and other specialized subclasses are rejected because a
+presentation clone cannot preserve their runtime behavior.
+
+```csharp
+var blueClock = FurnitureCreator.CloneFrom("grandfatherclock")
+    .WithBasicInfo(
+        "my-mod:blue-grandfather-clock",
+        "Blue Grandfather Clock",
+        "A grandfather clock with a blue finish.")
+    .ConfigureModel(model =>
+    {
+        foreach (Renderer renderer in model.GetComponentsInChildren<Renderer>(true))
+        {
+            foreach (Material material in renderer.sharedMaterials)
+            {
+                if (material != null && material.HasProperty("_BaseColor"))
+                    material.SetColor("_BaseColor", new Color(0.08f, 0.2f, 0.65f));
+                if (material != null && material.HasProperty("_Color"))
+                    material.SetColor("_Color", new Color(0.08f, 0.2f, 0.65f));
+            }
+        }
+    })
+    .WithPricing(250f)
+    .WithGeneratedIcon()
+    .Build();
+```
+
+`ConfigureModel` runs once against a builder-owned hierarchy. S1API has already replaced every
+renderer material with a private instance, so material edits cannot change the donor or other
+native furniture. The final placed, stored, ghost, and icon representations also receive separate
+material instances.
+
+The clone path preserves the donor's exact grid cells or surface flags, rotation setting, build
+sound, price, resale multiplier, stack limit, and icon fallback. Any corresponding builder method
+overrides that default. The variant must use a new stable ID; `Build()` rejects the donor ID even if
+only its casing differs.
+
 ## Placement ghost
 
 Furniture created with `FurnitureCreator` does not need separate ghost setup. `WithModel(model)`
@@ -82,10 +123,14 @@ Every multiplayer peer must load the same mod version and register the same stab
 placement mode, and footprint. Placement authority, observer initialization, late joins, and
 property save/load then travel through the game's native grid or surface item flow.
 
-The generated icon path is the default. Furniture still registers during pre-load using its native
-template icon as a temporary fallback; S1API replaces that icon after the gameplay rendering rig is
-ready and refreshes bound inventory/shop UI. Call `WithIcon(sprite)` when an art-directed icon is
-preferred.
+Native variants also require every peer to register the same donor ID and apply the same
+deterministic `ConfigureModel` changes before save restoration or placement. S1API does not send
+models or materials over the network.
+
+The generated icon path is the default. Furniture still registers during pre-load with a temporary
+fallback icon: the donor icon for native variants or the generic template icon for supplied models.
+S1API replaces that icon after the gameplay rendering rig is ready and refreshes bound
+inventory/shop UI. Call `WithIcon(sprite)` when an art-directed icon is preferred.
 
 ## Placement scope
 

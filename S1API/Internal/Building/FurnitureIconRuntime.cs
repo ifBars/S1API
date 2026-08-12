@@ -25,12 +25,17 @@ namespace S1API.Internal.Building
         internal static void Queue(
             BuildableItemDefinition definition,
             Transform model,
-            int resolution)
+            int resolution,
+            bool isolateMaterials)
         {
             bool startProcessor = false;
             lock (Gate)
             {
-                Pending.Enqueue(new Request(definition, model, resolution));
+                Pending.Enqueue(new Request(
+                    definition,
+                    model,
+                    resolution,
+                    isolateMaterials));
                 if (!_processing)
                 {
                     _processing = true;
@@ -183,7 +188,9 @@ namespace S1API.Internal.Building
                     return false;
                 }
 
-                iconModel = InactiveObjectCloner.CloneGameObject(request.Model.gameObject);
+                iconModel = request.IsolateMaterials
+                    ? FurnitureVisualCloner.CloneOwnedVisual(request.Model.gameObject)
+                    : InactiveObjectCloner.CloneGameObject(request.Model.gameObject);
                 if (iconModel == null)
                 {
                     failure = "the source model could not be cloned";
@@ -287,16 +294,19 @@ namespace S1API.Internal.Building
             internal Request(
                 BuildableItemDefinition definition,
                 Transform model,
-                int resolution)
+                int resolution,
+                bool isolateMaterials)
             {
                 Definition = definition;
                 Model = model;
                 Resolution = resolution;
+                IsolateMaterials = isolateMaterials;
             }
 
             internal BuildableItemDefinition Definition { get; }
             internal Transform Model { get; }
             internal int Resolution { get; }
+            internal bool IsolateMaterials { get; }
         }
     }
 }
