@@ -2955,29 +2955,77 @@ namespace S1API.Entities
         // TODO: Add OnExitVehicle listener (currently missing LandVehicle abstraction)
         // public event Action OnExitVehicle { }
 
-        // TODO: Add OnExplosionHeard listener (currently missing NoiseEvent abstraction)
-        // public event Action OnExplosionHeard { }
+        /// <summary>
+        /// Called when this NPC hears an explosion. The snapshot is null only when the native event has no noise event.
+        /// </summary>
+        public event Action<NPCNoiseEvent?> OnExplosionHeard
+        {
+            add => AddAwarenessHandler(ref _explosionHeardHandlers, value);
+            remove => RemoveAwarenessHandler(ref _explosionHeardHandlers, value);
+        }
 
-        // TODO: Add OnGunshotHeard listener (currently missing NoiseEvent abstraction)
-        // public event Action OnGunshotHeard { }
+        /// <summary>
+        /// Called when this NPC hears a gunshot. The snapshot is null only when the native event has no noise event.
+        /// </summary>
+        public event Action<NPCNoiseEvent?> OnGunshotHeard
+        {
+            add => AddAwarenessHandler(ref _gunshotHeardHandlers, value);
+            remove => RemoveAwarenessHandler(ref _gunshotHeardHandlers, value);
+        }
 
-        // TODO: Add OnHitByCar listener (currently missing LandVehicle abstraction)
-        // public event Action OnHitByCar { }
+        /// <summary>
+        /// Called when this NPC is hit by a vehicle. The vehicle is null when the native event has no vehicle.
+        /// </summary>
+        public event Action<LandVehicle?> OnHitByCar
+        {
+            add => AddAwarenessHandler(ref _hitByCarHandlers, value);
+            remove => RemoveAwarenessHandler(ref _hitByCarHandlers, value);
+        }
 
-        // TODO: Add OnNoticedDrugDealing listener (currently missing Player abstraction)
-        // public event Action OnNoticedDrugDealing { }
+        /// <summary>
+        /// Called when this NPC notices a player dealing drugs. The player is null when S1API has no wrapper for the native player.
+        /// </summary>
+        public event Action<Player?> OnNoticedDrugDealing
+        {
+            add => AddAwarenessHandler(ref _noticedDrugDealingHandlers, value);
+            remove => RemoveAwarenessHandler(ref _noticedDrugDealingHandlers, value);
+        }
 
-        // TODO: Add OnNoticedGeneralCrime listener (currently missing Player abstraction)
-        // public event Action OnNoticedGeneralCrime { }
+        /// <summary>
+        /// Called when this NPC notices a player committing a general crime. The player is null when S1API has no wrapper for the native player.
+        /// </summary>
+        public event Action<Player?> OnNoticedGeneralCrime
+        {
+            add => AddAwarenessHandler(ref _noticedGeneralCrimeHandlers, value);
+            remove => RemoveAwarenessHandler(ref _noticedGeneralCrimeHandlers, value);
+        }
 
-        // TODO: Add OnNoticedPettyCrime listener (currently missing Player abstraction)
-        // public event Action OnNoticedPettyCrime { }
+        /// <summary>
+        /// Called when this NPC notices a player committing a petty crime. The player is null when S1API has no wrapper for the native player.
+        /// </summary>
+        public event Action<Player?> OnNoticedPettyCrime
+        {
+            add => AddAwarenessHandler(ref _noticedPettyCrimeHandlers, value);
+            remove => RemoveAwarenessHandler(ref _noticedPettyCrimeHandlers, value);
+        }
 
-        // TODO: Add OnPlayerViolatingCurfew listener (currently missing Player abstraction)
-        // public event Action OnPlayerViolatingCurfew { }
+        /// <summary>
+        /// Called when this NPC notices a player violating curfew. The player is null when S1API has no wrapper for the native player.
+        /// </summary>
+        public event Action<Player?> OnNoticedPlayerViolatingCurfew
+        {
+            add => AddAwarenessHandler(ref _noticedPlayerViolatingCurfewHandlers, value);
+            remove => RemoveAwarenessHandler(ref _noticedPlayerViolatingCurfewHandlers, value);
+        }
 
-        // TODO: Add OnNoticedSuspiciousPlayer listener (currently missing Player abstraction)
-        // public event Action OnNoticedSuspiciousPlayer { }
+        /// <summary>
+        /// Called when this NPC notices a suspicious player. The player is null when S1API has no wrapper for the native player.
+        /// </summary>
+        public event Action<Player?> OnNoticedSuspiciousPlayer
+        {
+            add => AddAwarenessHandler(ref _noticedSuspiciousPlayerHandlers, value);
+            remove => RemoveAwarenessHandler(ref _noticedSuspiciousPlayerHandlers, value);
+        }
 
         /// <summary>
         /// Called when the NPC died.
@@ -3439,6 +3487,8 @@ namespace S1API.Entities
             {
                 awareness.Responses = validCivilianResponses;
             }
+
+            EnsureAwarenessEventHooks();
         }
 
         private void InitializeBehaviourComponents()
@@ -4142,6 +4192,23 @@ namespace S1API.Entities
         private NPCSupplier? _supplier;
         private NPCRelationship? _relationship;
         private NPCMessaging? _messaging;
+        private Action<Player?>? _noticedDrugDealingHandlers;
+        private Action<Player?>? _noticedGeneralCrimeHandlers;
+        private Action<Player?>? _noticedPettyCrimeHandlers;
+        private Action<Player?>? _noticedPlayerViolatingCurfewHandlers;
+        private Action<Player?>? _noticedSuspiciousPlayerHandlers;
+        private Action<NPCNoiseEvent?>? _gunshotHeardHandlers;
+        private Action<NPCNoiseEvent?>? _explosionHeardHandlers;
+        private Action<LandVehicle?>? _hitByCarHandlers;
+        private S1NPCs.NPCAwareness? _subscribedAwareness;
+        private Action<S1PlayerScripts.Player>? _nativeNoticedDrugDealingDispatcher;
+        private Action<S1PlayerScripts.Player>? _nativeNoticedGeneralCrimeDispatcher;
+        private Action<S1PlayerScripts.Player>? _nativeNoticedPettyCrimeDispatcher;
+        private Action<S1PlayerScripts.Player>? _nativeNoticedPlayerViolatingCurfewDispatcher;
+        private Action<S1PlayerScripts.Player>? _nativeNoticedSuspiciousPlayerDispatcher;
+        private Action<S1Noise.NoiseEvent>? _nativeGunshotHeardDispatcher;
+        private Action<S1Noise.NoiseEvent>? _nativeExplosionHeardDispatcher;
+        private Action<S1Vehicles.LandVehicle>? _nativeHitByCarDispatcher;
         private NPCSmoking? _smoking;
         private NPCSprayPainting? _sprayPainting;
         private NPCDrinking? _drinking;
@@ -4681,9 +4748,301 @@ namespace S1API.Entities
             _recommendationSubscriptions.Clear();
         }
 
+        private void AddAwarenessHandler<T>(
+            ref Action<T>? handlers,
+            Action<T>? handler)
+        {
+            if (handler == null)
+                return;
+
+            handlers += handler;
+            EnsureAwarenessEventHooks();
+        }
+
+        private void RemoveAwarenessHandler<T>(
+            ref Action<T>? handlers,
+            Action<T>? handler)
+        {
+            if (handler == null)
+                return;
+
+            handlers -= handler;
+            RemoveAwarenessEventHooksWhenUnused();
+        }
+
+        private void EnsureAwarenessEventHooks()
+        {
+            if (!HasAwarenessEventHandlers())
+                return;
+
+            S1NPCs.NPCAwareness? awareness = S1NPC?.Awareness;
+            if (awareness == null)
+                return;
+
+            if (!ReferenceEquals(awareness, _subscribedAwareness))
+            {
+                RemoveAwarenessEventHooks();
+                _subscribedAwareness = awareness;
+            }
+
+            try
+            {
+                if (_noticedDrugDealingHandlers != null)
+                {
+                    global::S1API.Utils.EventHelper.AddListener(
+                        GetOrCreateNoticedDrugDealingDispatcher(),
+                        awareness.onNoticedDrugDealing);
+                }
+
+                if (_noticedGeneralCrimeHandlers != null)
+                {
+                    global::S1API.Utils.EventHelper.AddListener(
+                        GetOrCreateNoticedGeneralCrimeDispatcher(),
+                        awareness.onNoticedGeneralCrime);
+                }
+
+                if (_noticedPettyCrimeHandlers != null)
+                {
+                    global::S1API.Utils.EventHelper.AddListener(
+                        GetOrCreateNoticedPettyCrimeDispatcher(),
+                        awareness.onNoticedPettyCrime);
+                }
+
+                if (_noticedPlayerViolatingCurfewHandlers != null)
+                {
+                    global::S1API.Utils.EventHelper.AddListener(
+                        GetOrCreateNoticedPlayerViolatingCurfewDispatcher(),
+                        awareness.onNoticedPlayerViolatingCurfew);
+                }
+
+                if (_noticedSuspiciousPlayerHandlers != null)
+                {
+                    global::S1API.Utils.EventHelper.AddListener(
+                        GetOrCreateNoticedSuspiciousPlayerDispatcher(),
+                        awareness.onNoticedSuspiciousPlayer);
+                }
+
+                if (_gunshotHeardHandlers != null)
+                {
+                    global::S1API.Utils.EventHelper.AddListener(
+                        GetOrCreateGunshotHeardDispatcher(),
+                        awareness.onGunshotHeard);
+                }
+
+                if (_explosionHeardHandlers != null)
+                {
+                    global::S1API.Utils.EventHelper.AddListener(
+                        GetOrCreateExplosionHeardDispatcher(),
+                        awareness.onExplosionHeard);
+                }
+
+                if (_hitByCarHandlers != null)
+                {
+                    global::S1API.Utils.EventHelper.AddListener(
+                        GetOrCreateHitByCarDispatcher(),
+                        awareness.onHitByCar);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Could not attach NPC awareness event hooks: {ex}");
+            }
+        }
+
+        private void RemoveAwarenessEventHooksWhenUnused()
+        {
+            if (!HasAwarenessEventHandlers())
+                RemoveAwarenessEventHooks();
+        }
+
+        private bool HasAwarenessEventHandlers() =>
+            _noticedDrugDealingHandlers != null ||
+            _noticedGeneralCrimeHandlers != null ||
+            _noticedPettyCrimeHandlers != null ||
+            _noticedPlayerViolatingCurfewHandlers != null ||
+            _noticedSuspiciousPlayerHandlers != null ||
+            _gunshotHeardHandlers != null ||
+            _explosionHeardHandlers != null ||
+            _hitByCarHandlers != null;
+
+        private void RemoveAwarenessEventHooks()
+        {
+            S1NPCs.NPCAwareness? awareness = _subscribedAwareness;
+            if (awareness == null)
+                return;
+
+            try
+            {
+                if (_nativeNoticedDrugDealingDispatcher != null)
+                {
+                    global::S1API.Utils.EventHelper.RemoveListener(
+                        _nativeNoticedDrugDealingDispatcher,
+                        awareness.onNoticedDrugDealing);
+                }
+
+                if (_nativeNoticedGeneralCrimeDispatcher != null)
+                {
+                    global::S1API.Utils.EventHelper.RemoveListener(
+                        _nativeNoticedGeneralCrimeDispatcher,
+                        awareness.onNoticedGeneralCrime);
+                }
+
+                if (_nativeNoticedPettyCrimeDispatcher != null)
+                {
+                    global::S1API.Utils.EventHelper.RemoveListener(
+                        _nativeNoticedPettyCrimeDispatcher,
+                        awareness.onNoticedPettyCrime);
+                }
+
+                if (_nativeNoticedPlayerViolatingCurfewDispatcher != null)
+                {
+                    global::S1API.Utils.EventHelper.RemoveListener(
+                        _nativeNoticedPlayerViolatingCurfewDispatcher,
+                        awareness.onNoticedPlayerViolatingCurfew);
+                }
+
+                if (_nativeNoticedSuspiciousPlayerDispatcher != null)
+                {
+                    global::S1API.Utils.EventHelper.RemoveListener(
+                        _nativeNoticedSuspiciousPlayerDispatcher,
+                        awareness.onNoticedSuspiciousPlayer);
+                }
+
+                if (_nativeGunshotHeardDispatcher != null)
+                {
+                    global::S1API.Utils.EventHelper.RemoveListener(
+                        _nativeGunshotHeardDispatcher,
+                        awareness.onGunshotHeard);
+                }
+
+                if (_nativeExplosionHeardDispatcher != null)
+                {
+                    global::S1API.Utils.EventHelper.RemoveListener(
+                        _nativeExplosionHeardDispatcher,
+                        awareness.onExplosionHeard);
+                }
+
+                if (_nativeHitByCarDispatcher != null)
+                {
+                    global::S1API.Utils.EventHelper.RemoveListener(
+                        _nativeHitByCarDispatcher,
+                        awareness.onHitByCar);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Could not remove NPC awareness event hooks: {ex}");
+            }
+            finally
+            {
+                _subscribedAwareness = null;
+            }
+        }
+
+        private Action<S1PlayerScripts.Player> GetOrCreateNoticedDrugDealingDispatcher() =>
+            _nativeNoticedDrugDealingDispatcher ??= DispatchNoticedDrugDealing;
+
+        private Action<S1PlayerScripts.Player> GetOrCreateNoticedGeneralCrimeDispatcher() =>
+            _nativeNoticedGeneralCrimeDispatcher ??= DispatchNoticedGeneralCrime;
+
+        private Action<S1PlayerScripts.Player> GetOrCreateNoticedPettyCrimeDispatcher() =>
+            _nativeNoticedPettyCrimeDispatcher ??= DispatchNoticedPettyCrime;
+
+        private Action<S1PlayerScripts.Player> GetOrCreateNoticedPlayerViolatingCurfewDispatcher() =>
+            _nativeNoticedPlayerViolatingCurfewDispatcher ??= DispatchNoticedPlayerViolatingCurfew;
+
+        private Action<S1PlayerScripts.Player> GetOrCreateNoticedSuspiciousPlayerDispatcher() =>
+            _nativeNoticedSuspiciousPlayerDispatcher ??= DispatchNoticedSuspiciousPlayer;
+
+        private Action<S1Noise.NoiseEvent> GetOrCreateGunshotHeardDispatcher() =>
+            _nativeGunshotHeardDispatcher ??= DispatchGunshotHeard;
+
+        private Action<S1Noise.NoiseEvent> GetOrCreateExplosionHeardDispatcher() =>
+            _nativeExplosionHeardDispatcher ??= DispatchExplosionHeard;
+
+        private Action<S1Vehicles.LandVehicle> GetOrCreateHitByCarDispatcher() =>
+            _nativeHitByCarDispatcher ??= DispatchHitByCar;
+
+        private void DispatchNoticedDrugDealing(S1PlayerScripts.Player player) =>
+            InvokeAwarenessHandlers(
+                _noticedDrugDealingHandlers,
+                ResolvePlayer(player),
+                nameof(OnNoticedDrugDealing));
+
+        private void DispatchNoticedGeneralCrime(S1PlayerScripts.Player player) =>
+            InvokeAwarenessHandlers(
+                _noticedGeneralCrimeHandlers,
+                ResolvePlayer(player),
+                nameof(OnNoticedGeneralCrime));
+
+        private void DispatchNoticedPettyCrime(S1PlayerScripts.Player player) =>
+            InvokeAwarenessHandlers(
+                _noticedPettyCrimeHandlers,
+                ResolvePlayer(player),
+                nameof(OnNoticedPettyCrime));
+
+        private void DispatchNoticedPlayerViolatingCurfew(S1PlayerScripts.Player player) =>
+            InvokeAwarenessHandlers(
+                _noticedPlayerViolatingCurfewHandlers,
+                ResolvePlayer(player),
+                nameof(OnNoticedPlayerViolatingCurfew));
+
+        private void DispatchNoticedSuspiciousPlayer(S1PlayerScripts.Player player) =>
+            InvokeAwarenessHandlers(
+                _noticedSuspiciousPlayerHandlers,
+                ResolvePlayer(player),
+                nameof(OnNoticedSuspiciousPlayer));
+
+        private void DispatchGunshotHeard(S1Noise.NoiseEvent noiseEvent) =>
+            InvokeAwarenessHandlers(
+                _gunshotHeardHandlers,
+                noiseEvent == null ? null : new NPCNoiseEvent(noiseEvent),
+                nameof(OnGunshotHeard));
+
+        private void DispatchExplosionHeard(S1Noise.NoiseEvent noiseEvent) =>
+            InvokeAwarenessHandlers(
+                _explosionHeardHandlers,
+                noiseEvent == null ? null : new NPCNoiseEvent(noiseEvent),
+                nameof(OnExplosionHeard));
+
+        private void DispatchHitByCar(S1Vehicles.LandVehicle vehicle) =>
+            InvokeAwarenessHandlers(
+                _hitByCarHandlers,
+                vehicle == null ? null : new LandVehicle(vehicle),
+                nameof(OnHitByCar));
+
+        private static Player? ResolvePlayer(S1PlayerScripts.Player player) =>
+            player == null
+                ? null
+                : Player.All.FirstOrDefault(apiPlayer => apiPlayer.S1Player == player);
+
+        private static void InvokeAwarenessHandlers<T>(
+            Action<T>? handlers,
+            T value,
+            string eventName)
+        {
+            if (handlers == null)
+                return;
+
+            foreach (Action<T> handler in handlers.GetInvocationList())
+            {
+                try
+                {
+                    handler(value);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning(
+                        $"NPC {eventName} subscriber " +
+                        $"'{handler.Method.DeclaringType?.FullName}.{handler.Method.Name}' failed: {ex}");
+                }
+            }
+        }
+
         internal void CleanupRuntimeHooks()
         {
             ClearDealerRecommendationHooks();
+            RemoveAwarenessEventHooks();
             _messaging?.Cleanup();
         }
 
