@@ -1,4 +1,5 @@
 #if (IL2CPPMELON)
+using NativeVehicleLifecycleAction = Il2CppSystem.Action<Il2CppScheduleOne.Vehicles.LandVehicle>;
 using S1DevUtilities = Il2CppScheduleOne.DevUtilities;
 using S1AvatarEquipping = Il2CppScheduleOne.AvatarFramework.Equipping;
 using S1Dialogue = Il2CppScheduleOne.Dialogue;
@@ -28,6 +29,7 @@ using S1Registry = Il2CppScheduleOne.Registry;
 using S1Money = Il2CppScheduleOne.Money;
 using ConversationCategoryList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.Messaging.EConversationCategory>;
 #elif MONOMELON
+using NativeVehicleLifecycleAction = System.Action<ScheduleOne.Vehicles.LandVehicle>;
 using S1DevUtilities = ScheduleOne.DevUtilities;
 using S1AvatarEquipping = ScheduleOne.AvatarFramework.Equipping;
 using S1Dialogue = ScheduleOne.Dialogue;
@@ -2817,6 +2819,54 @@ namespace S1API.Entities
         public LandVehicle? CurrentVehicle =>
             S1NPC.CurrentVehicle != null ? new LandVehicle(S1NPC.CurrentVehicle) : null;
 
+        /// <summary>
+        /// Occurs when the NPC enters a vehicle.
+        /// </summary>
+        /// <remarks>This event preserves the timing of the native vehicle-entry callback.</remarks>
+        public event Action<LandVehicle> OnEnterVehicle
+        {
+            add
+            {
+                if (value == null)
+                    return;
+
+                _enterVehicleHandlers += value;
+                EnsureVehicleLifecycleHooks();
+            }
+            remove
+            {
+                if (value == null)
+                    return;
+
+                _enterVehicleHandlers -= value;
+                RemoveVehicleLifecycleHooksWhenUnused();
+            }
+        }
+
+        /// <summary>
+        /// Occurs when the NPC exits a vehicle.
+        /// </summary>
+        /// <remarks>This event preserves the timing of the native vehicle-exit callback.</remarks>
+        public event Action<LandVehicle> OnExitVehicle
+        {
+            add
+            {
+                if (value == null)
+                    return;
+
+                _exitVehicleHandlers += value;
+                EnsureVehicleLifecycleHooks();
+            }
+            remove
+            {
+                if (value == null)
+                    return;
+
+                _exitVehicleHandlers -= value;
+                RemoveVehicleLifecycleHooksWhenUnused();
+            }
+        }
+
         // TODO: Add Inventory (currently missing NPCInventory abstraction)
         // public ??? Inventory { get; set; }
 
@@ -2948,12 +2998,6 @@ namespace S1API.Entities
                 Logger.Warning($"Failed to clear conversation categories for {ID}: {ex.Message}");
             }
         }
-
-        // TODO: Add OnEnterVehicle listener (currently missing LandVehicle abstraction)
-        // public event Action OnEnterVehicle { }
-
-        // TODO: Add OnExitVehicle listener (currently missing LandVehicle abstraction)
-        // public event Action OnExitVehicle { }
 
         // TODO: Add OnExplosionHeard listener (currently missing NoiseEvent abstraction)
         // public event Action OnExplosionHeard { }
@@ -4146,6 +4190,11 @@ namespace S1API.Entities
         private NPCSprayPainting? _sprayPainting;
         private NPCDrinking? _drinking;
         private NPCItemHolding? _itemHolding;
+        private Action<LandVehicle>? _enterVehicleHandlers;
+        private Action<LandVehicle>? _exitVehicleHandlers;
+        private NativeVehicleLifecycleAction? _nativeEnterVehicleDispatcher;
+        private NativeVehicleLifecycleAction? _nativeExitVehicleDispatcher;
+        private bool _vehicleLifecycleHooksSubscribed;
         private bool _relationshipDataAppliedFromPrefab;
         private float? _loadedRelationshipDelta;
         private bool _loadedRelationshipUnlocked;
@@ -4685,6 +4734,167 @@ namespace S1API.Entities
         {
             ClearDealerRecommendationHooks();
             _messaging?.Cleanup();
+            CleanupVehicleLifecycleHooks();
+        }
+
+        private void EnsureVehicleLifecycleHooks()
+        {
+            if (_vehicleLifecycleHooksSubscribed ||
+                (_enterVehicleHandlers == null && _exitVehicleHandlers == null))
+            {
+                return;
+            }
+
+            NativeVehicleLifecycleAction enterDispatcher =
+                GetOrCreateNativeEnterVehicleDispatcher();
+            NativeVehicleLifecycleAction exitDispatcher =
+                GetOrCreateNativeExitVehicleDispatcher();
+
+            try
+            {
+                _vehicleLifecycleHooksSubscribed = true;
+#if IL2CPPMELON
+                S1NPC.onEnterVehicle = S1NPC.onEnterVehicle == null
+                    ? enterDispatcher
+                    : Il2CppSystem.Delegate.Combine(
+                            S1NPC.onEnterVehicle,
+                            enterDispatcher)
+                        .Cast<NativeVehicleLifecycleAction>();
+                S1NPC.onExitVehicle = S1NPC.onExitVehicle == null
+                    ? exitDispatcher
+                    : Il2CppSystem.Delegate.Combine(
+                            S1NPC.onExitVehicle,
+                            exitDispatcher)
+                        .Cast<NativeVehicleLifecycleAction>();
+#else
+                S1NPC.onEnterVehicle += enterDispatcher;
+                S1NPC.onExitVehicle += exitDispatcher;
+#endif
+            }
+            catch (Exception ex)
+            {
+                RemoveVehicleLifecycleHooks();
+                Logger.Warning(
+                    $"Could not attach native vehicle lifecycle hooks for '{GetSafeNpcId()}': {ex}");
+            }
+        }
+
+        private NativeVehicleLifecycleAction GetOrCreateNativeEnterVehicleDispatcher()
+        {
+            if (_nativeEnterVehicleDispatcher != null)
+                return _nativeEnterVehicleDispatcher;
+
+#if IL2CPPMELON
+            _nativeEnterVehicleDispatcher =
+                DelegateSupport.ConvertDelegate<NativeVehicleLifecycleAction>(
+                    new Action<S1Vehicles.LandVehicle>(DispatchEnterVehicle))
+                ?? throw new InvalidOperationException(
+                    "Could not create the native vehicle-entry dispatcher.");
+#else
+            _nativeEnterVehicleDispatcher = DispatchEnterVehicle;
+#endif
+            return _nativeEnterVehicleDispatcher;
+        }
+
+        private NativeVehicleLifecycleAction GetOrCreateNativeExitVehicleDispatcher()
+        {
+            if (_nativeExitVehicleDispatcher != null)
+                return _nativeExitVehicleDispatcher;
+
+#if IL2CPPMELON
+            _nativeExitVehicleDispatcher =
+                DelegateSupport.ConvertDelegate<NativeVehicleLifecycleAction>(
+                    new Action<S1Vehicles.LandVehicle>(DispatchExitVehicle))
+                ?? throw new InvalidOperationException(
+                    "Could not create the native vehicle-exit dispatcher.");
+#else
+            _nativeExitVehicleDispatcher = DispatchExitVehicle;
+#endif
+            return _nativeExitVehicleDispatcher;
+        }
+
+        private void RemoveVehicleLifecycleHooksWhenUnused()
+        {
+            if (_enterVehicleHandlers == null && _exitVehicleHandlers == null)
+                RemoveVehicleLifecycleHooks();
+        }
+
+        private void CleanupVehicleLifecycleHooks()
+        {
+            RemoveVehicleLifecycleHooks();
+            _enterVehicleHandlers = null;
+            _exitVehicleHandlers = null;
+            _nativeEnterVehicleDispatcher = null;
+            _nativeExitVehicleDispatcher = null;
+        }
+
+        private void RemoveVehicleLifecycleHooks()
+        {
+            if (!_vehicleLifecycleHooksSubscribed ||
+                _nativeEnterVehicleDispatcher == null ||
+                _nativeExitVehicleDispatcher == null)
+            {
+                _vehicleLifecycleHooksSubscribed = false;
+                return;
+            }
+
+            try
+            {
+#if IL2CPPMELON
+                Il2CppSystem.Delegate? remainingEnter = Il2CppSystem.Delegate.Remove(
+                    S1NPC.onEnterVehicle,
+                    _nativeEnterVehicleDispatcher);
+                S1NPC.onEnterVehicle =
+                    remainingEnter?.Cast<NativeVehicleLifecycleAction>();
+                Il2CppSystem.Delegate? remainingExit = Il2CppSystem.Delegate.Remove(
+                    S1NPC.onExitVehicle,
+                    _nativeExitVehicleDispatcher);
+                S1NPC.onExitVehicle =
+                    remainingExit?.Cast<NativeVehicleLifecycleAction>();
+#else
+                S1NPC.onEnterVehicle -= _nativeEnterVehicleDispatcher;
+                S1NPC.onExitVehicle -= _nativeExitVehicleDispatcher;
+#endif
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning(
+                    $"Could not remove native vehicle lifecycle hooks for '{GetSafeNpcId()}': {ex}");
+            }
+            finally
+            {
+                _vehicleLifecycleHooksSubscribed = false;
+            }
+        }
+
+        private void DispatchEnterVehicle(S1Vehicles.LandVehicle vehicle) =>
+            DispatchVehicleLifecycleEvent(_enterVehicleHandlers, vehicle, "OnEnterVehicle");
+
+        private void DispatchExitVehicle(S1Vehicles.LandVehicle vehicle) =>
+            DispatchVehicleLifecycleEvent(_exitVehicleHandlers, vehicle, "OnExitVehicle");
+
+        private void DispatchVehicleLifecycleEvent(
+            Action<LandVehicle>? handlers,
+            S1Vehicles.LandVehicle vehicle,
+            string eventName)
+        {
+            if (handlers == null)
+                return;
+
+            var wrappedVehicle = new LandVehicle(vehicle);
+            foreach (Action<LandVehicle> handler in handlers.GetInvocationList())
+            {
+                try
+                {
+                    handler(wrappedVehicle);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning(
+                        $"NPC.{eventName} subscriber " +
+                        $"'{handler.Method.DeclaringType?.FullName}.{handler.Method.Name}' failed: {ex}");
+                }
+            }
         }
 
         private sealed class DealerRecommendationSubscription
