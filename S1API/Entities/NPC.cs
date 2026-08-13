@@ -2797,8 +2797,19 @@ namespace S1API.Entities
 #endif
         }
 
-        // TODO: Add CurrentBuilding (currently missing NPCEnterableBuilding abstraction)
-        // public ??? CurrentBuilding { get; set; }
+        /// <summary>
+        /// The enterable building the NPC is currently in, if any.
+        /// </summary>
+        public Map.Building? CurrentBuilding
+        {
+            get
+            {
+                object? currentBuilding = S1NPC.CurrentBuilding;
+                return currentBuilding == null
+                    ? null
+                    : Map.Building.All.FirstOrDefault(building => ReferenceEquals(building._gameBuilding, currentBuilding));
+            }
+        }
 
         /// <summary>
         /// The current vehicle the NPC is occupying, if any.
