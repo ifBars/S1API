@@ -2827,7 +2827,8 @@ namespace S1API.Entities
         {
             add => AddVehicleLifecycleHandler(
                 value,
-                _enterVehicleRegistrations,
+                _enterVehicleRegistrations ??=
+                    new ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>(),
                 SubscribeEnterVehicle,
                 nameof(OnEnterVehicle));
             remove => RemoveVehicleLifecycleHandler(
@@ -2845,7 +2846,8 @@ namespace S1API.Entities
         {
             add => AddVehicleLifecycleHandler(
                 value,
-                _exitVehicleRegistrations,
+                _exitVehicleRegistrations ??=
+                    new ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>(),
                 SubscribeExitVehicle,
                 nameof(OnExitVehicle));
             remove => RemoveVehicleLifecycleHandler(
@@ -4178,10 +4180,8 @@ namespace S1API.Entities
         private NPCSprayPainting? _sprayPainting;
         private NPCDrinking? _drinking;
         private NPCItemHolding? _itemHolding;
-        private readonly ManagedEventRegistrationTracker<NativeVehicleLifecycleAction> _enterVehicleRegistrations =
-            new ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>();
-        private readonly ManagedEventRegistrationTracker<NativeVehicleLifecycleAction> _exitVehicleRegistrations =
-            new ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>();
+        private ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>? _enterVehicleRegistrations;
+        private ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>? _exitVehicleRegistrations;
         private bool _relationshipDataAppliedFromPrefab;
         private float? _loadedRelationshipDelta;
         private bool _loadedRelationshipUnlocked;
@@ -4749,11 +4749,12 @@ namespace S1API.Entities
 
         private void RemoveVehicleLifecycleHandler(
             Action<LandVehicle>? handler,
-            ManagedEventRegistrationTracker<NativeVehicleLifecycleAction> registrations,
+            ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>? registrations,
             Action<NativeVehicleLifecycleAction> unsubscribe,
             string eventName)
         {
-            if (handler == null || !registrations.TryTakeLast(handler, out var nativeHandler))
+            if (handler == null || registrations == null ||
+                !registrations.TryTakeLast(handler, out var nativeHandler))
                 return;
 
             try
@@ -4856,10 +4857,13 @@ namespace S1API.Entities
         }
 
         private void CleanupVehicleLifecycleHandlers(
-            ManagedEventRegistrationTracker<NativeVehicleLifecycleAction> registrations,
+            ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>? registrations,
             Action<NativeVehicleLifecycleAction> unsubscribe,
             string eventName)
         {
+            if (registrations == null)
+                return;
+
             foreach (var registration in registrations.TakeAll())
             {
                 try
