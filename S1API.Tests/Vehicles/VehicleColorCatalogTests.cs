@@ -22,7 +22,11 @@ public sealed class VehicleColorCatalogTests : IDisposable
     public void LookupsExposeS1ApiOwnedMetadata()
     {
         Color materialColor = CreateColor(0.2f, 0.4f, 0.6f);
+#if IL2CPPMELON
+        Color32 uiColor = default;
+#else
         Color32 uiColor = new(12, 34, 56, 255);
+#endif
         var metadata = new VehicleColorMetadata(
             VehicleColor.DarkBlue,
             "Dark Blue",
@@ -38,7 +42,9 @@ public sealed class VehicleColorCatalogTests : IDisposable
         Assert.Same(metadata, resolved);
         Assert.Equal("Dark Blue", resolved!.DisplayName);
         AssertColor(materialColor, resolved.MaterialColor);
+#if !IL2CPPMELON
         Assert.Equal(uiColor, resolved.UIColor);
+#endif
     }
 
     [Fact]
