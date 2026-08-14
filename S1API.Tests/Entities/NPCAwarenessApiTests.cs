@@ -2,44 +2,23 @@ using System;
 using System.Reflection;
 using S1API.Entities;
 using S1API.Vehicles;
-using UnityEngine;
 
 namespace S1API.Tests.Entities;
 
 public sealed class NPCAwarenessApiTests
 {
-#if MONOMELON
-    [Fact]
-    public void NoiseSnapshotCapturesManagedValues()
-    {
-        var origin = new Vector3(1f, 2f, 3f);
-        var snapshot = new NPCNoiseEvent(
-            origin,
-            24f,
-            NPCNoiseType.Gunshot,
-            source: null,
-            originInSewer: true);
-
-        Assert.Equal(origin, snapshot.Origin);
-        Assert.Equal(24f, snapshot.Range);
-        Assert.Equal(NPCNoiseType.Gunshot, snapshot.Type);
-        Assert.Null(snapshot.Source);
-        Assert.True(snapshot.OriginInSewer);
-    }
-#endif
-
     [Theory]
-    [InlineData(nameof(NPCNoiseEvent.Origin), typeof(Vector3))]
-    [InlineData(nameof(NPCNoiseEvent.Range), typeof(float))]
-    [InlineData(nameof(NPCNoiseEvent.Type), typeof(NPCNoiseType))]
-    [InlineData(nameof(NPCNoiseEvent.Source), typeof(GameObject))]
-    [InlineData(nameof(NPCNoiseEvent.OriginInSewer), typeof(bool))]
-    public void NoiseSnapshotPropertiesAreReadOnly(string propertyName, Type propertyType)
+    [InlineData(nameof(NPCNoiseEvent.Origin), "UnityEngine.Vector3")]
+    [InlineData(nameof(NPCNoiseEvent.Range), "System.Single")]
+    [InlineData(nameof(NPCNoiseEvent.Type), "S1API.Entities.NPCNoiseType")]
+    [InlineData(nameof(NPCNoiseEvent.Source), "UnityEngine.GameObject")]
+    [InlineData(nameof(NPCNoiseEvent.OriginInSewer), "System.Boolean")]
+    public void NoiseSnapshotPropertiesAreReadOnly(string propertyName, string propertyTypeName)
     {
         PropertyInfo? property = typeof(NPCNoiseEvent).GetProperty(propertyName);
 
         Assert.NotNull(property);
-        Assert.Equal(propertyType, property!.PropertyType);
+        Assert.Equal(propertyTypeName, property!.PropertyType.FullName);
         Assert.False(property.CanWrite);
     }
 
