@@ -16,7 +16,7 @@ namespace S1API.Internal.Building
     /// </summary>
     internal static class FurnitureIconRuntime
     {
-        private const int RenderRigWaitFrames = 600;
+        private const int RenderLeaseWaitFrames = 600;
         private static readonly Log Logger = new Log("FurnitureIconRuntime");
         private static readonly object Gate = new object();
         private static readonly Queue<Request> Pending = new Queue<Request>();
@@ -25,12 +25,17 @@ namespace S1API.Internal.Building
         internal static void Queue(
             BuildableItemDefinition definition,
             Transform model,
-            int resolution)
+            int resolution,
+            bool isolateMaterials)
         {
             bool startProcessor = false;
             lock (Gate)
             {
-                Pending.Enqueue(new Request(definition, model, resolution));
+                Pending.Enqueue(new Request(
+                    definition,
+                    model,
+                    resolution,
+                    isolateMaterials));
                 if (!_processing)
                 {
                     _processing = true;
@@ -46,22 +51,11 @@ namespace S1API.Internal.Building
         {
             try
             {
-                int readinessFrame = 0;
-                while (!IconFactory.IsItemIconGeneratorReady && readinessFrame < RenderRigWaitFrames)
-                {
-                    readinessFrame++;
+                // Registration must happen before save restoration, while the native render rig
+                // appears only after gameplay is ready. Preserve queued work across loading and
+                // new-game setup instead of discarding it on an arbitrary frame deadline.
+                while (!IconFactory.IsItemIconGeneratorReady)
                     yield return null;
-                }
-
-                if (!IconFactory.IsItemIconGeneratorReady)
-                {
-                    int requestCount = DrainPendingRequests();
-                    Logger.Warning(
-                        $"Could not generate {requestCount} furniture icon(s): " +
-                        "the native item-icon rendering rig did not become ready. " +
-                        "The definitions retain their native fallback icons.");
-                    yield break;
-                }
 
                 while (TryDequeue(out Request? request))
                 {
@@ -101,7 +95,7 @@ namespace S1API.Internal.Building
                 int acquisitionFrame = 0;
                 bool leaseAcquired = false;
                 while (!(leaseAcquired = ProductIconRenderRigArbiter.TryAcquire(renderLease)) &&
-                       acquisitionFrame < RenderRigWaitFrames)
+                       acquisitionFrame < RenderLeaseWaitFrames)
                 {
                     acquisitionFrame++;
                     yield return null;
@@ -183,7 +177,9 @@ namespace S1API.Internal.Building
                     return false;
                 }
 
-                iconModel = InactiveObjectCloner.CloneGameObject(request.Model.gameObject);
+                iconModel = request.IsolateMaterials
+                    ? FurnitureVisualCloner.CloneOwnedVisual(request.Model.gameObject)
+                    : InactiveObjectCloner.CloneGameObject(request.Model.gameObject);
                 if (iconModel == null)
                 {
                     failure = "the source model could not be cloned";
@@ -250,16 +246,6 @@ namespace S1API.Internal.Building
             }
         }
 
-        private static int DrainPendingRequests()
-        {
-            lock (Gate)
-            {
-                int requestCount = Pending.Count;
-                Pending.Clear();
-                return requestCount;
-            }
-        }
-
         private static void FinishProcessing()
         {
             bool restart;
@@ -287,16 +273,19 @@ namespace S1API.Internal.Building
             internal Request(
                 BuildableItemDefinition definition,
                 Transform model,
-                int resolution)
+                int resolution,
+                bool isolateMaterials)
             {
                 Definition = definition;
                 Model = model;
                 Resolution = resolution;
+                IsolateMaterials = isolateMaterials;
             }
 
             internal BuildableItemDefinition Definition { get; }
             internal Transform Model { get; }
             internal int Resolution { get; }
+            internal bool IsolateMaterials { get; }
         }
     }
 }

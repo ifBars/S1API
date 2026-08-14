@@ -14,6 +14,7 @@ using S1Storage = ScheduleOne.Storage;
 using S1Tiles = ScheduleOne.Tiles;
 #endif
 using System;
+using System.Collections.Generic;
 using S1API.Internal.Utils;
 using S1API.Items;
 using S1API.Items.Buildable;
@@ -37,7 +38,10 @@ namespace S1API.Internal.Building
             int footprintWidth,
             int footprintDepth,
             FurnitureSurfaceType surfaceTypes,
-            bool allowSurfaceRotation)
+            bool allowSurfaceRotation,
+            IReadOnlyList<FurnitureFootprintCoordinate>? donorFootprint,
+            bool centerModelOnFootprint,
+            bool isolateMaterials)
         {
             string templateId = placementMode == FurniturePlacementMode.Grid
                 ? FurnitureTemplateCatalog.GridItemId
@@ -50,7 +54,8 @@ namespace S1API.Internal.Building
             builtItem.gameObject.name = $"{id}_BuiltItem";
             DisableTemplateRenderers(builtItem.gameObject);
 
-            Vector3 visualOffset = placementMode == FurniturePlacementMode.Grid
+            Vector3 visualOffset = placementMode == FurniturePlacementMode.Grid &&
+                                   centerModelOnFootprint
                 ? new Vector3(
                     (footprintWidth - 1) * GridTileSize * 0.5f,
                     0f,
@@ -60,7 +65,8 @@ namespace S1API.Internal.Building
                 model,
                 builtItem.transform,
                 visualOffset,
-                BuildableGhostRuntime.FurnitureVisualName);
+                BuildableGhostRuntime.FurnitureVisualName,
+                isolateMaterials);
             ConfigureBoundsAndCulling(builtItem, builtModel, placementMode);
 
             if (placementMode == FurniturePlacementMode.Grid)
@@ -68,7 +74,11 @@ namespace S1API.Internal.Building
                 if (!CrossType.Is(builtItem, out S1EntityFramework.GridItem gridItem))
                     throw new InvalidOperationException($"Furniture template '{templateId}' is not a native GridItem.");
 
-                ConfigureGridFootprint(gridItem, footprintWidth, footprintDepth);
+                ConfigureGridFootprint(
+                    gridItem,
+                    footprintWidth,
+                    footprintDepth,
+                    donorFootprint);
             }
             else
             {
@@ -89,7 +99,8 @@ namespace S1API.Internal.Building
                 model,
                 storedItem.transform,
                 Vector3.zero,
-                BuildableGhostRuntime.FurnitureVisualName);
+                BuildableGhostRuntime.FurnitureVisualName,
+                isolateMaterials);
             RuntimePrefabCache.Store(storedItem.gameObject);
 
             return new FurnitureComposition(
@@ -122,9 +133,12 @@ namespace S1API.Internal.Building
             GameObject model,
             Transform parent,
             Vector3 localPosition,
-            string name)
+            string name,
+            bool isolateMaterials)
         {
-            GameObject clone = InactiveObjectCloner.CloneGameObject(model);
+            GameObject clone = isolateMaterials
+                ? FurnitureVisualCloner.CloneOwnedVisual(model)
+                : InactiveObjectCloner.CloneGameObject(model);
             clone.name = name;
             clone.transform.SetParent(parent, false);
             clone.transform.localPosition = localPosition;
@@ -259,7 +273,8 @@ namespace S1API.Internal.Building
         private static void ConfigureGridFootprint(
             S1EntityFramework.GridItem gridItem,
             int width,
-            int depth)
+            int depth,
+            IReadOnlyList<FurnitureFootprintCoordinate>? donorFootprint)
         {
             if (gridItem.CoordinateFootprintTilePairs == null ||
                 gridItem.CoordinateFootprintTilePairs.Count == 0 ||
@@ -282,35 +297,44 @@ namespace S1API.Internal.Building
 #else
             var pairs = new System.Collections.Generic.List<S1Tiles.CoordinateFootprintTilePair>();
 #endif
-            for (int x = 0; x < width; x++)
+            if (donorFootprint != null)
             {
+                foreach (FurnitureFootprintCoordinate coordinate in donorFootprint)
+                    AddFootprintTile(coordinate.X, coordinate.Y);
+            }
+            else
+            {
+                for (int x = 0; x < width; x++)
                 for (int y = 0; y < depth; y++)
-                {
-                    S1Tiles.FootprintTile tile = InactiveObjectCloner.CloneComponent(
-                        templateTile,
-                        footprintRoot.transform);
-                    tile.name = $"FootprintTile_{x}_{y}";
-                    tile.X = x;
-                    tile.Y = y;
-                    tile.transform.localPosition = new Vector3(x * GridTileSize, 0f, y * GridTileSize);
-                    tile.gameObject.SetActive(true);
-
-#if (IL2CPPMELON)
-                    var pair = new S1Tiles.CoordinateFootprintTilePair();
-                    pair.coord = new S1Tiles.Coordinate(x, y);
-                    pair.footprintTile = tile;
-#else
-                    var pair = new S1Tiles.CoordinateFootprintTilePair
-                    {
-                        coord = new S1Tiles.Coordinate(x, y),
-                        footprintTile = tile,
-                    };
-#endif
-                    pairs.Add(pair);
-                }
+                    AddFootprintTile(x, y);
             }
 
             gridItem.CoordinateFootprintTilePairs = pairs;
+
+            void AddFootprintTile(int x, int y)
+            {
+                S1Tiles.FootprintTile tile = InactiveObjectCloner.CloneComponent(
+                    templateTile,
+                    footprintRoot.transform);
+                tile.name = $"FootprintTile_{x}_{y}";
+                tile.X = x;
+                tile.Y = y;
+                tile.transform.localPosition = new Vector3(x * GridTileSize, 0f, y * GridTileSize);
+                tile.gameObject.SetActive(true);
+
+#if (IL2CPPMELON)
+                var pair = new S1Tiles.CoordinateFootprintTilePair();
+                pair.coord = new S1Tiles.Coordinate(x, y);
+                pair.footprintTile = tile;
+#else
+                var pair = new S1Tiles.CoordinateFootprintTilePair
+                {
+                    coord = new S1Tiles.Coordinate(x, y),
+                    footprintTile = tile,
+                };
+#endif
+                pairs.Add(pair);
+            }
         }
 
         private static void ConfigureSurfacePlacement(
