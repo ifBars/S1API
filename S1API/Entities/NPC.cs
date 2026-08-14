@@ -1,4 +1,5 @@
 #if (IL2CPPMELON)
+using NativeVehicleLifecycleAction = Il2CppSystem.Action<Il2CppScheduleOne.Vehicles.LandVehicle>;
 using S1DevUtilities = Il2CppScheduleOne.DevUtilities;
 using S1AvatarEquipping = Il2CppScheduleOne.AvatarFramework.Equipping;
 using S1Dialogue = Il2CppScheduleOne.Dialogue;
@@ -28,6 +29,7 @@ using S1Registry = Il2CppScheduleOne.Registry;
 using S1Money = Il2CppScheduleOne.Money;
 using ConversationCategoryList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.Messaging.EConversationCategory>;
 #elif MONOMELON
+using NativeVehicleLifecycleAction = System.Action<ScheduleOne.Vehicles.LandVehicle>;
 using S1DevUtilities = ScheduleOne.DevUtilities;
 using S1AvatarEquipping = ScheduleOne.AvatarFramework.Equipping;
 using S1Dialogue = ScheduleOne.Dialogue;
@@ -2817,6 +2819,44 @@ namespace S1API.Entities
         public LandVehicle? CurrentVehicle =>
             S1NPC.CurrentVehicle != null ? new LandVehicle(S1NPC.CurrentVehicle) : null;
 
+        /// <summary>
+        /// Occurs when the NPC enters a vehicle.
+        /// </summary>
+        /// <remarks>This event preserves the timing of the native vehicle-entry callback.</remarks>
+        public event Action<LandVehicle> OnEnterVehicle
+        {
+            add => AddVehicleLifecycleHandler(
+                value,
+                _enterVehicleRegistrations ??=
+                    new ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>(),
+                SubscribeEnterVehicle,
+                nameof(OnEnterVehicle));
+            remove => RemoveVehicleLifecycleHandler(
+                value,
+                _enterVehicleRegistrations,
+                UnsubscribeEnterVehicle,
+                nameof(OnEnterVehicle));
+        }
+
+        /// <summary>
+        /// Occurs when the NPC exits a vehicle.
+        /// </summary>
+        /// <remarks>This event preserves the timing of the native vehicle-exit callback.</remarks>
+        public event Action<LandVehicle> OnExitVehicle
+        {
+            add => AddVehicleLifecycleHandler(
+                value,
+                _exitVehicleRegistrations ??=
+                    new ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>(),
+                SubscribeExitVehicle,
+                nameof(OnExitVehicle));
+            remove => RemoveVehicleLifecycleHandler(
+                value,
+                _exitVehicleRegistrations,
+                UnsubscribeExitVehicle,
+                nameof(OnExitVehicle));
+        }
+
         // TODO: Add Inventory (currently missing NPCInventory abstraction)
         // public ??? Inventory { get; set; }
 
@@ -2948,12 +2988,6 @@ namespace S1API.Entities
                 Logger.Warning($"Failed to clear conversation categories for {ID}: {ex.Message}");
             }
         }
-
-        // TODO: Add OnEnterVehicle listener (currently missing LandVehicle abstraction)
-        // public event Action OnEnterVehicle { }
-
-        // TODO: Add OnExitVehicle listener (currently missing LandVehicle abstraction)
-        // public event Action OnExitVehicle { }
 
         // TODO: Add OnExplosionHeard listener (currently missing NoiseEvent abstraction)
         // public event Action OnExplosionHeard { }
@@ -4146,6 +4180,8 @@ namespace S1API.Entities
         private NPCSprayPainting? _sprayPainting;
         private NPCDrinking? _drinking;
         private NPCItemHolding? _itemHolding;
+        private ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>? _enterVehicleRegistrations;
+        private ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>? _exitVehicleRegistrations;
         private bool _relationshipDataAppliedFromPrefab;
         private float? _loadedRelationshipDelta;
         private bool _loadedRelationshipUnlocked;
@@ -4685,6 +4721,164 @@ namespace S1API.Entities
         {
             ClearDealerRecommendationHooks();
             _messaging?.Cleanup();
+            CleanupVehicleLifecycleHooks();
+        }
+
+        private void AddVehicleLifecycleHandler(
+            Action<LandVehicle>? handler,
+            ManagedEventRegistrationTracker<NativeVehicleLifecycleAction> registrations,
+            Action<NativeVehicleLifecycleAction> subscribe,
+            string eventName)
+        {
+            if (handler == null)
+                return;
+
+            try
+            {
+                NativeVehicleLifecycleAction nativeHandler =
+                    CreateVehicleLifecycleHandler(handler, eventName);
+                subscribe(nativeHandler);
+                registrations.Add(handler, nativeHandler);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning(
+                    $"Could not subscribe to NPC.{eventName} for '{GetSafeNpcId()}': {ex}");
+            }
+        }
+
+        private void RemoveVehicleLifecycleHandler(
+            Action<LandVehicle>? handler,
+            ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>? registrations,
+            Action<NativeVehicleLifecycleAction> unsubscribe,
+            string eventName)
+        {
+            if (handler == null || registrations == null ||
+                !registrations.TryTakeLast(handler, out var nativeHandler))
+                return;
+
+            try
+            {
+                unsubscribe(nativeHandler);
+            }
+            catch (Exception ex)
+            {
+                registrations.Add(handler, nativeHandler);
+                Logger.Warning(
+                    $"Could not unsubscribe from NPC.{eventName} for '{GetSafeNpcId()}': {ex}");
+            }
+        }
+
+        private NativeVehicleLifecycleAction CreateVehicleLifecycleHandler(
+            Action<LandVehicle> handler,
+            string eventName)
+        {
+            Action<S1Vehicles.LandVehicle> managedHandler = vehicle =>
+            {
+                try
+                {
+                    handler(new LandVehicle(vehicle));
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning(
+                        $"NPC.{eventName} subscriber " +
+                        $"'{handler.Method.DeclaringType?.FullName}.{handler.Method.Name}' failed: {ex}");
+                }
+            };
+
+#if IL2CPPMELON
+            return DelegateSupport.ConvertDelegate<NativeVehicleLifecycleAction>(managedHandler)
+                ?? throw new InvalidOperationException(
+                    $"Could not create the native {eventName} delegate.");
+#else
+            return managedHandler;
+#endif
+        }
+
+        private void SubscribeEnterVehicle(NativeVehicleLifecycleAction handler)
+        {
+#if IL2CPPMELON
+            S1NPC.onEnterVehicle = S1NPC.onEnterVehicle == null
+                ? handler
+                : Il2CppSystem.Delegate.Combine(S1NPC.onEnterVehicle, handler)
+                    .Cast<NativeVehicleLifecycleAction>();
+#else
+            S1NPC.onEnterVehicle += handler;
+#endif
+        }
+
+        private void UnsubscribeEnterVehicle(NativeVehicleLifecycleAction handler)
+        {
+#if IL2CPPMELON
+            Il2CppSystem.Delegate? remaining = Il2CppSystem.Delegate.Remove(
+                S1NPC.onEnterVehicle,
+                handler);
+            S1NPC.onEnterVehicle = remaining?.Cast<NativeVehicleLifecycleAction>();
+#else
+            S1NPC.onEnterVehicle -= handler;
+#endif
+        }
+
+        private void SubscribeExitVehicle(NativeVehicleLifecycleAction handler)
+        {
+#if IL2CPPMELON
+            S1NPC.onExitVehicle = S1NPC.onExitVehicle == null
+                ? handler
+                : Il2CppSystem.Delegate.Combine(S1NPC.onExitVehicle, handler)
+                    .Cast<NativeVehicleLifecycleAction>();
+#else
+            S1NPC.onExitVehicle += handler;
+#endif
+        }
+
+        private void UnsubscribeExitVehicle(NativeVehicleLifecycleAction handler)
+        {
+#if IL2CPPMELON
+            Il2CppSystem.Delegate? remaining = Il2CppSystem.Delegate.Remove(
+                S1NPC.onExitVehicle,
+                handler);
+            S1NPC.onExitVehicle = remaining?.Cast<NativeVehicleLifecycleAction>();
+#else
+            S1NPC.onExitVehicle -= handler;
+#endif
+        }
+
+        private void CleanupVehicleLifecycleHooks()
+        {
+            CleanupVehicleLifecycleHandlers(
+                _enterVehicleRegistrations,
+                UnsubscribeEnterVehicle,
+                nameof(OnEnterVehicle));
+            CleanupVehicleLifecycleHandlers(
+                _exitVehicleRegistrations,
+                UnsubscribeExitVehicle,
+                nameof(OnExitVehicle));
+        }
+
+        private void CleanupVehicleLifecycleHandlers(
+            ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>? registrations,
+            Action<NativeVehicleLifecycleAction> unsubscribe,
+            string eventName)
+        {
+            if (registrations == null)
+                return;
+
+            foreach (var registration in registrations.TakeAll())
+            {
+                try
+                {
+                    unsubscribe(registration.NativeHandler);
+                }
+                catch (Exception ex)
+                {
+                    registrations.Add(
+                        registration.ManagedHandler,
+                        registration.NativeHandler);
+                    Logger.Warning(
+                        $"Could not clean up NPC.{eventName} for '{GetSafeNpcId()}': {ex}");
+                }
+            }
         }
 
         private sealed class DealerRecommendationSubscription

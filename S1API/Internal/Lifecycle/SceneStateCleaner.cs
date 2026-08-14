@@ -66,9 +66,14 @@ namespace S1API.Internal.Lifecycle
                     for (int i = 0; i < NPC.All.Count; i++)
                     {
                         var npc = NPC.All[i];
-                        if (npc != null && npc.gameObject != null)
+                        if (npc != null)
                         {
-                            TryRun(() => UnityEngine.Object.Destroy(npc.gameObject));
+                            TryRun(
+                                npc.CleanupRuntimeHooks,
+                                "Failed to remove NPC runtime hooks during scene cleanup");
+
+                            if (npc.gameObject != null)
+                                TryRun(() => UnityEngine.Object.Destroy(npc.gameObject));
                         }
                     }
                     NPC.All.Clear();
@@ -126,4 +131,3 @@ namespace S1API.Internal.Lifecycle
         }
     }
 }
-
