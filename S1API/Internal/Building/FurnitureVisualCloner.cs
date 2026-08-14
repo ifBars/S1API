@@ -139,12 +139,12 @@ namespace S1API.Internal.Building
 
         private static bool IsPresentationComponent(Component component)
         {
-            return component is Transform ||
-                   component is Renderer ||
-                   component is MeshFilter ||
-                   component is LODGroup ||
-                   component is Animator ||
-                   component is Animation;
+            return CrossType.Is(component, out Transform _) ||
+                   CrossType.Is(component, out Renderer _) ||
+                   CrossType.Is(component, out MeshFilter _) ||
+                   CrossType.Is(component, out LODGroup _) ||
+                   CrossType.Is(component, out Animator _) ||
+                   CrossType.Is(component, out Animation _);
         }
 
         private static void EnsureRenderable(GameObject root, string donorId)

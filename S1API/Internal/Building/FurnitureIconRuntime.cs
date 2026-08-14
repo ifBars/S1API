@@ -16,7 +16,7 @@ namespace S1API.Internal.Building
     /// </summary>
     internal static class FurnitureIconRuntime
     {
-        private const int RenderRigWaitFrames = 600;
+        private const int RenderLeaseWaitFrames = 600;
         private static readonly Log Logger = new Log("FurnitureIconRuntime");
         private static readonly object Gate = new object();
         private static readonly Queue<Request> Pending = new Queue<Request>();
@@ -51,22 +51,11 @@ namespace S1API.Internal.Building
         {
             try
             {
-                int readinessFrame = 0;
-                while (!IconFactory.IsItemIconGeneratorReady && readinessFrame < RenderRigWaitFrames)
-                {
-                    readinessFrame++;
+                // Registration must happen before save restoration, while the native render rig
+                // appears only after gameplay is ready. Preserve queued work across loading and
+                // new-game setup instead of discarding it on an arbitrary frame deadline.
+                while (!IconFactory.IsItemIconGeneratorReady)
                     yield return null;
-                }
-
-                if (!IconFactory.IsItemIconGeneratorReady)
-                {
-                    int requestCount = DrainPendingRequests();
-                    Logger.Warning(
-                        $"Could not generate {requestCount} furniture icon(s): " +
-                        "the native item-icon rendering rig did not become ready. " +
-                        "The definitions retain their native fallback icons.");
-                    yield break;
-                }
 
                 while (TryDequeue(out Request? request))
                 {
@@ -106,7 +95,7 @@ namespace S1API.Internal.Building
                 int acquisitionFrame = 0;
                 bool leaseAcquired = false;
                 while (!(leaseAcquired = ProductIconRenderRigArbiter.TryAcquire(renderLease)) &&
-                       acquisitionFrame < RenderRigWaitFrames)
+                       acquisitionFrame < RenderLeaseWaitFrames)
                 {
                     acquisitionFrame++;
                     yield return null;
@@ -254,16 +243,6 @@ namespace S1API.Internal.Building
 
                 request = Pending.Dequeue();
                 return true;
-            }
-        }
-
-        private static int DrainPendingRequests()
-        {
-            lock (Gate)
-            {
-                int requestCount = Pending.Count;
-                Pending.Clear();
-                return requestCount;
             }
         }
 
