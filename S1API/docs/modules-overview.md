@@ -158,6 +158,7 @@ Vehicle spawning and management.
 - `LandVehicle` - Land vehicle wrapper
 - `VehicleRegistry` - Vehicle registration
 - `VehicleColor` - Color configuration
+- `VehicleColorCatalog` - Native vehicle color metadata
 - `ParkingAlignment` - Parking helpers
 
 **Documentation**: In development
