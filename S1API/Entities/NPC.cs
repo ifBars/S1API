@@ -5014,6 +5014,7 @@ namespace S1API.Entities
         {
             ClearDealerRecommendationHooks();
             CleanupAwarenessEventHooks();
+            _dealer?.Cleanup();
             _messaging?.Cleanup();
             CleanupVehicleLifecycleHooks();
         }

@@ -55,6 +55,43 @@ public sealed class DealerLifecyclePolicyTests
         Assert.Equal(expected, NPCPrefabBuilder.IsDealerHomeEventName(name));
     }
 
+    [Theory]
+    [InlineData(false, true, 0, 0, 0, true)]
+    [InlineData(false, false, 0, 0, 0, false)]
+    [InlineData(true, true, 0, 0, 0, false)]
+    [InlineData(false, true, 1, 0, 0, false)]
+    [InlineData(false, true, 0, 1, 0, false)]
+    [InlineData(false, true, 0, 0, 1, false)]
+    public void OnlyCreatedEmptyLockedDealerConversationsAreHidden(
+        bool relationshipUnlocked,
+        bool uiCreated,
+        int messageCount,
+        int messageChainCount,
+        int responseCount,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            NPCDealer.ShouldHideLockedConversation(
+                relationshipUnlocked,
+                uiCreated,
+                messageCount,
+                messageChainCount,
+                responseCount));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public void DealerConversationUiIsCreatedOnlyForUnlockedRelationships(
+        bool relationshipUnlocked,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            NPCDealer.ShouldEnsureConversationUi(relationshipUnlocked));
+    }
+
     [Fact]
     public void ConnectionIdsAreStableAcrossSpawnOrderReconciliation()
     {
