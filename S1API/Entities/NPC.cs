@@ -2825,22 +2825,16 @@ namespace S1API.Entities
         /// <remarks>This event preserves the timing of the native vehicle-entry callback.</remarks>
         public event Action<LandVehicle> OnEnterVehicle
         {
-            add
-            {
-                if (value == null)
-                    return;
-
-                _enterVehicleHandlers += value;
-                EnsureVehicleLifecycleHooks();
-            }
-            remove
-            {
-                if (value == null)
-                    return;
-
-                _enterVehicleHandlers -= value;
-                RemoveVehicleLifecycleHooksWhenUnused();
-            }
+            add => AddVehicleLifecycleHandler(
+                value,
+                _enterVehicleRegistrations,
+                SubscribeEnterVehicle,
+                nameof(OnEnterVehicle));
+            remove => RemoveVehicleLifecycleHandler(
+                value,
+                _enterVehicleRegistrations,
+                UnsubscribeEnterVehicle,
+                nameof(OnEnterVehicle));
         }
 
         /// <summary>
@@ -2849,22 +2843,16 @@ namespace S1API.Entities
         /// <remarks>This event preserves the timing of the native vehicle-exit callback.</remarks>
         public event Action<LandVehicle> OnExitVehicle
         {
-            add
-            {
-                if (value == null)
-                    return;
-
-                _exitVehicleHandlers += value;
-                EnsureVehicleLifecycleHooks();
-            }
-            remove
-            {
-                if (value == null)
-                    return;
-
-                _exitVehicleHandlers -= value;
-                RemoveVehicleLifecycleHooksWhenUnused();
-            }
+            add => AddVehicleLifecycleHandler(
+                value,
+                _exitVehicleRegistrations,
+                SubscribeExitVehicle,
+                nameof(OnExitVehicle));
+            remove => RemoveVehicleLifecycleHandler(
+                value,
+                _exitVehicleRegistrations,
+                UnsubscribeExitVehicle,
+                nameof(OnExitVehicle));
         }
 
         // TODO: Add Inventory (currently missing NPCInventory abstraction)
@@ -4190,11 +4178,10 @@ namespace S1API.Entities
         private NPCSprayPainting? _sprayPainting;
         private NPCDrinking? _drinking;
         private NPCItemHolding? _itemHolding;
-        private Action<LandVehicle>? _enterVehicleHandlers;
-        private Action<LandVehicle>? _exitVehicleHandlers;
-        private NativeVehicleLifecycleAction? _nativeEnterVehicleDispatcher;
-        private NativeVehicleLifecycleAction? _nativeExitVehicleDispatcher;
-        private bool _vehicleLifecycleHooksSubscribed;
+        private readonly ManagedEventRegistrationTracker<NativeVehicleLifecycleAction> _enterVehicleRegistrations =
+            new ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>();
+        private readonly ManagedEventRegistrationTracker<NativeVehicleLifecycleAction> _exitVehicleRegistrations =
+            new ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>();
         private bool _relationshipDataAppliedFromPrefab;
         private float? _loadedRelationshipDelta;
         private bool _loadedRelationshipUnlocked;
@@ -4737,162 +4724,155 @@ namespace S1API.Entities
             CleanupVehicleLifecycleHooks();
         }
 
-        private void EnsureVehicleLifecycleHooks()
-        {
-            if (_vehicleLifecycleHooksSubscribed ||
-                (_enterVehicleHandlers == null && _exitVehicleHandlers == null))
-            {
-                return;
-            }
-
-            NativeVehicleLifecycleAction enterDispatcher =
-                GetOrCreateNativeEnterVehicleDispatcher();
-            NativeVehicleLifecycleAction exitDispatcher =
-                GetOrCreateNativeExitVehicleDispatcher();
-
-            try
-            {
-                _vehicleLifecycleHooksSubscribed = true;
-#if IL2CPPMELON
-                S1NPC.onEnterVehicle = S1NPC.onEnterVehicle == null
-                    ? enterDispatcher
-                    : Il2CppSystem.Delegate.Combine(
-                            S1NPC.onEnterVehicle,
-                            enterDispatcher)
-                        .Cast<NativeVehicleLifecycleAction>();
-                S1NPC.onExitVehicle = S1NPC.onExitVehicle == null
-                    ? exitDispatcher
-                    : Il2CppSystem.Delegate.Combine(
-                            S1NPC.onExitVehicle,
-                            exitDispatcher)
-                        .Cast<NativeVehicleLifecycleAction>();
-#else
-                S1NPC.onEnterVehicle += enterDispatcher;
-                S1NPC.onExitVehicle += exitDispatcher;
-#endif
-            }
-            catch (Exception ex)
-            {
-                RemoveVehicleLifecycleHooks();
-                Logger.Warning(
-                    $"Could not attach native vehicle lifecycle hooks for '{GetSafeNpcId()}': {ex}");
-            }
-        }
-
-        private NativeVehicleLifecycleAction GetOrCreateNativeEnterVehicleDispatcher()
-        {
-            if (_nativeEnterVehicleDispatcher != null)
-                return _nativeEnterVehicleDispatcher;
-
-#if IL2CPPMELON
-            _nativeEnterVehicleDispatcher =
-                DelegateSupport.ConvertDelegate<NativeVehicleLifecycleAction>(
-                    new Action<S1Vehicles.LandVehicle>(DispatchEnterVehicle))
-                ?? throw new InvalidOperationException(
-                    "Could not create the native vehicle-entry dispatcher.");
-#else
-            _nativeEnterVehicleDispatcher = DispatchEnterVehicle;
-#endif
-            return _nativeEnterVehicleDispatcher;
-        }
-
-        private NativeVehicleLifecycleAction GetOrCreateNativeExitVehicleDispatcher()
-        {
-            if (_nativeExitVehicleDispatcher != null)
-                return _nativeExitVehicleDispatcher;
-
-#if IL2CPPMELON
-            _nativeExitVehicleDispatcher =
-                DelegateSupport.ConvertDelegate<NativeVehicleLifecycleAction>(
-                    new Action<S1Vehicles.LandVehicle>(DispatchExitVehicle))
-                ?? throw new InvalidOperationException(
-                    "Could not create the native vehicle-exit dispatcher.");
-#else
-            _nativeExitVehicleDispatcher = DispatchExitVehicle;
-#endif
-            return _nativeExitVehicleDispatcher;
-        }
-
-        private void RemoveVehicleLifecycleHooksWhenUnused()
-        {
-            if (_enterVehicleHandlers == null && _exitVehicleHandlers == null)
-                RemoveVehicleLifecycleHooks();
-        }
-
-        private void CleanupVehicleLifecycleHooks()
-        {
-            RemoveVehicleLifecycleHooks();
-            _enterVehicleHandlers = null;
-            _exitVehicleHandlers = null;
-            _nativeEnterVehicleDispatcher = null;
-            _nativeExitVehicleDispatcher = null;
-        }
-
-        private void RemoveVehicleLifecycleHooks()
-        {
-            if (!_vehicleLifecycleHooksSubscribed ||
-                _nativeEnterVehicleDispatcher == null ||
-                _nativeExitVehicleDispatcher == null)
-            {
-                _vehicleLifecycleHooksSubscribed = false;
-                return;
-            }
-
-            try
-            {
-#if IL2CPPMELON
-                Il2CppSystem.Delegate? remainingEnter = Il2CppSystem.Delegate.Remove(
-                    S1NPC.onEnterVehicle,
-                    _nativeEnterVehicleDispatcher);
-                S1NPC.onEnterVehicle =
-                    remainingEnter?.Cast<NativeVehicleLifecycleAction>();
-                Il2CppSystem.Delegate? remainingExit = Il2CppSystem.Delegate.Remove(
-                    S1NPC.onExitVehicle,
-                    _nativeExitVehicleDispatcher);
-                S1NPC.onExitVehicle =
-                    remainingExit?.Cast<NativeVehicleLifecycleAction>();
-#else
-                S1NPC.onEnterVehicle -= _nativeEnterVehicleDispatcher;
-                S1NPC.onExitVehicle -= _nativeExitVehicleDispatcher;
-#endif
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning(
-                    $"Could not remove native vehicle lifecycle hooks for '{GetSafeNpcId()}': {ex}");
-            }
-            finally
-            {
-                _vehicleLifecycleHooksSubscribed = false;
-            }
-        }
-
-        private void DispatchEnterVehicle(S1Vehicles.LandVehicle vehicle) =>
-            DispatchVehicleLifecycleEvent(_enterVehicleHandlers, vehicle, "OnEnterVehicle");
-
-        private void DispatchExitVehicle(S1Vehicles.LandVehicle vehicle) =>
-            DispatchVehicleLifecycleEvent(_exitVehicleHandlers, vehicle, "OnExitVehicle");
-
-        private void DispatchVehicleLifecycleEvent(
-            Action<LandVehicle>? handlers,
-            S1Vehicles.LandVehicle vehicle,
+        private void AddVehicleLifecycleHandler(
+            Action<LandVehicle>? handler,
+            ManagedEventRegistrationTracker<NativeVehicleLifecycleAction> registrations,
+            Action<NativeVehicleLifecycleAction> subscribe,
             string eventName)
         {
-            if (handlers == null)
+            if (handler == null)
                 return;
 
-            var wrappedVehicle = new LandVehicle(vehicle);
-            foreach (Action<LandVehicle> handler in handlers.GetInvocationList())
+            try
+            {
+                NativeVehicleLifecycleAction nativeHandler =
+                    CreateVehicleLifecycleHandler(handler, eventName);
+                subscribe(nativeHandler);
+                registrations.Add(handler, nativeHandler);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning(
+                    $"Could not subscribe to NPC.{eventName} for '{GetSafeNpcId()}': {ex}");
+            }
+        }
+
+        private void RemoveVehicleLifecycleHandler(
+            Action<LandVehicle>? handler,
+            ManagedEventRegistrationTracker<NativeVehicleLifecycleAction> registrations,
+            Action<NativeVehicleLifecycleAction> unsubscribe,
+            string eventName)
+        {
+            if (handler == null || !registrations.TryTakeLast(handler, out var nativeHandler))
+                return;
+
+            try
+            {
+                unsubscribe(nativeHandler);
+            }
+            catch (Exception ex)
+            {
+                registrations.Add(handler, nativeHandler);
+                Logger.Warning(
+                    $"Could not unsubscribe from NPC.{eventName} for '{GetSafeNpcId()}': {ex}");
+            }
+        }
+
+        private NativeVehicleLifecycleAction CreateVehicleLifecycleHandler(
+            Action<LandVehicle> handler,
+            string eventName)
+        {
+            Action<S1Vehicles.LandVehicle> managedHandler = vehicle =>
             {
                 try
                 {
-                    handler(wrappedVehicle);
+                    handler(new LandVehicle(vehicle));
                 }
                 catch (Exception ex)
                 {
                     Logger.Warning(
                         $"NPC.{eventName} subscriber " +
                         $"'{handler.Method.DeclaringType?.FullName}.{handler.Method.Name}' failed: {ex}");
+                }
+            };
+
+#if IL2CPPMELON
+            return DelegateSupport.ConvertDelegate<NativeVehicleLifecycleAction>(managedHandler)
+                ?? throw new InvalidOperationException(
+                    $"Could not create the native {eventName} delegate.");
+#else
+            return managedHandler;
+#endif
+        }
+
+        private void SubscribeEnterVehicle(NativeVehicleLifecycleAction handler)
+        {
+#if IL2CPPMELON
+            S1NPC.onEnterVehicle = S1NPC.onEnterVehicle == null
+                ? handler
+                : Il2CppSystem.Delegate.Combine(S1NPC.onEnterVehicle, handler)
+                    .Cast<NativeVehicleLifecycleAction>();
+#else
+            S1NPC.onEnterVehicle += handler;
+#endif
+        }
+
+        private void UnsubscribeEnterVehicle(NativeVehicleLifecycleAction handler)
+        {
+#if IL2CPPMELON
+            Il2CppSystem.Delegate? remaining = Il2CppSystem.Delegate.Remove(
+                S1NPC.onEnterVehicle,
+                handler);
+            S1NPC.onEnterVehicle = remaining?.Cast<NativeVehicleLifecycleAction>();
+#else
+            S1NPC.onEnterVehicle -= handler;
+#endif
+        }
+
+        private void SubscribeExitVehicle(NativeVehicleLifecycleAction handler)
+        {
+#if IL2CPPMELON
+            S1NPC.onExitVehicle = S1NPC.onExitVehicle == null
+                ? handler
+                : Il2CppSystem.Delegate.Combine(S1NPC.onExitVehicle, handler)
+                    .Cast<NativeVehicleLifecycleAction>();
+#else
+            S1NPC.onExitVehicle += handler;
+#endif
+        }
+
+        private void UnsubscribeExitVehicle(NativeVehicleLifecycleAction handler)
+        {
+#if IL2CPPMELON
+            Il2CppSystem.Delegate? remaining = Il2CppSystem.Delegate.Remove(
+                S1NPC.onExitVehicle,
+                handler);
+            S1NPC.onExitVehicle = remaining?.Cast<NativeVehicleLifecycleAction>();
+#else
+            S1NPC.onExitVehicle -= handler;
+#endif
+        }
+
+        private void CleanupVehicleLifecycleHooks()
+        {
+            CleanupVehicleLifecycleHandlers(
+                _enterVehicleRegistrations,
+                UnsubscribeEnterVehicle,
+                nameof(OnEnterVehicle));
+            CleanupVehicleLifecycleHandlers(
+                _exitVehicleRegistrations,
+                UnsubscribeExitVehicle,
+                nameof(OnExitVehicle));
+        }
+
+        private void CleanupVehicleLifecycleHandlers(
+            ManagedEventRegistrationTracker<NativeVehicleLifecycleAction> registrations,
+            Action<NativeVehicleLifecycleAction> unsubscribe,
+            string eventName)
+        {
+            foreach (var registration in registrations.TakeAll())
+            {
+                try
+                {
+                    unsubscribe(registration.NativeHandler);
+                }
+                catch (Exception ex)
+                {
+                    registrations.Add(
+                        registration.ManagedHandler,
+                        registration.NativeHandler);
+                    Logger.Warning(
+                        $"Could not clean up NPC.{eventName} for '{GetSafeNpcId()}': {ex}");
                 }
             }
         }
