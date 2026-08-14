@@ -4873,7 +4873,7 @@ namespace S1API.Entities
 
             try
             {
-                Action<TNative> nativeHandler = value =>
+                Action<TNative> managedHandler = value =>
                 {
                     try
                     {
@@ -4887,7 +4887,15 @@ namespace S1API.Entities
                     }
                 };
 
-                global::S1API.Utils.EventHelper.AddListener(nativeHandler, nativeEvent);
+#if IL2CPPMELON
+                UnityAction<TNative> nativeHandler =
+                    DelegateSupport.ConvertDelegate<UnityAction<TNative>>(managedHandler)
+                    ?? throw new InvalidOperationException(
+                        $"Could not create the native {eventName} listener.");
+#else
+                UnityAction<TNative> nativeHandler = new UnityAction<TNative>(managedHandler);
+#endif
+                nativeEvent.AddListener(nativeHandler);
                 registrations.Add(
                     handler,
                     new AwarenessEventRegistration<TNative>(nativeEvent, nativeHandler));
@@ -4910,9 +4918,7 @@ namespace S1API.Entities
 
             try
             {
-                global::S1API.Utils.EventHelper.RemoveListener(
-                    registration.Handler,
-                    registration.Event);
+                registration.Event.RemoveListener(registration.Handler);
             }
             catch (Exception ex)
             {
@@ -4961,9 +4967,8 @@ namespace S1API.Entities
             {
                 try
                 {
-                    global::S1API.Utils.EventHelper.RemoveListener(
-                        registration.NativeHandler.Handler,
-                        registration.NativeHandler.Event);
+                    registration.NativeHandler.Event.RemoveListener(
+                        registration.NativeHandler.Handler);
                 }
                 catch (Exception ex)
                 {
@@ -4994,11 +4999,11 @@ namespace S1API.Entities
         private sealed class AwarenessEventRegistration<TNative>
         {
             internal UnityEvent<TNative> Event { get; }
-            internal Action<TNative> Handler { get; }
+            internal UnityAction<TNative> Handler { get; }
 
             internal AwarenessEventRegistration(
                 UnityEvent<TNative> nativeEvent,
-                Action<TNative> handler)
+                UnityAction<TNative> handler)
             {
                 Event = nativeEvent;
                 Handler = handler;
