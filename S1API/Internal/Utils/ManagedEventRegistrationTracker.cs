@@ -9,9 +9,9 @@ namespace S1API.Internal.Utils
     /// <typeparam name="TNativeHandler">The runtime-specific handler type.</typeparam>
     internal sealed class ManagedEventRegistrationTracker<TNativeHandler>
     {
-        private readonly Dictionary<Action, List<TNativeHandler>> _registrations = new Dictionary<Action, List<TNativeHandler>>();
+        private readonly Dictionary<Delegate, List<TNativeHandler>> _registrations = new Dictionary<Delegate, List<TNativeHandler>>();
 
-        internal void Add(Action managedHandler, TNativeHandler nativeHandler)
+        internal void Add(Delegate managedHandler, TNativeHandler nativeHandler)
         {
             if (!_registrations.TryGetValue(managedHandler, out var nativeHandlers))
             {
@@ -22,7 +22,7 @@ namespace S1API.Internal.Utils
             nativeHandlers.Add(nativeHandler);
         }
 
-        internal bool TryTakeLast(Action managedHandler, out TNativeHandler nativeHandler)
+        internal bool TryTakeLast(Delegate managedHandler, out TNativeHandler nativeHandler)
         {
             if (!_registrations.TryGetValue(managedHandler, out var nativeHandlers)
                 || nativeHandlers.Count == 0)
@@ -40,6 +40,21 @@ namespace S1API.Internal.Utils
             }
 
             return true;
+        }
+
+        internal IReadOnlyList<(Delegate ManagedHandler, TNativeHandler NativeHandler)> TakeAll()
+        {
+            var registrations = new List<(Delegate ManagedHandler, TNativeHandler NativeHandler)>();
+            foreach (var registration in _registrations)
+            {
+                foreach (TNativeHandler nativeHandler in registration.Value)
+                {
+                    registrations.Add((registration.Key, nativeHandler));
+                }
+            }
+
+            _registrations.Clear();
+            return registrations;
         }
     }
 }
