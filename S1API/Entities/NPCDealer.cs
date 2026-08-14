@@ -69,6 +69,7 @@ namespace S1API.Entities
         private Action? _contractAcceptedHandlers;
         private bool _contractAcceptedHooked;
         private Action<NPCRelationship.UnlockType, bool>? _relationshipUnlockedHandler;
+        private S1Messaging.MSGConversation? _conversationUiRefreshHooked;
 
         internal NPCDealer(NPC npc)
         {
@@ -178,6 +179,9 @@ namespace S1API.Entities
                     RefreshDealerCategoryBadge();
                 }
 
+                if (ReferenceEquals(_conversationUiRefreshHooked, convo))
+                    return;
+
                 // Hook onLoaded (called after UI is loaded from save)
                 var prevLoaded = convo.onLoaded;
                 convo.onLoaded = new System.Action(() =>
@@ -194,6 +198,8 @@ namespace S1API.Entities
                     try { prevOpened?.Invoke(); } catch { }
                     RefreshDealerCategoryBadge();
                 });
+
+                _conversationUiRefreshHooked = convo;
             }
             catch (Exception ex)
             {
@@ -286,11 +292,13 @@ namespace S1API.Entities
 
         internal void Cleanup()
         {
-            if (_relationshipUnlockedHandler == null)
-                return;
+            if (_relationshipUnlockedHandler != null)
+            {
+                NPC.Relationship.OnUnlocked -= _relationshipUnlockedHandler;
+                _relationshipUnlockedHandler = null;
+            }
 
-            NPC.Relationship.OnUnlocked -= _relationshipUnlockedHandler;
-            _relationshipUnlockedHandler = null;
+            _conversationUiRefreshHooked = null;
         }
 
         /// <summary>
