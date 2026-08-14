@@ -68,6 +68,7 @@ namespace S1API.Entities
         private readonly ManagedEventRegistrationTracker<NativeDealerRecruitedAction> _dealerRecruitedHandlers = new ManagedEventRegistrationTracker<NativeDealerRecruitedAction>();
         private Action? _contractAcceptedHandlers;
         private bool _contractAcceptedHooked;
+        private Action<NPCRelationship.UnlockType, bool>? _relationshipUnlockedHandler;
 
         internal NPCDealer(NPC npc)
         {
@@ -138,10 +139,16 @@ namespace S1API.Entities
         {
             try
             {
-                NPC.SetConversationCategory(S1Messaging.EConversationCategory.Dealer);
+                bool isUnlocked = NPC.Relationship.IsUnlocked;
+                NPC.SetConversationCategory(
+                    S1Messaging.EConversationCategory.Dealer,
+                    ensureUi: ShouldEnsureConversationUi(isUnlocked));
+                EnsureRelationshipUnlockHook();
+
                 if (NPC.S1NPC.MSGConversation != null)
                 {
                     TryHookConversationUIRefresh(NPC.S1NPC.MSGConversation);
+                    HideLockedEmptyConversation();
                     RefreshDealerCategoryBadge();
                 }
             }
@@ -176,6 +183,7 @@ namespace S1API.Entities
                 convo.onLoaded = new System.Action(() =>
                 {
                     try { prevLoaded?.Invoke(); } catch { }
+                    HideLockedEmptyConversation();
                     RefreshDealerCategoryBadge();
                 });
 
@@ -191,6 +199,98 @@ namespace S1API.Entities
             {
                 Logger.Warning($"Exception in TryHookConversationUIRefresh: {ex.Message}");
             }
+        }
+
+        private void EnsureRelationshipUnlockHook()
+        {
+            _relationshipUnlockedHandler ??= (_, _) => ShowConversationAfterUnlock();
+
+            NPC.Relationship.OnUnlocked -= _relationshipUnlockedHandler;
+            NPC.Relationship.OnUnlocked += _relationshipUnlockedHandler;
+        }
+
+        private void ShowConversationAfterUnlock()
+        {
+            try
+            {
+                NPC.SetConversationCategory(
+                    S1Messaging.EConversationCategory.Dealer,
+                    ensureUi: true);
+
+                var conversation = NPC.S1NPC.MSGConversation;
+                if (conversation == null)
+                    return;
+
+                conversation.SetIsKnown(true);
+                conversation.SetEntryVisibility(true);
+                TryHookConversationUIRefresh(conversation);
+                RefreshDealerCategoryBadge();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Exception showing dealer conversation after unlock for {NPC.ID}: {ex.Message}");
+            }
+        }
+
+        private void HideLockedEmptyConversation()
+        {
+            var conversation = NPC.S1NPC.MSGConversation;
+            if (conversation == null)
+                return;
+
+            bool uiCreated =
+                Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(conversation, "uiCreated") is bool created
+                && created;
+            int messageCount = conversation.messageHistory?.Count ?? 0;
+            int messageChainCount = conversation.messageChainHistory?.Count ?? 0;
+            int responseCount = conversation.currentResponses?.Count ?? 0;
+            if (!ShouldHideLockedConversation(
+                    NPC.Relationship.IsUnlocked,
+                    uiCreated,
+                    messageCount,
+                    messageChainCount,
+                    responseCount))
+            {
+                return;
+            }
+
+            bool conversationCanBeHidden = NPC.ConversationCanBeHidden;
+            try
+            {
+                if (!conversationCanBeHidden)
+                    NPC.ConversationCanBeHidden = true;
+
+                conversation.SetEntryVisibility(false);
+            }
+            finally
+            {
+                if (!conversationCanBeHidden)
+                    NPC.ConversationCanBeHidden = false;
+            }
+        }
+
+        internal static bool ShouldHideLockedConversation(
+            bool relationshipUnlocked,
+            bool uiCreated,
+            int messageCount,
+            int messageChainCount,
+            int responseCount) =>
+            !relationshipUnlocked
+            && uiCreated
+            && messageCount == 0
+            && messageChainCount == 0
+            && responseCount == 0;
+
+        internal static bool ShouldEnsureConversationUi(bool relationshipUnlocked) =>
+            relationshipUnlocked;
+
+        internal void Cleanup()
+        {
+            if (_relationshipUnlockedHandler == null)
+                return;
+
+            NPC.Relationship.OnUnlocked -= _relationshipUnlockedHandler;
+            _relationshipUnlockedHandler = null;
         }
 
         /// <summary>
