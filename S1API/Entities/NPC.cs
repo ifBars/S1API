@@ -2827,7 +2827,8 @@ namespace S1API.Entities
         {
             add => AddVehicleLifecycleHandler(
                 value,
-                _enterVehicleRegistrations,
+                _enterVehicleRegistrations ??=
+                    new ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>(),
                 SubscribeEnterVehicle,
                 nameof(OnEnterVehicle));
             remove => RemoveVehicleLifecycleHandler(
@@ -2845,7 +2846,8 @@ namespace S1API.Entities
         {
             add => AddVehicleLifecycleHandler(
                 value,
-                _exitVehicleRegistrations,
+                _exitVehicleRegistrations ??=
+                    new ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>(),
                 SubscribeExitVehicle,
                 nameof(OnExitVehicle));
             remove => RemoveVehicleLifecycleHandler(
@@ -2992,16 +2994,35 @@ namespace S1API.Entities
         /// </summary>
         public event Action<NPCNoiseEvent?> OnExplosionHeard
         {
-            add => AddAwarenessHandler(ref _explosionHeardHandlers, value);
-            remove => RemoveAwarenessHandler(ref _explosionHeardHandlers, value);
+            add => AddAwarenessHandler(
+                value,
+                _explosionHeardRegistrations ??=
+                    new ManagedEventRegistrationTracker<AwarenessEventRegistration<S1Noise.NoiseEvent>>(),
+                awareness => awareness.onExplosionHeard,
+                ResolveNoiseEvent,
+                nameof(OnExplosionHeard));
+            remove => RemoveAwarenessHandler(
+                value,
+                _explosionHeardRegistrations,
+                nameof(OnExplosionHeard));
         }
+
         /// <summary>
         /// Called when this NPC hears a gunshot. The snapshot is null only when the native event has no noise event.
         /// </summary>
         public event Action<NPCNoiseEvent?> OnGunshotHeard
         {
-            add => AddAwarenessHandler(ref _gunshotHeardHandlers, value);
-            remove => RemoveAwarenessHandler(ref _gunshotHeardHandlers, value);
+            add => AddAwarenessHandler(
+                value,
+                _gunshotHeardRegistrations ??=
+                    new ManagedEventRegistrationTracker<AwarenessEventRegistration<S1Noise.NoiseEvent>>(),
+                awareness => awareness.onGunshotHeard,
+                ResolveNoiseEvent,
+                nameof(OnGunshotHeard));
+            remove => RemoveAwarenessHandler(
+                value,
+                _gunshotHeardRegistrations,
+                nameof(OnGunshotHeard));
         }
 
         /// <summary>
@@ -3009,8 +3030,17 @@ namespace S1API.Entities
         /// </summary>
         public event Action<LandVehicle?> OnHitByCar
         {
-            add => AddAwarenessHandler(ref _hitByCarHandlers, value);
-            remove => RemoveAwarenessHandler(ref _hitByCarHandlers, value);
+            add => AddAwarenessHandler(
+                value,
+                _hitByCarRegistrations ??=
+                    new ManagedEventRegistrationTracker<AwarenessEventRegistration<S1Vehicles.LandVehicle>>(),
+                awareness => awareness.onHitByCar,
+                ResolveVehicle,
+                nameof(OnHitByCar));
+            remove => RemoveAwarenessHandler(
+                value,
+                _hitByCarRegistrations,
+                nameof(OnHitByCar));
         }
 
         /// <summary>
@@ -3018,8 +3048,17 @@ namespace S1API.Entities
         /// </summary>
         public event Action<Player?> OnNoticedDrugDealing
         {
-            add => AddAwarenessHandler(ref _noticedDrugDealingHandlers, value);
-            remove => RemoveAwarenessHandler(ref _noticedDrugDealingHandlers, value);
+            add => AddAwarenessHandler(
+                value,
+                _noticedDrugDealingRegistrations ??=
+                    new ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>(),
+                awareness => awareness.onNoticedDrugDealing,
+                ResolvePlayer,
+                nameof(OnNoticedDrugDealing));
+            remove => RemoveAwarenessHandler(
+                value,
+                _noticedDrugDealingRegistrations,
+                nameof(OnNoticedDrugDealing));
         }
 
         /// <summary>
@@ -3027,8 +3066,17 @@ namespace S1API.Entities
         /// </summary>
         public event Action<Player?> OnNoticedGeneralCrime
         {
-            add => AddAwarenessHandler(ref _noticedGeneralCrimeHandlers, value);
-            remove => RemoveAwarenessHandler(ref _noticedGeneralCrimeHandlers, value);
+            add => AddAwarenessHandler(
+                value,
+                _noticedGeneralCrimeRegistrations ??=
+                    new ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>(),
+                awareness => awareness.onNoticedGeneralCrime,
+                ResolvePlayer,
+                nameof(OnNoticedGeneralCrime));
+            remove => RemoveAwarenessHandler(
+                value,
+                _noticedGeneralCrimeRegistrations,
+                nameof(OnNoticedGeneralCrime));
         }
 
         /// <summary>
@@ -3036,8 +3084,17 @@ namespace S1API.Entities
         /// </summary>
         public event Action<Player?> OnNoticedPettyCrime
         {
-            add => AddAwarenessHandler(ref _noticedPettyCrimeHandlers, value);
-            remove => RemoveAwarenessHandler(ref _noticedPettyCrimeHandlers, value);
+            add => AddAwarenessHandler(
+                value,
+                _noticedPettyCrimeRegistrations ??=
+                    new ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>(),
+                awareness => awareness.onNoticedPettyCrime,
+                ResolvePlayer,
+                nameof(OnNoticedPettyCrime));
+            remove => RemoveAwarenessHandler(
+                value,
+                _noticedPettyCrimeRegistrations,
+                nameof(OnNoticedPettyCrime));
         }
 
         /// <summary>
@@ -3045,8 +3102,17 @@ namespace S1API.Entities
         /// </summary>
         public event Action<Player?> OnNoticedPlayerViolatingCurfew
         {
-            add => AddAwarenessHandler(ref _noticedPlayerViolatingCurfewHandlers, value);
-            remove => RemoveAwarenessHandler(ref _noticedPlayerViolatingCurfewHandlers, value);
+            add => AddAwarenessHandler(
+                value,
+                _noticedPlayerViolatingCurfewRegistrations ??=
+                    new ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>(),
+                awareness => awareness.onNoticedPlayerViolatingCurfew,
+                ResolvePlayer,
+                nameof(OnNoticedPlayerViolatingCurfew));
+            remove => RemoveAwarenessHandler(
+                value,
+                _noticedPlayerViolatingCurfewRegistrations,
+                nameof(OnNoticedPlayerViolatingCurfew));
         }
 
         /// <summary>
@@ -3054,8 +3120,17 @@ namespace S1API.Entities
         /// </summary>
         public event Action<Player?> OnNoticedSuspiciousPlayer
         {
-            add => AddAwarenessHandler(ref _noticedSuspiciousPlayerHandlers, value);
-            remove => RemoveAwarenessHandler(ref _noticedSuspiciousPlayerHandlers, value);
+            add => AddAwarenessHandler(
+                value,
+                _noticedSuspiciousPlayerRegistrations ??=
+                    new ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>(),
+                awareness => awareness.onNoticedSuspiciousPlayer,
+                ResolvePlayer,
+                nameof(OnNoticedSuspiciousPlayer));
+            remove => RemoveAwarenessHandler(
+                value,
+                _noticedSuspiciousPlayerRegistrations,
+                nameof(OnNoticedSuspiciousPlayer));
         }
 
         /// <summary>
@@ -3519,7 +3594,6 @@ namespace S1API.Entities
                 awareness.Responses = validCivilianResponses;
             }
 
-            EnsureAwarenessEventHooks();
         }
 
         private void InitializeBehaviourComponents()
@@ -4223,31 +4297,28 @@ namespace S1API.Entities
         private NPCSupplier? _supplier;
         private NPCRelationship? _relationship;
         private NPCMessaging? _messaging;
-        private Action<Player?>? _noticedDrugDealingHandlers;
-        private Action<Player?>? _noticedGeneralCrimeHandlers;
-        private Action<Player?>? _noticedPettyCrimeHandlers;
-        private Action<Player?>? _noticedPlayerViolatingCurfewHandlers;
-        private Action<Player?>? _noticedSuspiciousPlayerHandlers;
-        private Action<NPCNoiseEvent?>? _gunshotHeardHandlers;
-        private Action<NPCNoiseEvent?>? _explosionHeardHandlers;
-        private Action<LandVehicle?>? _hitByCarHandlers;
-        private S1NPCs.NPCAwareness? _subscribedAwareness;
-        private Action<S1PlayerScripts.Player>? _nativeNoticedDrugDealingDispatcher;
-        private Action<S1PlayerScripts.Player>? _nativeNoticedGeneralCrimeDispatcher;
-        private Action<S1PlayerScripts.Player>? _nativeNoticedPettyCrimeDispatcher;
-        private Action<S1PlayerScripts.Player>? _nativeNoticedPlayerViolatingCurfewDispatcher;
-        private Action<S1PlayerScripts.Player>? _nativeNoticedSuspiciousPlayerDispatcher;
-        private Action<S1Noise.NoiseEvent>? _nativeGunshotHeardDispatcher;
-        private Action<S1Noise.NoiseEvent>? _nativeExplosionHeardDispatcher;
-        private Action<S1Vehicles.LandVehicle>? _nativeHitByCarDispatcher;
+        private ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>?
+            _noticedDrugDealingRegistrations;
+        private ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>?
+            _noticedGeneralCrimeRegistrations;
+        private ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>?
+            _noticedPettyCrimeRegistrations;
+        private ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>?
+            _noticedPlayerViolatingCurfewRegistrations;
+        private ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>?
+            _noticedSuspiciousPlayerRegistrations;
+        private ManagedEventRegistrationTracker<AwarenessEventRegistration<S1Noise.NoiseEvent>>?
+            _gunshotHeardRegistrations;
+        private ManagedEventRegistrationTracker<AwarenessEventRegistration<S1Noise.NoiseEvent>>?
+            _explosionHeardRegistrations;
+        private ManagedEventRegistrationTracker<AwarenessEventRegistration<S1Vehicles.LandVehicle>>?
+            _hitByCarRegistrations;
         private NPCSmoking? _smoking;
         private NPCSprayPainting? _sprayPainting;
         private NPCDrinking? _drinking;
         private NPCItemHolding? _itemHolding;
-        private readonly ManagedEventRegistrationTracker<NativeVehicleLifecycleAction> _enterVehicleRegistrations =
-            new ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>();
-        private readonly ManagedEventRegistrationTracker<NativeVehicleLifecycleAction> _exitVehicleRegistrations =
-            new ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>();
+        private ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>? _enterVehicleRegistrations;
+        private ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>? _exitVehicleRegistrations;
         private bool _relationshipDataAppliedFromPrefab;
         private float? _loadedRelationshipDelta;
         private bool _loadedRelationshipUnlocked;
@@ -4783,301 +4854,161 @@ namespace S1API.Entities
             _recommendationSubscriptions.Clear();
         }
 
-        private void AddAwarenessHandler<T>(
-            ref Action<T>? handlers,
-            Action<T>? handler)
+        private void AddAwarenessHandler<TManaged, TNative>(
+            Action<TManaged>? handler,
+            ManagedEventRegistrationTracker<AwarenessEventRegistration<TNative>> registrations,
+            Func<S1NPCs.NPCAwareness, UnityEvent<TNative>?> selectEvent,
+            Func<TNative, TManaged> convert,
+            string eventName)
         {
             if (handler == null)
-                return;
-
-            handlers += handler;
-            EnsureAwarenessEventHooks();
-        }
-
-        private void RemoveAwarenessHandler<T>(
-            ref Action<T>? handlers,
-            Action<T>? handler)
-        {
-            if (handler == null)
-                return;
-
-            handlers -= handler;
-            RemoveAwarenessEventHooksWhenUnused();
-        }
-
-        private void EnsureAwarenessEventHooks()
-        {
-            if (!HasAwarenessEventHandlers())
                 return;
 
             S1NPCs.NPCAwareness? awareness = S1NPC?.Awareness;
-            if (awareness == null)
-                return;
-
-            if (!ReferenceEquals(awareness, _subscribedAwareness))
-            {
-                RemoveAwarenessEventHooks();
-                _subscribedAwareness = awareness;
-            }
-
-            try
-            {
-                if (_noticedDrugDealingHandlers != null)
-                {
-                    global::S1API.Utils.EventHelper.AddListener(
-                        GetOrCreateNoticedDrugDealingDispatcher(),
-                        awareness.onNoticedDrugDealing);
-                }
-
-                if (_noticedGeneralCrimeHandlers != null)
-                {
-                    global::S1API.Utils.EventHelper.AddListener(
-                        GetOrCreateNoticedGeneralCrimeDispatcher(),
-                        awareness.onNoticedGeneralCrime);
-                }
-
-                if (_noticedPettyCrimeHandlers != null)
-                {
-                    global::S1API.Utils.EventHelper.AddListener(
-                        GetOrCreateNoticedPettyCrimeDispatcher(),
-                        awareness.onNoticedPettyCrime);
-                }
-
-                if (_noticedPlayerViolatingCurfewHandlers != null)
-                {
-                    global::S1API.Utils.EventHelper.AddListener(
-                        GetOrCreateNoticedPlayerViolatingCurfewDispatcher(),
-                        awareness.onNoticedPlayerViolatingCurfew);
-                }
-
-                if (_noticedSuspiciousPlayerHandlers != null)
-                {
-                    global::S1API.Utils.EventHelper.AddListener(
-                        GetOrCreateNoticedSuspiciousPlayerDispatcher(),
-                        awareness.onNoticedSuspiciousPlayer);
-                }
-
-                if (_gunshotHeardHandlers != null)
-                {
-                    global::S1API.Utils.EventHelper.AddListener(
-                        GetOrCreateGunshotHeardDispatcher(),
-                        awareness.onGunshotHeard);
-                }
-
-                if (_explosionHeardHandlers != null)
-                {
-                    global::S1API.Utils.EventHelper.AddListener(
-                        GetOrCreateExplosionHeardDispatcher(),
-                        awareness.onExplosionHeard);
-                }
-
-                if (_hitByCarHandlers != null)
-                {
-                    global::S1API.Utils.EventHelper.AddListener(
-                        GetOrCreateHitByCarDispatcher(),
-                        awareness.onHitByCar);
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning($"Could not attach NPC awareness event hooks: {ex}");
-            }
-        }
-
-        private void RemoveAwarenessEventHooksWhenUnused()
-        {
-            if (!HasAwarenessEventHandlers())
-                RemoveAwarenessEventHooks();
-        }
-
-        private bool HasAwarenessEventHandlers() =>
-            _noticedDrugDealingHandlers != null ||
-            _noticedGeneralCrimeHandlers != null ||
-            _noticedPettyCrimeHandlers != null ||
-            _noticedPlayerViolatingCurfewHandlers != null ||
-            _noticedSuspiciousPlayerHandlers != null ||
-            _gunshotHeardHandlers != null ||
-            _explosionHeardHandlers != null ||
-            _hitByCarHandlers != null;
-
-        private void RemoveAwarenessEventHooks()
-        {
-            S1NPCs.NPCAwareness? awareness = _subscribedAwareness;
-            if (awareness == null)
+            UnityEvent<TNative>? nativeEvent = awareness == null
+                ? null
+                : selectEvent(awareness);
+            if (nativeEvent == null)
                 return;
 
             try
             {
-                if (_nativeNoticedDrugDealingDispatcher != null)
+                Action<TNative> nativeHandler = value =>
                 {
-                    global::S1API.Utils.EventHelper.RemoveListener(
-                        _nativeNoticedDrugDealingDispatcher,
-                        awareness.onNoticedDrugDealing);
-                }
+                    try
+                    {
+                        handler(convert(value));
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warning(
+                            $"NPC.{eventName} subscriber " +
+                            $"'{handler.Method.DeclaringType?.FullName}.{handler.Method.Name}' failed: {ex}");
+                    }
+                };
 
-                if (_nativeNoticedGeneralCrimeDispatcher != null)
-                {
-                    global::S1API.Utils.EventHelper.RemoveListener(
-                        _nativeNoticedGeneralCrimeDispatcher,
-                        awareness.onNoticedGeneralCrime);
-                }
-
-                if (_nativeNoticedPettyCrimeDispatcher != null)
-                {
-                    global::S1API.Utils.EventHelper.RemoveListener(
-                        _nativeNoticedPettyCrimeDispatcher,
-                        awareness.onNoticedPettyCrime);
-                }
-
-                if (_nativeNoticedPlayerViolatingCurfewDispatcher != null)
-                {
-                    global::S1API.Utils.EventHelper.RemoveListener(
-                        _nativeNoticedPlayerViolatingCurfewDispatcher,
-                        awareness.onNoticedPlayerViolatingCurfew);
-                }
-
-                if (_nativeNoticedSuspiciousPlayerDispatcher != null)
-                {
-                    global::S1API.Utils.EventHelper.RemoveListener(
-                        _nativeNoticedSuspiciousPlayerDispatcher,
-                        awareness.onNoticedSuspiciousPlayer);
-                }
-
-                if (_nativeGunshotHeardDispatcher != null)
-                {
-                    global::S1API.Utils.EventHelper.RemoveListener(
-                        _nativeGunshotHeardDispatcher,
-                        awareness.onGunshotHeard);
-                }
-
-                if (_nativeExplosionHeardDispatcher != null)
-                {
-                    global::S1API.Utils.EventHelper.RemoveListener(
-                        _nativeExplosionHeardDispatcher,
-                        awareness.onExplosionHeard);
-                }
-
-                if (_nativeHitByCarDispatcher != null)
-                {
-                    global::S1API.Utils.EventHelper.RemoveListener(
-                        _nativeHitByCarDispatcher,
-                        awareness.onHitByCar);
-                }
+                global::S1API.Utils.EventHelper.AddListener(nativeHandler, nativeEvent);
+                registrations.Add(
+                    handler,
+                    new AwarenessEventRegistration<TNative>(nativeEvent, nativeHandler));
             }
             catch (Exception ex)
             {
-                Logger.Warning($"Could not remove NPC awareness event hooks: {ex}");
-            }
-            finally
-            {
-                _subscribedAwareness = null;
+                Logger.Warning(
+                    $"Could not subscribe to NPC.{eventName} for '{GetSafeNpcId()}': {ex}");
             }
         }
 
-        private Action<S1PlayerScripts.Player> GetOrCreateNoticedDrugDealingDispatcher() =>
-            _nativeNoticedDrugDealingDispatcher ??= DispatchNoticedDrugDealing;
+        private void RemoveAwarenessHandler<TManaged, TNative>(
+            Action<TManaged>? handler,
+            ManagedEventRegistrationTracker<AwarenessEventRegistration<TNative>>? registrations,
+            string eventName)
+        {
+            if (handler == null || registrations == null ||
+                !registrations.TryTakeLast(handler, out var registration))
+                return;
 
-        private Action<S1PlayerScripts.Player> GetOrCreateNoticedGeneralCrimeDispatcher() =>
-            _nativeNoticedGeneralCrimeDispatcher ??= DispatchNoticedGeneralCrime;
+            try
+            {
+                global::S1API.Utils.EventHelper.RemoveListener(
+                    registration.Handler,
+                    registration.Event);
+            }
+            catch (Exception ex)
+            {
+                registrations.Add(handler, registration);
+                Logger.Warning(
+                    $"Could not unsubscribe from NPC.{eventName} for '{GetSafeNpcId()}': {ex}");
+            }
+        }
 
-        private Action<S1PlayerScripts.Player> GetOrCreateNoticedPettyCrimeDispatcher() =>
-            _nativeNoticedPettyCrimeDispatcher ??= DispatchNoticedPettyCrime;
-
-        private Action<S1PlayerScripts.Player> GetOrCreateNoticedPlayerViolatingCurfewDispatcher() =>
-            _nativeNoticedPlayerViolatingCurfewDispatcher ??= DispatchNoticedPlayerViolatingCurfew;
-
-        private Action<S1PlayerScripts.Player> GetOrCreateNoticedSuspiciousPlayerDispatcher() =>
-            _nativeNoticedSuspiciousPlayerDispatcher ??= DispatchNoticedSuspiciousPlayer;
-
-        private Action<S1Noise.NoiseEvent> GetOrCreateGunshotHeardDispatcher() =>
-            _nativeGunshotHeardDispatcher ??= DispatchGunshotHeard;
-
-        private Action<S1Noise.NoiseEvent> GetOrCreateExplosionHeardDispatcher() =>
-            _nativeExplosionHeardDispatcher ??= DispatchExplosionHeard;
-
-        private Action<S1Vehicles.LandVehicle> GetOrCreateHitByCarDispatcher() =>
-            _nativeHitByCarDispatcher ??= DispatchHitByCar;
-
-        private void DispatchNoticedDrugDealing(S1PlayerScripts.Player player) =>
-            InvokeAwarenessHandlers(
-                _noticedDrugDealingHandlers,
-                ResolvePlayer(player),
+        private void CleanupAwarenessEventHooks()
+        {
+            CleanupAwarenessHandlers(
+                _noticedDrugDealingRegistrations,
                 nameof(OnNoticedDrugDealing));
-
-        private void DispatchNoticedGeneralCrime(S1PlayerScripts.Player player) =>
-            InvokeAwarenessHandlers(
-                _noticedGeneralCrimeHandlers,
-                ResolvePlayer(player),
+            CleanupAwarenessHandlers(
+                _noticedGeneralCrimeRegistrations,
                 nameof(OnNoticedGeneralCrime));
-
-        private void DispatchNoticedPettyCrime(S1PlayerScripts.Player player) =>
-            InvokeAwarenessHandlers(
-                _noticedPettyCrimeHandlers,
-                ResolvePlayer(player),
+            CleanupAwarenessHandlers(
+                _noticedPettyCrimeRegistrations,
                 nameof(OnNoticedPettyCrime));
-
-        private void DispatchNoticedPlayerViolatingCurfew(S1PlayerScripts.Player player) =>
-            InvokeAwarenessHandlers(
-                _noticedPlayerViolatingCurfewHandlers,
-                ResolvePlayer(player),
+            CleanupAwarenessHandlers(
+                _noticedPlayerViolatingCurfewRegistrations,
                 nameof(OnNoticedPlayerViolatingCurfew));
-
-        private void DispatchNoticedSuspiciousPlayer(S1PlayerScripts.Player player) =>
-            InvokeAwarenessHandlers(
-                _noticedSuspiciousPlayerHandlers,
-                ResolvePlayer(player),
+            CleanupAwarenessHandlers(
+                _noticedSuspiciousPlayerRegistrations,
                 nameof(OnNoticedSuspiciousPlayer));
-
-        private void DispatchGunshotHeard(S1Noise.NoiseEvent noiseEvent) =>
-            InvokeAwarenessHandlers(
-                _gunshotHeardHandlers,
-                noiseEvent == null ? null : new NPCNoiseEvent(noiseEvent),
+            CleanupAwarenessHandlers(
+                _gunshotHeardRegistrations,
                 nameof(OnGunshotHeard));
-
-        private void DispatchExplosionHeard(S1Noise.NoiseEvent noiseEvent) =>
-            InvokeAwarenessHandlers(
-                _explosionHeardHandlers,
-                noiseEvent == null ? null : new NPCNoiseEvent(noiseEvent),
+            CleanupAwarenessHandlers(
+                _explosionHeardRegistrations,
                 nameof(OnExplosionHeard));
-
-        private void DispatchHitByCar(S1Vehicles.LandVehicle vehicle) =>
-            InvokeAwarenessHandlers(
-                _hitByCarHandlers,
-                vehicle == null ? null : new LandVehicle(vehicle),
+            CleanupAwarenessHandlers(
+                _hitByCarRegistrations,
                 nameof(OnHitByCar));
+        }
+
+        private void CleanupAwarenessHandlers<TNative>(
+            ManagedEventRegistrationTracker<AwarenessEventRegistration<TNative>>? registrations,
+            string eventName)
+        {
+            if (registrations == null)
+                return;
+
+            foreach (var registration in registrations.TakeAll())
+            {
+                try
+                {
+                    global::S1API.Utils.EventHelper.RemoveListener(
+                        registration.NativeHandler.Handler,
+                        registration.NativeHandler.Event);
+                }
+                catch (Exception ex)
+                {
+                    registrations.Add(
+                        registration.ManagedHandler,
+                        registration.NativeHandler);
+                    Logger.Warning(
+                        $"Could not clean up NPC.{eventName} for '{GetSafeNpcId()}': {ex}");
+                }
+            }
+        }
 
         private static Player? ResolvePlayer(S1PlayerScripts.Player player) =>
             player == null
                 ? null
                 : Player.All.FirstOrDefault(apiPlayer => apiPlayer.S1Player == player);
 
-        private static void InvokeAwarenessHandlers<T>(
-            Action<T>? handlers,
-            T value,
-            string eventName)
-        {
-            if (handlers == null)
-                return;
+        private static NPCNoiseEvent? ResolveNoiseEvent(S1Noise.NoiseEvent noiseEvent) =>
+            noiseEvent == null
+                ? null
+                : new NPCNoiseEvent(noiseEvent);
 
-            foreach (Action<T> handler in handlers.GetInvocationList())
+        private static LandVehicle? ResolveVehicle(S1Vehicles.LandVehicle vehicle) =>
+            vehicle == null
+                ? null
+                : new LandVehicle(vehicle);
+
+        private sealed class AwarenessEventRegistration<TNative>
+        {
+            internal UnityEvent<TNative> Event { get; }
+            internal Action<TNative> Handler { get; }
+
+            internal AwarenessEventRegistration(
+                UnityEvent<TNative> nativeEvent,
+                Action<TNative> handler)
             {
-                try
-                {
-                    handler(value);
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warning(
-                        $"NPC {eventName} subscriber " +
-                        $"'{handler.Method.DeclaringType?.FullName}.{handler.Method.Name}' failed: {ex}");
-                }
+                Event = nativeEvent;
+                Handler = handler;
             }
         }
 
         internal void CleanupRuntimeHooks()
         {
             ClearDealerRecommendationHooks();
-            RemoveAwarenessEventHooks();
+            CleanupAwarenessEventHooks();
             _messaging?.Cleanup();
             CleanupVehicleLifecycleHooks();
         }
@@ -5107,11 +5038,12 @@ namespace S1API.Entities
 
         private void RemoveVehicleLifecycleHandler(
             Action<LandVehicle>? handler,
-            ManagedEventRegistrationTracker<NativeVehicleLifecycleAction> registrations,
+            ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>? registrations,
             Action<NativeVehicleLifecycleAction> unsubscribe,
             string eventName)
         {
-            if (handler == null || !registrations.TryTakeLast(handler, out var nativeHandler))
+            if (handler == null || registrations == null ||
+                !registrations.TryTakeLast(handler, out var nativeHandler))
                 return;
 
             try
@@ -5214,10 +5146,13 @@ namespace S1API.Entities
         }
 
         private void CleanupVehicleLifecycleHandlers(
-            ManagedEventRegistrationTracker<NativeVehicleLifecycleAction> registrations,
+            ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>? registrations,
             Action<NativeVehicleLifecycleAction> unsubscribe,
             string eventName)
         {
+            if (registrations == null)
+                return;
+
             foreach (var registration in registrations.TakeAll())
             {
                 try

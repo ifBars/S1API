@@ -8,8 +8,9 @@ namespace S1API.Tests.Entities;
 
 public sealed class NPCAwarenessApiTests
 {
+#if MONOMELON
     [Fact]
-    public void NoiseSnapshotCapturesReadOnlyManagedValues()
+    public void NoiseSnapshotCapturesManagedValues()
     {
         var origin = new Vector3(1f, 2f, 3f);
         var snapshot = new NPCNoiseEvent(
@@ -24,11 +25,22 @@ public sealed class NPCAwarenessApiTests
         Assert.Equal(NPCNoiseType.Gunshot, snapshot.Type);
         Assert.Null(snapshot.Source);
         Assert.True(snapshot.OriginInSewer);
-        Assert.False(typeof(NPCNoiseEvent).GetProperty(nameof(NPCNoiseEvent.Origin))!.CanWrite);
-        Assert.False(typeof(NPCNoiseEvent).GetProperty(nameof(NPCNoiseEvent.Range))!.CanWrite);
-        Assert.False(typeof(NPCNoiseEvent).GetProperty(nameof(NPCNoiseEvent.Type))!.CanWrite);
-        Assert.False(typeof(NPCNoiseEvent).GetProperty(nameof(NPCNoiseEvent.Source))!.CanWrite);
-        Assert.False(typeof(NPCNoiseEvent).GetProperty(nameof(NPCNoiseEvent.OriginInSewer))!.CanWrite);
+    }
+#endif
+
+    [Theory]
+    [InlineData(nameof(NPCNoiseEvent.Origin), typeof(Vector3))]
+    [InlineData(nameof(NPCNoiseEvent.Range), typeof(float))]
+    [InlineData(nameof(NPCNoiseEvent.Type), typeof(NPCNoiseType))]
+    [InlineData(nameof(NPCNoiseEvent.Source), typeof(GameObject))]
+    [InlineData(nameof(NPCNoiseEvent.OriginInSewer), typeof(bool))]
+    public void NoiseSnapshotPropertiesAreReadOnly(string propertyName, Type propertyType)
+    {
+        PropertyInfo? property = typeof(NPCNoiseEvent).GetProperty(propertyName);
+
+        Assert.NotNull(property);
+        Assert.Equal(propertyType, property!.PropertyType);
+        Assert.False(property.CanWrite);
     }
 
     [Fact]
