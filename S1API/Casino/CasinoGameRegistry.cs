@@ -7,6 +7,7 @@ using S1Casino = ScheduleOne.Casino;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using S1API.Internal;
 using S1API.Lifecycle;
 using S1API.Logging;
 using UnityEngine;
@@ -53,7 +54,7 @@ namespace S1API.Casino
         /// <summary>Raised when a slot machine displays a synchronized spin outcome.</summary>
         public static event Action<SlotMachine, SlotSpinSnapshot>? SlotSpinCompleted;
 
-        /// <summary>Gets immutable wrappers for all active blackjack tables.</summary>
+        /// <summary>Gets a read-only snapshot of all active blackjack tables.</summary>
         public static IReadOnlyList<BlackjackGame> GetBlackjackGames()
         {
             EnsureLifecycleHook();
@@ -67,7 +68,7 @@ namespace S1API.Casino
             return new ReadOnlyCollection<BlackjackGame>(games);
         }
 
-        /// <summary>Gets immutable wrappers for all active Ride the Bus tables.</summary>
+        /// <summary>Gets a read-only snapshot of all active Ride the Bus tables.</summary>
         public static IReadOnlyList<RideTheBusGame> GetRideTheBusGames()
         {
             EnsureLifecycleHook();
@@ -81,7 +82,7 @@ namespace S1API.Casino
             return new ReadOnlyCollection<RideTheBusGame>(games);
         }
 
-        /// <summary>Gets immutable wrappers for all active native slot machines.</summary>
+        /// <summary>Gets a read-only snapshot of all active native slot machines.</summary>
         public static IReadOnlyList<SlotMachine> GetSlotMachines()
         {
             EnsureLifecycleHook();
@@ -105,7 +106,7 @@ namespace S1API.Casino
             return native == null ? null : Wrap(native);
         }
 
-        /// <summary>Gets immutable wrappers for all active blackjack and Ride the Bus tables.</summary>
+        /// <summary>Gets a read-only snapshot of all active blackjack and Ride the Bus tables.</summary>
         public static IReadOnlyList<CasinoGameTable> GetTables()
         {
             var tables = new List<CasinoGameTable>();
@@ -160,12 +161,12 @@ namespace S1API.Casino
 
             BlackjackGame game = Wrap(native);
             game.NotifyStageChanged(previous, current);
-            InvokeSafely(BlackjackStageChanged, game, previous, current, nameof(BlackjackStageChanged));
+            CasinoEventInvoker.Invoke(BlackjackStageChanged, game, previous, current, nameof(BlackjackStageChanged));
 
             if (current == BlackjackStage.Dealing && previous == BlackjackStage.WaitingForPlayers)
-                InvokeSafely(BlackjackRoundStarted, game, nameof(BlackjackRoundStarted));
+                CasinoEventInvoker.Invoke(BlackjackRoundStarted, game, nameof(BlackjackRoundStarted));
             if (current == BlackjackStage.WaitingForPlayers)
-                InvokeSafely(BlackjackRoundEnded, game, nameof(BlackjackRoundEnded));
+                CasinoEventInvoker.Invoke(BlackjackRoundEnded, game, nameof(BlackjackRoundEnded));
         }
 
         internal static void NotifyRideTheBusStageChanged(
@@ -178,12 +179,12 @@ namespace S1API.Casino
 
             RideTheBusGame game = Wrap(native);
             game.NotifyStageChanged(previous, current);
-            InvokeSafely(RideTheBusStageChanged, game, previous, current, nameof(RideTheBusStageChanged));
+            CasinoEventInvoker.Invoke(RideTheBusStageChanged, game, previous, current, nameof(RideTheBusStageChanged));
 
             if (current == RideTheBusStage.RedOrBlack && previous == RideTheBusStage.WaitingForPlayers)
-                InvokeSafely(RideTheBusRoundStarted, game, nameof(RideTheBusRoundStarted));
+                CasinoEventInvoker.Invoke(RideTheBusRoundStarted, game, nameof(RideTheBusRoundStarted));
             if (current == RideTheBusStage.WaitingForPlayers)
-                InvokeSafely(RideTheBusRoundEnded, game, nameof(RideTheBusRoundEnded));
+                CasinoEventInvoker.Invoke(RideTheBusRoundEnded, game, nameof(RideTheBusRoundEnded));
         }
 
         internal static void NotifySlotSpinStarted(
@@ -195,7 +196,7 @@ namespace S1API.Casino
 
             SlotMachine machine = Wrap(native);
             machine.NotifySpinStarted(snapshot);
-            InvokeSafely(SlotSpinStarted, machine, snapshot, nameof(SlotSpinStarted));
+            CasinoEventInvoker.Invoke(SlotSpinStarted, machine, snapshot, nameof(SlotSpinStarted));
         }
 
         internal static void NotifySlotSpinCompleted(
@@ -211,7 +212,7 @@ namespace S1API.Casino
             SlotSpinSnapshot completed = started.Complete(outcome, winAmount);
             SlotMachine machine = Wrap(native);
             machine.NotifySpinCompleted(completed);
-            InvokeSafely(SlotSpinCompleted, machine, completed, nameof(SlotSpinCompleted));
+            CasinoEventInvoker.Invoke(SlotSpinCompleted, machine, completed, nameof(SlotSpinCompleted));
         }
 
         internal static void LogSubscriberFailure(string eventName, Exception exception) =>
@@ -232,51 +233,6 @@ namespace S1API.Casino
             RideTheBusGames.Clear();
             SlotMachines.Clear();
             ActiveSpins.Clear();
-        }
-
-        private static void InvokeSafely<T>(Action<T>? handlers, T value, string eventName)
-        {
-            if (handlers == null)
-                return;
-
-            foreach (Action<T> handler in handlers.GetInvocationList())
-            {
-                try { handler(value); }
-                catch (Exception ex) { LogSubscriberFailure(eventName, ex); }
-            }
-        }
-
-        private static void InvokeSafely<T1, T2>(
-            Action<T1, T2>? handlers,
-            T1 value1,
-            T2 value2,
-            string eventName)
-        {
-            if (handlers == null)
-                return;
-
-            foreach (Action<T1, T2> handler in handlers.GetInvocationList())
-            {
-                try { handler(value1, value2); }
-                catch (Exception ex) { LogSubscriberFailure(eventName, ex); }
-            }
-        }
-
-        private static void InvokeSafely<T1, T2, T3>(
-            Action<T1, T2, T3>? handlers,
-            T1 value1,
-            T2 value2,
-            T3 value3,
-            string eventName)
-        {
-            if (handlers == null)
-                return;
-
-            foreach (Action<T1, T2, T3> handler in handlers.GetInvocationList())
-            {
-                try { handler(value1, value2, value3); }
-                catch (Exception ex) { LogSubscriberFailure(eventName, ex); }
-            }
         }
     }
 }

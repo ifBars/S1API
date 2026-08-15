@@ -30,7 +30,7 @@ if (nearest != null)
     MelonLogger.Msg($"Nearest slot machine: {nearest.Name} at {nearest.Position}");
 ```
 
-Registry results are immutable snapshots. Calling a discovery method again reflects the objects in the current scene, while wrappers for the same live scene object retain their identity so instance event subscriptions remain attached.
+Registry results are read-only snapshots of the active casino objects at the time of discovery. Their wrapper instances represent live scene objects, so wrapper properties continue to reflect current controller state. Calling a discovery method again reflects the active objects in the current scene, while wrappers for the same live scene object retain their identity within that scene.
 
 ## Shared table state
 
@@ -114,3 +114,5 @@ The same events are available on an individual `SlotMachine` wrapper. S1API's ex
 ## Event lifetime
 
 Static registry subscriptions belong to your mod and remain subscribed across scene changes. Unsubscribe them when your mod no longer needs them. S1API clears scene-object wrapper and active-spin state before scene transitions, so discovery never returns cached objects from a previous gameplay scene.
+
+Subscriptions attached directly to a `BlackjackGame`, `RideTheBusGame`, or `SlotMachine` wrapper last only for that wrapper's scene. Query and subscribe to new wrappers after each gameplay scene load, or use the static `CasinoGameRegistry` events when the subscription should remain active across scene changes.

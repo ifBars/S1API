@@ -13,6 +13,8 @@ namespace S1API.Casino
         /// <summary>
         /// Creates an immutable bet-limit snapshot.
         /// </summary>
+        /// <param name="minimum">The minimum bet accepted by the table.</param>
+        /// <param name="maximum">The maximum bet accepted by the table.</param>
         public CasinoBetLimits(float minimum, float maximum)
         {
             Minimum = minimum;
@@ -84,6 +86,10 @@ namespace S1API.Casino
         /// <summary>
         /// Creates an immutable card snapshot.
         /// </summary>
+        /// <param name="id">The scene-local native card identifier.</param>
+        /// <param name="suit">The card suit.</param>
+        /// <param name="value">The card value.</param>
+        /// <param name="isFaceUp">Whether the card is face up for the current client.</param>
         public CasinoCardSnapshot(string id, CasinoCardSuit suit, CasinoCardValue value, bool isFaceUp)
         {
             Id = id ?? string.Empty;

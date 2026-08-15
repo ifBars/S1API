@@ -7,7 +7,10 @@ using S1Casino = ScheduleOne.Casino;
 using S1NetworkConnection = FishNet.Connection.NetworkConnection;
 #endif
 
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using HarmonyLib;
 using S1API.Casino;
 
@@ -63,41 +66,68 @@ namespace S1API.Internal.Patches
                 (RideTheBusStage)(int)__0);
         }
 
-        [HarmonyPatch(typeof(S1Casino.SlotMachine), "RpcLogic___StartSpin_2659526290")]
-        [HarmonyPrefix]
-        private static void SlotSpinPrefix(
-            S1Casino.SlotMachine __instance,
-            S1NetworkConnection __0,
-#if IL2CPPMELON
-            Il2CppStructArray<S1Casino.SlotMachine.ESymbol> __1,
-#else
-            S1Casino.SlotMachine.ESymbol[] __1,
-#endif
-            int __2,
-            out SlotStartPatchState __state)
+        internal static MethodBase? FindSlotStartLogicMethod(Type slotMachineType)
         {
-            var symbols = new List<SlotSymbol>(__1.Length);
-            for (int i = 0; i < __1.Length; i++)
-                symbols.Add((SlotSymbol)(int)__1[i]);
+            return slotMachineType
+                .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .FirstOrDefault(method =>
+                {
+                    if (!method.Name.StartsWith("RpcLogic___StartSpin_", StringComparison.Ordinal))
+                        return false;
 
-            __state = new SlotStartPatchState(
-                __instance.IsSpinning,
-                new SlotSpinSnapshot(
-                    __2,
-                    SlotSpinSnapshot.Freeze(symbols),
-                    __0 != null && __0.IsLocalClient,
-                    outcome: null,
-                    winAmount: null));
+                    ParameterInfo[] parameters = method.GetParameters();
+                    return method.ReturnType == typeof(void)
+                        && parameters.Length == 3
+                        && parameters[0].ParameterType == typeof(S1NetworkConnection)
+#if IL2CPPMELON
+                        && parameters[1].ParameterType == typeof(Il2CppStructArray<S1Casino.SlotMachine.ESymbol>)
+#else
+                        && parameters[1].ParameterType == typeof(S1Casino.SlotMachine.ESymbol[])
+#endif
+                        && parameters[2].ParameterType == typeof(int);
+                });
         }
 
-        [HarmonyPatch(typeof(S1Casino.SlotMachine), "RpcLogic___StartSpin_2659526290")]
-        [HarmonyPostfix]
-        private static void SlotSpinPostfix(
-            S1Casino.SlotMachine __instance,
-            SlotStartPatchState __state)
+        [HarmonyPatch]
+        private static class SlotSpinPatch
         {
-            if (!__state.WasSpinning && __instance.IsSpinning)
-                CasinoGameRegistry.NotifySlotSpinStarted(__instance, __state.Snapshot);
+            private static MethodBase? TargetMethod() =>
+                FindSlotStartLogicMethod(typeof(S1Casino.SlotMachine));
+
+            [HarmonyPrefix]
+            private static void Prefix(
+                S1Casino.SlotMachine __instance,
+                S1NetworkConnection __0,
+#if IL2CPPMELON
+                Il2CppStructArray<S1Casino.SlotMachine.ESymbol> __1,
+#else
+                S1Casino.SlotMachine.ESymbol[] __1,
+#endif
+                int __2,
+                out SlotStartPatchState __state)
+            {
+                var symbols = new List<SlotSymbol>(__1.Length);
+                for (int i = 0; i < __1.Length; i++)
+                    symbols.Add((SlotSymbol)(int)__1[i]);
+
+                __state = new SlotStartPatchState(
+                    __instance.IsSpinning,
+                    new SlotSpinSnapshot(
+                        __2,
+                        SlotSpinSnapshot.Freeze(symbols),
+                        __0 != null && __0.IsLocalClient,
+                        outcome: null,
+                        winAmount: null));
+            }
+
+            [HarmonyPostfix]
+            private static void Postfix(
+                S1Casino.SlotMachine __instance,
+                SlotStartPatchState __state)
+            {
+                if (!__state.WasSpinning && __instance.IsSpinning)
+                    CasinoGameRegistry.NotifySlotSpinStarted(__instance, __state.Snapshot);
+            }
         }
 
         [HarmonyPatch(typeof(S1Casino.SlotMachine), "DisplayOutcome")]

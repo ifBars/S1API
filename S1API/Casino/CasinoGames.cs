@@ -12,7 +12,9 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reflection;
 using S1API.Entities;
+using S1API.Internal;
 using S1API.Internal.Utils;
+using S1API.Logging;
 using UnityEngine;
 
 namespace S1API.Casino
@@ -24,37 +26,38 @@ namespace S1API.Casino
     {
         private static readonly IReadOnlyList<CasinoPlayerSnapshot> EmptyPlayers =
             new ReadOnlyCollection<CasinoPlayerSnapshot>(Array.Empty<CasinoPlayerSnapshot>());
+        private static readonly Log Logger = new Log("CasinoGameTable");
 
         internal CasinoGameTable(S1Casino.CasinoGameController controller)
         {
-            Controller = controller ?? throw new ArgumentNullException(nameof(controller));
+            S1Controller = controller ?? throw new ArgumentNullException(nameof(controller));
         }
 
-        internal S1Casino.CasinoGameController Controller { get; }
+        internal S1Casino.CasinoGameController S1Controller { get; }
 
         /// <summary>Gets the scene object name.</summary>
-        public string Name => Controller.gameObject?.name ?? string.Empty;
+        public string Name => S1Controller.gameObject?.name ?? string.Empty;
 
         /// <summary>Gets the current world position.</summary>
-        public Vector3 Position => Controller.transform.position;
+        public Vector3 Position => S1Controller.transform.position;
 
         /// <summary>
         /// Gets whether this table's interface is open for the local player.
         /// </summary>
-        public bool IsOpen => Controller.IsOpen;
+        public bool IsOpen => S1Controller.IsOpen;
 
         /// <summary>Gets whether the table is currently accepting ready players.</summary>
-        public bool IsWaitingForPlayers => Controller.IsWaitingForPlayers();
+        public bool IsWaitingForPlayers => S1Controller.IsWaitingForPlayers();
 
         /// <summary>Gets the local player's currently selected bet.</summary>
-        public float LocalBet => Controller.LocalPlayerBet;
+        public float LocalBet => S1Controller.LocalPlayerBet;
 
         /// <summary>Gets the native minimum and maximum bet.</summary>
         public CasinoBetLimits BetLimits
         {
             get
             {
-                Controller.GetBetLimits(out float minimum, out float maximum);
+                S1Controller.GetBetLimits(out float minimum, out float maximum);
                 return new CasinoBetLimits(minimum, maximum);
             }
         }
@@ -66,7 +69,7 @@ namespace S1API.Casino
         {
             get
             {
-                S1Casino.CasinoGamePlayers? players = Controller.Players;
+                S1Casino.CasinoGamePlayers? players = S1Controller.Players;
                 if (players == null)
                     return EmptyPlayers;
 
@@ -83,8 +86,9 @@ namespace S1API.Casino
                         S1Casino.CasinoGamePlayerData? data = players.GetPlayerData(nativePlayer);
                         ready = data != null && data.GetData<bool>("Ready");
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        Logger.Warning($"Failed to read ready state for player '{nativePlayer.PlayerName}': {ex.Message}");
                     }
 
                     snapshots.Add(new CasinoPlayerSnapshot(
@@ -112,14 +116,27 @@ namespace S1API.Casino
     {
         private static readonly IReadOnlyList<CasinoCardSnapshot> EmptyCards =
             new ReadOnlyCollection<CasinoCardSnapshot>(Array.Empty<CasinoCardSnapshot>());
+#if MONOMELON
+        private const BindingFlags NativeMemberFlags =
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        private static readonly MethodInfo? GetPlayerCardsMethod =
+            typeof(S1Casino.BlackjackGameController).GetMethod(
+                "GetPlayerCards",
+                NativeMemberFlags,
+                binder: null,
+                types: new[] { typeof(int) },
+                modifiers: null);
+        private static readonly FieldInfo? DealerHandField =
+            typeof(S1Casino.BlackjackGameController).GetField("dealerHand", NativeMemberFlags);
+#endif
 
         internal BlackjackGame(S1Casino.BlackjackGameController controller)
             : base(controller)
         {
-            Native = controller;
+            S1Native = controller;
         }
 
-        internal S1Casino.BlackjackGameController Native { get; }
+        internal S1Casino.BlackjackGameController S1Native { get; }
 
         /// <summary>Raised after the native blackjack stage changes.</summary>
         public event Action<BlackjackStage, BlackjackStage>? StageChanged;
@@ -131,25 +148,25 @@ namespace S1API.Casino
         public event Action? RoundEnded;
 
         /// <summary>Gets the current round stage.</summary>
-        public BlackjackStage Stage => (BlackjackStage)(int)Native.CurrentStage;
+        public BlackjackStage Stage => (BlackjackStage)(int)S1Native.CurrentStage;
 
         /// <summary>Gets the current dealer score visible to this peer.</summary>
-        public int DealerScore => Native.DealerScore;
+        public int DealerScore => S1Native.DealerScore;
 
         /// <summary>Gets the current local-player score.</summary>
-        public int LocalPlayerScore => Native.LocalPlayerScore;
+        public int LocalPlayerScore => S1Native.LocalPlayerScore;
 
         /// <summary>Gets whether the local player has a natural blackjack.</summary>
-        public bool IsLocalPlayerBlackjack => Native.IsLocalPlayerBlackjack;
+        public bool IsLocalPlayerBlackjack => S1Native.IsLocalPlayerBlackjack;
 
         /// <summary>Gets whether the local player is bust.</summary>
-        public bool IsLocalPlayerBust => Native.IsLocalPlayerBust;
+        public bool IsLocalPlayerBust => S1Native.IsLocalPlayerBust;
 
         /// <summary>Gets whether the local player belongs to the active round.</summary>
-        public bool IsLocalPlayerInRound => Native.IsLocalPlayerInCurrentRound;
+        public bool IsLocalPlayerInRound => S1Native.IsLocalPlayerInCurrentRound;
 
         /// <summary>Gets the number of seated players currently marked ready.</summary>
-        public int ReadyPlayerCount => Native.GetPlayersReadyCount();
+        public int ReadyPlayerCount => S1Native.GetPlayersReadyCount();
 
         /// <summary>
         /// Gets an immutable snapshot of a seated player's current hand.
@@ -157,16 +174,13 @@ namespace S1API.Casino
         /// <param name="seatIndex">The zero-based seat index.</param>
         public IReadOnlyList<CasinoCardSnapshot> GetPlayerHand(int seatIndex)
         {
-            if (seatIndex < 0 || seatIndex >= Native.Players.PlayerLimit)
+            if (seatIndex < 0 || seatIndex >= S1Native.Players.PlayerLimit)
                 return EmptyCards;
 
 #if IL2CPPMELON
-            var cards = Native.GetPlayerCards(seatIndex);
+            var cards = S1Native.GetPlayerCards(seatIndex);
 #else
-            var method = typeof(S1Casino.BlackjackGameController).GetMethod(
-                "GetPlayerCards",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            var cards = method?.Invoke(Native, new object[] { seatIndex })
+            var cards = GetPlayerCardsMethod?.Invoke(S1Native, new object[] { seatIndex })
                 as List<S1Casino.PlayingCard>;
 #endif
             return FreezeCards(cards);
@@ -178,12 +192,9 @@ namespace S1API.Casino
             get
             {
 #if IL2CPPMELON
-                var cards = Native.dealerHand;
+                var cards = S1Native.dealerHand;
 #else
-                var dealerHandField = typeof(S1Casino.BlackjackGameController).GetField(
-                    "dealerHand",
-                    BindingFlags.Instance | BindingFlags.NonPublic);
-                var cards = dealerHandField?.GetValue(Native) as List<S1Casino.PlayingCard>;
+                var cards = DealerHandField?.GetValue(S1Native) as List<S1Casino.PlayingCard>;
 #endif
                 return FreezeCards(cards);
             }
@@ -191,11 +202,11 @@ namespace S1API.Casino
 
         internal void NotifyStageChanged(BlackjackStage previous, BlackjackStage current)
         {
-            InvokeSafely(StageChanged, previous, current, nameof(StageChanged));
+            CasinoEventInvoker.Invoke(StageChanged, previous, current, nameof(StageChanged));
             if (current == BlackjackStage.Dealing && previous == BlackjackStage.WaitingForPlayers)
-                InvokeSafely(RoundStarted, nameof(RoundStarted));
+                CasinoEventInvoker.Invoke(RoundStarted, nameof(RoundStarted));
             if (current == BlackjackStage.WaitingForPlayers && previous != current)
-                InvokeSafely(RoundEnded, nameof(RoundEnded));
+                CasinoEventInvoker.Invoke(RoundEnded, nameof(RoundEnded));
         }
 
         private static IReadOnlyList<CasinoCardSnapshot> FreezeCards(
@@ -227,34 +238,6 @@ namespace S1API.Casino
                 (CasinoCardSuit)(int)card.Suit,
                 (CasinoCardValue)(int)card.Value,
                 card.IsFaceUp);
-
-        private static void InvokeSafely(Action? handlers, string eventName)
-        {
-            if (handlers == null)
-                return;
-
-            foreach (Action handler in handlers.GetInvocationList())
-            {
-                try { handler(); }
-                catch (Exception ex) { CasinoGameRegistry.LogSubscriberFailure(eventName, ex); }
-            }
-        }
-
-        private static void InvokeSafely(
-            Action<BlackjackStage, BlackjackStage>? handlers,
-            BlackjackStage previous,
-            BlackjackStage current,
-            string eventName)
-        {
-            if (handlers == null)
-                return;
-
-            foreach (Action<BlackjackStage, BlackjackStage> handler in handlers.GetInvocationList())
-            {
-                try { handler(previous, current); }
-                catch (Exception ex) { CasinoGameRegistry.LogSubscriberFailure(eventName, ex); }
-            }
-        }
     }
 
     /// <summary>
@@ -268,10 +251,10 @@ namespace S1API.Casino
         internal RideTheBusGame(S1Casino.RTBGameController controller)
             : base(controller)
         {
-            Native = controller;
+            S1Native = controller;
         }
 
-        internal S1Casino.RTBGameController Native { get; }
+        internal S1Casino.RTBGameController S1Native { get; }
 
         /// <summary>Raised after the native Ride the Bus stage changes.</summary>
         public event Action<RideTheBusStage, RideTheBusStage>? StageChanged;
@@ -283,41 +266,42 @@ namespace S1API.Casino
         public event Action? RoundEnded;
 
         /// <summary>Gets the current round stage.</summary>
-        public RideTheBusStage Stage => (RideTheBusStage)(int)Native.CurrentStage;
+        public RideTheBusStage Stage => (RideTheBusStage)(int)S1Native.CurrentStage;
 
         /// <summary>Gets whether a question is currently accepting answers.</summary>
-        public bool IsQuestionActive => Native.IsQuestionActive;
+        public bool IsQuestionActive => S1Native.IsQuestionActive;
 
         /// <summary>Gets the local player's current bet multiplier.</summary>
-        public float LocalBetMultiplier => Native.LocalPlayerBetMultiplier;
+        public float LocalBetMultiplier => S1Native.LocalPlayerBetMultiplier;
 
         /// <summary>Gets the local player's multiplied bet.</summary>
-        public float MultipliedLocalBet => Native.MultipliedLocalPlayerBet;
+        public float MultipliedLocalBet => S1Native.MultipliedLocalPlayerBet;
 
         /// <summary>Gets the answer time remaining on the current peer.</summary>
-        public float RemainingAnswerTime => Native.RemainingAnswerTime;
+        public float RemainingAnswerTime => S1Native.RemainingAnswerTime;
 
         /// <summary>Gets whether the local player belongs to the active round.</summary>
-        public bool IsLocalPlayerInRound => Native.IsLocalPlayerInCurrentRound;
+        public bool IsLocalPlayerInRound => S1Native.IsLocalPlayerInCurrentRound;
 
         /// <summary>Gets the number of seated players currently marked ready.</summary>
-        public int ReadyPlayerCount => Native.GetPlayersReadyCount();
+        public int ReadyPlayerCount => S1Native.GetPlayersReadyCount();
 
         /// <summary>Gets the number of active-round players who submitted an answer.</summary>
-        public int AnsweredPlayerCount => Native.GetAnsweredPlayersCount();
+        public int AnsweredPlayerCount => S1Native.GetAnsweredPlayersCount();
 
         /// <summary>Gets immutable snapshots of cards currently assigned by the table.</summary>
         public IReadOnlyList<CasinoCardSnapshot> Cards
         {
             get
             {
-                if (Native.Cards == null || Native.Cards.Length == 0)
+                var nativeCards = S1Native.Cards;
+                if (nativeCards == null || nativeCards.Length == 0)
                     return EmptyCards;
 
                 var cards = new List<CasinoCardSnapshot>();
-                for (int i = 0; i < Native.Cards.Length; i++)
+                for (int i = 0; i < nativeCards.Length; i++)
                 {
-                    S1Casino.PlayingCard? card = Native.Cards[i];
+                    S1Casino.PlayingCard? card = nativeCards[i];
                     if (card != null && (int)card.Value != (int)CasinoCardValue.Blank)
                         cards.Add(BlackjackGame.ToSnapshot(card));
                 }
@@ -330,39 +314,11 @@ namespace S1API.Casino
 
         internal void NotifyStageChanged(RideTheBusStage previous, RideTheBusStage current)
         {
-            InvokeSafely(StageChanged, previous, current, nameof(StageChanged));
+            CasinoEventInvoker.Invoke(StageChanged, previous, current, nameof(StageChanged));
             if (current == RideTheBusStage.RedOrBlack && previous == RideTheBusStage.WaitingForPlayers)
-                InvokeSafely(RoundStarted, nameof(RoundStarted));
+                CasinoEventInvoker.Invoke(RoundStarted, nameof(RoundStarted));
             if (current == RideTheBusStage.WaitingForPlayers && previous != current)
-                InvokeSafely(RoundEnded, nameof(RoundEnded));
-        }
-
-        private static void InvokeSafely(Action? handlers, string eventName)
-        {
-            if (handlers == null)
-                return;
-
-            foreach (Action handler in handlers.GetInvocationList())
-            {
-                try { handler(); }
-                catch (Exception ex) { CasinoGameRegistry.LogSubscriberFailure(eventName, ex); }
-            }
-        }
-
-        private static void InvokeSafely(
-            Action<RideTheBusStage, RideTheBusStage>? handlers,
-            RideTheBusStage previous,
-            RideTheBusStage current,
-            string eventName)
-        {
-            if (handlers == null)
-                return;
-
-            foreach (Action<RideTheBusStage, RideTheBusStage> handler in handlers.GetInvocationList())
-            {
-                try { handler(previous, current); }
-                catch (Exception ex) { CasinoGameRegistry.LogSubscriberFailure(eventName, ex); }
-            }
+                CasinoEventInvoker.Invoke(RoundEnded, nameof(RoundEnded));
         }
     }
 
@@ -373,10 +329,10 @@ namespace S1API.Casino
     {
         internal SlotMachine(S1Casino.SlotMachine machine)
         {
-            Native = machine ?? throw new ArgumentNullException(nameof(machine));
+            S1Native = machine ?? throw new ArgumentNullException(nameof(machine));
         }
 
-        internal S1Casino.SlotMachine Native { get; }
+        internal S1Casino.SlotMachine S1Native { get; }
 
         /// <summary>Raised when a synchronized spin begins.</summary>
         public event Action<SlotSpinSnapshot>? SpinStarted;
@@ -385,20 +341,20 @@ namespace S1API.Casino
         public event Action<SlotSpinSnapshot>? SpinCompleted;
 
         /// <summary>Gets the scene object name.</summary>
-        public string Name => Native.gameObject?.name ?? string.Empty;
+        public string Name => S1Native.gameObject?.name ?? string.Empty;
 
         /// <summary>Gets the current world position.</summary>
-        public Vector3 Position => Native.transform.position;
+        public Vector3 Position => S1Native.transform.position;
 
         /// <summary>Gets whether the reels are currently spinning.</summary>
-        public bool IsSpinning => Native.IsSpinning;
+        public bool IsSpinning => S1Native.IsSpinning;
 
         /// <summary>Gets the machine's currently selected bet.</summary>
         public int CurrentBet
         {
             get
             {
-                object? value = ReflectionUtils.TryGetFieldOrProperty(Native, "currentBetAmount");
+                object? value = ReflectionUtils.TryGetFieldOrProperty(S1Native, "currentBetAmount");
                 return value is int bet ? bet : 0;
             }
         }
@@ -417,24 +373,9 @@ namespace S1API.Casino
         }
 
         internal void NotifySpinStarted(SlotSpinSnapshot snapshot) =>
-            InvokeSafely(SpinStarted, snapshot, nameof(SpinStarted));
+            CasinoEventInvoker.Invoke(SpinStarted, snapshot, nameof(SpinStarted));
 
         internal void NotifySpinCompleted(SlotSpinSnapshot snapshot) =>
-            InvokeSafely(SpinCompleted, snapshot, nameof(SpinCompleted));
-
-        private static void InvokeSafely(
-            Action<SlotSpinSnapshot>? handlers,
-            SlotSpinSnapshot snapshot,
-            string eventName)
-        {
-            if (handlers == null)
-                return;
-
-            foreach (Action<SlotSpinSnapshot> handler in handlers.GetInvocationList())
-            {
-                try { handler(snapshot); }
-                catch (Exception ex) { CasinoGameRegistry.LogSubscriberFailure(eventName, ex); }
-            }
-        }
+            CasinoEventInvoker.Invoke(SpinCompleted, snapshot, nameof(SpinCompleted));
     }
 }

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Reflection;
 using S1API.Casino;
 
@@ -20,9 +21,10 @@ public sealed class CasinoApiContractTests
         Assert.NotNull(typeof(S1Casino.RTBGameController).GetMethod(
             "set_CurrentStage",
             BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public));
-        Assert.NotNull(typeof(S1Casino.SlotMachine).GetMethod(
-            "RpcLogic___StartSpin_2659526290",
-            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public));
+        MethodBase? slotStartMethod = global::S1API.Internal.Patches.CasinoGamePatches
+            .FindSlotStartLogicMethod(typeof(S1Casino.SlotMachine));
+        Assert.NotNull(slotStartMethod);
+        Assert.StartsWith("RpcLogic___StartSpin_", slotStartMethod!.Name);
         Assert.NotNull(typeof(S1Casino.SlotMachine).GetMethod(
             "DisplayOutcome",
             BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public));
@@ -49,6 +51,7 @@ public sealed class CasinoApiContractTests
         Assert.All(
             snapshotType.GetProperties(BindingFlags.Public | BindingFlags.Instance),
             property => Assert.Null(property.SetMethod));
+        AssertPublicInstanceFieldsAreReadonly(snapshotType);
         Assert.Empty(snapshotType.GetConstructors(BindingFlags.Public | BindingFlags.Instance));
     }
 
@@ -68,6 +71,7 @@ public sealed class CasinoApiContractTests
             Assert.All(
                 wrapperType.GetProperties(BindingFlags.Public | BindingFlags.Instance),
                 property => Assert.Null(property.SetMethod));
+            AssertPublicInstanceFieldsAreReadonly(wrapperType);
         }
     }
 
@@ -99,7 +103,12 @@ public sealed class CasinoApiContractTests
             modifiers: null)!;
 
         Assert.NotNull(method);
-        Assert.NotNull(method.GetCustomAttribute<ObsoleteAttribute>());
+        ObsoleteAttribute obsolete = Assert.IsType<ObsoleteAttribute>(
+            method.GetCustomAttribute<ObsoleteAttribute>());
+        Assert.False(obsolete.IsError);
+        EditorBrowsableAttribute editorBrowsable = Assert.IsType<EditorBrowsableAttribute>(
+            method.GetCustomAttribute<EditorBrowsableAttribute>());
+        Assert.Equal(EditorBrowsableState.Never, editorBrowsable.State);
         Assert.Equal(typeof(S1Casino.SlotMachine), method.ReturnType);
 
         MethodInfo managedMethod = typeof(CasinoGameRegistry).GetMethod(
@@ -141,26 +150,64 @@ public sealed class CasinoApiContractTests
 
     private static IEnumerable<Type> GetExposedTypes(MemberInfo member)
     {
+        IEnumerable<Type> declaredTypes;
         switch (member)
         {
             case PropertyInfo property:
-                yield return property.PropertyType;
+                declaredTypes = new[] { property.PropertyType };
                 break;
             case FieldInfo field:
-                yield return field.FieldType;
+                declaredTypes = new[] { field.FieldType };
                 break;
             case EventInfo eventInfo when eventInfo.EventHandlerType != null:
-                yield return eventInfo.EventHandlerType;
+                declaredTypes = new[] { eventInfo.EventHandlerType };
                 break;
             case MethodInfo method:
-                yield return method.ReturnType;
-                foreach (ParameterInfo parameter in method.GetParameters())
-                    yield return parameter.ParameterType;
+                declaredTypes = new[] { method.ReturnType }
+                    .Concat(method.GetParameters().Select(parameter => parameter.ParameterType));
                 break;
             case ConstructorInfo constructor:
-                foreach (ParameterInfo parameter in constructor.GetParameters())
-                    yield return parameter.ParameterType;
+                declaredTypes = constructor.GetParameters().Select(parameter => parameter.ParameterType);
                 break;
+            default:
+                return Array.Empty<Type>();
         }
+
+        return declaredTypes.SelectMany(ExpandCompositeType);
+    }
+
+    private static IEnumerable<Type> ExpandCompositeType(Type root)
+    {
+        var pending = new Stack<Type>();
+        var visited = new HashSet<Type>();
+        pending.Push(root);
+
+        while (pending.Count > 0)
+        {
+            Type current = pending.Pop();
+            if (!visited.Add(current))
+                continue;
+
+            yield return current;
+
+            if (current.HasElementType && current.GetElementType() is Type elementType)
+                pending.Push(elementType);
+
+            foreach (Type argument in current.GetGenericArguments())
+                pending.Push(argument);
+
+            if (current.BaseType != null)
+                pending.Push(current.BaseType);
+
+            foreach (Type implementedInterface in current.GetInterfaces())
+                pending.Push(implementedInterface);
+        }
+    }
+
+    private static void AssertPublicInstanceFieldsAreReadonly(Type type)
+    {
+        Assert.All(
+            type.GetFields(BindingFlags.Public | BindingFlags.Instance),
+            field => Assert.True(field.IsInitOnly, $"{type.Name}.{field.Name} must be readonly."));
     }
 }
