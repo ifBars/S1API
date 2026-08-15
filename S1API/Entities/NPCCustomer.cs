@@ -42,6 +42,7 @@ using S1API.Economy;
 using S1API.Internal.Abstraction;
 using S1API.Internal.Utils;
 #if (IL2CPPMELON)
+using Il2CppInterop.Runtime;
 using Il2CppFishNet;
 using Il2CppFishNet.Managing;
 using Il2CppFishNet.Managing.Object;
@@ -782,20 +783,21 @@ namespace S1API.Entities
 
             try
             {
-                var evt = Utils.ReflectionUtils.TryGetFieldOrProperty(Component, "onContractAssigned");
+                UnityEvent<S1Quests.Contract>? evt = Component.onContractAssigned;
                 if (evt == null)
                     return false;
 
-                var contractType = typeof(S1Quests.Contract);
-                var unityActionType = typeof(UnityAction<>).MakeGenericType(contractType);
-                var method = GetType().GetMethod(nameof(HandleContractAssigned), BindingFlags.NonPublic | BindingFlags.Instance);
-                if (method == null)
-                    return false;
-
-                var del = Delegate.CreateDelegate(unityActionType, this, method);
-                var addListener = evt.GetType().GetMethod("AddListener", new[] { unityActionType });
-                addListener?.Invoke(evt, new object[] { del });
-                _contractAssignedBridge = del;
+#if IL2CPPMELON
+                _contractAssignedBridge =
+                    DelegateSupport.ConvertDelegate<UnityAction<S1Quests.Contract>>(
+                        new Action<S1Quests.Contract>(HandleContractAssigned))
+                    ?? throw new InvalidOperationException(
+                        "Could not create the native contract-assigned listener.");
+#else
+                _contractAssignedBridge =
+                    new UnityAction<S1Quests.Contract>(HandleContractAssigned);
+#endif
+                evt.AddListener(_contractAssignedBridge);
                 _contractAssignedUnityEvent = evt;
                 return true;
             }
@@ -813,9 +815,7 @@ namespace S1API.Entities
 
             try
             {
-                var unityActionType = _contractAssignedBridge.GetType();
-                var removeListener = _contractAssignedUnityEvent.GetType().GetMethod("RemoveListener", new[] { unityActionType });
-                removeListener?.Invoke(_contractAssignedUnityEvent, new object[] { _contractAssignedBridge });
+                _contractAssignedUnityEvent.RemoveListener(_contractAssignedBridge);
             }
             catch (Exception ex)
             {
@@ -829,11 +829,11 @@ namespace S1API.Entities
         }
 
         private Action<float, int, int, int>? _onContractAssigned;
-        private Delegate? _contractAssignedBridge;
-        private object? _contractAssignedUnityEvent;
+        private UnityAction<S1Quests.Contract>? _contractAssignedBridge;
+        private UnityEvent<S1Quests.Contract>? _contractAssignedUnityEvent;
 
         // Maps Contract to safe primitives for modders
-        private void HandleContractAssigned(object contract)
+        private void HandleContractAssigned(S1Quests.Contract contract)
         {
             try
             {
