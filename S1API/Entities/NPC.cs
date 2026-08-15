@@ -2790,13 +2790,8 @@ namespace S1API.Entities
         /// </summary>
         public bool RequiresRegionUnlocked
         {
-#if IL2CPPMELON
-            get => DefaultRequiresRegionUnlocked;
-            set { /* no-op under IL2CPP; constant in base game so non accessible */ }
-#else
-            get => _requiresRegionUnlockedField != null && (bool)_requiresRegionUnlockedField.GetValue(S1NPC)!;
-            set { _requiresRegionUnlockedField?.SetValue(S1NPC, value); }
-#endif
+            get => ResolveRequiresRegionUnlocked(S1NPC);
+            set => TrySetRequiresRegionUnlocked(S1NPC, value);
         }
 
         /// <summary>
@@ -4282,11 +4277,15 @@ namespace S1API.Entities
 
         internal readonly bool IsCustomNPC;
 
-#if IL2CPPMELON
         private const bool DefaultRequiresRegionUnlocked = true;
-#else
-        private readonly FieldInfo _requiresRegionUnlockedField = AccessTools.Field(typeof(S1NPCs.NPC), "RequiresRegionUnlocked");
-#endif
+
+        internal static bool ResolveRequiresRegionUnlocked(object npc) =>
+            Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(npc, "RequiresRegionUnlocked") is bool value
+                ? value
+                : DefaultRequiresRegionUnlocked;
+
+        internal static bool TrySetRequiresRegionUnlocked(object npc, bool value) =>
+            Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(npc, "RequiresRegionUnlocked", value);
 
         private readonly MethodInfo _unsettleMethod = AccessTools.Method(typeof(S1NPCs.NPC), "SetUnsettled");
         private readonly MethodInfo _removePanicMethod = AccessTools.Method(typeof(S1NPCs.NPC), "RemovePanicked");
