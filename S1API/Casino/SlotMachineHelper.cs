@@ -13,6 +13,7 @@ using S1Items = ScheduleOne.ItemFramework;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using S1API.Entities;
 using S1API.Lifecycle;
 using S1API.Logging;
@@ -282,7 +283,7 @@ namespace S1API.Casino
                 if (_isSceneChangeInProgress)
                     return false;
 
-                var machine = FindNearestSlotMachine(machinePosition, maxSearchDistance);
+                var machine = FindNearestNativeSlotMachine(machinePosition, maxSearchDistance);
                 if (machine == null)
                 {
                     Logger.Warning($"No slot machine found near position {machinePosition}");
@@ -325,6 +326,18 @@ namespace S1API.Casino
                     SpinSlotMachineForNPC(npc, machine, symbols, betAmount, activeSpin));
 #endif
 
+                var managedSymbols = new List<SlotSymbol>(symbols.Length);
+                for (int i = 0; i < symbols.Length; i++)
+                    managedSymbols.Add((SlotSymbol)(int)symbols[i]);
+
+                CasinoGameRegistry.NotifySlotSpinStarted(
+                    machine,
+                    new SlotSpinSnapshot(
+                        betAmount,
+                        SlotSpinSnapshot.Freeze(managedSymbols),
+                        wasStartedByLocalPlayer: false,
+                        outcome: null,
+                        winAmount: null));
                 RegisterActiveSpin(activeSpin);
 
                 return true;
@@ -337,12 +350,21 @@ namespace S1API.Casino
         }
 
         /// <summary>
-        /// Finds the nearest slot machine to a given position.
+        /// Finds the nearest native slot machine to a given position.
         /// </summary>
         /// <param name="position">The position to search from.</param>
         /// <param name="maxDistance">Maximum distance to search.</param>
-        /// <returns>The nearest slot machine, or null if none found.</returns>
+        /// <returns>The nearest native slot machine, or null if none found.</returns>
+        /// <remarks>
+        /// This compatibility method exposes a game type. New code should use
+        /// <see cref="CasinoGameRegistry.FindNearestSlotMachine(Vector3, float)"/>.
+        /// </remarks>
+        [Obsolete("Use CasinoGameRegistry.FindNearestSlotMachine to receive an S1API managed wrapper.")]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         public static S1Casino.SlotMachine? FindNearestSlotMachine(Vector3 position, float maxDistance)
+            => FindNearestNativeSlotMachine(position, maxDistance);
+
+        internal static S1Casino.SlotMachine? FindNearestNativeSlotMachine(Vector3 position, float maxDistance)
         {
             try
             {
