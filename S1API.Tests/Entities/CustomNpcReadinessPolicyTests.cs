@@ -1,9 +1,37 @@
+using S1API.Entities;
 using S1API.Internal.Entities;
+using S1API.Internal.Patches;
 
 namespace S1API.Tests.Entities;
 
 public sealed class CustomNpcReadinessPolicyTests
 {
+    [Fact]
+    public void ClientHydrationSignalsReadyOnlyAfterEveryCustomNpcTypeCompletes()
+    {
+        NPC.FinalizedCustomNpcTypes.Clear();
+        NPCPatches.CustomNpcsReady = false;
+
+        try
+        {
+            var dealer = TestObjectFactory.CreateUninitialized<DealerNpc>();
+            var customer = TestObjectFactory.CreateUninitialized<CustomerNpc>();
+
+            dealer.CreateFromClientNetworkSpawn();
+
+            Assert.False(NPC.CustomNpcsReady);
+
+            customer.CreateFromClientNetworkSpawn();
+
+            Assert.True(NPC.CustomNpcsReady);
+        }
+        finally
+        {
+            NPC.FinalizedCustomNpcTypes.Clear();
+            NPCPatches.CustomNpcsReady = false;
+        }
+    }
+
     [Fact]
     public void ClientRemainsNotReadyWhileARegisteredTypeIsMissing()
     {
@@ -44,11 +72,17 @@ public sealed class CustomNpcReadinessPolicyTests
         Assert.False(ready);
     }
 
-    private sealed class DealerNpc
+    private sealed class DealerNpc : NPC
     {
+        internal override void CreateInternal()
+        {
+        }
     }
 
-    private sealed class CustomerNpc
+    private sealed class CustomerNpc : NPC
     {
+        internal override void CreateInternal()
+        {
+        }
     }
 }
