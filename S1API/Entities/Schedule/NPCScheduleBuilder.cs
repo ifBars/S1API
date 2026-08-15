@@ -102,7 +102,7 @@ namespace S1API.Entities.Schedule
         /// Schedule I 0.4.6 removed the deal signal. The retained specification configures the
         /// current customer deal-attendance behaviour during prefab creation and otherwise no-ops.
         /// </remarks>
-        [System.Obsolete("NPCSignal_WaitForDelivery was removed in game version 0.4.6. Use EnsureCustomer(); deal attendance is configured automatically.")]
+        [System.Obsolete("NPCSignal_WaitForDelivery was removed in game version 0.4.6. Override NPC.IsCustomer; deal attendance is configured automatically.")]
         public PrefabScheduleBuilder EnsureDealSignal()
         {
             _specs.Add(new EnsureDealSignalSpec());
@@ -375,7 +375,7 @@ namespace S1API.Entities.Schedule
         /// <remarks>
         /// As of v0.4.2f4, deal handling is now automatic through the DealerAttendDealBehaviour system.
         /// This method is kept for backwards compatibility but is a no-op. Dealer NPCs set up with
-        /// EnsureDealer() will automatically handle deals when contracts are assigned.
+        /// Dealer NPCs automatically handle deals when contracts are assigned.
         /// </remarks>
         [System.Obsolete("HandleDeal is no longer needed as of game version 0.4.2f4. Deal handling is now automatic through DealerAttendDealBehaviour.")]
         public PrefabScheduleBuilder HandleDeal(int startTime, string? name = null)

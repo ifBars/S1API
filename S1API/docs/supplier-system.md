@@ -34,7 +34,7 @@ public sealed class WarehouseSupplier : NPC
 }
 ```
 
-`WithSupplierDefaults(...)` calls `EnsureSupplier()` for you. Call `EnsureSupplier()` directly only when you want the supplier role with default data.
+`IsSupplier` is the role declaration. `WithSupplierDefaults(...)` only supplies optional order, listing, and message configuration; omit it when the native defaults are sufficient.
 
 The string overload of `WithDeliveryItem(...)` is declaration-order safe: S1API
 stores the stable ID during NPC prefab discovery and resolves it when supplier

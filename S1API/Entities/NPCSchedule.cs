@@ -173,10 +173,10 @@ namespace S1API.Entities
         /// </summary>
         /// <remarks>
         /// Schedule I 0.4.6 removed <c>NPCSignal_WaitForDelivery</c>. Customer deal attendance is
-        /// configured automatically by <see cref="NPCPrefabBuilder.EnsureCustomer"/>. This method
+        /// configured automatically when <see cref="NPC.IsCustomer"/> is <c>true</c>. This method
         /// now performs no runtime work and logs one compatibility warning per process.
         /// </remarks>
-        [Obsolete("NPCSignal_WaitForDelivery was removed in game version 0.4.6. Customer deal attendance is configured automatically by EnsureCustomer().")]
+        [Obsolete("NPCSignal_WaitForDelivery was removed in game version 0.4.6. Override NPC.IsCustomer; customer deal attendance is configured automatically.")]
         public void EnsureDealSignal()
         {
             if (_loggedRemovedDealSignal)

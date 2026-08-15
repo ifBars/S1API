@@ -115,8 +115,8 @@ Once the NPC exists in-world, add dialogue. Keep the logic small here and lean o
 
 ## Step 5 (optional): Make them a customer or dealer
 
-- Customer NPCs: `builder.EnsureCustomer().WithCustomerDefaults(...)` (see `S1API/docs/customer-behavior.md`)
-- Dealer NPCs: `public override bool IsDealer => true;` + `builder.EnsureDealer().WithDealerDefaults(...)` (see `S1API/docs/dealer-system.md`)
+- Customer NPCs: `public override bool IsCustomer => true;` + `builder.WithCustomerDefaults(...)` (see `S1API/docs/customer-behavior.md`)
+- Dealer NPCs: `public override bool IsDealer => true;` + `builder.WithDealerDefaults(...)` (see `S1API/docs/dealer-system.md`)
 
 ## Example NPCs
 

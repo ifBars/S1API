@@ -87,13 +87,23 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Adds customer behavior component to the NPC. Required before configuring customer defaults.
+        /// Ensures customer infrastructure for compatibility with existing prefab-builder declarations.
         /// </summary>
         /// <remarks>
-        /// Enables the NPC to act as a business customer that can buy products from the player.
+        /// Compatibility shim for existing mods. New NPC types should override <see cref="NPC.IsCustomer"/>.
         /// </remarks>
         /// <returns>The builder instance for fluent chaining.</returns>
-        public NPCPrefabBuilder EnsureCustomer()
+        [Obsolete("Override NPC.IsCustomer to return true instead.", false)]
+        public NPCPrefabBuilder EnsureCustomer() =>
+            DeclareCustomerCompatibility();
+
+        internal NPCPrefabBuilder DeclareCustomerCompatibility()
+        {
+            NPC.RegisterCustomerType(ownerType);
+            return EnsureCustomerInfrastructure();
+        }
+
+        internal NPCPrefabBuilder EnsureCustomerInfrastructure()
         {
             var customer = prefabRoot.GetComponent<S1Economy.Customer>();
             if (customer == null)
@@ -101,8 +111,6 @@ namespace S1API.Entities
                 customer = prefabRoot.AddComponent<S1Economy.Customer>();
                 customer.enabled = true;
             }
-            // Mark this NPC type as a Customer-bearing type so pre-registration adds Customer on template
-            NPC.RegisterCustomerType(ownerType);
             return this;
         }
 
@@ -334,10 +342,10 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Adds dealer behavior to the NPC. Required before configuring dealer defaults.
+        /// Ensures dealer infrastructure for compatibility with existing prefab-builder declarations.
         /// </summary>
         /// <remarks>
-        /// Enables the NPC to act as a dealer that sells products to assigned customers.
+        /// Compatibility shim for existing mods. New NPC types should override <see cref="NPC.IsDealer"/>.
         /// This marks the NPC type as dealer-capable; S1API will ensure the generated spawnable prefab
         /// has a Dealer-compatible NPC component before network registration when the selected base prefab
         /// does not already include one.
@@ -345,11 +353,18 @@ namespace S1API.Entities
         /// dealer functionality and ensure the messaging app displays the correct Dealer category badge.
         /// </remarks>
         /// <returns>The builder instance for fluent chaining.</returns>
-        public NPCPrefabBuilder EnsureDealer()
+        [Obsolete("Override NPC.IsDealer to return true instead.", false)]
+        public NPCPrefabBuilder EnsureDealer() =>
+            DeclareDealerCompatibility();
+
+        internal NPCPrefabBuilder DeclareDealerCompatibility()
         {
-            // Mark the type as dealer-capable; NPC prefab creation materializes the correct runtime component.
             NPC.RegisterDealerType(ownerType);
-            
+            return EnsureDealerInfrastructure();
+        }
+
+        internal NPCPrefabBuilder EnsureDealerInfrastructure()
+        {
             // Ensure required schedule components exist
             var mgr = EnsureScheduleManager();
 
@@ -477,33 +492,45 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Configures this NPC type to use the native supplier root.
+        /// Ensures supplier infrastructure for compatibility with existing prefab-builder declarations.
         /// </summary>
         /// <remarks>
+        /// Compatibility shim for existing mods. New NPC types should override <see cref="NPC.IsSupplier"/>.
         /// Supplier NPCs support dead-drop orders, supplier meetings, delivery unlocks, and debt tracking.
         /// S1API reserves a location-dialogue schedule action required by the native supplier lifecycle.
         /// A custom NPC cannot be both a dealer and a supplier.
         /// </remarks>
         /// <returns>The builder instance for fluent chaining.</returns>
-        public NPCPrefabBuilder EnsureSupplier()
+        [Obsolete("Override NPC.IsSupplier to return true instead.", false)]
+        public NPCPrefabBuilder EnsureSupplier() =>
+            DeclareSupplierCompatibility();
+
+        internal NPCPrefabBuilder DeclareSupplierCompatibility()
         {
             NPC.RegisterSupplierType(ownerType);
+            return EnsureSupplierInfrastructure();
+        }
+
+        internal NPCPrefabBuilder EnsureSupplierInfrastructure()
+        {
             SupplierRuntimeCoordinator.EnsurePrefabInfrastructure(prefabRoot);
             return this;
         }
 
         /// <summary>
-        /// Configures customer behavior defaults using the <see cref="CustomerDataBuilder"/>. Requires <see cref="EnsureCustomer"/> to be called first.
+        /// Configures customer behavior defaults using the <see cref="CustomerDataBuilder"/>.
         /// </summary>
         /// <remarks>
         /// Configure spending behavior, order frequency, customer standards, product preferences, and relationship requirements.
+        /// Override <see cref="NPC.IsCustomer"/> to declare customer capability. This method retains the
+        /// legacy implicit declaration behavior for source and behavioral compatibility.
         /// This configuration is essential for proper save/load behavior and must be done in <see cref="NPC.ConfigurePrefab"/>.
         /// </remarks>
         /// <param name="configure">Action to configure customer defaults using the builder.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithCustomerDefaults(Action<CustomerDataBuilder> configure)
         {
-            EnsureCustomer();
+            DeclareCustomerCompatibility();
             var customer = prefabRoot.GetComponent<S1Economy.Customer>();
             if (customer != null)
             {
@@ -584,17 +611,19 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Configures dealer behavior defaults using the <see cref="DealerDataBuilder"/>. Requires <see cref="EnsureDealer"/> to be called first.
+        /// Configures dealer behavior defaults using the <see cref="DealerDataBuilder"/>.
         /// </summary>
         /// <remarks>
         /// Configure dealer settings such as signing fee, commission cut, dealer type, quality restrictions, and deal tracking.
+        /// Override <see cref="NPC.IsDealer"/> to declare dealer capability. This method retains the
+        /// legacy implicit declaration behavior for source and behavioral compatibility.
         /// This configuration is essential for proper save/load behavior and must be done in <see cref="NPC.ConfigurePrefab"/>.
         /// </remarks>
         /// <param name="configure">Action to configure dealer defaults using the builder.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithDealerDefaults(Action<DealerDataBuilder> configure)
         {
-            EnsureDealer();
+            DeclareDealerCompatibility();
             
             // Register dealer defaults for type-level application
             NPC.RegisterDealerDefaultsForType(ownerType, configure);
@@ -635,6 +664,10 @@ namespace S1API.Entities
         /// <summary>
         /// Configures native supplier data for this NPC type.
         /// </summary>
+        /// <remarks>
+        /// Override <see cref="NPC.IsSupplier"/> to declare supplier capability. This method retains the
+        /// legacy implicit declaration behavior for source and behavioral compatibility.
+        /// </remarks>
         /// <param name="configure">Action that defines order limits, delivery items, and supplier messages.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="configure"/> is null.</exception>
@@ -643,7 +676,7 @@ namespace S1API.Entities
             if (configure == null)
                 throw new ArgumentNullException(nameof(configure));
 
-            EnsureSupplier();
+            DeclareSupplierCompatibility();
             NPC.RegisterSupplierDefaultsForType(ownerType, configure);
             return this;
         }

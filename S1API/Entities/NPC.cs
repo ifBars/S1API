@@ -955,7 +955,8 @@ namespace S1API.Entities
                 NetworkObject? chosen = null;
                 int count = spawnablePrefabs.GetObjectCount();
                 
-                NpcRootRole rootRole = GetDeclaredRootRole(npcType);
+                NpcRoleDeclaration roleDeclaration = GetDeclaredRoles(npcType);
+                NpcRootRole rootRole = roleDeclaration.RootRole;
                 chosen = ResolveNpcSpawnablePrefab(spawnablePrefabs, count, rootRole);
 
                 if (chosen == null)
@@ -1036,6 +1037,7 @@ namespace S1API.Entities
                     throw new InvalidOperationException("NPC prefab is missing its NetworkObject.");
                 var prefabRoot = prefabNO.gameObject ?? throw new InvalidOperationException("NPC prefab is missing its GameObject.");
                 var builder = new NPCPrefabBuilder(prefabRoot, npcType);
+                PrepareDeclaredRoleInfrastructure(builder, roleDeclaration);
                 if (owner != null)
                 {
                     owner.ConfigurePrefab(builder);
@@ -1045,29 +1047,37 @@ namespace S1API.Entities
                     InvokeConfigurePrefabWithoutInstance(npcType, builder);
                 }
 
-                // ConfigurePrefab may declare a specialized root role even when the virtual property was not overridden.
-                rootRole = GetDeclaredRootRole(npcType);
+                // Legacy builder calls may declare roles that were not exposed by type-level properties.
+                roleDeclaration = GetDeclaredRoles(npcType);
+                rootRole = roleDeclaration.RootRole;
+                S1Economy.Dealer? dealerComponent = null;
+                S1Economy.Supplier? supplierComponent = null;
                 switch (rootRole)
                 {
                     case NpcRootRole.Dealer:
-                    {
-                        var dealerComponent = EnsureDealerComponentOnPrefab(prefabNO.gameObject);
-                        var dealerDefaults = BuildDealerDefaultsForType(npcType);
-                        if (dealerComponent != null && dealerDefaults != null)
-                            TryApplyDealerDefaults(dealerComponent, dealerDefaults);
+                        dealerComponent = EnsureDealerComponentOnPrefab(prefabNO.gameObject);
                         break;
-                    }
                     case NpcRootRole.Supplier:
-                    {
-                        var supplierComponent = EnsureSupplierComponentOnPrefab(prefabNO.gameObject);
-                        var supplierDefaults = BuildSupplierDefaultsForType(npcType);
-                        if (supplierComponent != null && supplierDefaults != null)
-                            TryApplySupplierDefaults(supplierComponent, supplierDefaults);
-                        SupplierRuntimeCoordinator.FinalizePrefabInfrastructure(
-                            prefabNO.gameObject,
-                            supplierDefaults?.PersistentId);
+                        supplierComponent = EnsureSupplierComponentOnPrefab(prefabNO.gameObject);
                         break;
-                    }
+                }
+
+                // Root replacement can invalidate references prepared against the donor NPC, so this
+                // pass is deliberately repeated after compatibility roles have been materialized.
+                PrepareDeclaredRoleInfrastructure(builder, roleDeclaration);
+
+                var dealerDefaults = BuildDealerDefaultsForType(npcType);
+                if (dealerComponent != null && dealerDefaults != null)
+                    TryApplyDealerDefaults(dealerComponent, dealerDefaults);
+
+                var supplierDefaults = BuildSupplierDefaultsForType(npcType);
+                if (supplierComponent != null && supplierDefaults != null)
+                    TryApplySupplierDefaults(supplierComponent, supplierDefaults);
+                if (supplierComponent != null)
+                {
+                    SupplierRuntimeCoordinator.FinalizePrefabInfrastructure(
+                        prefabNO.gameObject,
+                        supplierDefaults?.PersistentId);
                 }
 
                 // Ensure schedule actions exist on the template so NetworkBehaviour indices are stable
@@ -1080,34 +1090,6 @@ namespace S1API.Entities
                 if (sourcePrefabName == BaseEmployeePrefabName)
                 {
                     RemoveEmployeeComponentsFromBaseEmployeeFallback(prefabNO.gameObject);
-                }
-
-                // If we are pre-registering without an instance owner, ensure baseline Customer exists when applicable
-                if (owner == null)
-                {
-                    try
-                    {
-                        // Only add Customer for types that opted-in via EnsureCustomer
-                        if (IsCustomerType(npcType))
-                        {
-                            var existingCustomer = prefabNO.gameObject.GetComponent<S1Economy.Customer>();
-                            if (existingCustomer == null)
-                            {
-                                existingCustomer = prefabNO.gameObject.AddComponent<S1Economy.Customer>();
-                            }
-
-                            // Apply defaults if the mod registered them
-                            var defaults = GetCustomerDefaultsForType(npcType);
-                            if (defaults != null && existingCustomer != null)
-                            {
-                                var data = BuildCustomerDefaultsForType(npcType);
-                                if (data != null)
-                                    TrySetCustomerDataOnComponent(existingCustomer, data);
-                            }
-                        }
-                        
-                    }
-                    catch { }
                 }
 
                 RepairBehaviourOwnership(prefabRoot, GetPreferredNpcComponent(prefabRoot));
@@ -1157,46 +1139,39 @@ namespace S1API.Entities
                 BuildSupplierDefaultsForType(npcType)?.PersistentId);
         }
 
-        private static NpcRootRole GetDeclaredRootRole(System.Type npcType)
+        private static NpcRoleDeclaration GetDeclaredRoles(System.Type npcType)
         {
-            bool isDealer = IsDealerType(npcType);
-            bool isSupplier = IsSupplierType(npcType);
-            bool isPhysical = false;
+            NpcRoleDeclaration declaration = NpcRoleDeclarationResolver
+                .GetDeclaredProperties(npcType)
+                .WithCompatibilityRoles(
+                    IsCustomerType(npcType),
+                    IsDealerType(npcType),
+                    IsSupplierType(npcType))
+                .Validate(npcType);
 
-            try
-            {
-                NPC tempInstance = (NPC)FormatterServices.GetUninitializedObject(npcType);
-                isDealer |= tempInstance.IsDealer;
-                isSupplier |= tempInstance.IsSupplier;
-                isPhysical = tempInstance.IsPhysical;
-            }
-            catch
-            {
-            }
-
-            if (isDealer && isSupplier)
-            {
-                throw new InvalidOperationException(
-                    $"Custom NPC type '{npcType.FullName}' cannot be both a dealer and a supplier root.");
-            }
-
-            if (isSupplier)
-            {
-                if (!isPhysical)
-                {
-                    throw new InvalidOperationException(
-                        $"Custom supplier type '{npcType.FullName}' must override IsPhysical to return true.");
-                }
-
+            if (declaration.IsCustomer)
+                RegisterCustomerType(npcType);
+            if (declaration.IsSupplier)
                 RegisterSupplierType(npcType);
-                return NpcRootRole.Supplier;
-            }
-            if (isDealer)
-            {
+            else if (declaration.IsDealer)
                 RegisterDealerType(npcType);
-                return NpcRootRole.Dealer;
-            }
-            return NpcRootRole.Plain;
+
+            return declaration;
+        }
+
+        private static NpcRootRole GetDeclaredRootRole(System.Type npcType) =>
+            GetDeclaredRoles(npcType).RootRole;
+
+        private static void PrepareDeclaredRoleInfrastructure(
+            NPCPrefabBuilder builder,
+            NpcRoleDeclaration declaration)
+        {
+            if (declaration.IsCustomer)
+                builder.EnsureCustomerInfrastructure();
+            if (declaration.IsDealer)
+                builder.EnsureDealerInfrastructure();
+            if (declaration.IsSupplier)
+                builder.EnsureSupplierInfrastructure();
         }
 
         private static void InvokeConfigurePrefabWithoutInstance(System.Type npcType, NPCPrefabBuilder builder)
@@ -2435,7 +2410,18 @@ namespace S1API.Entities
         /// Non-physical NPCs (<c>false</c>): Invisible, primarily for messaging and phone contacts, cannot move or be directly interacted with.
         /// </remarks>
         public virtual bool IsPhysical => false;
-        
+
+        /// <summary>
+        /// Determines whether this NPC has native customer functionality.
+        /// Override as true for NPCs that should buy products from the player.
+        /// </summary>
+        /// <remarks>
+        /// This declarative type-level value is inspected while S1API prepares the NPC prefab.
+        /// Overrides must be stable, side-effect-free, and must not depend on constructor or field initialization.
+        /// When true, S1API adds and configures the customer component before network registration.
+        /// </remarks>
+        public virtual bool IsCustomer => false;
+
         /// <summary>
         /// Determines if the NPC has dealer functionality. Override as true for NPCs that should be dealers.
         /// </summary>
@@ -2443,6 +2429,7 @@ namespace S1API.Entities
         /// Dealer NPCs (<c>true</c>): Can manage customers, handle contracts, accept cash payments, and track inventory for sales.
         /// When true, the NPC prefab will use the "Dealer" network prefab instead of "CivilianNPC".
         /// Non-dealer NPCs (<c>false</c>): Regular NPCs without dealer-specific functionality.
+        /// This declarative type-level value must be stable, side-effect-free, and independent of normal instance initialization.
         /// </remarks>
         public virtual bool IsDealer => false;
 
@@ -2452,6 +2439,8 @@ namespace S1API.Entities
         /// <remarks>
         /// Supplier NPCs can provide dead-drop orders, meetings, delivery unlocks, and debt tracking.
         /// A custom NPC cannot be both a dealer and a supplier.
+        /// Suppliers must also override <see cref="IsPhysical"/> to return <c>true</c>.
+        /// This declarative type-level value must be stable, side-effect-free, and independent of normal instance initialization.
         /// </remarks>
         public virtual bool IsSupplier => false;
 

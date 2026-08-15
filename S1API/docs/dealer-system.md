@@ -14,7 +14,7 @@ Dealer NPCs are special NPCs that can:
 
 ## Creating a Dealer NPC
 
-To create a dealer NPC, set `IsDealer = true` and configure dealer defaults using the `EnsureDealer()` builder method:
+To create a dealer NPC, override `IsDealer` and configure any optional dealer defaults in `ConfigurePrefab`:
 
 ```csharp
 using S1API.Entities;
@@ -36,7 +36,6 @@ public class MyDealerNPC : NPC
                 av.Gender = 0.0f;
                 av.Height = 1.0f;
             })
-            .EnsureDealer()
             .WithDealerDefaults(dd =>
             {
                 dd.WithSigningFee(1000f)              // Cost to recruit
@@ -246,7 +245,6 @@ public sealed class ProfessionalDealer : NPC
                 av.WithBodyLayer("Avatar/Layers/Bottom/Jeans", new Color(0.2f, 0.2f, 0.3f));
                 av.WithAccessoryLayer("Avatar/Accessories/Feet/Sneakers/Sneakers", Color.black);
             })
-            .EnsureDealer()
             .WithDealerDefaults(dd =>
             {
                 dd.WithSigningFee(2500f)  // Higher fee = more experienced
