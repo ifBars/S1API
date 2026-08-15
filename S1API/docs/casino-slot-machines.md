@@ -2,6 +2,10 @@
 
 The S1API provides a modder-facing API for making NPCs interact with slot machines in the casino. This system handles cash management, animations, and outcome determination automatically.
 
+For read-only player-facing blackjack, Ride the Bus, and slot-machine state and lifecycle events, see [Casino game state](casino-games.md).
+
+For discovery, including finding the nearest slot machine, use `CasinoGameRegistry`. The legacy `SlotMachineHelper.FindNearestSlotMachine` method remains available for compatibility but exposes a native game type and is obsolete for new mods.
+
 ## Overview
 
 The slot machine system allows NPCs to:
