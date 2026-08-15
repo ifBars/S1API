@@ -1277,7 +1277,6 @@ namespace S1API.Internal.Patches
                 else
                 {
                     apiNpc.CreateFromClientNetworkSpawn();
-                    NPC.CheckAndSetCustomNpcsReady();
                 }
                 
                 // Ensure visibility is set correctly on clients based on IsPhysical

@@ -3489,6 +3489,8 @@ namespace S1API.Entities
             {
                 _clientNetworkSpawnHydrationDepth--;
             }
+
+            MarkCustomNpcFinalized();
         }
 
         internal override void SaveInternal(string folderPath, ref List<string> extraSaveables)
@@ -4659,9 +4661,7 @@ namespace S1API.Entities
 
                 // Check if all custom NPCs are now ready (finalized)
                 // This sets the CustomNpcsReady flag once all custom NPCs have been spawned and finalized
-                FinalizedCustomNpcTypes.Add(GetType());
-                ReconcileAllCustomNpcRelationshipConnections();
-                CheckAndSetCustomNpcsReady();
+                MarkCustomNpcFinalized();
             }
             catch (Exception ex)
             {
@@ -4671,7 +4671,7 @@ namespace S1API.Entities
 
         /// <summary>
         /// Checks if all custom NPCs have been finalized and sets the CustomNpcsReady flag.
-        /// This is called from FinalizeNetworkSpawn to signal when all custom NPCs are ready.
+        /// Called after server finalization and client network-spawn hydration.
         /// </summary>
         internal static void CheckAndSetCustomNpcsReady()
         {
@@ -4689,8 +4689,8 @@ namespace S1API.Entities
                 if (customNpcTypes.Count == 0)
                     return;
 
-                bool allTypesFinalized = customNpcTypes.All(
-                    type => FinalizedCustomNpcTypes.Contains(type));
+                bool allTypesFinalized = Internal.Entities.CustomNpcReadinessPolicy
+                    .AreAllTypesFinalized(customNpcTypes, FinalizedCustomNpcTypes);
 
                 if (allTypesFinalized)
                     CustomNpcsReady = true;
@@ -4699,6 +4699,15 @@ namespace S1API.Entities
             {
                 Logger.Warning($"[NPC] Failed to check CustomNpcsReady status: {ex.Message}");
             }
+        }
+
+        private void MarkCustomNpcFinalized()
+        {
+            Internal.Entities.CustomNpcReadinessPolicy.MarkFinalized(
+                GetType(),
+                FinalizedCustomNpcTypes);
+            ReconcileAllCustomNpcRelationshipConnections();
+            CheckAndSetCustomNpcsReady();
         }
 
         internal static void ReconcileAllCustomNpcRelationshipConnections()
