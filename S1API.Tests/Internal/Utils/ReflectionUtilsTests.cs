@@ -1,4 +1,7 @@
 using S1API.Internal.Utils;
+using S1API.Logging;
+using System.Reflection;
+using System.Reflection.Emit;
 
 namespace S1API.Tests.Internal.Utils;
 
@@ -36,6 +39,58 @@ public sealed class ReflectionUtilsTests
             ReflectionUtils.TryGetStaticFieldOrProperty(typeof(DerivedStaticShape), "RuntimeMember"));
     }
 
+    [Fact]
+    public void DerivedTypeScanIncludesAssembliesThatReferenceTheBaseAssembly()
+    {
+        Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+
+        Assert.True(ReflectionUtils.CanContainTypesDerivedFrom(
+            typeof(ReflectionUtilsTests).Assembly,
+            typeof(ReflectionUtils).Assembly,
+            loadedAssemblies));
+    }
+
+    [Fact]
+    public void GetDerivedClassesFindsTypesInReferencingAssemblies()
+    {
+        Assert.Contains(
+            typeof(DerivedLogShape),
+            ReflectionUtils.GetDerivedClasses<Log>());
+    }
+
+    [Fact]
+    public void DerivedTypeScanExcludesAssembliesWithoutAReferencePathToTheBaseAssembly()
+    {
+        Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+
+        Assert.False(ReflectionUtils.CanContainTypesDerivedFrom(
+            typeof(string).Assembly,
+            typeof(ReflectionUtils).Assembly,
+            loadedAssemblies));
+    }
+
+    [Fact]
+    public void DerivedTypeScanFollowsTransitiveAssemblyReferences()
+    {
+        var assemblyName = new AssemblyName($"S1API.ReflectionUtilsTests.Dynamic.{Guid.NewGuid():N}");
+        AssemblyBuilder assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(
+            assemblyName,
+            AssemblyBuilderAccess.Run);
+        ModuleBuilder moduleBuilder = assemblyBuilder.DefineDynamicModule(assemblyName.Name!);
+        moduleBuilder.DefineType(
+                "DynamicReflectionCandidate",
+                TypeAttributes.Public,
+                typeof(ReflectionCandidateBridge))
+            .CreateType();
+
+        Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+
+        Assert.True(ReflectionUtils.CanContainTypesDerivedFrom(
+            assemblyBuilder,
+            typeof(ReflectionUtils).Assembly,
+            loadedAssemblies));
+    }
+
     private sealed class MonoShape
     {
 #pragma warning disable CS0169
@@ -69,5 +124,17 @@ public sealed class ReflectionUtilsTests
 
     private sealed class DerivedStaticShape : BaseStaticShape
     {
+    }
+
+    public class ReflectionCandidateBridge
+    {
+    }
+
+    private sealed class DerivedLogShape : Log
+    {
+        public DerivedLogShape()
+            : base(nameof(DerivedLogShape))
+        {
+        }
     }
 }

@@ -1265,29 +1265,11 @@ namespace S1API.Entities
                     return null;
 
                 // Find the NPC type in loaded assemblies
-                System.Type? npcType = null;
-                var baseType = typeof(NPC);
-                var asms = AppDomain.CurrentDomain.GetAssemblies();
-                for (int ai = 0; ai < asms.Length && npcType == null; ai++)
-                {
-                    var asm = asms[ai];
-                    if (asm == baseType.Assembly)
-                        continue; // Skip S1API assembly (internal wrappers)
-
-                    System.Type[] types;
-                    try { types = asm.GetTypes(); } catch { continue; }
-                    for (int ti = 0; ti < types.Length; ti++)
-                    {
-                        var t = types[ti];
-                        if (t == null || t.IsAbstract || !baseType.IsAssignableFrom(t))
-                            continue;
-                        if (t.Name == typeName)
-                        {
-                            npcType = t;
-                            break;
-                        }
-                    }
-                }
+                var baseAssembly = typeof(NPC).Assembly;
+                System.Type? npcType = ReflectionUtils.GetDerivedClasses<NPC>()
+                    .FirstOrDefault(type =>
+                        type.Assembly != baseAssembly &&
+                        type.Name == typeName);
 
                 if (npcType == null)
                     return null;
@@ -1545,29 +1527,9 @@ namespace S1API.Entities
                 if (spawnables == null)
                     return;
 
-                var baseType = typeof(NPC);
-                var baseAssembly = baseType.Assembly;
-                var candidateTypes = new System.Collections.Generic.List<System.Type>();
-                var asms = AppDomain.CurrentDomain.GetAssemblies();
-                for (int ai = 0; ai < asms.Length; ai++)
-                {
-                    var asm = asms[ai];
-                    Type[] types;
-                    try { types = asm.GetTypes(); } catch { continue; }
-                    for (int ti = 0; ti < types.Length; ti++)
-                    {
-                        var t = types[ti];
-                        if (t == null || t.IsAbstract)
-                            continue;
-                        if (baseType.IsAssignableFrom(t))
-                        {
-                            // Skip internal S1API NPC wrappers; only pre-register mod-defined types
-                            if (t.Assembly == baseAssembly)
-                                continue;
-                            candidateTypes.Add(t);
-                        }
-                    }
-                }
+                var baseAssembly = typeof(NPC).Assembly;
+                var candidateTypes = ReflectionUtils.GetDerivedClasses<NPC>()
+                    .Where(type => type.Assembly != baseAssembly);
 
                 foreach (System.Type type in candidateTypes.OrderBy(
                              candidate => candidate.FullName,
