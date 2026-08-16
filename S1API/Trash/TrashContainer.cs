@@ -1,13 +1,19 @@
 #if IL2CPPMELON
+using Il2CppInterop.Runtime;
+using NativeTrashAddedAction = UnityEngine.Events.UnityAction<string>;
+using NativeTrashLevelChangedAction = UnityEngine.Events.UnityAction;
 using S1InstanceFinder = Il2CppFishNet.InstanceFinder;
 using S1Trash = Il2CppScheduleOne.Trash;
 #elif MONOMELON
+using NativeTrashAddedAction = System.Action<string>;
+using NativeTrashLevelChangedAction = System.Action;
 using S1InstanceFinder = FishNet.InstanceFinder;
 using S1Trash = ScheduleOne.Trash;
 #endif
 
 using System;
 using System.Collections.Generic;
+using S1API.Internal.Utils;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -21,10 +27,11 @@ namespace S1API.Trash
     /// </remarks>
     public sealed class TrashContainer
     {
-        private Action<string>? _trashAdded;
-        private Action? _trashLevelChanged;
-        private bool _trashAddedSubscribed;
-        private bool _trashLevelChangedSubscribed;
+        private static readonly Dictionary<int, TrashAddedRegistrationState> TrashAddedRegistrations =
+            new Dictionary<int, TrashAddedRegistrationState>();
+
+        private static readonly Dictionary<int, TrashLevelChangedRegistrationState> TrashLevelChangedRegistrations =
+            new Dictionary<int, TrashLevelChangedRegistrationState>();
 
         /// <summary>
         /// INTERNAL: The native trash container.
@@ -51,6 +58,7 @@ namespace S1API.Trash
             if (gameObject == null)
                 throw new ArgumentNullException(nameof(gameObject));
 
+            PruneDestroyedRegistrationStates();
             S1Trash.TrashContainer? trashContainer =
                 gameObject.GetComponent<S1Trash.TrashContainer>();
             return trashContainer == null ? null : new TrashContainer(trashContainer);
@@ -63,6 +71,7 @@ namespace S1API.Trash
         /// <returns>A snapshot of the trash containers found in the scene.</returns>
         public static TrashContainer[] FindInScene(bool includeInactive = false)
         {
+            PruneDestroyedRegistrationStates();
             var nativeContainers =
                 Object.FindObjectsOfType<S1Trash.TrashContainer>(includeInactive);
             if (nativeContainers == null || nativeContainers.Length == 0)
@@ -141,6 +150,10 @@ namespace S1API.Trash
         /// <summary>
         /// Occurs after the native container adds trash.
         /// </summary>
+        /// <remarks>
+        /// A handler may be removed through any wrapper for the same native container.
+        /// Duplicate subscriptions are removed one at a time.
+        /// </remarks>
         public event Action<string> OnTrashAdded
         {
             add
@@ -148,35 +161,40 @@ namespace S1API.Trash
                 if (value == null)
                     return;
 
-                if (!_trashAddedSubscribed)
-                {
-                    global::S1API.Utils.EventHelper.AddListener(
-                        HandleTrashAdded,
-                        S1TrashContainer.onTrashAdded);
-                    _trashAddedSubscribed = true;
-                }
-
-                _trashAdded += value;
+                NativeTrashAddedAction nativeHandler = CreateNativeTrashAddedHandler(value);
+                SubscribeTrashAdded(nativeHandler);
+                GetTrashAddedRegistrationState().Registrations.Add(value, nativeHandler);
             }
             remove
             {
-                if (value == null)
+                if (value == null || !TryTakeTrashAddedRegistration(
+                        value,
+                        out TrashAddedRegistrationState state,
+                        out NativeTrashAddedAction nativeHandler))
                     return;
 
-                _trashAdded -= value;
-                if (_trashAdded != null || !_trashAddedSubscribed)
-                    return;
+                try
+                {
+                    UnsubscribeTrashAdded(nativeHandler);
+                }
+                catch
+                {
+                    state.Registrations.Add(value, nativeHandler);
+                    throw;
+                }
 
-                global::S1API.Utils.EventHelper.RemoveListener(
-                    HandleTrashAdded,
-                    S1TrashContainer.onTrashAdded);
-                _trashAddedSubscribed = false;
+                if (state.Registrations.IsEmpty)
+                    TrashAddedRegistrations.Remove(S1TrashContainer.GetInstanceID());
             }
         }
 
         /// <summary>
         /// Occurs after the native container level changes.
         /// </summary>
+        /// <remarks>
+        /// A handler may be removed through any wrapper for the same native container.
+        /// Duplicate subscriptions are removed one at a time.
+        /// </remarks>
         public event Action OnTrashLevelChanged
         {
             add
@@ -184,29 +202,30 @@ namespace S1API.Trash
                 if (value == null)
                     return;
 
-                if (!_trashLevelChangedSubscribed)
-                {
-                    global::S1API.Utils.EventHelper.AddListener(
-                        HandleTrashLevelChanged,
-                        S1TrashContainer.onTrashLevelChanged);
-                    _trashLevelChangedSubscribed = true;
-                }
-
-                _trashLevelChanged += value;
+                NativeTrashLevelChangedAction nativeHandler = CreateNativeTrashLevelChangedHandler(value);
+                SubscribeTrashLevelChanged(nativeHandler);
+                GetTrashLevelChangedRegistrationState().Registrations.Add(value, nativeHandler);
             }
             remove
             {
-                if (value == null)
+                if (value == null || !TryTakeTrashLevelChangedRegistration(
+                        value,
+                        out TrashLevelChangedRegistrationState state,
+                        out NativeTrashLevelChangedAction nativeHandler))
                     return;
 
-                _trashLevelChanged -= value;
-                if (_trashLevelChanged != null || !_trashLevelChangedSubscribed)
-                    return;
+                try
+                {
+                    UnsubscribeTrashLevelChanged(nativeHandler);
+                }
+                catch
+                {
+                    state.Registrations.Add(value, nativeHandler);
+                    throw;
+                }
 
-                global::S1API.Utils.EventHelper.RemoveListener(
-                    HandleTrashLevelChanged,
-                    S1TrashContainer.onTrashLevelChanged);
-                _trashLevelChangedSubscribed = false;
+                if (state.Registrations.IsEmpty)
+                    TrashLevelChangedRegistrations.Remove(S1TrashContainer.GetInstanceID());
             }
         }
 
@@ -223,10 +242,184 @@ namespace S1API.Trash
             return true;
         }
 
-        private void HandleTrashAdded(string trashId) =>
-            _trashAdded?.Invoke(trashId);
+        private static NativeTrashAddedAction CreateNativeTrashAddedHandler(Action<string> handler)
+        {
+#if IL2CPPMELON
+            return DelegateSupport.ConvertDelegate<NativeTrashAddedAction>(handler)
+                ?? throw new InvalidOperationException("Could not create the native trash-added delegate.");
+#else
+            return trashId => handler(trashId);
+#endif
+        }
 
-        private void HandleTrashLevelChanged() =>
-            _trashLevelChanged?.Invoke();
+        private static NativeTrashLevelChangedAction CreateNativeTrashLevelChangedHandler(Action handler)
+        {
+#if IL2CPPMELON
+            return DelegateSupport.ConvertDelegate<NativeTrashLevelChangedAction>(handler)
+                ?? throw new InvalidOperationException("Could not create the native trash-level delegate.");
+#else
+            return () => handler();
+#endif
+        }
+
+        private void SubscribeTrashAdded(NativeTrashAddedAction handler)
+        {
+#if IL2CPPMELON
+            S1TrashContainer.onTrashAdded.AddListener(handler);
+#else
+            global::S1API.Utils.EventHelper.AddListener(handler, S1TrashContainer.onTrashAdded);
+#endif
+        }
+
+        private void UnsubscribeTrashAdded(NativeTrashAddedAction handler)
+        {
+#if IL2CPPMELON
+            S1TrashContainer.onTrashAdded.RemoveListener(handler);
+#else
+            global::S1API.Utils.EventHelper.RemoveListener(handler, S1TrashContainer.onTrashAdded);
+#endif
+        }
+
+        private void SubscribeTrashLevelChanged(NativeTrashLevelChangedAction handler)
+        {
+#if IL2CPPMELON
+            S1TrashContainer.onTrashLevelChanged.AddListener(handler);
+#else
+            global::S1API.Utils.EventHelper.AddListener(handler, S1TrashContainer.onTrashLevelChanged);
+#endif
+        }
+
+        private void UnsubscribeTrashLevelChanged(NativeTrashLevelChangedAction handler)
+        {
+#if IL2CPPMELON
+            S1TrashContainer.onTrashLevelChanged.RemoveListener(handler);
+#else
+            global::S1API.Utils.EventHelper.RemoveListener(handler, S1TrashContainer.onTrashLevelChanged);
+#endif
+        }
+
+        private TrashAddedRegistrationState GetTrashAddedRegistrationState()
+        {
+            PruneDestroyedRegistrationStates();
+            int instanceId = S1TrashContainer.GetInstanceID();
+            if (TrashAddedRegistrations.TryGetValue(instanceId, out TrashAddedRegistrationState? state))
+                return state;
+
+            state = new TrashAddedRegistrationState(S1TrashContainer);
+            TrashAddedRegistrations.Add(instanceId, state);
+            return state;
+        }
+
+        private bool TryTakeTrashAddedRegistration(
+            Action<string> managedHandler,
+            out TrashAddedRegistrationState state,
+            out NativeTrashAddedAction nativeHandler)
+        {
+            PruneDestroyedRegistrationStates();
+            if (TrashAddedRegistrations.TryGetValue(
+                    S1TrashContainer.GetInstanceID(),
+                    out TrashAddedRegistrationState? registrationState)
+                && registrationState.Registrations.TryTakeLast(managedHandler, out nativeHandler))
+            {
+                state = registrationState;
+                return true;
+            }
+
+            state = null!;
+            nativeHandler = null!;
+            return false;
+        }
+
+        private TrashLevelChangedRegistrationState GetTrashLevelChangedRegistrationState()
+        {
+            PruneDestroyedRegistrationStates();
+            int instanceId = S1TrashContainer.GetInstanceID();
+            if (TrashLevelChangedRegistrations.TryGetValue(
+                    instanceId,
+                    out TrashLevelChangedRegistrationState? state))
+                return state;
+
+            state = new TrashLevelChangedRegistrationState(S1TrashContainer);
+            TrashLevelChangedRegistrations.Add(instanceId, state);
+            return state;
+        }
+
+        private bool TryTakeTrashLevelChangedRegistration(
+            Action managedHandler,
+            out TrashLevelChangedRegistrationState state,
+            out NativeTrashLevelChangedAction nativeHandler)
+        {
+            PruneDestroyedRegistrationStates();
+            if (TrashLevelChangedRegistrations.TryGetValue(
+                    S1TrashContainer.GetInstanceID(),
+                    out TrashLevelChangedRegistrationState? registrationState)
+                && registrationState.Registrations.TryTakeLast(managedHandler, out nativeHandler))
+            {
+                state = registrationState;
+                return true;
+            }
+
+            state = null!;
+            nativeHandler = null!;
+            return false;
+        }
+
+        private static void PruneDestroyedRegistrationStates()
+        {
+            PruneDestroyedRegistrationStates(TrashAddedRegistrations);
+            PruneDestroyedRegistrationStates(TrashLevelChangedRegistrations);
+        }
+
+        private static void PruneDestroyedRegistrationStates<TState>(Dictionary<int, TState> registrations)
+            where TState : TrashContainerRegistrationState
+        {
+            List<int>? destroyedIds = null;
+            foreach (KeyValuePair<int, TState> registration in registrations)
+            {
+                if (registration.Value.S1TrashContainer != null)
+                    continue;
+
+                destroyedIds ??= new List<int>();
+                destroyedIds.Add(registration.Key);
+            }
+
+            if (destroyedIds == null)
+                return;
+
+            foreach (int destroyedId in destroyedIds)
+                registrations.Remove(destroyedId);
+        }
+
+        private abstract class TrashContainerRegistrationState
+        {
+            internal S1Trash.TrashContainer S1TrashContainer { get; }
+
+            protected TrashContainerRegistrationState(S1Trash.TrashContainer trashContainer)
+            {
+                S1TrashContainer = trashContainer;
+            }
+        }
+
+        private sealed class TrashAddedRegistrationState : TrashContainerRegistrationState
+        {
+            internal ManagedEventRegistrationTracker<NativeTrashAddedAction> Registrations { get; } =
+                new ManagedEventRegistrationTracker<NativeTrashAddedAction>();
+
+            internal TrashAddedRegistrationState(S1Trash.TrashContainer trashContainer)
+                : base(trashContainer)
+            {
+            }
+        }
+
+        private sealed class TrashLevelChangedRegistrationState : TrashContainerRegistrationState
+        {
+            internal ManagedEventRegistrationTracker<NativeTrashLevelChangedAction> Registrations { get; } =
+                new ManagedEventRegistrationTracker<NativeTrashLevelChangedAction>();
+
+            internal TrashLevelChangedRegistrationState(S1Trash.TrashContainer trashContainer)
+                : base(trashContainer)
+            {
+            }
+        }
     }
 }
