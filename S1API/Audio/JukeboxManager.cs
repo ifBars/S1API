@@ -26,6 +26,7 @@ namespace S1API.Audio
         public static IReadOnlyList<Jukebox> GetAll()
         {
             EnsureLifecycleHook();
+            PruneDestroyedJukeboxes();
             var nativeJukeboxes = UnityEngine.Object.FindObjectsOfType<S1Jukebox>();
             var jukeboxes = new List<Jukebox>(nativeJukeboxes.Length);
             for (int index = 0; index < nativeJukeboxes.Length; index++)
@@ -60,16 +61,10 @@ namespace S1API.Audio
         internal static Jukebox Wrap(S1Jukebox nativeJukebox)
         {
             EnsureLifecycleHook();
+            PruneDestroyedJukeboxes();
             int instanceId = nativeJukebox.GetInstanceID();
             if (Jukeboxes.TryGetValue(instanceId, out Jukebox? jukebox))
-            {
-                if (jukebox.S1Jukebox != null)
-                    return jukebox;
-
-                jukebox = new Jukebox(nativeJukebox);
-                Jukeboxes[instanceId] = jukebox;
                 return jukebox;
-            }
 
             jukebox = new Jukebox(nativeJukebox);
             Jukeboxes.Add(instanceId, jukebox);
@@ -83,6 +78,26 @@ namespace S1API.Audio
 
             GameLifecycle.OnPreSceneChange += ClearSceneState;
             _lifecycleHooked = true;
+        }
+
+        private static void PruneDestroyedJukeboxes()
+        {
+            List<int>? destroyedInstanceIds = null;
+            foreach (KeyValuePair<int, Jukebox> pair in Jukeboxes)
+            {
+                if (pair.Value.S1Jukebox != null)
+                    continue;
+
+                pair.Value.Cleanup();
+                destroyedInstanceIds ??= new List<int>();
+                destroyedInstanceIds.Add(pair.Key);
+            }
+
+            if (destroyedInstanceIds == null)
+                return;
+
+            foreach (int instanceId in destroyedInstanceIds)
+                Jukeboxes.Remove(instanceId);
         }
 
         private static void ClearSceneState()

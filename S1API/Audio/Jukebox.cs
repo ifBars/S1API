@@ -201,14 +201,14 @@ namespace S1API.Audio
         /// <summary>
         /// Changes the volume using the native jukebox control.
         /// </summary>
-        /// <param name="change">The change to apply to the current native volume.</param>
+        /// <param name="change">The change to apply to the current native volume, which the game clamps from 0 through 8.</param>
         public void ChangeVolume(int change) =>
             S1Jukebox.ChangeVolume(change);
 
         /// <summary>
         /// Sets the volume and requests native replication.
         /// </summary>
-        /// <param name="volume">The native volume value to set.</param>
+        /// <param name="volume">The native volume value to set. The game clamps the value from 0 through 8.</param>
         public void SetVolume(int volume) =>
             S1Jukebox.SetVolume(volume, replicate: true);
 
@@ -234,8 +234,25 @@ namespace S1API.Audio
         /// Selects a configured native track.
         /// </summary>
         /// <param name="trackIndex">The <see cref="JukeboxTrack.Index"/> of the configured track.</param>
-        public void SelectTrack(int trackIndex) =>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// <paramref name="trackIndex"/> does not identify a configured track.
+        /// </exception>
+        public void SelectTrack(int trackIndex)
+        {
+            ValidateTrackIndex(trackIndex, S1Jukebox.TrackList?.Length ?? 0);
             S1Jukebox.PlayTrack(trackIndex);
+        }
+
+        internal static void ValidateTrackIndex(int trackIndex, int trackCount)
+        {
+            if (trackIndex < 0 || trackIndex >= trackCount)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(trackIndex),
+                    trackIndex,
+                    "The track index does not identify a configured jukebox track.");
+            }
+        }
 
         internal void Cleanup()
         {
@@ -313,14 +330,18 @@ namespace S1API.Audio
             if (_nativeStateChangedDispatcher == null)
                 return;
 
+            if (S1Jukebox != null)
+            {
 #if IL2CPPMELON
-            Il2CppSystem.Delegate? remaining = Il2CppSystem.Delegate.Remove(
-                S1Jukebox.onStateChanged,
-                _nativeStateChangedDispatcher);
-            S1Jukebox.onStateChanged = remaining?.Cast<NativeAction>();
+                Il2CppSystem.Delegate? remaining = Il2CppSystem.Delegate.Remove(
+                    S1Jukebox.onStateChanged,
+                    _nativeStateChangedDispatcher);
+                S1Jukebox.onStateChanged = remaining?.Cast<NativeAction>();
 #else
-            S1Jukebox.onStateChanged -= _nativeStateChangedDispatcher;
+                S1Jukebox.onStateChanged -= _nativeStateChangedDispatcher;
 #endif
+            }
+
             _nativeStateChangedDispatcher = null;
         }
 
