@@ -1,6 +1,7 @@
 using S1API.Entities;
 using S1API.Internal.Entities;
 using S1API.Internal.Patches;
+using S1API.Internal.Utils;
 
 namespace S1API.Tests.Entities;
 
@@ -14,6 +15,16 @@ public sealed class CustomNpcReadinessPolicyTests
 
         try
         {
+            foreach (Type npcType in ReflectionUtils.GetDerivedClasses<NPC>())
+            {
+                if (npcType.Assembly != typeof(NPC).Assembly
+                    && npcType != typeof(DealerNpc)
+                    && npcType != typeof(CustomerNpc))
+                {
+                    NPC.FinalizedCustomNpcTypes.Add(npcType);
+                }
+            }
+
             var dealer = TestObjectFactory.CreateUninitialized<DealerNpc>();
             var customer = TestObjectFactory.CreateUninitialized<CustomerNpc>();
 

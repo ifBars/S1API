@@ -21,7 +21,7 @@ Follow this order:
 
 Keep these responsibilities separate:
 
-- `ConfigurePrefab(...)`: identity, icon, spawn position, relationship defaults, customer defaults, dealer defaults, inventory defaults, schedule, and required `Ensure*` components.
+- `ConfigurePrefab(...)`: identity, icon, spawn position, relationship defaults, customer defaults, dealer defaults, inventory defaults, schedule, and action-specific `Ensure*` calls such as `plan.EnsureDealSignal()`. Role infrastructure comes automatically from `IsCustomer`, `IsDealer`, and `IsSupplier`; do not add `EnsureCustomer()`, `EnsureDealer()`, or `EnsureSupplier()`.
 - `OnCreated()`: `base.OnCreated()`, `Appearance.Build()`, `Schedule.Enable()`, `Schedule.InitializeActions()` when needed, dialogue wiring, event subscriptions, text messages, and runtime state.
 
 Do not move persistent customer, dealer, relationship, or schedule defaults into runtime code.

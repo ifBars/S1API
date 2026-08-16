@@ -11,11 +11,8 @@ public sealed class NPCRoleDeclarationTests
     {
         PropertyInfo? property = typeof(NPC).GetProperty(nameof(NPC.IsCustomer));
         MethodInfo? getter = property?.GetMethod;
-        Type npcType = typeof(CustomNpcReadinessPolicyTests).GetNestedType(
-            "DealerNpc",
-            BindingFlags.NonPublic)!;
         var npc = (NPC)System.Runtime.CompilerServices.RuntimeHelpers
-            .GetUninitializedObject(npcType);
+            .GetUninitializedObject(typeof(RoleTestNpc));
 
         Assert.NotNull(property);
         Assert.Equal(typeof(bool), property!.PropertyType);
@@ -23,6 +20,25 @@ public sealed class NPCRoleDeclarationTests
         Assert.False(getter.IsFinal);
         Assert.Null(property.SetMethod);
         Assert.False(npc.IsCustomer);
+    }
+
+    [Fact]
+    public void DeclaredPropertiesRejectsNullType()
+    {
+        ArgumentNullException exception = Assert.Throws<ArgumentNullException>(
+            () => NpcRoleDeclarationResolver.GetDeclaredProperties(null!));
+
+        Assert.Equal("npcType", exception.ParamName);
+    }
+
+    [Fact]
+    public void DeclaredPropertiesRejectsNonNpcType()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => NpcRoleDeclarationResolver.GetDeclaredProperties(typeof(string)));
+
+        Assert.Equal("npcType", exception.ParamName);
+        Assert.Contains("does not derive from", exception.Message);
     }
 
     [Theory]
@@ -132,4 +148,11 @@ public sealed class NPCRoleDeclarationTests
     private static NPCPrefabBuilder CompileLegacyFluentCalls(NPCPrefabBuilder builder) =>
         builder.EnsureCustomer().EnsureDealer().EnsureSupplier();
 #pragma warning restore CS0618
+
+    private sealed class RoleTestNpc : NPC
+    {
+        internal override void CreateInternal()
+        {
+        }
+    }
 }

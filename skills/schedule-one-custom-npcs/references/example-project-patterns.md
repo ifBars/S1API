@@ -11,6 +11,7 @@ Use when the NPC is visible in the world, directly interactable, and participate
 Recommended structure:
 
 ```csharp
+public override bool IsPhysical => true;
 public override bool IsCustomer => true;
 
 builder.WithIdentity(...)

@@ -374,8 +374,8 @@ namespace S1API.Entities.Schedule
         /// <returns>This builder instance for method chaining.</returns>
         /// <remarks>
         /// As of v0.4.2f4, deal handling is now automatic through the DealerAttendDealBehaviour system.
-        /// This method is kept for backwards compatibility but is a no-op. Dealer NPCs set up with
-        /// Dealer NPCs automatically handle deals when contracts are assigned.
+        /// This method is kept for backwards compatibility but is a no-op. Dealer NPCs
+        /// automatically handle deals when contracts are assigned.
         /// </remarks>
         [System.Obsolete("HandleDeal is no longer needed as of game version 0.4.2f4. Deal handling is now automatic through DealerAttendDealBehaviour.")]
         public PrefabScheduleBuilder HandleDeal(int startTime, string? name = null)
