@@ -5,6 +5,7 @@ using S1API.Internal.Utils;
 
 namespace S1API.Tests.Entities;
 
+[Collection(CustomNpcReadinessCollection.Name)]
 public sealed class CustomNpcReadinessPolicyTests
 {
     [Fact]

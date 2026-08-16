@@ -44,6 +44,8 @@ public sealed class NPCRoleDeclarationTests
     [Theory]
     [InlineData(false, false, false, false)]
     [InlineData(false, true, false, false)]
+    [InlineData(true, false, false, false)]
+    [InlineData(true, true, false, false)]
     [InlineData(true, false, true, false)]
     [InlineData(true, true, true, false)]
     [InlineData(true, false, false, true)]
