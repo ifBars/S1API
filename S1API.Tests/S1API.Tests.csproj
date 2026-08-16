@@ -43,6 +43,9 @@
         <Reference Include="UnityEngine.CoreModule">
             <HintPath>$(MonoAssembliesPath)/UnityEngine.CoreModule.dll</HintPath>
         </Reference>
+        <Reference Include="UnityEngine.PhysicsModule">
+            <HintPath>$(MonoAssembliesPath)/UnityEngine.PhysicsModule.dll</HintPath>
+        </Reference>
     </ItemGroup>
 
     <ItemGroup Condition="'$(Configuration)' == 'Il2CppMelon'">
@@ -55,5 +58,6 @@
         <Reference Include="$(Il2CppAssembliesPath)\Il2Cppmscorlib.dll" />
         <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.dll" />
         <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.CoreModule.dll" />
+        <Reference Include="$(Il2CppAssembliesPath)\UnityEngine.PhysicsModule.dll" />
     </ItemGroup>
 </Project>
