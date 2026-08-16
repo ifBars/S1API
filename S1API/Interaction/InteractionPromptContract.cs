@@ -6,6 +6,7 @@ namespace S1API.Interaction
     internal static class InteractionPromptContract
     {
         internal const float NativeMaxInteractionRange = 4f;
+        internal const float DefaultAngleLimit = 90f;
 
         internal static string NormalizeMessage(string message)
         {

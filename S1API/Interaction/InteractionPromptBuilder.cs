@@ -24,7 +24,7 @@ namespace S1API.Interaction
         private float _range = InteractionPromptContract.NativeMaxInteractionRange;
         private int _priority;
         private bool _limitAngle;
-        private float _angleLimit = 90f;
+        private float _angleLimit = InteractionPromptContract.DefaultAngleLimit;
         private Transform? _displayPoint;
         private Collider? _displayCollider;
         private InteractionPrompt? _builtPrompt;

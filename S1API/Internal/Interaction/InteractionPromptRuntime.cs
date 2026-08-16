@@ -45,6 +45,7 @@ namespace S1API.Internal.Interaction
                 throw new InvalidOperationException(
                     $"GameObject '{target.name}' already contains an InteractableObject component.");
             }
+            ValidateColliderComposition(target);
 
             Target = target;
             _owner = owner;
@@ -64,7 +65,6 @@ namespace S1API.Internal.Interaction
                 _interactable.LimitInteractionAngle = limitAngle;
                 _interactable.AngleLimit = angleLimit;
                 ApplyDisplayLocation(displayPoint, displayCollider);
-                ValidateColliderComposition(interactable);
 
                 EventHelper.AddListener(_hoveredHandler, _interactable.onHovered);
                 EventHelper.AddListener(_interactionStartedHandler, _interactable.onInteractStart);
@@ -165,18 +165,18 @@ namespace S1API.Internal.Interaction
             _interactable.displayLocationPoint = displayPoint;
         }
 
-        private void ValidateColliderComposition(S1Interaction.InteractableObject interactable)
+        private static void ValidateColliderComposition(GameObject target)
         {
-            Collider[] colliders = Target.GetComponentsInChildren<Collider>(true);
+            Collider[] colliders = target.GetComponentsInChildren<Collider>(true);
             for (int i = 0; i < colliders.Length; i++)
             {
                 Collider collider = colliders[i];
-                if (collider != null && collider.GetComponentInParent<S1Interaction.InteractableObject>() == interactable)
+                if (collider != null)
                     return;
             }
 
             throw new InvalidOperationException(
-                $"GameObject '{Target.name}' and its children do not contain a collider usable by the interaction manager.");
+                $"GameObject '{target.name}' and its children do not contain a collider usable by the interaction manager.");
         }
     }
 }
