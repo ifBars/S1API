@@ -55,7 +55,8 @@ Here's a minimal example to get you started:
 ```csharp
 public sealed class MyFirstNPC : NPC
 {
-    protected override bool IsPhysical => true;
+    public override bool IsPhysical => true;
+    public override bool IsCustomer => true;
     
     protected override void ConfigurePrefab(NPCPrefabBuilder builder)
     {
@@ -64,7 +65,6 @@ public sealed class MyFirstNPC : NPC
                 firstName: "John",
                 lastName: "Doe")
                 .WithSpawnPosition(new Vector3(0, 0, 0))
-                .EnsureCustomer()
                 .WithCustomerDefaults(cd => {
                     cd.WithSpending(100f, 500f)
                       .WithOrdersPerWeek(1, 3);

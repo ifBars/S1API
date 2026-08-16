@@ -11,10 +11,12 @@ Use when the NPC is visible in the world, directly interactable, and participate
 Recommended structure:
 
 ```csharp
+public override bool IsPhysical => true;
+public override bool IsCustomer => true;
+
 builder.WithIdentity(...)
     .WithAppearanceDefaults(...)
     .WithSpawnPosition(...)
-    .EnsureCustomer()
     .WithCustomerDefaults(...)
     .WithRelationshipDefaults(...)
     .WithSchedule(plan =>
@@ -35,7 +37,7 @@ Typical runtime work:
 
 Extra checks:
 
-- Confirm `EnsureCustomer()` exists before `WithCustomerDefaults(...)`.
+- Confirm the NPC overrides `IsCustomer` with a stable, side-effect-free value.
 - Confirm the schedule includes `EnsureDealSignal()` when the customer should actively deal.
 - Keep spending, standards, and relationship requirements internally consistent.
 
@@ -83,8 +85,7 @@ Minimum structure:
 ```csharp
 public override bool IsDealer => true;
 
-builder.EnsureDealer()
-    .WithDealerDefaults(dd =>
+builder.WithDealerDefaults(dd =>
     {
         dd.WithSigningFee(1000f)
             .WithCut(0.15f)

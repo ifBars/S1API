@@ -89,7 +89,7 @@ namespace S1API.Entities
         {
             if (Component == null)
             {
-                Logger.Warning($"Customer component not present on NPC prefab for {NPC.ID}. Add it via NPC.ConfigurePrefab(builder.EnsureCustomer()).");
+                Logger.Warning($"Customer component not present on NPC prefab for {NPC.ID}. Override NPC.IsCustomer to return true.");
                 return;
             }
             

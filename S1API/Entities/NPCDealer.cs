@@ -104,14 +104,14 @@ namespace S1API.Entities
         /// <remarks>
         /// Note: Since Dealer inherits from NPC in the base game (not a component), this will only work
         /// if the wrapped NPC is already a Dealer instance. For custom NPCs created via S1API,
-        /// dealer functionality must be configured at prefab creation time using <see cref="NPCPrefabBuilder.EnsureDealer"/>.
-        /// This method is called automatically when the NPC spawns if <see cref="NPCPrefabBuilder.EnsureDealer"/> was used.
+        /// dealer functionality must be declared at prefab creation time by overriding <see cref="NPC.IsDealer"/>.
+        /// This method is called automatically when a dealer NPC spawns.
         /// </remarks>
         public void EnsureDealer()
         {
             if (Component == null)
             {
-                Logger.Warning($"Dealer component not present on NPC prefab for {NPC.ID}. Add it via NPC.ConfigurePrefab(builder.EnsureDealer()).");
+                Logger.Warning($"Dealer component not present on NPC prefab for {NPC.ID}. Override NPC.IsDealer to return true.");
                 return;
             }
             
