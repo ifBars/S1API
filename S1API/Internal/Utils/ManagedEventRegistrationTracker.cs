@@ -11,6 +11,9 @@ namespace S1API.Internal.Utils
     {
         private readonly Dictionary<Delegate, List<TNativeHandler>> _registrations = new Dictionary<Delegate, List<TNativeHandler>>();
 
+        internal bool IsEmpty =>
+            _registrations.Count == 0;
+
         internal void Add(Delegate managedHandler, TNativeHandler nativeHandler)
         {
             if (!_registrations.TryGetValue(managedHandler, out var nativeHandlers))
