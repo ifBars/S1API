@@ -18,10 +18,7 @@ internal static class TemperatureApiCompileFixture
         emitter.OnChanged -= changed;
 
         TemperatureEmitter? existing = TemperatureEmitter.FromGameObject(gameObject);
-        TemperatureEmitterInfo[] emitters =
-        {
-            new TemperatureEmitterInfo(emitter.Temperature, emitter.Range * emitter.Range, emitter.EmissionPoint)
-        };
+        TemperatureEmitterInfo[] emitters = { emitter.ToInfo() };
         float temperature = TemperatureAlgorithm.GetTemperatureAtPoint(
             ambientTemperature: 20f,
             originPoint: Vector3.zero,
@@ -30,6 +27,7 @@ internal static class TemperatureApiCompileFixture
 
         _ = existing;
         _ = temperature;
+        _ = TemperatureUtility.TemperatureSystemEnabled;
         _ = TemperatureUtility.ToFahrenheit(20f);
         _ = TemperatureUtility.FormatCelsiusTemperature(20f, decimalPoints: 1);
         _ = TemperatureUtility.FormatFahrenheitTemperature(68f, decimalPoints: 1);

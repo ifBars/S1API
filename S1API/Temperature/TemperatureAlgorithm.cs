@@ -5,6 +5,8 @@ using S1Temperature = Il2CppScheduleOne.Temperature;
 using S1Temperature = ScheduleOne.Temperature;
 #endif
 
+using System;
+using S1API.Internal.Temperature;
 using UnityEngine;
 
 namespace S1API.Temperature
@@ -17,11 +19,16 @@ namespace S1API.Temperature
         /// <summary>
         /// Calculates the temperature at a world position from an ambient temperature and emitter snapshots.
         /// </summary>
-        /// <param name="ambientTemperature">The ambient temperature in the game's native temperature scale.</param>
-        /// <param name="originPoint">The origin used by the game's temperature calculation.</param>
+        /// <param name="ambientTemperature">The ambient temperature in degrees Celsius.</param>
+        /// <param name="originPoint">
+        /// The world origin forwarded to the native API for signature compatibility. The current native implementation
+        /// evaluates world-space emitter and query positions directly and does not otherwise use this value.
+        /// </param>
         /// <param name="point">The world position to query.</param>
         /// <param name="emitters">The emitter snapshots to include in the calculation.</param>
-        /// <returns>The temperature at <paramref name="point"/> in the game's native temperature scale.</returns>
+        /// <returns>The temperature at <paramref name="point"/> in degrees Celsius.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="emitters"/> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">A scalar or vector input is not finite.</exception>
         /// <remarks>
         /// This method does not discover scene emitters or register the supplied snapshots with a grid.
         /// </remarks>
@@ -31,6 +38,12 @@ namespace S1API.Temperature
             Vector3 point,
             TemperatureEmitterInfo[] emitters)
         {
+            if (emitters == null)
+                throw new ArgumentNullException(nameof(emitters));
+
+            TemperatureValidation.EnsureFinite(ambientTemperature, nameof(ambientTemperature));
+            TemperatureValidation.EnsureFinite(originPoint, nameof(originPoint));
+            TemperatureValidation.EnsureFinite(point, nameof(point));
 #if IL2CPPMELON
             var nativeEmitters = new Il2CppStructArray<S1Temperature.TemperatureEmitterInfo>(emitters.Length);
 #else
@@ -39,9 +52,18 @@ namespace S1API.Temperature
             for (int i = 0; i < emitters.Length; i++)
             {
                 TemperatureEmitterInfo emitter = emitters[i];
-                nativeEmitters[i] = new S1Temperature.TemperatureEmitterInfo(
+                float temperature = TemperatureValidation.ClampTemperature(
                     emitter.Temperature,
-                    emitter.SqrRange,
+                    $"{nameof(emitters)}[{i}].{nameof(TemperatureEmitterInfo.Temperature)}");
+                float range = TemperatureValidation.ClampRange(
+                    emitter.Range,
+                    $"{nameof(emitters)}[{i}].{nameof(TemperatureEmitterInfo.Range)}");
+                TemperatureValidation.EnsureFinite(
+                    emitter.Position,
+                    $"{nameof(emitters)}[{i}].{nameof(TemperatureEmitterInfo.Position)}");
+                nativeEmitters[i] = new S1Temperature.TemperatureEmitterInfo(
+                    temperature,
+                    range * range,
                     emitter.Position);
             }
 

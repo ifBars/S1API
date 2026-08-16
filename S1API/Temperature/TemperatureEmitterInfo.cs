@@ -1,3 +1,5 @@
+using System;
+using S1API.Internal.Temperature;
 using UnityEngine;
 
 namespace S1API.Temperature
@@ -10,25 +12,29 @@ namespace S1API.Temperature
         /// <summary>
         /// Creates a temperature-emitter snapshot.
         /// </summary>
-        /// <param name="temperature">The emitter temperature in the game's native temperature scale.</param>
-        /// <param name="sqrRange">The emitter range squared, in world units squared.</param>
-        /// <param name="position">The emitter position in world space.</param>
-        public TemperatureEmitterInfo(float temperature, float sqrRange, Vector3 position)
+        /// <param name="temperature">
+        /// The emitter temperature in degrees Celsius. Finite values are clamped to the game's supported range.
+        /// </param>
+        /// <param name="range">The emitter range in world units. Finite values are clamped to the game's supported range.</param>
+        /// <param name="position">The emitter position in world space. Every component must be finite.</param>
+        /// <exception cref="ArgumentOutOfRangeException">An argument is not finite.</exception>
+        public TemperatureEmitterInfo(float temperature, float range, Vector3 position)
         {
-            Temperature = temperature;
-            SqrRange = sqrRange;
+            Temperature = TemperatureValidation.ClampTemperature(temperature, nameof(temperature));
+            Range = TemperatureValidation.ClampRange(range, nameof(range));
+            TemperatureValidation.EnsureFinite(position, nameof(position));
             Position = position;
         }
 
         /// <summary>
-        /// Gets the emitter temperature in the game's native temperature scale.
+        /// Gets the emitter temperature in degrees Celsius.
         /// </summary>
         public float Temperature { get; }
 
         /// <summary>
-        /// Gets the emitter range squared, in world units squared.
+        /// Gets the emitter range in world units.
         /// </summary>
-        public float SqrRange { get; }
+        public float Range { get; }
 
         /// <summary>
         /// Gets the emitter position in world space.

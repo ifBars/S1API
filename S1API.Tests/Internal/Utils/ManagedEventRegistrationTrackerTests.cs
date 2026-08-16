@@ -12,12 +12,14 @@ public sealed class ManagedEventRegistrationTrackerTests
 
         tracker.Add(handler, "first");
         tracker.Add(handler, "second");
+        Assert.False(tracker.IsEmpty);
 
         Assert.True(tracker.TryTakeLast(handler, out string? second));
         Assert.Equal("second", second);
         Assert.True(tracker.TryTakeLast(handler, out string? first));
         Assert.Equal("first", first);
         Assert.False(tracker.TryTakeLast(handler, out _));
+        Assert.True(tracker.IsEmpty);
     }
 
     [Fact]
@@ -30,6 +32,7 @@ public sealed class ManagedEventRegistrationTrackerTests
         tracker.Add(firstHandler, "first");
         tracker.Add(firstHandler, "second");
         tracker.Add(secondHandler, "third");
+        Assert.False(tracker.IsEmpty);
 
         var registrations = tracker.TakeAll();
 
@@ -42,5 +45,6 @@ public sealed class ManagedEventRegistrationTrackerTests
             registration.ManagedHandler.Equals(secondHandler) && registration.NativeHandler == "third");
         Assert.False(tracker.TryTakeLast(firstHandler, out _));
         Assert.False(tracker.TryTakeLast(secondHandler, out _));
+        Assert.True(tracker.IsEmpty);
     }
 }

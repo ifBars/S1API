@@ -12,6 +12,12 @@ namespace S1API.Temperature
     public static class TemperatureUtility
     {
         /// <summary>
+        /// Gets whether the game's temperature system is currently enabled.
+        /// </summary>
+        public static bool TemperatureSystemEnabled =>
+            S1Temperature.TemperatureUtility.TemperatureSystemEnabled;
+
+        /// <summary>
         /// Converts a Celsius temperature to Fahrenheit.
         /// </summary>
         /// <param name="celsius">The temperature in degrees Celsius.</param>
