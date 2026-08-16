@@ -18,6 +18,8 @@
       href: modules-overview.md
     - name: Weather
       href: weather.md
+    - name: Jukeboxes
+      href: jukebox.md
     - name: NPCs
       items:
         - name: Overview
