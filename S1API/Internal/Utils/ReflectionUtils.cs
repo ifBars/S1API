@@ -106,7 +106,7 @@ namespace S1API.Internal.Utils
             AssemblyName baseAssemblyName,
             IReadOnlyDictionary<string, Assembly[]> assembliesBySimpleName)
         {
-            if (AssemblyName.ReferenceMatchesDefinition(candidateAssembly.GetName(), baseAssemblyName))
+            if (AssemblyIdentityMatches(candidateAssembly.GetName(), baseAssemblyName))
                 return true;
 
             return ReferencesAssemblyTransitively(
@@ -137,7 +137,7 @@ namespace S1API.Internal.Utils
 
             foreach (AssemblyName referencedAssembly in referencedAssemblies)
             {
-                if (AssemblyName.ReferenceMatchesDefinition(referencedAssembly, baseAssemblyName))
+                if (AssemblyIdentityMatches(referencedAssembly, baseAssemblyName))
                     return true;
 
                 string referencedName = referencedAssembly.Name ?? string.Empty;
@@ -147,6 +147,9 @@ namespace S1API.Internal.Utils
 
                 foreach (Assembly loadedReference in loadedReferences)
                 {
+                    if (!AssemblyIdentityMatches(loadedReference.GetName(), referencedAssembly))
+                        continue;
+
                     if (ReferencesAssemblyTransitively(
                             loadedReference,
                             baseAssemblyName,
@@ -160,6 +163,14 @@ namespace S1API.Internal.Utils
 
             return false;
         }
+
+        private static bool AssemblyIdentityMatches(
+            AssemblyName referenceAssemblyName,
+            AssemblyName definitionAssemblyName) =>
+            string.Equals(
+                referenceAssemblyName.FullName,
+                definitionAssemblyName.FullName,
+                StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// INTERNAL: Gets all types by their name.

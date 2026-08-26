@@ -91,6 +91,46 @@ public sealed class ReflectionUtilsTests
             loadedAssemblies));
     }
 
+    [Fact]
+    public void DerivedTypeScanDoesNotFollowSameNameAssembliesWithDifferentIdentities()
+    {
+        string assemblyName = $"S1API.ReflectionUtilsTests.Duplicate.{Guid.NewGuid():N}";
+        AssemblyBuilder unrelatedAssembly = CreateDynamicAssembly(assemblyName, new Version(1, 0, 0, 0));
+        Type unrelatedType = unrelatedAssembly
+            .DefineDynamicModule(assemblyName)
+            .DefineType("UnrelatedType", TypeAttributes.Public)
+            .CreateType()!;
+
+        AssemblyBuilder relatedAssembly = CreateDynamicAssembly(assemblyName, new Version(2, 0, 0, 0));
+        relatedAssembly
+            .DefineDynamicModule(assemblyName)
+            .DefineType("RelatedType", TypeAttributes.Public, typeof(ReflectionCandidateBridge))
+            .CreateType();
+
+        AssemblyBuilder candidateAssembly = CreateDynamicAssembly(
+            $"S1API.ReflectionUtilsTests.Candidate.{Guid.NewGuid():N}",
+            new Version(1, 0, 0, 0));
+        ModuleBuilder candidateModule = candidateAssembly.DefineDynamicModule(candidateAssembly.GetName().Name!);
+        candidateModule
+            .DefineType("CandidateType", TypeAttributes.Public, unrelatedType)
+            .CreateType();
+
+        Assert.False(ReflectionUtils.CanContainTypesDerivedFrom(
+            candidateAssembly,
+            typeof(ReflectionUtils).Assembly,
+            AppDomain.CurrentDomain.GetAssemblies()));
+    }
+
+    private static AssemblyBuilder CreateDynamicAssembly(string name, Version version)
+    {
+        var assemblyName = new AssemblyName(name)
+        {
+            Version = version
+        };
+
+        return AssemblyBuilder.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
+    }
+
     private sealed class MonoShape
     {
 #pragma warning disable CS0169
