@@ -11,6 +11,8 @@ namespace S1API.Internal.Utils
     /// </summary>
     internal static class ReflectionUtils
     {
+        private static readonly Log Logger = new Log("ReflectionUtils");
+
         private const BindingFlags InstanceMemberFlags = BindingFlags.Public
             | BindingFlags.NonPublic
             | BindingFlags.Instance
@@ -29,9 +31,23 @@ namespace S1API.Internal.Utils
         internal static List<Type> GetDerivedClasses<TBaseClass>()
         {
             List<Type> derivedClasses = new List<Type>();
-            Assembly[] applicableAssemblies = AppDomain.CurrentDomain.GetAssemblies()
-                .Where(assembly => !ShouldSkipAssembly(assembly))
+            Type baseType = typeof(TBaseClass);
+            Assembly baseAssembly = baseType.Assembly;
+            Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+            IReadOnlyDictionary<string, Assembly[]> assembliesBySimpleName =
+                IndexAssembliesBySimpleName(loadedAssemblies);
+            Assembly[] applicableAssemblies = loadedAssemblies
+                .Where(assembly => assembly == baseAssembly || !ShouldSkipAssembly(assembly))
+                .Where(assembly => CanContainTypesDerivedFrom(
+                    assembly,
+                    baseAssembly.GetName(),
+                    assembliesBySimpleName))
                 .ToArray();
+
+            Logger.Debug(
+                $"[S1API][Reflection] Scanning {applicableAssemblies.Length} of {loadedAssemblies.Length} " +
+                $"loaded assemblies for types derived from '{baseType.FullName}'.");
+
             foreach (Assembly assembly in applicableAssemblies)
                 foreach (Type type in SafeGetTypes(assembly))
                 {
@@ -39,8 +55,8 @@ namespace S1API.Internal.Utils
                     {
                         if (type == null)
                             continue;
-                        if (typeof(TBaseClass).IsAssignableFrom(type)
-                            && type != typeof(TBaseClass)
+                        if (baseType.IsAssignableFrom(type)
+                            && type != baseType
                             && !type.IsAbstract)
                         {
                             derivedClasses.Add(type);
@@ -57,6 +73,104 @@ namespace S1API.Internal.Utils
                 }
             return derivedClasses;
         }
+
+        internal static bool CanContainTypesDerivedFrom(
+            Assembly candidateAssembly,
+            Assembly baseAssembly,
+            IEnumerable<Assembly> loadedAssemblies)
+        {
+            if (candidateAssembly == baseAssembly)
+                return true;
+
+            IReadOnlyDictionary<string, Assembly[]> assembliesBySimpleName =
+                IndexAssembliesBySimpleName(loadedAssemblies);
+
+            return ReferencesAssemblyTransitively(
+                candidateAssembly,
+                baseAssembly.GetName(),
+                assembliesBySimpleName,
+                new HashSet<Assembly>());
+        }
+
+        private static IReadOnlyDictionary<string, Assembly[]> IndexAssembliesBySimpleName(
+            IEnumerable<Assembly> loadedAssemblies)
+        {
+            return loadedAssemblies
+                .Where(assembly => assembly != null)
+                .GroupBy(assembly => assembly.GetName().Name ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static bool CanContainTypesDerivedFrom(
+            Assembly candidateAssembly,
+            AssemblyName baseAssemblyName,
+            IReadOnlyDictionary<string, Assembly[]> assembliesBySimpleName)
+        {
+            if (AssemblyIdentityMatches(candidateAssembly.GetName(), baseAssemblyName))
+                return true;
+
+            return ReferencesAssemblyTransitively(
+                candidateAssembly,
+                baseAssemblyName,
+                assembliesBySimpleName,
+                new HashSet<Assembly>());
+        }
+
+        private static bool ReferencesAssemblyTransitively(
+            Assembly candidateAssembly,
+            AssemblyName baseAssemblyName,
+            IReadOnlyDictionary<string, Assembly[]> assembliesBySimpleName,
+            HashSet<Assembly> visitedAssemblies)
+        {
+            if (!visitedAssemblies.Add(candidateAssembly))
+                return false;
+
+            AssemblyName[] referencedAssemblies;
+            try
+            {
+                referencedAssemblies = candidateAssembly.GetReferencedAssemblies();
+            }
+            catch
+            {
+                return false;
+            }
+
+            foreach (AssemblyName referencedAssembly in referencedAssemblies)
+            {
+                if (AssemblyIdentityMatches(referencedAssembly, baseAssemblyName))
+                    return true;
+
+                string referencedName = referencedAssembly.Name ?? string.Empty;
+                if (!assembliesBySimpleName.TryGetValue(referencedName, out Assembly[]? loadedReferences)
+                    || loadedReferences == null)
+                    continue;
+
+                foreach (Assembly loadedReference in loadedReferences)
+                {
+                    if (!AssemblyIdentityMatches(loadedReference.GetName(), referencedAssembly))
+                        continue;
+
+                    if (ReferencesAssemblyTransitively(
+                            loadedReference,
+                            baseAssemblyName,
+                            assembliesBySimpleName,
+                            visitedAssemblies))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static bool AssemblyIdentityMatches(
+            AssemblyName referenceAssemblyName,
+            AssemblyName definitionAssemblyName) =>
+            string.Equals(
+                referenceAssemblyName.FullName,
+                definitionAssemblyName.FullName,
+                StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// INTERNAL: Gets all types by their name.
@@ -137,16 +251,26 @@ namespace S1API.Internal.Utils
         /// <returns>The types that were successfully loaded from the assembly.</returns>
         private static IEnumerable<Type> SafeGetTypes(Assembly asm)
         {
+            string assemblyName = asm.FullName ?? asm.GetName().Name ?? "<unknown>";
+            Logger.Debug($"[S1API][Reflection] About to enumerate types in '{assemblyName}'.");
+
             try
             {
-                return asm.GetTypes();
+                Type[] types = asm.GetTypes();
+                Logger.Debug(
+                    $"[S1API][Reflection] Enumerated {types.Length} types in '{assemblyName}'.");
+                return types;
             }
             catch (ReflectionTypeLoadException ex)
             {
-                return ex.Types.Where(t => t != null)!.Cast<Type>();
+                Type[] loadedTypes = ex.Types.Where(type => type != null).Cast<Type>().ToArray();
+                Logger.Debug(
+                    $"[S1API][Reflection] Partially enumerated {loadedTypes.Length} types in '{assemblyName}'.");
+                return loadedTypes;
             }
             catch
             {
+                Logger.Debug($"[S1API][Reflection] Failed to enumerate types in '{assemblyName}'.");
                 return Array.Empty<Type>();
             }
         }
