@@ -28,6 +28,7 @@
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
         <ProjectReference Include="../S1API/S1API.csproj" />
+        <ProjectReference Include="../tools/S1APICoverageAnalyzer/S1APICoverageAnalyzer.csproj" />
     </ItemGroup>
 
     <ItemGroup Condition="'$(Configuration)' == 'MonoMelon'">
