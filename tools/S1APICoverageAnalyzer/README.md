@@ -9,8 +9,10 @@ If the game splits public `ScheduleOne.*` types across multiple assemblies, pass
 - **Type Coverage Analysis**: Identifies which game types are wrapped by S1API
 - **Member Coverage Analysis**: Tracks which members (fields, properties, methods) are exposed
 - **Smart Type Matching**: Uses multiple strategies to match game types to S1API types
+  - Explicit matching for reviewed semantic mirrors
   - Exact matching
   - Normalized matching (handles nested type separators)
+  - Nested matching (attributes declaring and nested types)
   - Fuzzy matching (handles naming variations)
 - **Configurable Exclusions**: Excludes internal/infrastructure types from analysis
 - **Multiple Output Formats**: JSON, plain text, and badge markdown
