@@ -52,6 +52,27 @@ namespace S1API.Deliveries
         public int LoadingDockIndex => NativeDelivery.LoadingDockIndex;
 
         /// <summary>
+        /// Gets the selected destination loading dock, or <see langword="null"/> while it is unavailable.
+        /// </summary>
+        public LoadingDock? LoadingDock
+        {
+            get
+            {
+                try
+                {
+                    var loadingDock = NativeDelivery.LoadingDock;
+                    return loadingDock == null
+                        ? null
+                        : global::S1API.Deliveries.LoadingDock.Wrap(loadingDock);
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+        }
+
+        /// <summary>
         /// Gets the wrapped destination property, or <see langword="null"/> while it is unavailable.
         /// </summary>
         public PropertyWrapper? Destination
