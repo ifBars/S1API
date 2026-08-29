@@ -39,17 +39,25 @@ dotnet run --project S1APICoverageAnalyzer.csproj \
 
 ## Type Matching Strategies
 
-The analyzer uses multiple strategies to match game types to S1API types, in order of priority:
+The analyzer uses multiple strategies to match game types to S1API types, in order of priority. Every covered type records both the responsible S1API type and the selected strategy.
 
-### 1. Exact Match
+### 1. Explicit Match
+
+`Configuration/ExplicitCoverageConfig.cs` declares runtime-agnostic mirrors that intentionally avoid retaining native game types in their public or compiled shape. Keep this list limited to reviewed semantic equivalents.
+
+### 2. Exact Match
 Direct full name match: `ScheduleOne.NPCs.NPC` == `ScheduleOne.NPCs.NPC`
 
-### 2. Normalized Match
+### 3. Normalized Match
 Handles nested type separator differences:
 - Game: `ScheduleOne.Casino.SlotMachine+ESymbol`
 - Matches: `ScheduleOne.Casino.SlotMachine.ESymbol`
 
-### 3. Fuzzy Match
+### 4. Nested Match
+
+Attributes a nested game type to the S1API type that wraps its declaring type, or vice versa.
+
+### 5. Fuzzy Match
 Handles common naming variations:
 
 #### Enum Prefix Differences
@@ -101,7 +109,7 @@ Edit `Configuration/ExclusionConfig.cs` to adjust which types are excluded from 
 ### JSON Report
 Detailed coverage data including:
 - Class and member coverage percentages
-- List of covered types with their covering API types
+- List of covered types with their covering API types and match strategies
 - List of uncovered types
 - Excluded namespace information
 
