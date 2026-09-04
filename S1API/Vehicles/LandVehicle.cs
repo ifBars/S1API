@@ -1,16 +1,20 @@
 ﻿#if (IL2CPPMELON)
 using S1Vehicles = Il2CppScheduleOne.Vehicles;
+using S1PlayerScripts = Il2CppScheduleOne.PlayerScripts;
 using Il2Cpp;
 using Il2CppFishNet;
 using Il2CppFishNet.Connection;
 using Guid = Il2CppSystem.Guid;
 #elif MONOMELON
 using S1Vehicles = ScheduleOne.Vehicles;
+using S1PlayerScripts = ScheduleOne.PlayerScripts;
 using FishNet;
 using FishNet.Connection;
 using Guid = System.Guid;
 #endif
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Reflection;
 using UnityEngine;
 using S1API.Internal.Utils;
@@ -48,6 +52,7 @@ namespace S1API.Vehicles
             SetConnection();
             UpdateGuidFromGame();
             _storage = new StorageInstance(component.Storage);
+            VehicleRegistry.Register(S1LandVehicle, this);
         }
 
         /// <summary>
@@ -84,6 +89,15 @@ namespace S1API.Vehicles
             get => S1LandVehicle.IsOccupied;
             set => S1LandVehicle.IsOccupied = value;
         }
+
+        /// <summary>
+        /// Gets the vehicle's seats in their native order.
+        /// </summary>
+        /// <remarks>
+        /// The collection is read-only and its seat wrappers retain stable identities while this
+        /// vehicle wrapper remains valid.
+        /// </remarks>
+        public IReadOnlyList<VehicleSeatInfo> Seats => GetSeats();
 
         /// <summary>
         /// When this vehicle has started
@@ -233,6 +247,7 @@ namespace S1API.Vehicles
             UpdateGuidFromGame();
             _storage = new StorageInstance(landVehicle.Storage);
             _isDeferredByName = false;
+            VehicleRegistry.Register(S1LandVehicle, this);
         }
 
         /// <summary>
@@ -253,6 +268,8 @@ namespace S1API.Vehicles
         /// </summary>
         private static readonly Log _logger = new Log("S1API.LandVehicle");
 
+        private IReadOnlyList<VehicleSeatInfo>? _seats;
+
         /// <summary>
         /// Connection to the player that owns the vehicle.
         /// </summary>
@@ -262,6 +279,38 @@ namespace S1API.Vehicles
         /// Cached GUID string for this vehicle.
         /// </summary>
         private string _guid = string.Empty;
+
+        internal void NotifySeatOccupantChanged(
+            int seatIndex,
+            S1PlayerScripts.Player? previous,
+            S1PlayerScripts.Player? current)
+        {
+            if (VehicleSeatInfo.HasSameNativeIdentity(previous, current))
+                return;
+
+            var seats = GetSeats();
+            if (seatIndex < 0 || seatIndex >= seats.Count)
+                return;
+
+            seats[seatIndex].NotifyOccupantChanged(previous, current);
+        }
+
+        private IReadOnlyList<VehicleSeatInfo> GetSeats()
+        {
+            if (_seats != null)
+                return _seats;
+
+            var nativeSeats = S1LandVehicle?.Seats;
+            if (nativeSeats == null)
+                return Array.Empty<VehicleSeatInfo>();
+
+            var seats = new VehicleSeatInfo[nativeSeats.Length];
+            for (int i = 0; i < nativeSeats.Length; i++)
+                seats[i] = new VehicleSeatInfo(i, nativeSeats[i]);
+
+            _seats = new ReadOnlyCollection<VehicleSeatInfo>(seats);
+            return _seats;
+        }
 
         /// <summary>
         /// Sets the connection to the player that owns the vehicle.
