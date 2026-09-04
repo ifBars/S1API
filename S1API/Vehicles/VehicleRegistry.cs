@@ -205,7 +205,7 @@ namespace S1API.Vehicles
                 _cache.Remove(gameVehicle);
         }
 
-        private static LandVehicle? Wrap(S1Vehicles.LandVehicle? veh)
+        internal static LandVehicle? Wrap(S1Vehicles.LandVehicle? veh)
         {
             if (veh == null)
                 return null;
