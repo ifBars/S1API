@@ -118,6 +118,7 @@ namespace S1API.Vehicles
                         {
                             deferredVehicle.S1LandVehicle = vehicle.S1LandVehicle;
                             deferredVehicle._isDeferredByName = false;
+                            Register(deferredVehicle.S1LandVehicle, deferredVehicle);
                         }
                     }));
                     return deferredVehicle;
@@ -215,7 +216,12 @@ namespace S1API.Vehicles
             _cache[veh] = wrapper;
             return wrapper;
         }
+
+        internal static void Register(S1Vehicles.LandVehicle vehicle, LandVehicle wrapper)
+        {
+            if (!_cache.ContainsKey(vehicle))
+                _cache.Add(vehicle, wrapper);
+        }
     }
 }
-
 
