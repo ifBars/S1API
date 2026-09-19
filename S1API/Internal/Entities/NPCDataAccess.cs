@@ -37,9 +37,6 @@ namespace S1API.Internal.Entities
     {
         private static readonly Logging.Log Logger = new Logging.Log("NPCDataAccess");
 #if !IL2CPPMELON
-        private static readonly FieldInfo NpcDataObjectField =
-            typeof(S1NPCs.NPC).GetField("_npcData", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingFieldException(typeof(S1NPCs.NPC).FullName, "_npcData");
         private static readonly FieldInfo CurrentNpcDataField =
             typeof(S1NPCs.NPC).GetField("<NPCData>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new MissingFieldException(typeof(S1NPCs.NPC).FullName, "<NPCData>k__BackingField");
