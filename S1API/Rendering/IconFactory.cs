@@ -1,10 +1,12 @@
 #if (IL2CPPMELON)
 using S1DevUtils = Il2CppScheduleOne.DevUtilities;
 using S1AvatarFramework = Il2CppScheduleOne.AvatarFramework;
+using S1AvatarTools = Il2CppScheduleOne.Avatar.Tools;
 using Il2CppScheduleOne.AvatarFramework.Customization;
 #elif MONOMELON
 using S1DevUtils = ScheduleOne.DevUtilities;
 using S1AvatarFramework = ScheduleOne.AvatarFramework;
+using S1AvatarTools = ScheduleOne.Avatar.Tools;
 using ScheduleOne.AvatarFramework.Customization;
 #endif
 
@@ -66,8 +68,8 @@ namespace S1API.Rendering
         /// <summary>
         /// INTERNAL: Reference to the game's MugshotGenerator instance.
         /// </summary>
-        internal static S1AvatarFramework.MugshotGenerator S1MugshotGenerator =>
-            S1AvatarFramework.MugshotGenerator.Instance;
+        internal static S1AvatarTools.MugshotGenerator? S1MugshotGenerator =>
+            UnityEngine.Object.FindObjectOfType<S1AvatarTools.MugshotGenerator>();
 
         /// <summary>
         /// Generates a preview texture for the specified model.
@@ -150,7 +152,6 @@ namespace S1API.Rendering
             Quaternion originalRot = model.localRotation;
             Vector3 originalScale = model.localScale;
             bool wasActive = model.gameObject.activeSelf;
-            int originalSize = generator.IconSize;
             bool originalModifyLighting = generator.ModifyLighting;
             List<SkinnedMeshRendererState>? bakedRenderers = null;
             Texture2D? texture = null;
@@ -201,7 +202,6 @@ namespace S1API.Rendering
                 }
 
                 // Temporarily override IconGenerator state
-                generator.IconSize = size;
                 generator.ModifyLighting = true;
 
                 texture = generator.GetTexture(model);
@@ -226,7 +226,6 @@ namespace S1API.Rendering
             }
             finally
             {
-                generator.IconSize = originalSize;
                 generator.ModifyLighting = originalModifyLighting;
 
                 if (bakedRenderers != null)
@@ -683,6 +682,7 @@ namespace S1API.Rendering
         /// </summary>
         private static IEnumerator ProcessAccessoryIconQueue()
         {
+#if false
             while (true)
             {
                 AccessoryIconRequest? next = null;
@@ -794,6 +794,27 @@ namespace S1API.Rendering
                 // Small delay between jobs to let the mugshot rig fully reset
                 yield return new WaitForSeconds(0.05f);
             }
+#else
+            while (true)
+            {
+                AccessoryIconRequest? next;
+                lock (_accessoryIconQueueLock)
+                {
+                    if (_accessoryIconQueue.Count == 0)
+                    {
+                        _isProcessingAccessoryIcons = false;
+                        yield break;
+                    }
+
+                    next = _accessoryIconQueue.Dequeue();
+                }
+
+                Logger.Warning(
+                    "Accessory icon generation is unavailable with the Schedule I 0.4.7 avatar pipeline.");
+                next.Callback?.Invoke(null);
+                yield return null;
+            }
+#endif
         }
 
         /// <summary>

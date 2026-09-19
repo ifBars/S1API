@@ -63,10 +63,9 @@ namespace S1API.Entities
 
             if (_runtimeAvatar != null)
             {
-                if (_runtimeAvatar.CurrentSettings != null)
-                    sourceSettings = _runtimeAvatar.CurrentSettings;
-                else
-                    sourceSettings = global::S1API.Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(_runtimeAvatar, "InitialAvatarSettings") as S1AvatarFramework.AvatarSettings;
+                sourceSettings = global::S1API.Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(
+                    _runtimeAvatar,
+                    "InitialAvatarSettings") as S1AvatarFramework.AvatarSettings;
             }
 
             if (sourceSettings != null)
@@ -154,6 +153,7 @@ namespace S1API.Entities
 
         private static IEnumerator ProcessMugshotQueueCore()
         {
+#if false
             var generator = S1AvatarFramework.MugshotGenerator.Instance;
             var mugshotRig = generator != null ? generator.MugshotRig : null;
             var iconGenerator = generator != null ? generator.Generator : null;
@@ -444,6 +444,25 @@ namespace S1API.Entities
                 // Small delay between jobs to let the mugshot rig fully reset
                 yield return new WaitForSeconds(0.1f);
             }
+#else
+            while (true)
+            {
+                NPCAppearance? next;
+                lock (_mugshotQueueLock)
+                {
+                    if (_mugshotQueue.Count == 0)
+                    {
+                        _isProcessingMugshots = false;
+                        yield break;
+                    }
+
+                    next = _mugshotQueue.Dequeue();
+                }
+
+                next.MarkMugshotCompleted();
+                yield return null;
+            }
+#endif
         }
 
         private void MarkMugshotCompleted()
@@ -573,7 +592,9 @@ namespace S1API.Entities
             if (avatar == null)
                 return;
 
-            avatar.LoadAvatarSettings(_customAvatarSettings);
+            global::S1API.Internal.Compatibility.AvatarCompatibility.ApplyLegacySettings(
+                avatar,
+                _customAvatarSettings);
         }
 
         #endregion

@@ -473,7 +473,7 @@ namespace S1API.Entities
             var container = contBuilder.Build(containerName);
 
 #if MONOMELON
-            var list = dialogueContainersField?.GetValue(Handler) as List<S1Dialogue.DialogueContainer>;
+            var list = dialogueContainersField?.GetValue(Handler) as List<S1Dialogue.Conversation>;
 #else
             var list = Handler.dialogueContainers;
 #endif
@@ -509,13 +509,13 @@ namespace S1API.Entities
                 return false;
 
 #if MONOMELON
-            var list = dialogueContainersField?.GetValue(Handler) as List<S1Dialogue.DialogueContainer>;
+            var list = dialogueContainersField?.GetValue(Handler) as List<S1Dialogue.Conversation>;
 #else
             var list = Handler.dialogueContainers;
 #endif
             if (list == null)
                 return false;
-            S1Dialogue.DialogueContainer? container = null;
+            S1Dialogue.Conversation? container = null;
             for (int i = 0; i < list.Count; i++)
             {
                 var item = list[i];
@@ -550,13 +550,13 @@ namespace S1API.Entities
                 return false;
 
 #if MONOMELON
-            var list = dialogueContainersField?.GetValue(Handler) as List<S1Dialogue.DialogueContainer>;
+            var list = dialogueContainersField?.GetValue(Handler) as List<S1Dialogue.Conversation>;
 #else
             var list = Handler.dialogueContainers;
 #endif
             if (list == null)
                 return false;
-            S1Dialogue.DialogueContainer? container = null;
+            S1Dialogue.Conversation? container = null;
             for (int i = 0; i < list.Count; i++)
             {
                 var item = list[i];
@@ -598,13 +598,13 @@ namespace S1API.Entities
             if (Handler == null)
                 return false;
 #if MONOMELON
-            var list = dialogueContainersField?.GetValue(Handler) as List<S1Dialogue.DialogueContainer>;
+            var list = dialogueContainersField?.GetValue(Handler) as List<S1Dialogue.Conversation>;
 #else
             var list = Handler.dialogueContainers;
 #endif
             if (list == null)
                 return false;
-            S1Dialogue.DialogueContainer? container = null;
+            S1Dialogue.Conversation? container = null;
             for (int i = 0; i < list.Count; i++)
             {
                 var item = list[i];
@@ -712,7 +712,7 @@ namespace S1API.Entities
             return true;
         }
 
-        private bool StartDialogueCompat(S1Dialogue.DialogueContainer container, bool enableBehaviour = true, string entryNodeLabel = "ENTRY")
+        private bool StartDialogueCompat(S1Dialogue.Conversation container, bool enableBehaviour = true, string entryNodeLabel = "ENTRY")
         {
             if (Handler == null || container == null)
                 return false;

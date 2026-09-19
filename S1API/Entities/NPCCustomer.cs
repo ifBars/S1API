@@ -1056,7 +1056,7 @@ namespace S1API.Entities
                             dialogueLine = dialogueLine.Replace("<NAME>", dealer.NPC.FullName);
                             
                             // Create dialogue container
-                            var container = ScriptableObject.CreateInstance<S1Dialogue.DialogueContainer>();
+                            var container = ScriptableObject.CreateInstance<S1Dialogue.Conversation>();
                             var nodeData = new S1Dialogue.DialogueNodeData
                             {
                                 DialogueText = dialogueLine,
@@ -1088,7 +1088,7 @@ namespace S1API.Entities
             }
         }
 
-        private System.Collections.IEnumerator WaitAndShowDialogue(S1Dialogue.DialogueContainer container, S1Dialogue.DialogueHandler handler)
+        private System.Collections.IEnumerator WaitAndShowDialogue(S1Dialogue.Conversation container, S1Dialogue.DialogueHandler handler)
         {
             yield return new WaitForSeconds(0.1f);
             if (handler != null && container != null)

@@ -298,11 +298,11 @@ namespace S1API.Internal.Entities
                         continue;
                     }
 
-                    S1AvatarFramework.AvatarSettings? settings =
-                        npc.Avatar?.CurrentSettings ??
-                        (npc.Avatar != null
-                            ? ReflectionUtils.TryGetFieldOrProperty(npc.Avatar, "InitialAvatarSettings") as S1AvatarFramework.AvatarSettings
-                            : null);
+                    S1AvatarFramework.AvatarSettings? settings = npc.Avatar != null
+                        ? ReflectionUtils.TryGetFieldOrProperty(
+                            npc.Avatar,
+                            "InitialAvatarSettings") as S1AvatarFramework.AvatarSettings
+                        : null;
                     if (settings == null || settings.ImpostorTexture == null)
                     {
                         continue;

@@ -51,8 +51,19 @@ namespace S1API.Entities.Employees
                 return false;
             }
 
-            S1Employees.EmployeeManager.Instance.GetRandomAppearance(male, out var i, out var avatarSettings);
-            if (avatarSettings == null)
+            S1Employees.EmployeeManager.Instance.GetRandomAppearance(male, out var i, out var appearanceObject);
+            var appearance = S1Employees.EmployeeManager.Instance.GetAppearance(male, i);
+            var avatarSettings = appearance == null
+                ? null
+                : global::S1API.Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(
+                    appearance,
+                    "Settings") as
+#if IL2CPPMELON
+                    Il2CppScheduleOne.AvatarFramework.AvatarSettings;
+#else
+                    ScheduleOne.AvatarFramework.AvatarSettings;
+#endif
+            if (appearanceObject == null || avatarSettings == null)
             {
                 settings = null;
                 index = -1;
@@ -78,7 +89,21 @@ namespace S1API.Entities.Employees
         /// <summary>
         /// Gets the avatar settings associated with this employee appearance.
         /// </summary>
-        public AvatarSettings Settings => new(S1EmployeeAppearance.Settings);
+        public AvatarSettings Settings
+        {
+            get
+            {
+                var settings = global::S1API.Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(
+                    S1EmployeeAppearance,
+                    "Settings") as
+#if IL2CPPMELON
+                    Il2CppScheduleOne.AvatarFramework.AvatarSettings;
+#else
+                    ScheduleOne.AvatarFramework.AvatarSettings;
+#endif
+                return settings == null ? AvatarSettings.Create() : new AvatarSettings(settings);
+            }
+        }
 
         /// <summary>
         /// Gets the mugshot sprite associated with this employee appearance.

@@ -31,6 +31,9 @@ namespace S1API.Internal.Patches
         [HarmonyPatch]
         internal static class AvatarApplyAccessorySettingsPatch
         {
+            [HarmonyPrepare]
+            private static bool Prepare() => TargetMethod() != null;
+
             static MethodBase? TargetMethod()
             {
                 return typeof(S1AvatarFramework.Avatar).GetMethod("ApplyAccessorySettings",

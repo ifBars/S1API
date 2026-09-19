@@ -48,6 +48,7 @@ namespace S1API.GameTime
 
         private static int _lastSleepSkippedMinutes;
         private static S1GameTime.TimeManager? _boundInstance;
+        private static S1GameTime.SleepController? _boundSleepController;
 
         private static readonly Action HourPassHandler = () => OnHourPass();
         private static readonly Action DayPassHandler = () => OnDayPass();
@@ -69,11 +70,14 @@ namespace S1API.GameTime
         internal static void TryBindToCurrentInstance()
         {
             var instance = S1GameTime.TimeManager.Instance;
-            if (instance == null || ReferenceEquals(instance, _boundInstance))
+            var sleepController = S1GameTime.SleepController.Instance;
+            if (instance == null ||
+                (ReferenceEquals(instance, _boundInstance) && ReferenceEquals(sleepController, _boundSleepController)))
                 return;
 
-            UnbindFromInstance(_boundInstance);
+            UnbindFromInstances(_boundInstance, _boundSleepController);
             _boundInstance = instance;
+            _boundSleepController = sleepController;
 
             instance.onHourPass += HourPassHandler;
             instance.onDayPass += DayPassHandler;
@@ -81,9 +85,12 @@ namespace S1API.GameTime
             
             AddToActionList(instance.onTick, TickHandler);
             
-            instance.onSleepStart += SleepStartHandler;
             instance.onTimeSkip += TimeSkipHandler;
-            instance.onSleepEnd += SleepEndHandler;
+            if (sleepController != null)
+            {
+                sleepController.OnSleepStart += SleepStartHandler;
+                sleepController.OnSleepEnd += SleepEndHandler;
+            }
         }
 
         /// <summary>
@@ -91,25 +98,30 @@ namespace S1API.GameTime
         /// </summary>
         internal static void ResetBindings()
         {
-            UnbindFromInstance(_boundInstance);
+            UnbindFromInstances(_boundInstance, _boundSleepController);
             _boundInstance = null;
+            _boundSleepController = null;
             _lastSleepSkippedMinutes = 0;
         }
 
-        private static void UnbindFromInstance(S1GameTime.TimeManager? instance)
+        private static void UnbindFromInstances(
+            S1GameTime.TimeManager? instance,
+            S1GameTime.SleepController? sleepController)
         {
-            if (instance == null)
-                return;
+            if (instance != null)
+            {
+                instance.onHourPass -= HourPassHandler;
+                instance.onDayPass -= DayPassHandler;
+                instance.onWeekPass -= WeekPassHandler;
+                RemoveFromActionList(instance.onTick, TickHandler);
+                instance.onTimeSkip -= TimeSkipHandler;
+            }
 
-            instance.onHourPass -= HourPassHandler;
-            instance.onDayPass -= DayPassHandler;
-            instance.onWeekPass -= WeekPassHandler;
-            
-            RemoveFromActionList(instance.onTick, TickHandler);
-            
-            instance.onSleepStart -= SleepStartHandler;
-            instance.onTimeSkip -= TimeSkipHandler;
-            instance.onSleepEnd -= SleepEndHandler;
+            if (sleepController != null)
+            {
+                sleepController.OnSleepStart -= SleepStartHandler;
+                sleepController.OnSleepEnd -= SleepEndHandler;
+            }
         }
 
         private static void AddToActionList(object? actionList, Action handler)
@@ -174,7 +186,7 @@ namespace S1API.GameTime
         /// <summary>
         /// Whether the player is currently sleeping.
         /// </summary>
-        public static bool SleepInProgress => S1GameTime.TimeManager.Instance.IsSleepInProgress;
+        public static bool SleepInProgress => S1GameTime.SleepController.Instance?.IsSleepInProgress ?? false;
 
         /// <summary>
         /// The current normalized time of day (0.0 = start, 1.0 = end).
@@ -190,7 +202,7 @@ namespace S1API.GameTime
         /// Sets the current time manually and synchronizes across the network.
         /// This can only be called by the host.
         /// </summary>
-        public static void SetTime(int time24h) => S1GameTime.TimeManager.Instance.SetTimeAndSync(time24h);
+        public static void SetTime(int time24h) => S1GameTime.TimeManager.Instance.SetTime_Server(time24h);
 
         /// <summary>
         /// Gets the current time formatted in 12-hour AM/PM format.

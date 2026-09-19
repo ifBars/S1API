@@ -289,7 +289,11 @@ namespace S1API.Internal.Patches
                     return;
                 }
 
-                var agent = __instance?.Agent;
+                var agent = __instance == null
+                    ? null
+                    : ReflectionUtils.TryGetFieldOrProperty(
+                        __instance,
+                        "_agent") as UnityEngine.AI.NavMeshAgent;
                 if (agent != null && NavMeshUtility.SamplePosition(
                         desiredDestination,
                         out var hit,
@@ -2423,14 +2427,7 @@ namespace S1API.Internal.Patches
         [HarmonyPrefix]
         private static bool NPCMovement_SetGravityMultiplier_Prefix(S1NPCs.NPCMovement __instance, float multiplier)
         {
-#if !IL2CPPMELON
-            var ragdollForceComponentsField = typeof(S1NPCs.NPCMovement).GetField("ragdollForceComponents",
-                BindingFlags.NonPublic | BindingFlags.Instance);
-            var ragdollForceComponents = ragdollForceComponentsField?.GetValue(__instance) as List<ConstantForce>;
-#else
-            var ragdollForceComponents = __instance.ragdollForceComponents;
-#endif
-            return ragdollForceComponents == null || ragdollForceComponents.ToArray().All(comp => comp != null);
+            return true;
         }
 
         /// <summary>
@@ -2449,7 +2446,7 @@ namespace S1API.Internal.Patches
             var npc = __instance.GetComponent<S1NPCs.NPC>();
 #if (!IL2CPPMELON)
             var npcField = typeof(S1NPCs.NPCHealth)
-                .GetField("npc", BindingFlags.NonPublic | BindingFlags.Instance);
+                .GetField("_npc", BindingFlags.NonPublic | BindingFlags.Instance);
             if (npcField != null)
                 npcField.SetValue(__instance, npc);
             
@@ -2476,7 +2473,7 @@ namespace S1API.Internal.Patches
                     (Action)Delegate.Combine(TimeManagerShim.Instance.onHourPass, hourPassDelegate);
             }
 #else
-            __instance.npc = npc;
+            __instance._npc = npc;
 
             TimeManagerShim.Instance.onSleepStart =
                 (Action)Delegate.Combine(TimeManagerShim.Instance.onSleepStart, new Action(__instance.SleepStart));

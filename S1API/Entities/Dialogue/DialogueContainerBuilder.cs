@@ -62,9 +62,9 @@ namespace S1API.Entities.Dialogue
         /// <summary>
         /// INTERNAL: Builds a ScriptableObject DialogueContainer.
         /// </summary>
-        internal S1Dialogue.DialogueContainer Build(string containerName)
+        internal S1Dialogue.Conversation Build(string containerName)
         {
-            var container = ScriptableObject.CreateInstance<S1Dialogue.DialogueContainer>();
+            var container = ScriptableObject.CreateInstance<S1Dialogue.Conversation>();
             container.name = string.IsNullOrEmpty(containerName) ? "CustomContainer" : containerName;
 
             // Build node data

@@ -49,7 +49,7 @@ namespace S1API.Entities
         /// Gets whether the NPC's conversation is currently open in the phone's Messages app.
         /// </summary>
         public bool IsOpen =>
-            _npc.S1NPC?.MSGConversation?.isOpen ?? false;
+            _npc.S1NPC?.MSGConversation?.IsOpen ?? false;
 
         /// <summary>
         /// Occurs when the player opens the NPC's conversation in the phone's Messages app.

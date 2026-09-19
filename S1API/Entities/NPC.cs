@@ -257,9 +257,9 @@ namespace S1API.Entities
                 }
             }
             catch { }
-            if (S1NPCs.NPCManager.InstanceExists && S1NPCs.NPCManager.Instance.NPCContainer != null)
+            if (S1NPCs.NPCManager.InstanceExists)
             {
-                Transform parent = S1NPCs.NPCManager.Instance.NPCContainer;
+                Transform parent = S1NPCs.NPCManager.Instance.transform;
                 if (parent != null && parent.gameObject != null && parent.gameObject.activeInHierarchy)
                     instance.transform.SetParent(parent, false);
             }
@@ -604,15 +604,15 @@ namespace S1API.Entities
             if (movement != null)
             {
                 SetGameMember(npc, "Movement", movement);
-                SetGameMember(movement, "npc", npc);
+                SetGameMember(movement, "_npc", npc);
 
-                movement.Agent = EnsureRootNavMeshAgent(prefabRoot);
+                SetGameMember(movement, "_agent", EnsureRootNavMeshAgent(prefabRoot));
 
                 var speedController = prefabRoot.GetComponent<S1NPCs.NPCSpeedController>()
                                       ?? prefabRoot.GetComponentInChildren<S1NPCs.NPCSpeedController>(true);
                 if (speedController != null)
                 {
-                    movement.SpeedController = speedController;
+                    SetGameMember(movement, "_speedController", speedController);
                     SetGameMember(speedController, "Movement", movement);
                 }
             }
@@ -642,7 +642,10 @@ namespace S1API.Entities
             if (movement != null)
             {
                 movement.SetAgentType(S1NPCs.NPCMovement.EAgentType.Humanoid);
-                movement.DefaultObstacleAvoidanceType = UnityEngine.AI.ObstacleAvoidanceType.HighQualityObstacleAvoidance;
+                SetGameMember(
+                    movement,
+                    "_defaultObstacleAvoidanceType",
+                    UnityEngine.AI.ObstacleAvoidanceType.HighQualityObstacleAvoidance);
             }
         }
 
@@ -738,8 +741,14 @@ namespace S1API.Entities
                 controller = controllerObject.AddComponent<S1Dialogue.DialogueController_Dealer>();
                 if (source != null)
                 {
-                    controller.IntObj = source.IntObj;
-                    controller.GenericDialogue = source.GenericDialogue;
+                    SetGameMember(
+                        controller,
+                        "_interactable",
+                        GetGameMember(source, "_interactable"));
+                    SetGameMember(
+                        controller,
+                        "_genericConversation",
+                        GetGameMember(source, "_genericConversation"));
                     controller.DialogueEnabled = source.DialogueEnabled;
                     controller.UseDialogueBehaviour = source.UseDialogueBehaviour;
                     controller.Choices = source.Choices;
@@ -887,8 +896,14 @@ namespace S1API.Entities
                     if (civilianController == null || civilianController == employeeController)
                     {
                         civilianController = controllerObject.AddComponent<S1Dialogue.DialogueController>();
-                        civilianController.IntObj = employeeController.IntObj;
-                        civilianController.GenericDialogue = employeeController.GenericDialogue;
+                        SetGameMember(
+                            civilianController,
+                            "_interactable",
+                            GetGameMember(employeeController, "_interactable"));
+                        SetGameMember(
+                            civilianController,
+                            "_genericConversation",
+                            GetGameMember(employeeController, "_genericConversation"));
                         civilianController.DialogueEnabled = employeeController.DialogueEnabled;
                         civilianController.UseDialogueBehaviour = employeeController.UseDialogueBehaviour;
                         // Customer and other runtime components rebuild their own role-specific dialogue state.
@@ -2542,12 +2557,10 @@ namespace S1API.Entities
 
             if (S1NPC.MSGConversation == null)
             {
-#if IL2CPPMELON
-                S1NPC.CreateMessageConversation();
-#elif MONOMELON
-                MethodInfo createConvoMethod = AccessTools.Method(typeof(S1NPCs.NPC), "CreateMessageConversation");
+                MethodInfo createConvoMethod = AccessTools.Method(
+                    typeof(S1NPCs.NPC),
+                    "CreateAndAssignDefaultMessageConversation");
                 createConvoMethod?.Invoke(S1NPC, null);
-#endif
                 if (S1NPC.MSGConversation == null)
                 {
                     Logger.Warning($"EnsureMessageConversationInstance: creation failed for '{GetSafeNpcId()}'.");
@@ -4176,12 +4189,16 @@ namespace S1API.Entities
             Guid guid = NPCPersistentIds.TryGetGuid(npcId, out Guid persistentGuid)
                 ? persistentGuid
                 : Guid.NewGuid();
-            S1NPC.BakedGUID = guid.ToString();
+#if IL2CPPMELON
+            S1NPC.SetGUID(new Il2CppSystem.Guid(guid.ToString()));
+#else
+            S1NPC.SetGUID(guid);
+#endif
         }
 
         internal void RegisterPersistentGuidForContractLoad()
         {
-            if (!Guid.TryParse(S1NPC.BakedGUID, out Guid guid))
+            if (!Guid.TryParse(S1NPC.GUID.ToString(), out Guid guid))
                 return;
 
             try
@@ -4364,11 +4381,7 @@ namespace S1API.Entities
                         ? "Avatar"
                         : "Avatar(active)");
             }
-            else if (activeAvatar.HeadBone == null)
-            {
-                missing.Add("Avatar.HeadBone");
-            }
-            else if (activeAvatar.HeadBone.GetComponentInChildren<S1VoiceOver.VOEmitter>() == null)
+            else if (activeAvatar.GetComponentInChildren<S1VoiceOver.VOEmitter>() == null)
             {
                 missing.Add(nameof(S1VoiceOver.VOEmitter));
             }
