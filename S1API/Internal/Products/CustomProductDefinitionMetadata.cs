@@ -7,6 +7,7 @@ using S1Product = ScheduleOne.Product;
 using System;
 using System.Collections.Generic;
 using S1API.Products;
+using UnityEngine;
 
 namespace S1API.Internal.Products
 {
@@ -39,7 +40,8 @@ namespace S1API.Internal.Products
             ProductKind productKind,
             Quality defaultQuality,
             IReadOnlyList<PackagingDefinition> validPackaging,
-            S1Product.ProductDefinition? representationTemplate)
+            S1Product.ProductDefinition? representationTemplate,
+            Color32? generatedMixColor = null)
         {
             ProductKind = productKind;
             DefaultQuality = defaultQuality;
@@ -49,6 +51,7 @@ namespace S1API.Internal.Products
             ValidPackaging =
                 new List<PackagingDefinition>(validPackaging).AsReadOnly();
             RepresentationTemplate = representationTemplate;
+            GeneratedMixColor = generatedMixColor;
         }
 
         internal ProductKind ProductKind { get; }
@@ -58,5 +61,7 @@ namespace S1API.Internal.Products
         internal IReadOnlyList<PackagingDefinition> ValidPackaging { get; }
 
         internal S1Product.ProductDefinition? RepresentationTemplate { get; }
+
+        internal Color32? GeneratedMixColor { get; }
     }
 }

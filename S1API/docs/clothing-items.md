@@ -105,6 +105,35 @@ Shop injection should happen after the registry confirms your item exists (e.g.,
 | Feet | Shoes, boots |
 | Wrist | Watches, bracelets |
 
+### Reading the Native Clothing Catalog
+
+Use `ClothingMetadataCatalog` when a menu or tool needs the same clothing slot
+names, icons, and colors as the base game:
+
+```csharp
+using S1API.Items.Clothing;
+using UnityEngine;
+
+foreach (ClothingSlotMetadata slot in ClothingMetadataCatalog.Slots)
+{
+    MelonLogger.Msg($"{slot.Slot}: {slot.DisplayName}");
+    Sprite? icon = slot.Icon;
+}
+
+ClothingColorMetadata? blue =
+    ClothingMetadataCatalog.GetColor(ClothingColor.Blue);
+if (blue != null)
+{
+    Color materialColor = blue.ActualColor;
+    Color labelColor = blue.LabelColor;
+}
+```
+
+The catalog is read-only and returns S1API-owned metadata snapshots rather than
+native `ClothingUtility` objects. Access it after the main scene has initialized;
+before the native clothing utility is ready, `Slots` and `Colors` are empty and
+individual lookups return `null`.
+
 | Application Type (`ClothingApplicationType`) | Purpose |
 | --- | --- |
 | Accessory | 3D meshes (hats, glasses) |

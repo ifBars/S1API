@@ -21,7 +21,8 @@ namespace S1API.Internal.Products
                 if (existing.MixerMap == profile.MixerMap &&
                     ReferenceEquals(existing.OutputFactory, profile.OutputFactory) &&
                     string.Equals(existing.OutputFactoryIdentity, profile.OutputFactoryIdentity, StringComparison.OrdinalIgnoreCase) &&
-                    existing.OutputFactoryVersion == profile.OutputFactoryVersion)
+                    existing.OutputFactoryVersion == profile.OutputFactoryVersion &&
+                    existing.UsePropertyColorMixing == profile.UsePropertyColorMixing)
                     return existing;
                 throw new InvalidOperationException("A conflicting mixing profile is already registered for product kind '" + profile.ProductKind.Id + "'.");
             }

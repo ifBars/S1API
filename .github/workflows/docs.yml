@@ -85,9 +85,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: S1API/ScheduleOneAssemblies
-          key: game-assemblies-v4-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
+          key: game-assemblies-v5-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
           restore-keys: |
-            game-assemblies-v4-${{ steps.assembly-branch.outputs.branch }}-
+            game-assemblies-v5-${{ steps.assembly-branch.outputs.branch }}-
 
       # Only checkout game assemblies if cache miss AND we have access to secrets
       - name: Checkout Game Assemblies
@@ -212,7 +212,7 @@ jobs:
         if: always() && steps.cache-assemblies.outputs.cache-hit != 'true' && hashFiles('S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll') != '' && hashFiles('S1API/ScheduleOneAssemblies/Managed/Unity.Burst.dll') != '' && hashFiles('S1API/ScheduleOneAssemblies/MelonLoader/0Harmony.dll') != '' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable' || github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/npc-prefabs')))
         with:
           path: S1API/ScheduleOneAssemblies
-          key: game-assemblies-v4-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
+          key: game-assemblies-v5-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
 
       - name: Create CI Build Properties
         run: |
@@ -311,18 +311,67 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+
           git checkout --detach --force "$BASE_SHA"
-          dotnet restore S1API/S1API.csproj -p:Configuration=MonoMelon
-          dotnet build \
-            S1API/S1API.csproj \
-            --no-restore \
-            --configuration MonoMelon \
-            --verbosity minimal \
-            --property:AutomateLocalDeployment=false
-          cp \
-            S1API/bin/MonoMelon/netstandard2.1/S1API.dll \
-            "$RUNNER_TEMP/s1api-api-compat/baseline.dll"
+
+          use_release_baseline=false
+          if [[ "$BASE_REF" == "beta" ]]; then
+            baseline_tag="$(gh release list \
+              --repo "$GITHUB_REPOSITORY" \
+              --limit 100 \
+              --json tagName,isPrerelease,publishedAt \
+              --jq '[.[] | select(.isPrerelease and (.tagName | contains("-beta.")))] | sort_by(.publishedAt) | last | .tagName // ""')"
+            if [[ -z "$baseline_tag" ]]; then
+              baseline_tag="$(gh release view \
+                --repo "$GITHUB_REPOSITORY" \
+                --json tagName \
+                --jq '.tagName')"
+            fi
+            use_release_baseline=true
+          else
+            baseline_tag="$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$BASE_SHA" 2>/dev/null || true)"
+            if [[ -n "$baseline_tag" ]] && git diff --quiet "$baseline_tag" "$BASE_SHA" -- \
+              ':(glob)S1API/**/*.cs' \
+              S1API/S1API.csproj \
+              S1API/Directory.Build.props \
+              Directory.Build.props; then
+              use_release_baseline=true
+            fi
+          fi
+
+          if [[ "$use_release_baseline" == "true" ]]; then
+            baseline_version="${baseline_tag#v}"
+            release_dir="$RUNNER_TEMP/s1api-api-compat/release"
+            release_zip="$release_dir/S1API-Forked-${baseline_version}.zip"
+
+            mkdir -p "$release_dir"
+            gh release download "$baseline_tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --pattern "S1API-Forked-${baseline_version}.zip" \
+              --dir "$release_dir"
+            unzip -p "$release_zip" \
+              Mods/S1API.Mono.MelonLoader.dll \
+              > "$RUNNER_TEMP/s1api-api-compat/baseline.dll"
+            echo "Using shipped ${baseline_tag} Mono assembly as the API baseline"
+          else
+            dotnet restore S1API/S1API.csproj -p:Configuration=MonoMelon
+            dotnet build \
+              S1API/S1API.csproj \
+              --no-restore \
+              --configuration MonoMelon \
+              --verbosity minimal \
+              --property:AutomateLocalDeployment=false
+            cp \
+              S1API/bin/MonoMelon/netstandard2.1/S1API.dll \
+              "$RUNNER_TEMP/s1api-api-compat/baseline.dll"
+            echo "Using target-branch source build as the API baseline"
+          fi
+
+          test -s "$RUNNER_TEMP/s1api-api-compat/baseline.dll"
           git checkout --detach --force "$GITHUB_SHA"
 
       - name: Restore ApiCompat tool cache
@@ -348,6 +397,7 @@ jobs:
           "$RUNNER_TEMP/apicompat/apicompat" \
             --left "$RUNNER_TEMP/s1api-api-compat/baseline.dll" \
             --right "$RUNNER_TEMP/s1api-api-compat/current.dll" \
+            --suppression-file .github/api-compat-suppressions.xml \
             --enable-rule-cannot-change-parameter-name \
             --enable-rule-attributes-must-match
 

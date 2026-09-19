@@ -20,6 +20,11 @@ public sealed class GameType
     /// The S1API wrapper type that provides coverage for this game type.
     /// </summary>
     public string? CoveredByApiType { get; set; }
+
+    /// <summary>
+    /// How the analyzer matched this game type to its covering S1API type.
+    /// </summary>
+    public CoverageMatchStrategy? MatchStrategy { get; set; }
     
     /// <summary>
     /// Number of members that are covered.
@@ -36,6 +41,15 @@ public sealed class GameType
     /// </summary>
     public double MemberCoveragePercentage => 
         TotalMemberCount == 0 ? 0 : (double)CoveredMemberCount / TotalMemberCount * 100;
+}
+
+public enum CoverageMatchStrategy
+{
+    Explicit,
+    Exact,
+    Normalized,
+    Nested,
+    Fuzzy
 }
 
 public enum GameTypeKind

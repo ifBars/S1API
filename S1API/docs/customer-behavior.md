@@ -17,12 +17,13 @@ The customer system allows NPCs to act as business customers, buying products fr
 Customer NPCs can buy products from the player, follow spending patterns, and participate in the game's economy. The customer system is configured in `ConfigurePrefab` and managed at runtime.
 
 ```csharp
+public override bool IsCustomer => true;
+
 protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 {
-    builder.EnsureCustomer()
-           .WithCustomerDefaults(cd => {
-               // Spending behavior
-               cd.WithSpending(minWeekly: 150f, maxWeekly: 600f)
+    builder.WithCustomerDefaults(cd => {
+        // Spending behavior
+        cd.WithSpending(minWeekly: 150f, maxWeekly: 600f)
                  .WithOrdersPerWeek(1, 4)
                  .WithPreferredOrderDay(Day.Friday)
                  .WithOrderTime(1100); // 11:00 AM
@@ -47,7 +48,7 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
                
                // Property preferences
                cd.WithPreferredProperties(Property.Munchies, Property.Energizing);
-           });
+    });
 }
 ```
 
@@ -55,10 +56,10 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 
 ### Enabling Customer Behavior
 
-First, ensure the customer component is added:
+Declare customer capability at the NPC type level. S1API adds the native component before `ConfigurePrefab` and network registration:
 
 ```csharp
-builder.EnsureCustomer();
+public override bool IsCustomer => true;
 ```
 
 ### Customer Defaults
@@ -266,11 +267,12 @@ var contract = Customer.CurrentContract;
 ### Basic Customer
 
 ```csharp
+public override bool IsCustomer => true;
+
 protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 {
-    builder.EnsureCustomer()
-           .WithCustomerDefaults(cd => {
-               cd.WithSpending(100f, 300f)
+    builder.WithCustomerDefaults(cd => {
+        cd.WithSpending(100f, 300f)
                  .WithOrdersPerWeek(1, 2)
                  .WithPreferredOrderDay(Day.Friday)
                  .WithOrderTime(1400)
@@ -280,18 +282,19 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
                  .WithAffinities(new[] {
                      (DrugType.Marijuana, 0.5f)
                  });
-           });
+    });
 }
 ```
 
 ### High-Value Customer
 
 ```csharp
+public override bool IsCustomer => true;
+
 protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 {
-    builder.EnsureCustomer()
-           .WithCustomerDefaults(cd => {
-               cd.WithSpending(500f, 1000f)
+    builder.WithCustomerDefaults(cd => {
+        cd.WithSpending(500f, 1000f)
                  .WithOrdersPerWeek(3, 5)
                  .WithPreferredOrderDay(Day.Saturday)
                  .WithOrderTime(1100)
@@ -306,18 +309,19 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
                      (DrugType.Marijuana, 0.6f)
                  })
                  .WithPreferredProperties(Property.Energizing, Property.BrightEyed);
-           });
+    });
 }
 ```
 
 ### Risky Customer
 
 ```csharp
+public override bool IsCustomer => true;
+
 protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 {
-    builder.EnsureCustomer()
-           .WithCustomerDefaults(cd => {
-               cd.WithSpending(200f, 600f)
+    builder.WithCustomerDefaults(cd => {
+        cd.WithSpending(200f, 600f)
                  .WithOrdersPerWeek(2, 4)
                  .WithPreferredOrderDay(Day.Sunday)
                  .WithOrderTime(2000)
@@ -330,7 +334,7 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
                      (DrugType.Heroin, 0.7f),
                      (DrugType.Cocaine, 0.5f)
                  });
-           });
+    });
 }
 ```
 
@@ -376,7 +380,7 @@ protected override void OnCreated()
 ### Don'ts
 
 - **Don't modify customer data at runtime** (except through proper APIs)
-- **Don't forget to call `EnsureCustomer()`** before `WithCustomerDefaults()`
+- **Don't make `IsCustomer` depend on constructor state**; S1API reads role properties from an uninitialized instance
 - **Don't use extreme values** for spending, addiction, or police chance
 - **Don't create customers with impossible requirements** (e.g., high standards with low relationship)
 
@@ -385,14 +389,15 @@ protected override void OnCreated()
 Wrap customer configuration in try-catch blocks:
 
 ```csharp
+public override bool IsCustomer => true;
+
 protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 {
     try
     {
-        builder.EnsureCustomer()
-               .WithCustomerDefaults(cd => {
-                   // Customer configuration
-               });
+        builder.WithCustomerDefaults(cd => {
+            // Customer configuration
+        });
     }
     catch (Exception ex)
     {

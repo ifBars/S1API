@@ -28,6 +28,9 @@ namespace S1API.Entities.Dealer
             public bool SellInsufficientQualityItems { get; set; } = false;
             public bool SellExcessQualityItems { get; set; } = true;
             public string CompletedDealsVariable { get; set; } = string.Empty;
+            public bool InsufficientQualityConfigured { get; set; }
+            public bool ExcessQualityConfigured { get; set; }
+            public bool CompletedDealsVariableConfigured { get; set; }
             public List<DealerRecommendationBuilder.RecommendationConfigData> Recommendations { get; } =
                 new List<DealerRecommendationBuilder.RecommendationConfigData>();
         }
@@ -96,6 +99,7 @@ namespace S1API.Entities.Dealer
         public DealerDataBuilder AllowInsufficientQuality(bool allow)
         {
             _data.SellInsufficientQualityItems = allow;
+            _data.InsufficientQualityConfigured = true;
             return this;
         }
 
@@ -105,6 +109,7 @@ namespace S1API.Entities.Dealer
         public DealerDataBuilder AllowExcessQuality(bool allow)
         {
             _data.SellExcessQualityItems = allow;
+            _data.ExcessQualityConfigured = true;
             return this;
         }
 
@@ -114,6 +119,7 @@ namespace S1API.Entities.Dealer
         public DealerDataBuilder WithCompletedDealsVariable(string varName)
         {
             _data.CompletedDealsVariable = varName ?? string.Empty;
+            _data.CompletedDealsVariableConfigured = true;
             return this;
         }
 

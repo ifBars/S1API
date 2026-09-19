@@ -1,4 +1,5 @@
 using System.Globalization;
+using S1API.Internal.Console;
 using S1API.Internal.Rendering;
 using S1API.Rendering;
 using UnityEngine;
@@ -7,6 +8,14 @@ namespace S1API.Tests.Rendering;
 
 public sealed class PresentationWorkbenchTests
 {
+    [Fact]
+    public void ConsoleCommandUsesTheCompactCommandWord()
+    {
+        Assert.Equal(
+            "presentationworkbench",
+            new PresentationWorkbenchCommand().CommandWord);
+    }
+
     [Theory]
     [InlineData("product")]
     [InlineData("PRODUCT")]

@@ -222,13 +222,13 @@ namespace S1API.Entities.Schedule
             {
                 Logger.Warning($"[{npc.ID}] Initial position not reachable, searching for nearest slot machine");
                 // Try to find the nearest reachable slot machine
-                var machine = SlotMachineHelper.FindNearestSlotMachine(targetPosition, MaxSearchDistance * 2f);
+                var machine = CasinoGameRegistry.FindNearestSlotMachine(targetPosition, MaxSearchDistance * 2f);
                 if (machine != null)
                 {
                     // Check if this machine is reachable
-                    if (npc.Movement.CanGetTo(machine.transform.position))
+                    if (npc.Movement.CanGetTo(machine.Position))
                     {
-                        targetPosition = machine.transform.position;
+                        targetPosition = machine.Position;
                     }
                     else
                     {
@@ -315,10 +315,10 @@ namespace S1API.Entities.Schedule
             {
                 Logger.Warning($"[{npc.ID}] NPC can't pathfind to target, searching for alternative");
                 // NPC can't reach the destination - try to find the nearest slot machine instead
-                var machine = SlotMachineHelper.FindNearestSlotMachine(targetPosition, maxDistance * 2f);
+                var machine = CasinoGameRegistry.FindNearestSlotMachine(targetPosition, maxDistance * 2f);
                 if (machine != null)
                 {
-                    targetPosition = machine.transform.position;
+                    targetPosition = machine.Position;
                 }
                 else
                 {

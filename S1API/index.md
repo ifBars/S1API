@@ -70,7 +70,7 @@ _layout: landing
     </a>
     <a class="s1-card" href="docs/items.md">
       <h3>Items</h3>
-      <p>Register custom storable, additive, buildable, clothing, and equippable item definitions.</p>
+      <p>Register custom storable, furniture, additive, clothing, and equippable item definitions.</p>
     </a>
     <a class="s1-card" href="docs/products-system.md">
       <h3>Products</h3>
@@ -83,10 +83,6 @@ _layout: landing
     <a class="s1-card" href="docs/cutscenes.md">
       <h3>Cutscenes</h3>
       <p>Play local camera-driven cinematics with cross-runtime cleanup, skip controls, fades, and title cards.</p>
-    </a>
-    <a class="s1-card" href="docs/law-enforcement.md">
-      <h3>Law enforcement</h3>
-      <p>Use checkpoint, curfew, patrol, pursuit, and dispatch abstractions for police-oriented mods.</p>
     </a>
   </div>
 </section>

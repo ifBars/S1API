@@ -25,6 +25,53 @@ This page collects the main builder methods, advanced item-instance notes, and i
 - `WithUseCallback(callback)` - Registers a callback when the item is used
 - `Build()` - Finalizes and returns the equippable
 
+## FurnitureDefinitionBuilder Methods
+
+- `FurnitureCreator.CloneFrom(donor)` - Starts a presentation-only variant from native grid or surface furniture
+- `WithBasicInfo(id, name, description)` - Sets the stable ID and player-facing text
+- `WithModel(model)` - Supplies the model cloned into all native furniture representations
+- `ConfigureModel(callback)` - Modifies the isolated model owned by a `CloneFrom` builder
+- `WithPlacement(mode)` - Selects grid or surface placement
+- `WithFootprint(width, depth)` - Sets a grid footprint in 0.5 metre tiles
+- `WithSurfacePlacement(types, allowRotation)` - Selects wall/roof compatibility
+- `WithBuildSound(soundType)` - Selects the native completion sound; plastic furniture uses the metal fallback
+- `WithPricing(basePrice, resellMultiplier)` - Configures economic properties
+- `WithStackLimit(limit)` - Sets the inventory stack limit
+- `WithIcon(sprite)` / `WithGeneratedIcon(resolution)` - Configures the inventory icon
+- `Build()` - Composes the native prefabs, registers, and returns the furniture definition
+
+## Custom ghosts for cloned buildables
+
+Use `WithGhostVisual(visualFactory, replaceExistingVisual)` when a buildable cloned from a native
+machine or station needs a different placement model. Furniture created through `FurnitureCreator`
+does not call this method: `WithModel(...)` automatically supplies its placed, stored, icon, and
+ghost visuals.
+
+```csharp
+GameObject ghostModel = LoadMachineModel();
+ghostModel.SetActive(false);
+
+var machine = BuildableItemCreator.CloneFrom("brickpress")
+    .WithBasicInfo(
+        "my-mod:tablet-press",
+        "Tablet Press",
+        "A compact manual tablet press.",
+        ItemCategory.Equipment)
+    .WithGhostVisual(
+        parent => Object.Instantiate(ghostModel, parent, false),
+        replaceExistingVisual: true)
+    .Build();
+```
+
+The factory runs on Unity's main thread whenever the native grid, procedural-grid, or surface
+placement system creates a ghost. It must create and return a fresh `GameObject`; do not return the
+shared source object. S1API parents the result when necessary, activates it, and disables its
+colliders, navigation, networking, canvases, and lights so it behaves as a placement visual.
+
+Set `replaceExistingVisual: true` when the custom visual replaces the cloned native model. Buildables
+that do not call this method retain the game's normal ghost behavior. If the factory throws or
+returns `null`, S1API removes the partial visual and restores any inherited renderers it hid.
+
 ## Advanced: Custom Item Instances
 
 For items with custom runtime state, such as extra fields that must serialize, you will need to:
@@ -45,6 +92,7 @@ For items with custom runtime state, such as extra fields that must serialize, y
 ## See Also
 
 - [Item Registration & Basics](item-registration-basics.md)
+- [Custom Furniture](furniture-items.md)
 - [Runtime Additives](runtime-additives.md)
 - [Equippable Items](equippable-items.md)
 - [Avatar Equippable Prefabs](avatar-equippable-prefabs.md)

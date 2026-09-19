@@ -1,5 +1,4 @@
 using System;
-using System.Runtime.CompilerServices;
 using S1API.Entities;
 using S1API.Entities.NPCs;
 using S1API.Products;
@@ -61,7 +60,7 @@ public sealed class ProductEffectCallbackTests : IDisposable
     [Fact]
     public void NpcClearCallbackInvokesAndCanAllowNativeFallthrough()
     {
-        var npc = (NPC)RuntimeHelpers.GetUninitializedObject(typeof(DanSamwell));
+        var npc = (NPC)TestObjectFactory.CreateUninitialized(typeof(DanSamwell));
         var clearCount = 0;
 
         ProductManager.SetNpcEffectClearCallback("test_npc_clear", _ => clearCount++, allowDefaultEffect: true);
@@ -75,7 +74,7 @@ public sealed class ProductEffectCallbackTests : IDisposable
     public void MissingClearCallbackUsesNativeFallthrough()
     {
         var player = CreatePlayer();
-        var npc = (NPC)RuntimeHelpers.GetUninitializedObject(typeof(DanSamwell));
+        var npc = (NPC)TestObjectFactory.CreateUninitialized(typeof(DanSamwell));
 
         Assert.False(ProductManager.TryInvokeEffectClearCallback("missing", player, out var playerAllowDefault));
         Assert.False(ProductManager.TryInvokeNpcEffectClearCallback("missing", npc, out var npcAllowDefault));
@@ -106,7 +105,7 @@ public sealed class ProductEffectCallbackTests : IDisposable
     public void ResetClearCallbacksRemovesPlayerAndNpcRegistrations()
     {
         var player = CreatePlayer();
-        var npc = (NPC)RuntimeHelpers.GetUninitializedObject(typeof(DanSamwell));
+        var npc = (NPC)TestObjectFactory.CreateUninitialized(typeof(DanSamwell));
 
         ProductManager.SetEffectClearCallback("test_reset_player", _ => { });
         ProductManager.SetNpcEffectClearCallback("test_reset_npc", _ => { });
@@ -169,5 +168,5 @@ public sealed class ProductEffectCallbackTests : IDisposable
     }
 
     private static Player CreatePlayer() =>
-        (Player)RuntimeHelpers.GetUninitializedObject(typeof(Player));
+        TestObjectFactory.CreateUninitialized<Player>();
 }

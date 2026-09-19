@@ -34,7 +34,7 @@ public sealed class WarehouseSupplier : NPC
 }
 ```
 
-`WithSupplierDefaults(...)` calls `EnsureSupplier()` for you. Call `EnsureSupplier()` directly only when you want the supplier role with default data.
+`IsSupplier` is the role declaration. `WithSupplierDefaults(...)` only supplies optional order, listing, and message configuration; omit it when the native defaults are sufficient.
 
 The string overload of `WithDeliveryItem(...)` is declaration-order safe: S1API
 stores the stable ID during NPC prefab discovery and resolves it when supplier
@@ -52,7 +52,7 @@ storable to appear in the supplier shop. You can also pass an already registered
 - A custom NPC cannot be both a supplier and a dealer. Choose one native root role per NPC type.
 - `WithOrderLimits(minimum, maximum)` requires finite values, `minimum >= 0`, `maximum > 0`, and `maximum >= minimum`.
 - Every delivery listing must reference a storable item. Register custom items before S1API configures the NPC prefab.
-- Use a permanent, unique ID in `WithIdentity(...)`. S1API derives persistent supplier infrastructure from that ID, so changing it breaks continuity with existing saves.
+- Use a permanent, unique ID in `WithIdentity(...)`. S1API derives persistent supplier infrastructure from that ID, so changing it breaks continuity with existing saves. When a released supplier must adopt a new runtime NPC ID, opt in to `WithPersistentId("old_supplier_id")` in the supplier defaults. The runtime NPC ID changes while the generated shop, delivery vehicle, and stash keep their former persistent identities. New suppliers should omit this migration-only option.
 - Configure supplier defaults in `ConfigurePrefab`, not in `OnCreated`. This keeps host, client, and saved-game prefab data consistent.
 
 S1API creates the native meeting action and supplier-owned stash, shop, and delivery vehicle behind the public API. Do not copy or assign native supplier scene objects yourself.

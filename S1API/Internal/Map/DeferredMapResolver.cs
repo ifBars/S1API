@@ -17,6 +17,8 @@ namespace S1API.Internal.Map
         private static readonly List<DeferredLookup> PendingLookups = new List<DeferredLookup>();
         private static bool MainSceneLoaded = false;
 
+        internal static bool IsMainSceneReady => MainSceneLoaded;
+
         /// <summary>
         /// Registers a deferred lookup that will be resolved when Main scene loads.
         /// </summary>

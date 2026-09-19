@@ -62,7 +62,6 @@ George and Molly's House
 Fish Warehouse
 Cafe
 Pillville
-Casino
 Pawn Shop
 Upscale Apartments
 Community Center

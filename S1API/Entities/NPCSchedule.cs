@@ -2,10 +2,12 @@
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1GameTime = Il2CppScheduleOne.GameTime;
 using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
+using S1Behaviour = Il2CppScheduleOne.NPCs.Behaviour;
 #elif MONOMELON
 using S1NPCs = ScheduleOne.NPCs;
 using S1GameTime = ScheduleOne.GameTime;
 using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
+using S1Behaviour = ScheduleOne.NPCs.Behaviour;
 #endif
 
 using System;
@@ -51,6 +53,7 @@ namespace S1API.Entities
         {
             EnsureManager();
             Manager?.EnableSchedule();
+            ScheduleBehaviour?.Enable_Server();
         }
 
         /// <summary>
@@ -59,7 +62,11 @@ namespace S1API.Entities
         public void Disable()
         {
             Manager?.DisableSchedule();
+            ScheduleBehaviour?.Disable_Server();
         }
+
+        private S1Behaviour.ScheduleBehaviour? ScheduleBehaviour =>
+            NPC.gameObject.GetComponentInChildren<S1Behaviour.ScheduleBehaviour>(true);
 
         /// <summary>
         /// Initializes/sorts the order of the schedules on this NPC.
@@ -166,10 +173,10 @@ namespace S1API.Entities
         /// </summary>
         /// <remarks>
         /// Schedule I 0.4.6 removed <c>NPCSignal_WaitForDelivery</c>. Customer deal attendance is
-        /// configured automatically by <see cref="NPCPrefabBuilder.EnsureCustomer"/>. This method
+        /// configured automatically when <see cref="NPC.IsCustomer"/> is <c>true</c>. This method
         /// now performs no runtime work and logs one compatibility warning per process.
         /// </remarks>
-        [Obsolete("NPCSignal_WaitForDelivery was removed in game version 0.4.6. Customer deal attendance is configured automatically by EnsureCustomer().")]
+        [Obsolete("NPCSignal_WaitForDelivery was removed in game version 0.4.6. Override NPC.IsCustomer; customer deal attendance is configured automatically.")]
         public void EnsureDealSignal()
         {
             if (_loggedRemovedDealSignal)

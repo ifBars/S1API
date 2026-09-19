@@ -26,7 +26,8 @@ namespace S1API.Internal.Products
     /// <summary>INTERNAL: Owns the host-authoritative manifest handshake.</summary>
     internal static class CustomProductManifestRuntime
     {
-        private const int HandshakeTimeoutSeconds = 15;
+        private const int ClientManifestTimeoutSeconds = 15;
+        internal const int HostAcknowledgementTimeoutSeconds = 60;
         private static readonly object Gate = new object();
         private static readonly Dictionary<int, PendingHostData>
             PendingHostDataByConnection =
@@ -46,6 +47,7 @@ namespace S1API.Internal.Products
         private static bool _clientLifecycleSubscribed;
         private static bool _clientSessionActive;
         private static bool _clientDefinitionsReady;
+        private static bool _clientManifestReceived;
         private static bool _hostActive;
         private static bool _hostManifestReady;
         private static bool _hostRequiresValidation;
@@ -150,8 +152,7 @@ namespace S1API.Internal.Products
                     _hostPayload = manifest.Serialize(_sessionId);
                     _hostHash = manifest.CompatibilityHash;
                     _hostEntryCount = manifest.Entries.Length;
-                    _hostRequiresValidation = manifest.Entries.Length != 0 ||
-                        manifest.MixingProfiles.Length != 0;
+                    _hostRequiresValidation = RequiresValidation(manifest);
                 }
                 catch (Exception exception)
                 {
@@ -198,8 +199,7 @@ namespace S1API.Internal.Products
                 _hostPayload = manifest.Serialize(_sessionId);
                 _hostHash = manifest.CompatibilityHash;
                 _hostEntryCount = manifest.Entries.Length;
-                _hostRequiresValidation = manifest.Entries.Length != 0 ||
-                    manifest.MixingProfiles.Length != 0;
+                _hostRequiresValidation = RequiresValidation(manifest);
                 Info("host manifest refreshed after dynamic custom-product registration; entries=" +
                     _hostEntryCount);
             }
@@ -215,6 +215,7 @@ namespace S1API.Internal.Products
             {
                 _clientSessionActive = true;
                 _clientDefinitionsReady = false;
+                _clientManifestReceived = false;
                 _pendingClientManifest = null;
                 _localClientManifest = null;
                 ClientGate.Begin(requiresValidation: true);
@@ -304,6 +305,7 @@ namespace S1API.Internal.Products
             {
                 _clientSessionActive = false;
                 _clientDefinitionsReady = false;
+                _clientManifestReceived = false;
                 _pendingClientManifest = null;
                 _localClientManifest = null;
                 ClientGate.End();
@@ -343,7 +345,11 @@ namespace S1API.Internal.Products
             var rejectedConnections = new List<PendingConnection>();
             lock (Gate)
             {
-                rejectClient = ClientGate.IsWaiting && now >= _clientDeadline;
+                rejectClient = ShouldRejectClientForMissingManifest(
+                    ClientGate.IsWaiting,
+                    _clientManifestReceived,
+                    now,
+                    _clientDeadline);
                 if (rejectClient)
                     ClientGate.End();
 
@@ -388,14 +394,28 @@ namespace S1API.Internal.Products
                 }
 
                 bool authorized = ClientGate.AuthorizePlayerDataRequest(request);
-                if (!authorized)
+                if (ShouldStartClientManifestDeadline(
+                        authorized,
+                        _clientDeadline))
                 {
-                    _clientDeadline = DateTime.UtcNow.AddSeconds(HandshakeTimeoutSeconds);
+                    _clientDeadline = DateTime.UtcNow.AddSeconds(ClientManifestTimeoutSeconds);
                     Info("client player-data request deferred until manifest validation");
                 }
                 return authorized;
             }
         }
+
+        internal static bool ShouldStartClientManifestDeadline(
+            bool authorized,
+            DateTime currentDeadline) =>
+            !authorized && currentDeadline == DateTime.MaxValue;
+
+        internal static bool ShouldRejectClientForMissingManifest(
+            bool isWaiting,
+            bool manifestReceived,
+            DateTime now,
+            DateTime deadline) =>
+            isWaiting && !manifestReceived && now >= deadline;
 
         internal static bool AuthorizeHostPlayerData(
             object player,
@@ -586,7 +606,7 @@ namespace S1API.Internal.Products
                 PendingConnections[connectionId] = new PendingConnection(
                     connectionId,
                     connection,
-                    DateTime.UtcNow.AddSeconds(HandshakeTimeoutSeconds));
+                    DateTime.UtcNow.AddSeconds(HostAcknowledgementTimeoutSeconds));
             }
 
             try
@@ -696,6 +716,7 @@ namespace S1API.Internal.Products
             {
                 if (!_clientSessionActive)
                     return;
+                _clientManifestReceived = true;
                 if (!_clientDefinitionsReady)
                 {
                     if (_pendingClientManifest != null &&
@@ -754,7 +775,7 @@ namespace S1API.Internal.Products
                     return;
                 _localClientManifest = localManifest;
                 _clientDefinitionsReady = true;
-                ClientGate.Begin(localManifest.Entries.Length != 0);
+                ClientGate.Begin(RequiresValidation(localManifest));
                 pending = _pendingClientManifest;
                 _pendingClientManifest = null;
             }
@@ -764,6 +785,11 @@ namespace S1API.Internal.Products
             if (pending != null)
                 ProcessManifest(pending);
         }
+
+        internal static bool RequiresValidation(
+            CustomProductManifestData manifest) =>
+            manifest.Entries.Length != 0 ||
+            manifest.MixingProfiles.Length != 0;
 
         private static void ProcessManifest(CustomProductManifestData manifest)
         {
@@ -930,6 +956,7 @@ namespace S1API.Internal.Products
                 ClientGate.End();
                 _clientSessionActive = false;
                 _clientDefinitionsReady = false;
+                _clientManifestReceived = false;
                 _pendingClientManifest = null;
                 _localClientManifest = null;
             }

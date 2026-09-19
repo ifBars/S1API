@@ -21,7 +21,7 @@ Follow this order:
 
 Keep these responsibilities separate:
 
-- `ConfigurePrefab(...)`: identity, icon, spawn position, relationship defaults, customer defaults, dealer defaults, inventory defaults, schedule, and required `Ensure*` components.
+- `ConfigurePrefab(...)`: identity, icon, spawn position, relationship defaults, customer defaults, dealer defaults, inventory defaults, schedule, and action-specific `Ensure*` calls such as `plan.EnsureDealSignal()`. Role infrastructure comes automatically from `IsCustomer`, `IsDealer`, and `IsSupplier`; do not add `EnsureCustomer()`, `EnsureDealer()`, or `EnsureSupplier()`.
 - `OnCreated()`: `base.OnCreated()`, `Appearance.Build()`, `Schedule.Enable()`, `Schedule.InitializeActions()` when needed, dialogue wiring, event subscriptions, text messages, and runtime state.
 
 Do not move persistent customer, dealer, relationship, or schedule defaults into runtime code.
@@ -35,9 +35,9 @@ Do not move persistent customer, dealer, relationship, or schedule defaults into
 
 ### Customer vs dealer
 
-- Customer NPCs need `EnsureCustomer()` before `WithCustomerDefaults(...)`.
+- Customer NPCs declare `public override bool IsCustomer => true;`, then optionally use `WithCustomerDefaults(...)`.
 - Customer schedules usually need `plan.EnsureDealSignal()`.
-- Dealer NPCs need `public override bool IsDealer => true;` plus `EnsureDealer()` and `WithDealerDefaults(...)`.
+- Dealer NPCs declare `public override bool IsDealer => true;`, then optionally use `WithDealerDefaults(...)`.
 - Dealer schedules need `plan.EnsureDealSignal()` to function correctly, and may use `plan.HandleDeal(...)` when that better fits the role.
 
 ## Hard Rules
@@ -149,7 +149,7 @@ When producing code or guidance, include:
 ## Common Pitfalls
 
 - Setting appearance defaults but forgetting `Appearance.Build()`.
-- Calling `WithCustomerDefaults(...)` without `EnsureCustomer()`.
+- Making `IsCustomer`, `IsDealer`, or `IsSupplier` depend on constructor or initialized field state.
 - Calling `WithDealerDefaults(...)` without `IsDealer => true`.
 - Omitting `EnsureDealSignal()` for customer or dealer schedules that need deals/contracts.
 - Using advanced location-based actions without the matching `Ensure*` call.

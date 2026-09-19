@@ -1,4 +1,5 @@
 using System;
+using S1API.Internal.Products;
 using S1API.Products;
 using Xunit;
 
@@ -20,11 +21,61 @@ namespace S1API.Tests.Products
 
             Assert.Same(profile, ProductMixingProfiles.Get(kind));
             Assert.Equal(ProductMixingMap.Marijuana, profile.MixerMap);
+            Assert.False(profile.UsePropertyColorMixing);
             ProductMixingOutputDefinition output = profile.OutputFactory(
                 new ProductMixingOutput("example:output", "Named Mix", "example:source", kind, 20f));
             Assert.Equal("Named Mix Output", output.Name);
             Assert.Same(kind, output.ProductKind);
             Assert.Equal(30f, output.Price);
+        }
+
+        [Fact]
+        public void PropertyColorMixingIsExplicitlyOptIn()
+        {
+            ProductKind kind = CreateKind();
+
+            ProductMixingProfile profile = new ProductMixingProfileBuilder(kind)
+                .WithMixerMap(ProductMixingMap.Cocaine)
+                .WithPropertyColorMixing()
+                .WithOutputFactory(input => new ProductMixingOutputDefinition(
+                    input.MixName,
+                    input.SourceKind,
+                    input.SourcePrice))
+                .Build();
+
+            Assert.True(profile.UsePropertyColorMixing);
+        }
+
+        [Fact]
+        public void PropertyColorMixingParticipatesInMultiplayerCompatibility()
+        {
+            ProductKind kind = CreateKind();
+            ProductMixingProfile baseline = new ProductMixingProfileBuilder(kind)
+                .WithMixerMap(ProductMixingMap.Cocaine)
+                .WithOutputFactoryCompatibility("mixingtests:factory", 1)
+                .WithOutputFactory(input => new ProductMixingOutputDefinition(
+                    input.MixName,
+                    input.SourceKind,
+                    input.SourcePrice))
+                .Build();
+            ProductKind coloredKind = CreateKind();
+            ProductMixingProfile colored = new ProductMixingProfileBuilder(coloredKind)
+                .WithMixerMap(ProductMixingMap.Cocaine)
+                .WithPropertyColorMixing()
+                .WithOutputFactoryCompatibility("mixingtests:factory", 1)
+                .WithOutputFactory(input => new ProductMixingOutputDefinition(
+                    input.MixName,
+                    input.SourceKind,
+                    input.SourcePrice))
+                .Build();
+
+            var baselineEntry = CustomProductMixingProfileManifestEntryData.Create(baseline);
+            var coloredEntry = CustomProductMixingProfileManifestEntryData.Create(colored);
+            coloredEntry.ProductKindId = baselineEntry.ProductKindId;
+
+            Assert.Equal(
+                "property-color mixing strategy differs",
+                baselineEntry.DescribeMismatch(coloredEntry));
         }
 
         [Fact]

@@ -26,14 +26,19 @@ public sealed class NpcVisibilityPolicyTests
     }
 
     [Theory]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    public void LoadedVisibilityIsDeferredForSuppliersUntilAfterSpawn(
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    public void LoadedVisibilityIsAppliedBeforeSpawnOnlyForPhysicalNonSuppliers(
+        bool isPhysical,
         bool isSupplier,
         bool expected)
     {
         Assert.Equal(
             expected,
-            NPC.ShouldApplyLoadedVisibilityBeforeSpawn(isSupplier));
+            NPC.ShouldApplyLoadedVisibilityBeforeSpawn(
+                isPhysical,
+                isSupplier));
     }
 }

@@ -255,8 +255,12 @@ namespace S1API.Map
             if (byTypeName != null)
                 return byTypeName;
 
-            // If still not found and we're in Menu scene, create deferred wrapper
-            if (DeferredMapResolver.IsMenuScene())
+            // NPC prefab configuration can run after Main becomes the active scene but before
+            // the map registry has finished populating. Keep typed identifiers deferred until
+            // the load-complete resolver has established that the map is ready.
+            if (ShouldDeferTypedLookup(
+                    DeferredMapResolver.IsMenuScene(),
+                    DeferredMapResolver.IsMainSceneReady))
             {
                 string deferredName = !string.IsNullOrEmpty(name) ? name : t.Name;
                 var deferredWrapper = new Building(t, deferredName);
@@ -274,6 +278,9 @@ namespace S1API.Map
 
             return null;
         }
+
+        internal static bool ShouldDeferTypedLookup(bool isMenuScene, bool isMainSceneReady) =>
+            isMenuScene || !isMainSceneReady;
 
         private static string? TryGetNameFromIdentifier(Type t)
         {

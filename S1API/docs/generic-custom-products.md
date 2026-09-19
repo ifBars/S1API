@@ -86,7 +86,7 @@ appropriate, or explicitly select `WithNativeMixerMap(...)` for a logical kind
 that has no base-game enum. Neither option changes the logical kind's identity.
 
 To give the logical kind a Product Manager section, separately register
-[`ProductKindMetadata`](product-kinds.md#register-presentation-and-product-manager-metadata).
+[`ProductKindMetadata`](product-kinds.md#add-optional-presentation-and-product-manager-metadata).
 This catalog metadata does not change definition construction, discovery, or
 listing.
 

@@ -12,6 +12,7 @@ using S1EntityFramework = ScheduleOne.EntityFramework;
 
 using HarmonyLib;
 using S1API.Building;
+using S1API.Internal.Building;
 using S1API.Items;
 using S1API.Storage;
 using S1API.Logging;
@@ -26,6 +27,51 @@ namespace S1API.Internal.Patches
     internal static class BuildingPatches
     {
         private static readonly Log Logger = new Log("BuildingPatches");
+
+        [HarmonyPatch(typeof(S1Building.BuildStart_Grid), "CreateGhostModel")]
+        [HarmonyPostfix]
+        private static void CreateGridGhostModel_Postfix(
+            S1ItemFramework.BuildableItemDefinition itemDefinition,
+            S1EntityFramework.GridItem __result)
+        {
+            ConfigureGhostVisual(itemDefinition, __result);
+        }
+
+        [HarmonyPatch(typeof(S1Building.BuildStart_Surface), "CreateGhostModel")]
+        [HarmonyPostfix]
+        private static void CreateSurfaceGhostModel_Postfix(
+            S1ItemFramework.BuildableItemDefinition itemDefinition,
+            S1EntityFramework.SurfaceItem __result)
+        {
+            ConfigureGhostVisual(itemDefinition, __result);
+        }
+
+        [HarmonyPatch(typeof(S1Building.BuildStart_ProceduralGrid), "CreateGhostModel")]
+        [HarmonyPostfix]
+        private static void CreateProceduralGridGhostModel_Postfix(
+            S1ItemFramework.BuildableItemDefinition itemDefinition,
+            S1EntityFramework.ProceduralGridItem __result)
+        {
+            ConfigureGhostVisual(itemDefinition, __result);
+        }
+
+        private static void ConfigureGhostVisual(
+            S1ItemFramework.BuildableItemDefinition itemDefinition,
+            S1EntityFramework.BuildableItem ghost)
+        {
+            if (itemDefinition == null || ghost == null)
+                return;
+
+            try
+            {
+                BuildableGhostRuntime.TryConfigure(itemDefinition.ID, ghost.gameObject);
+            }
+            catch (System.Exception ex)
+            {
+                Logger.Error(
+                    $"Failed to configure placement ghost for buildable '{itemDefinition.ID}': {ex}");
+            }
+        }
 
         /// <summary>
         /// Patch for BuildManager.CreateGridItem - raises OnGridItemCreated event.
@@ -49,7 +95,6 @@ namespace S1API.Internal.Patches
                     storageWrapper = new StorageEntity(placeableStorage.StorageEntity, placeableStorage);
                 }
 
-                if (storageWrapper == null) return;
                 var args = new BuildEventArgs(itemInstance, __result.gameObject, storageWrapper);
                 BuildEvents.RaiseGridItemCreated(args);
             }
@@ -81,7 +126,6 @@ namespace S1API.Internal.Patches
                     storageWrapper = new StorageEntity(placeableStorage.StorageEntity, placeableStorage);
                 }
 
-                if (storageWrapper == null) return;
                 var args = new BuildEventArgs(itemInstance, __result.gameObject, storageWrapper);
                 BuildEvents.RaiseSurfaceItemCreated(args);
             }
@@ -113,7 +157,6 @@ namespace S1API.Internal.Patches
                     storageWrapper = new StorageEntity(placeableStorage.StorageEntity, placeableStorage);
                 }
 
-                if (storageWrapper == null) return;
                 var args = new BuildEventArgs(itemInstance, __instance.gameObject, storageWrapper);
                 BuildEvents.RaiseBuildableItemInitialized(args);
             }

@@ -4,7 +4,6 @@ using NativeProductDefinition = Il2CppScheduleOne.Product.ProductDefinition;
 using NativeProductDefinition = ScheduleOne.Product.ProductDefinition;
 #endif
 
-using System.Runtime.CompilerServices;
 using S1API.Internal.Products;
 using S1API.Products;
 
@@ -282,11 +281,7 @@ public sealed class ProductPresentationProfileRegistryTests : IDisposable
 
     private static NativeProductDefinition CreateDefinition()
     {
-        var definition =
-            (NativeProductDefinition)RuntimeHelpers.GetUninitializedObject(
-                typeof(NativeProductDefinition));
-        GC.SuppressFinalize(definition);
-        return definition;
+        return TestObjectFactory.CreateUninitialized<NativeProductDefinition>();
     }
 
     private static string CreateId()

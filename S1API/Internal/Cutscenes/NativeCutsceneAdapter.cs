@@ -1,9 +1,11 @@
 #if IL2CPPMELON
 using S1Cutscene = Il2CppScheduleOne.Cutscenes.Cutscene;
+using S1CutsceneCamera = Il2CppScheduleOne.Cutscenes.CutsceneCamera;
 using S1PlayerCamera = Il2CppScheduleOne.PlayerScripts.PlayerCamera;
 using S1PlayerSingleton = Il2CppScheduleOne.DevUtilities.PlayerSingleton<Il2CppScheduleOne.PlayerScripts.PlayerCamera>;
 #elif MONOMELON
 using S1Cutscene = ScheduleOne.Cutscenes.Cutscene;
+using S1CutsceneCamera = ScheduleOne.Cutscenes.CutsceneCamera;
 using S1PlayerCamera = ScheduleOne.PlayerScripts.PlayerCamera;
 using S1PlayerSingleton = ScheduleOne.DevUtilities.PlayerSingleton<ScheduleOne.PlayerScripts.PlayerCamera>;
 #endif
@@ -41,12 +43,13 @@ namespace S1API.Internal.Cutscenes
 
                 _cutscene = _host.AddComponent<S1Cutscene>();
                 _cutscene.Name = name;
-                _cutscene.CameraControl = _cameraControlObject.transform;
-                _cutscene.OverrideFOV = fov.HasValue;
+                var nativeCamera = _cameraControlObject.AddComponent<S1CutsceneCamera>();
+                Utils.ReflectionUtils.TrySetFieldOrProperty(nativeCamera, "_controlFoV", fov.HasValue);
                 if (fov.HasValue)
                 {
-                    _cutscene.CameraFOV = fov.Value;
+                    Utils.ReflectionUtils.TrySetFieldOrProperty(nativeCamera, "_fov", fov.Value);
                 }
+                _cutscene.SetActiveCameraControl(nativeCamera);
 
                 _nativeStateName = $"Cutscene ({name})";
                 _cutscene.Play();

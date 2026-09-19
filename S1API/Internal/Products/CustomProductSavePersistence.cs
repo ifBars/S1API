@@ -18,6 +18,7 @@ using System.IO;
 using Newtonsoft.Json;
 using S1API.Products;
 using S1API.Internal.Properties;
+using UnityEngine;
 
 namespace S1API.Internal.Products
 {
@@ -203,7 +204,19 @@ namespace S1API.Internal.Products
                 var packagingMetadata = new List<PackagingDefinition>();
                 foreach (NativePackagingDefinition item in packaging)
                     packagingMetadata.Add(new PackagingDefinition(item));
-                var metadata = new CustomProductDefinitionMetadata(kind, (Quality)data.DefaultQuality, packagingMetadata, template);
+                Color32? generatedMixColor = data.HasGeneratedMixColor
+                    ? new Color32(
+                        data.GeneratedMixColorR,
+                        data.GeneratedMixColorG,
+                        data.GeneratedMixColorB,
+                        data.GeneratedMixColorA)
+                    : null;
+                var metadata = new CustomProductDefinitionMetadata(
+                    kind,
+                    (Quality)data.DefaultQuality,
+                    packagingMetadata,
+                    template,
+                    generatedMixColor);
                 try
                 {
                     CustomProductDefinitionRegistry.Register(data.OwnerId, data.ProductId, data.ProductName, data.InitialPrice, native, metadata, data);

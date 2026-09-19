@@ -35,6 +35,7 @@ using S1API.Entities.Voices;
 using S1API.Entities.Relation;
 using S1API.Entities.Appearances.Base;
 using System.Collections.Generic;
+using System.Linq;
 using S1API.Internal.Entities;
 using S1API.Internal.Utils;
 using S1API.Logging;
@@ -57,6 +58,14 @@ namespace S1API.Entities
         private readonly GameObject prefabRoot;
         private readonly Type ownerType;
 
+        internal const int DealerAttendDealPriority = 5;
+        internal const string DealerHomeEventName = "DealerHomeEvent";
+        internal const bool BehaviourObjectsRemainActive = true;
+
+        internal static bool IsDealerHomeEventName(string? name) =>
+            string.Equals(name, DealerHomeEventName, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(name, "HomeEvent", StringComparison.OrdinalIgnoreCase);
+
         internal NPCPrefabBuilder(GameObject prefabRoot, Type ownerType)
         {
             this.prefabRoot = prefabRoot;
@@ -78,13 +87,23 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Adds customer behavior component to the NPC. Required before configuring customer defaults.
+        /// Ensures customer infrastructure for compatibility with existing prefab-builder declarations.
         /// </summary>
         /// <remarks>
-        /// Enables the NPC to act as a business customer that can buy products from the player.
+        /// Compatibility shim for existing mods. New NPC types should override <see cref="NPC.IsCustomer"/>.
         /// </remarks>
         /// <returns>The builder instance for fluent chaining.</returns>
-        public NPCPrefabBuilder EnsureCustomer()
+        [Obsolete("Override NPC.IsCustomer to return true instead.", false)]
+        public NPCPrefabBuilder EnsureCustomer() =>
+            DeclareCustomerCompatibility();
+
+        internal NPCPrefabBuilder DeclareCustomerCompatibility()
+        {
+            NPC.RegisterCustomerType(ownerType);
+            return EnsureCustomerInfrastructure();
+        }
+
+        internal NPCPrefabBuilder EnsureCustomerInfrastructure()
         {
             var customer = prefabRoot.GetComponent<S1Economy.Customer>();
             if (customer == null)
@@ -92,8 +111,6 @@ namespace S1API.Entities
                 customer = prefabRoot.AddComponent<S1Economy.Customer>();
                 customer.enabled = true;
             }
-            // Mark this NPC type as a Customer-bearing type so pre-registration adds Customer on template
-            NPC.RegisterCustomerType(ownerType);
             return this;
         }
 
@@ -247,9 +264,13 @@ namespace S1API.Entities
                 // Apply settings directly to Avatar component on prefab to prevent destruction issues
                 ApplyAvatarSettingsToPrefab(settings);
             }
-            catch
+            catch (Exception ex)
             {
-                // ignored
+                string ownerName = ownerType?.FullName ?? "<unknown-NPC-type>";
+                string assemblyName = ownerType?.Assembly.GetName().Name ?? "<unknown-assembly>";
+                Logger.Warning(
+                    $"[S1API][NPCAppearanceConfiguration] Failed to configure appearance defaults for " +
+                    $"'{ownerName}' from assembly '{assemblyName}': {ex.GetType().Name}: {ex.Message}");
             }
 
             return this;
@@ -321,10 +342,10 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Adds dealer behavior to the NPC. Required before configuring dealer defaults.
+        /// Ensures dealer infrastructure for compatibility with existing prefab-builder declarations.
         /// </summary>
         /// <remarks>
-        /// Enables the NPC to act as a dealer that sells products to assigned customers.
+        /// Compatibility shim for existing mods. New NPC types should override <see cref="NPC.IsDealer"/>.
         /// This marks the NPC type as dealer-capable; S1API will ensure the generated spawnable prefab
         /// has a Dealer-compatible NPC component before network registration when the selected base prefab
         /// does not already include one.
@@ -332,11 +353,18 @@ namespace S1API.Entities
         /// dealer functionality and ensure the messaging app displays the correct Dealer category badge.
         /// </remarks>
         /// <returns>The builder instance for fluent chaining.</returns>
-        public NPCPrefabBuilder EnsureDealer()
+        [Obsolete("Override NPC.IsDealer to return true instead.", false)]
+        public NPCPrefabBuilder EnsureDealer() =>
+            DeclareDealerCompatibility();
+
+        internal NPCPrefabBuilder DeclareDealerCompatibility()
         {
-            // Mark the type as dealer-capable; NPC prefab creation materializes the correct runtime component.
             NPC.RegisterDealerType(ownerType);
-            
+            return EnsureDealerInfrastructure();
+        }
+
+        internal NPCPrefabBuilder EnsureDealerInfrastructure()
+        {
             // Ensure required schedule components exist
             var mgr = EnsureScheduleManager();
 
@@ -355,20 +383,32 @@ namespace S1API.Entities
                 var go = new GameObject("DealerAttendDealBehaviour");
                 go.transform.SetParent(npcBehaviour.transform, false);
                 attendDeal = go.AddComponent<S1NPCsBehaviour.DealerAttendDealBehaviour>();
-                go.SetActive(false);
             }
+            attendDeal.gameObject.SetActive(BehaviourObjectsRemainActive);
             var baseNpcForDealer = prefabRoot.GetComponent<S1NPCs.NPC>();
             SetBehaviourRefs(attendDeal, npcBehaviour, baseNpcForDealer);
+            attendDeal.Name = "Attend deal";
+            attendDeal.Priority = DealerAttendDealPriority;
 
-            // Ensure NPCEvent_StayInBuilding exists for home behavior
-            var stayInBuilding = prefabRoot.GetComponentInChildren<S1NPCsSchedules.NPCEvent_StayInBuilding>(true);
-            if (stayInBuilding != null) return this;
+            // Keep the dealer's HomeEvent separate from mod-defined schedule actions. Dealer.OnTick
+            // toggles this object directly, so reusing an arbitrary StayInBuilding action makes the
+            // schedule and contract behaviour fight over the same doorway.
+            var stayInBuilding = prefabRoot
+                .GetComponentsInChildren<S1NPCsSchedules.NPCEvent_StayInBuilding>(true)
+                .FirstOrDefault(action => IsDealerHomeEventName(action?.gameObject?.name));
+            if (stayInBuilding == null)
             {
-                var go = new GameObject("StayInBuilding");
+                var go = new GameObject(DealerHomeEventName);
                 go.transform.SetParent(mgr.transform, false);
                 stayInBuilding = go.AddComponent<S1NPCsSchedules.NPCEvent_StayInBuilding>();
                 go.SetActive(false);
             }
+
+            ReflectionUtils.TrySetFieldOrProperty(stayInBuilding, "npc", baseNpcForDealer);
+            ReflectionUtils.TrySetFieldOrProperty(stayInBuilding, "schedule", mgr);
+            if (baseNpcForDealer != null
+                && CrossType.Is(baseNpcForDealer, out S1Economy.Dealer dealer))
+                dealer.HomeEvent = stayInBuilding;
 
             return this;
         }
@@ -452,33 +492,45 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Configures this NPC type to use the native supplier root.
+        /// Ensures supplier infrastructure for compatibility with existing prefab-builder declarations.
         /// </summary>
         /// <remarks>
+        /// Compatibility shim for existing mods. New NPC types should override <see cref="NPC.IsSupplier"/>.
         /// Supplier NPCs support dead-drop orders, supplier meetings, delivery unlocks, and debt tracking.
         /// S1API reserves a location-dialogue schedule action required by the native supplier lifecycle.
         /// A custom NPC cannot be both a dealer and a supplier.
         /// </remarks>
         /// <returns>The builder instance for fluent chaining.</returns>
-        public NPCPrefabBuilder EnsureSupplier()
+        [Obsolete("Override NPC.IsSupplier to return true instead.", false)]
+        public NPCPrefabBuilder EnsureSupplier() =>
+            DeclareSupplierCompatibility();
+
+        internal NPCPrefabBuilder DeclareSupplierCompatibility()
         {
             NPC.RegisterSupplierType(ownerType);
+            return EnsureSupplierInfrastructure();
+        }
+
+        internal NPCPrefabBuilder EnsureSupplierInfrastructure()
+        {
             SupplierRuntimeCoordinator.EnsurePrefabInfrastructure(prefabRoot);
             return this;
         }
 
         /// <summary>
-        /// Configures customer behavior defaults using the <see cref="CustomerDataBuilder"/>. Requires <see cref="EnsureCustomer"/> to be called first.
+        /// Configures customer behavior defaults using the <see cref="CustomerDataBuilder"/>.
         /// </summary>
         /// <remarks>
         /// Configure spending behavior, order frequency, customer standards, product preferences, and relationship requirements.
+        /// Override <see cref="NPC.IsCustomer"/> to declare customer capability. This method retains the
+        /// legacy implicit declaration behavior for source and behavioral compatibility.
         /// This configuration is essential for proper save/load behavior and must be done in <see cref="NPC.ConfigurePrefab"/>.
         /// </remarks>
         /// <param name="configure">Action to configure customer defaults using the builder.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithCustomerDefaults(Action<CustomerDataBuilder> configure)
         {
-            EnsureCustomer();
+            DeclareCustomerCompatibility();
             var customer = prefabRoot.GetComponent<S1Economy.Customer>();
             if (customer != null)
             {
@@ -559,17 +611,19 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Configures dealer behavior defaults using the <see cref="DealerDataBuilder"/>. Requires <see cref="EnsureDealer"/> to be called first.
+        /// Configures dealer behavior defaults using the <see cref="DealerDataBuilder"/>.
         /// </summary>
         /// <remarks>
         /// Configure dealer settings such as signing fee, commission cut, dealer type, quality restrictions, and deal tracking.
+        /// Override <see cref="NPC.IsDealer"/> to declare dealer capability. This method retains the
+        /// legacy implicit declaration behavior for source and behavioral compatibility.
         /// This configuration is essential for proper save/load behavior and must be done in <see cref="NPC.ConfigurePrefab"/>.
         /// </remarks>
         /// <param name="configure">Action to configure dealer defaults using the builder.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
         public NPCPrefabBuilder WithDealerDefaults(Action<DealerDataBuilder> configure)
         {
-            EnsureDealer();
+            DeclareDealerCompatibility();
             
             // Register dealer defaults for type-level application
             NPC.RegisterDealerDefaultsForType(ownerType, configure);
@@ -610,6 +664,10 @@ namespace S1API.Entities
         /// <summary>
         /// Configures native supplier data for this NPC type.
         /// </summary>
+        /// <remarks>
+        /// Override <see cref="NPC.IsSupplier"/> to declare supplier capability. This method retains the
+        /// legacy implicit declaration behavior for source and behavioral compatibility.
+        /// </remarks>
         /// <param name="configure">Action that defines order limits, delivery items, and supplier messages.</param>
         /// <returns>The builder instance for fluent chaining.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="configure"/> is null.</exception>
@@ -618,7 +676,7 @@ namespace S1API.Entities
             if (configure == null)
                 throw new ArgumentNullException(nameof(configure));
 
-            EnsureSupplier();
+            DeclareSupplierCompatibility();
             NPC.RegisterSupplierDefaultsForType(ownerType, configure);
             return this;
         }
@@ -664,8 +722,8 @@ namespace S1API.Entities
                     var go = new GameObject("SmokeBreakBehaviour");
                     go.transform.SetParent(npcBehaviour.gameObject.transform, false);
                     smokeBreak = go.AddComponent<S1NPCsBehaviour.SmokeBreakBehaviour>();
-                    go.SetActive(false);
                 }
+                smokeBreak.gameObject.SetActive(BehaviourObjectsRemainActive);
                 smokeBreak.Name = "SmokeBreakBehaviour";
 
                 var smokeCigarette = smokeBreak.GetComponentInChildren<S1NPCsOther.SmokeCigarette>(true);
@@ -877,8 +935,8 @@ namespace S1API.Entities
                     var go = new GameObject("GraffitiBehaviour");
                     go.transform.SetParent(npcBehaviour.gameObject.transform, false);
                     graffiti = go.AddComponent<S1NPCsBehaviour.GraffitiBehaviour>();
-                    go.SetActive(false);
                 }
+                graffiti.gameObject.SetActive(BehaviourObjectsRemainActive);
                 graffiti.Name = "GraffitiBehaviour";
 
                 var sprayPaint = graffiti.GetComponentInChildren<S1NPCsOther.SprayPaint>(true);
@@ -1202,10 +1260,8 @@ namespace S1API.Entities
                 try
                 {
                     var baseNpc = prefabRoot.GetComponent<S1NPCs.NPC>();
-                    var npcField = typeof(T).GetField("npc", BindingFlags.NonPublic | BindingFlags.Instance);
-                    npcField?.SetValue(comp, baseNpc);
-                    var schedField = typeof(T).GetField("schedule", BindingFlags.NonPublic | BindingFlags.Instance);
-                    schedField?.SetValue(comp, mgr);
+                    Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(comp, "npc", baseNpc);
+                    Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(comp, "schedule", mgr);
                 }
                 catch (Exception ex)
                 {
@@ -1235,6 +1291,7 @@ namespace S1API.Entities
                 component = behaviourObject.AddComponent<S1NPCsBehaviour.CustomerAttendDealBehaviour>();
             }
 
+            component.gameObject.SetActive(BehaviourObjectsRemainActive);
             ReflectionUtils.TrySetFieldOrProperty(component, "EnabledOnAwake", false);
             ReflectionUtils.TrySetFieldOrProperty(component, "Name", "Customer attend deal");
             ReflectionUtils.TrySetFieldOrProperty(component, "Priority", 4);

@@ -10,15 +10,20 @@ using S1Product = ScheduleOne.Product;
 namespace S1API.Products
 {
     /// <summary>
-    /// Provides functionality to wrap and convert generic product definitions into their specific type-derived definitions.
+    /// Selects the most specific API wrapper for a registered native product definition.
     /// </summary>
+    /// <remarks>
+    /// The wrapper exposes native-family types when available and returns
+    /// <see cref="CustomProductDefinition"/> only for definitions registered through S1API's
+    /// custom-product metadata. It never changes the native definition or its identity.
+    /// </remarks>
     public static class ProductDefinitionWrapper
     {
         /// <summary>
-        /// Converts a generic <see cref="ProductDefinition"/> into its corresponding typed wrapper.
+        /// Returns the most specific wrapper available for a product definition.
         /// </summary>
-        /// <param name="def">The raw product definition to be processed and converted.</param>
-        /// <returns>A wrapped instance of <see cref="ProductDefinition"/> with type-specific methods and properties, or the input definition if no specific wrapper applies.</returns>
+        /// <param name="def">The product definition to classify.</param>
+        /// <returns>A typed wrapper, or <paramref name="def"/> when no more specific wrapper applies.</returns>
         public static ProductDefinition Wrap(ProductDefinition def)
         {
             return Wrap(def.S1ProductDefinition, def);

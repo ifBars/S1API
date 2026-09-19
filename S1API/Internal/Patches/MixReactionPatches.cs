@@ -17,6 +17,7 @@ using HarmonyLib;
 using S1API.Logging;
 using S1API.Products;
 using S1API.Internal.Products;
+using S1API.Internal.Utils;
 
 namespace S1API.Internal.Patches
 {
@@ -55,7 +56,7 @@ namespace S1API.Internal.Patches
 
                 // The game can return a shared list (e.g. a product definition's Properties for a named recipe),
                 // so never mutate __result directly. Clone once, only if a rule actually fires.
-            EffectList? working = null;
+                EffectList? working = null;
 
                 foreach (var rule in rules)
                 {
@@ -173,14 +174,26 @@ namespace S1API.Internal.Patches
                 if (CustomProductDefinitionRegistry.IsRegistered(mixID))
                     return false;
 
-                S1Product.PropertyItemDefinition? ingredient =
-                    S1Registry.GetItem(ingredientID) as S1Product.PropertyItemDefinition;
-                if (ingredient == null || ingredient.Properties == null || ingredient.Properties.Count != 1)
+                object? ingredientItem = S1Registry.GetItem(ingredientID);
+                if (ingredientItem == null ||
+                    !CrossType.Is(
+                        ingredientItem,
+                        out S1Product.PropertyItemDefinition ingredient))
                 {
-                    Logger.Error("Custom product mix '" + productID + "' has no valid single-property ingredient '" + ingredientID + "'.");
+                    Logger.Error("Custom product mix '" + productID + "' could not resolve ingredient '" + ingredientID + "' as a property item.");
                     return false;
                 }
 
+                if (ingredient.Properties == null ||
+                    !CustomProductMixingIngredientContract.HasUsableProperty(
+                        ingredient.Properties.Count))
+                {
+                    Logger.Error("Custom product mix '" + productID + "' resolved ingredient '" + ingredientID + "' without any properties.");
+                    return false;
+                }
+
+                // Match the native ProductManager contract: mixing ingredients only need
+                // one usable property, and the first property drives the calculation.
                 EffectList properties = S1Effects.EffectMixCalculator.MixProperties(
                     source.Properties,
                     ingredient.Properties[0],
@@ -211,6 +224,31 @@ namespace S1API.Internal.Patches
                     packaging.Add(metadata.ValidPackaging[i].S1PackagingDefinition);
 
                 S1Product.ProductDefinition template = metadata.RepresentationTemplate ?? source;
+                UnityEngine.Color32? generatedMixColor = null;
+                if (profile.UsePropertyColorMixing)
+                {
+                    var colorSamples =
+                        new System.Collections.Generic.List<
+                            ProductMixingColorSample>(resolvedProperties.Count);
+                    for (int i = 0; i < resolvedProperties.Count; i++)
+                    {
+                        UnityEngine.Color32 propertyColor =
+                            resolvedProperties[i].ProductColor;
+                        colorSamples.Add(
+                            new ProductMixingColorSample(
+                                (int)resolvedProperties[i].Tier,
+                                new ProductMixingColorValue(
+                                    propertyColor.r,
+                                    propertyColor.g,
+                                    propertyColor.b,
+                                    propertyColor.a)));
+                    }
+
+                    generatedMixColor =
+                        ProductMixingColorContract.CalculatePrimaryColor(
+                            profile.MixerMap,
+                            colorSamples).ToColor32();
+                }
                 S1Product.ProductDefinition generated = CustomProductDefinitionFactory.Create(
                     mixID,
                     output.Name,
@@ -228,7 +266,8 @@ namespace S1API.Internal.Patches
                     output.ProductKind,
                     metadata.DefaultQuality,
                     metadata.ValidPackaging,
-                    template);
+                    template,
+                    generatedMixColor);
                 var saveDescriptor = new CustomProductSaveDescriptorData
                 {
                     ProductId = mixID,
@@ -246,7 +285,12 @@ namespace S1API.Internal.Patches
                     NpcEffectDurationSeconds = source.NPCEffectDuration,
                     PropertyIds = resolvedProperties.ConvertAll(property => property.ID).ToArray(),
                     PackagingIds = metadata.ValidPackaging.Select(packagingDefinition => packagingDefinition.ID).ToArray(),
-                    IsGeneratedMix = true
+                    IsGeneratedMix = true,
+                    HasGeneratedMixColor = generatedMixColor.HasValue,
+                    GeneratedMixColorR = generatedMixColor?.r ?? 0,
+                    GeneratedMixColorG = generatedMixColor?.g ?? 0,
+                    GeneratedMixColorB = generatedMixColor?.b ?? 0,
+                    GeneratedMixColorA = generatedMixColor?.a ?? 0
                 };
                 try
                 {
@@ -258,6 +302,8 @@ namespace S1API.Internal.Patches
                         generated,
                         generatedMetadata,
                         saveDescriptor);
+
+                    CompleteGeneratedMixCreation(generated);
                 }
                 catch
                 {
@@ -272,6 +318,32 @@ namespace S1API.Internal.Patches
                 Logger.Error("Custom product mixing output failed for '" + productID + "': " + exception);
                 return false;
             }
+        }
+
+        private static void CompleteGeneratedMixCreation(
+            S1Product.ProductDefinition generated)
+        {
+            S1Product.ProductManager productManager =
+                S1Product.ProductManager.Instance
+                ?? throw new InvalidOperationException(
+                    "Cannot complete custom product mixing before ProductManager is available.");
+
+            // Match the native Create* lifecycle after the definition has entered the
+            // registry. Discovery makes the output listable, while this event creates
+            // its Product Manager entry and lets S1API route it to the logical kind.
+            productManager.SetProductDiscovered(
+                null,
+                generated.ID,
+                autoList: false);
+            productManager.onNewProductCreated?.Invoke(generated);
+        }
+    }
+
+    internal static class CustomProductMixingIngredientContract
+    {
+        internal static bool HasUsableProperty(int propertyCount)
+        {
+            return propertyCount > 0;
         }
     }
 

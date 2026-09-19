@@ -1,8 +1,10 @@
 # Products API
 
-This page documents the API surface in `S1API/Products/` (definitions, instances, quality, and packaging).
+Use this page to inspect existing product definitions, create item instances,
+work with properties and packaging, or register effect callbacks.
 
-If you want customer preference configuration, see `S1API/docs/products-system.md`.
+For a task-based map of the product APIs, see [Products system](products-system.md).
+Customer preferences belong in [Customer behavior](customer-behavior.md).
 
 ## Key types
 
@@ -32,7 +34,7 @@ For creation and lifecycle guidance, see [Logical Product Kinds](product-kinds.m
 
 ## Getting product definitions
 
-### From the current save (discovered products)
+### From the current save
 
 `ProductManager.DiscoveredProducts` returns product definitions discovered on the current save.
 
@@ -47,7 +49,7 @@ foreach (var product in ProductManager.DiscoveredProducts)
 }
 ```
 
-### By item ID
+### From an item ID
 
 Products are also item definitions, so you can look them up by item ID.
 
@@ -118,7 +120,7 @@ compatible, and therefore require conditional compilation in cross-runtime mods.
 `DrugType.MDMA` and `DrugType.Heroin` mirror values present in the native enum. Their presence does
 not mean that every native product system supports those types.
 
-## Overriding product effect behavior with callbacks
+## Product effect callbacks
 
 You can register callbacks for both player and NPC product effects.
 
@@ -252,7 +254,7 @@ save/load, reconnect, or late join. If an apply callback fails, S1API immediatel
 callback and permits the next native apply lifecycle call to retry. `TargetId` is the native stable
 player code for players and the native NPC ID for NPCs; it is not a display name.
 
-## Creating product instances
+## Create product instances
 
 ### Unpackaged
 
@@ -310,8 +312,8 @@ void Log(ProductInstance inst)
 }
 ```
 
-## See Also
+## See also
 
-- `S1API/docs/products-system.md` (customer preferences and properties)
-- `S1API/docs/products-populator.md` (filling storages with products)
+- [Products system](products-system.md)
+- [ProductPopulator](products-populator.md)
 - <xref:S1API.Products> (API reference)

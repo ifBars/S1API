@@ -343,14 +343,17 @@ namespace S1API.Internal.Entities.Suppliers
                 }
             }
 
-            S1Economy.SupplierStash stash =
-                nativeDeadDrop.GetComponent<S1Economy.SupplierStash>() ??
-                nativeDeadDrop.gameObject.AddComponent<S1Economy.SupplierStash>();
             S1Storage.StorageEntityInteractable interactable =
                 nativeDeadDrop.Storage.GetComponent<S1Storage.StorageEntityInteractable>() ??
                 nativeDeadDrop.Storage.GetComponentInChildren<S1Storage.StorageEntityInteractable>(true) ??
                 throw new InvalidOperationException(
                     $"Dead drop '{deadDrop.Name}' has no storage interaction component.");
+
+            RemoveGeneratedPrefabStash(supplier);
+
+            S1Economy.SupplierStash stash =
+                nativeDeadDrop.GetComponent<S1Economy.SupplierStash>() ??
+                nativeDeadDrop.gameObject.AddComponent<S1Economy.SupplierStash>();
 
             stash.Supplier = supplier;
             stash.Storage = nativeDeadDrop.Storage;
@@ -362,6 +365,30 @@ namespace S1API.Internal.Entities.Suppliers
 
             ConfiguredStashes.Add(stash.GetInstanceID());
             ConfiguredStashGuids[supplierKey] = deadDrop.GUID;
+        }
+
+        private static void RemoveGeneratedPrefabStash(S1Economy.Supplier supplier)
+        {
+            int supplierKey = supplier.GetInstanceID();
+            GameObject? generatedStashObject = null;
+            if (OwnedStashes.TryGetValue(supplierKey, out GameObject? ownedStash))
+            {
+                generatedStashObject = ownedStash;
+                OwnedStashes.Remove(supplierKey);
+            }
+
+            S1Economy.SupplierStash? generatedStash =
+                generatedStashObject?.GetComponent<S1Economy.SupplierStash>() ??
+                FindInHierarchy(supplier.gameObject);
+            generatedStashObject ??= generatedStash?.gameObject;
+            if (generatedStashObject == null)
+                return;
+
+            if (generatedStash?.IntObj != null)
+                generatedStash.IntObj.enabled = false;
+
+            generatedStashObject.SetActive(false);
+            Destroy(generatedStashObject);
         }
 
         internal static bool IsReservedDeadDrop(S1Economy.DeadDrop deadDrop)

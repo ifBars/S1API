@@ -1,7 +1,10 @@
 #if (IL2CPPMELON)
+using Il2CppInterop.Runtime;
 using S1Dialogue = Il2CppScheduleOne.Dialogue;
+using NativeAction = Il2CppSystem.Action;
 #elif MONOMELON
 using S1Dialogue = ScheduleOne.Dialogue;
+using NativeAction = System.Action;
 #endif
 
 using System;
@@ -20,7 +23,7 @@ namespace S1API.Entities
     /// </summary>
     /// <remarks>
     /// Dialogue configuration is done in <see cref="NPC.OnCreated"/>. Use <see cref="BuildAndSetDatabase"/> for dialogue entries and <see cref="BuildAndRegisterContainer"/> for conversation flows.
-    /// Subscribe to choice and node events for dynamic dialogue behavior.
+    /// Subscribe to choice, node, and completion events for dynamic dialogue behavior.
     /// </remarks>
     public sealed class NPCDialogue
     {
@@ -49,12 +52,7 @@ namespace S1API.Entities
                 return this;
             EnsureHandler();
             EnsureEventHooks();
-            if (!_choiceCallbacks.TryGetValue(choiceLabel, out var list))
-            {
-                list = new List<Action>();
-                _choiceCallbacks[choiceLabel] = list;
-            }
-            list.Add(callback);
+            _choiceCallbacks.Add(choiceLabel, callback);
             return this;
         }
 
@@ -67,12 +65,7 @@ namespace S1API.Entities
                 return this;
             EnsureHandler();
             EnsureEventHooks();
-            if (!_nodeCallbacks.TryGetValue(nodeLabel, out var list))
-            {
-                list = new List<Action>();
-                _nodeCallbacks[nodeLabel] = list;
-            }
-            list.Add(callback);
+            _nodeCallbacks.Add(nodeLabel, callback);
             return this;
         }
 
@@ -91,6 +84,26 @@ namespace S1API.Entities
         }
 
         /// <summary>
+        /// Register a callback to run when any dialogue interaction handled by this NPC ends.
+        /// </summary>
+        /// <remarks>
+        /// The callback is handler-wide and does not identify the ending container. It runs when the native
+        /// handler ends an interaction, including explicit calls to <see cref="End"/>. Register it against
+        /// the active NPC handler; it does not persist through destruction and recreation of the handler.
+        /// </remarks>
+        /// <param name="callback">The callback to invoke when the dialogue handler ends an interaction.</param>
+        /// <returns>This dialogue wrapper.</returns>
+        public NPCDialogue OnDialogueEnded(Action callback)
+        {
+            if (callback == null)
+                return this;
+            EnsureHandler();
+            EnsureEventHooks();
+            _dialogueEndedCallbacks.Add(callback);
+            return this;
+        }
+
+        /// <summary>
         /// Removes all registered dialogue callbacks for this NPC.
         /// </summary>
         public void ClearCallbacks()
@@ -98,6 +111,45 @@ namespace S1API.Entities
             _choiceCallbacks.Clear();
             _nodeCallbacks.Clear();
             _conversationStartCallbacks.Clear();
+            _dialogueEndedCallbacks.Clear();
+            RemoveEventHooks();
+        }
+
+        /// <summary>
+        /// Enables or disables a controller-level dialogue choice by its destination container name.
+        /// </summary>
+        /// <remarks>
+        /// This changes only the live <c>DialogueController</c> choice state. It does not modify node choices,
+        /// save data, or network state. The name is matched case-insensitively against the choice's destination
+        /// container, and the method returns <see langword="false"/> when that controller choice is unavailable.
+        /// </remarks>
+        /// <param name="dialogueContainerName">The name of the dialogue container opened by the choice.</param>
+        /// <param name="enabled">Whether the choice should be enabled.</param>
+        /// <returns><see langword="true"/> when a matching controller choice was updated; otherwise <see langword="false"/>.</returns>
+        public bool SetChoiceEnabled(string dialogueContainerName, bool enabled)
+        {
+            if (string.IsNullOrEmpty(dialogueContainerName))
+                return false;
+
+            var controller = Handler?.GetComponent<S1Dialogue.DialogueController>();
+            var choices = controller?.Choices;
+            if (choices == null)
+                return false;
+
+            for (int i = 0; i < choices.Count; i++)
+            {
+                var choice = choices[i];
+                if (choice == null || choice.Conversation == null)
+                    continue;
+
+                if (!NPCDialoguePolicy.MatchesChoiceContainer(choice.Conversation.name, dialogueContainerName))
+                    continue;
+
+                choice.Enabled = enabled;
+                return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -166,7 +218,16 @@ namespace S1API.Entities
         /// <summary>
         /// INTERNAL: Returns the DialogueHandler instance, if present.
         /// </summary>
-        internal S1Dialogue.DialogueHandler Handler => NPC.gameObject.GetComponentInChildren<S1Dialogue.DialogueHandler>(true);
+        internal S1Dialogue.DialogueHandler? Handler
+        {
+            get
+            {
+                var handler = FindHandler();
+                if (handler != null && HasCallbacks)
+                    EnsureEventHooks(handler);
+                return handler;
+            }
+        }
 
         /// <summary>
         /// INTERNAL: Ensures there is a DialogueHandler component attached.
@@ -179,14 +240,48 @@ namespace S1API.Entities
 
         private void EnsureEventHooks()
         {
-            if (Handler == null || _eventsHooked)
-                return;
-            _eventsHooked = true;
-            // Handler events are invoked from DialogueHandler.ChoiceCallback and DialogueCallback
-            global::S1API.Utils.EventHelper.AddListener(Internal_OnChoice, Handler.onDialogueChoiceChosen);
-            global::S1API.Utils.EventHelper.AddListener(Internal_OnNode, Handler.onDialogueNodeDisplayed);
-            global::S1API.Utils.EventHelper.AddListener(Internal_OnConversationStart, Handler.onConversationStart);
+            EnsureEventHooks(FindHandler());
         }
+
+        private void EnsureEventHooks(S1Dialogue.DialogueHandler? handler)
+        {
+            if (handler == null)
+                return;
+
+            if (_hookedHandler == handler)
+                return;
+
+            RemoveEventHooks();
+
+            NativeAction? dialogueEndedDispatcher = CreateDialogueEndedDispatcher();
+            if (dialogueEndedDispatcher == null)
+                return;
+
+            _hookedHandler = handler;
+            _nativeDialogueEndedDispatcher = dialogueEndedDispatcher;
+
+            // Handler events are invoked from DialogueHandler.ChoiceCallback and DialogueCallback
+            try
+            {
+                global::S1API.Utils.EventHelper.AddListener(Internal_OnChoice, handler.onDialogueChoiceChosen);
+                global::S1API.Utils.EventHelper.AddListener(Internal_OnNode, handler.onDialogueNodeDisplayed);
+                global::S1API.Utils.EventHelper.AddListener(Internal_OnConversationStart, handler.onConversationStart);
+                handler.OnDialogueEnd += dialogueEndedDispatcher;
+            }
+            catch
+            {
+                RemoveEventHooks();
+            }
+        }
+
+        private S1Dialogue.DialogueHandler? FindHandler() =>
+            NPC.gameObject.GetComponentInChildren<S1Dialogue.DialogueHandler>(true);
+
+        private bool HasCallbacks =>
+            _choiceCallbacks.HasCallbacks
+            || _nodeCallbacks.HasCallbacks
+            || _conversationStartCallbacks.HasCallbacks
+            || _dialogueEndedCallbacks.HasCallbacks;
 
         /// <summary>
         /// INTERNAL: Rebuilds runtime modules on the handler to match a new database.
@@ -378,7 +473,7 @@ namespace S1API.Entities
             var container = contBuilder.Build(containerName);
 
 #if MONOMELON
-            var list = dialogueContainersField?.GetValue(Handler) as List<S1Dialogue.DialogueContainer>;
+            var list = dialogueContainersField?.GetValue(Handler) as List<S1Dialogue.Conversation>;
 #else
             var list = Handler.dialogueContainers;
 #endif
@@ -414,13 +509,13 @@ namespace S1API.Entities
                 return false;
 
 #if MONOMELON
-            var list = dialogueContainersField?.GetValue(Handler) as List<S1Dialogue.DialogueContainer>;
+            var list = dialogueContainersField?.GetValue(Handler) as List<S1Dialogue.Conversation>;
 #else
             var list = Handler.dialogueContainers;
 #endif
             if (list == null)
                 return false;
-            S1Dialogue.DialogueContainer? container = null;
+            S1Dialogue.Conversation? container = null;
             for (int i = 0; i < list.Count; i++)
             {
                 var item = list[i];
@@ -455,13 +550,13 @@ namespace S1API.Entities
                 return false;
 
 #if MONOMELON
-            var list = dialogueContainersField?.GetValue(Handler) as List<S1Dialogue.DialogueContainer>;
+            var list = dialogueContainersField?.GetValue(Handler) as List<S1Dialogue.Conversation>;
 #else
             var list = Handler.dialogueContainers;
 #endif
             if (list == null)
                 return false;
-            S1Dialogue.DialogueContainer? container = null;
+            S1Dialogue.Conversation? container = null;
             for (int i = 0; i < list.Count; i++)
             {
                 var item = list[i];
@@ -503,13 +598,13 @@ namespace S1API.Entities
             if (Handler == null)
                 return false;
 #if MONOMELON
-            var list = dialogueContainersField?.GetValue(Handler) as List<S1Dialogue.DialogueContainer>;
+            var list = dialogueContainersField?.GetValue(Handler) as List<S1Dialogue.Conversation>;
 #else
             var list = Handler.dialogueContainers;
 #endif
             if (list == null)
                 return false;
-            S1Dialogue.DialogueContainer? container = null;
+            S1Dialogue.Conversation? container = null;
             for (int i = 0; i < list.Count; i++)
             {
                 var item = list[i];
@@ -526,35 +621,50 @@ namespace S1API.Entities
 
         private void Internal_OnChoice(string choiceLabel)
         {
-            if (string.IsNullOrEmpty(choiceLabel))
-                return;
-            if (_choiceCallbacks.TryGetValue(choiceLabel, out var list))
-            {
-                for (int i = 0; i < list.Count; i++)
-                {
-                    try { list[i]?.Invoke(); } catch { }
-                }
-            }
+            _choiceCallbacks.Invoke(choiceLabel);
         }
 
         private void Internal_OnNode(string nodeLabel)
         {
-            if (string.IsNullOrEmpty(nodeLabel))
-                return;
-            if (_nodeCallbacks.TryGetValue(nodeLabel, out var list))
-            {
-                for (int i = 0; i < list.Count; i++)
-                {
-                    try { list[i]?.Invoke(); } catch { }
-                }
-            }
+            _nodeCallbacks.Invoke(nodeLabel);
         }
 
         private void Internal_OnConversationStart()
         {
-            for (int i = 0; i < _conversationStartCallbacks.Count; i++)
+            _conversationStartCallbacks.InvokeAll();
+        }
+
+        private void Internal_OnDialogueEnded()
+        {
+            _dialogueEndedCallbacks.InvokeAll();
+        }
+
+        private NativeAction? CreateDialogueEndedDispatcher()
+        {
+#if IL2CPPMELON
+            return DelegateSupport.ConvertDelegate<NativeAction>(new Action(Internal_OnDialogueEnded));
+#else
+            return Internal_OnDialogueEnded;
+#endif
+        }
+
+        private void RemoveEventHooks()
+        {
+            var handler = _hookedHandler;
+            var dialogueEndedDispatcher = _nativeDialogueEndedDispatcher;
+
+            _hookedHandler = null;
+            _nativeDialogueEndedDispatcher = null;
+
+            if (handler == null)
+                return;
+
+            try { global::S1API.Utils.EventHelper.RemoveListener(Internal_OnChoice, handler.onDialogueChoiceChosen); } catch { }
+            try { global::S1API.Utils.EventHelper.RemoveListener(Internal_OnNode, handler.onDialogueNodeDisplayed); } catch { }
+            try { global::S1API.Utils.EventHelper.RemoveListener(Internal_OnConversationStart, handler.onConversationStart); } catch { }
+            if (dialogueEndedDispatcher != null)
             {
-                try { _conversationStartCallbacks[i]?.Invoke(); } catch { }
+                try { handler.OnDialogueEnd -= dialogueEndedDispatcher; } catch { }
             }
         }
 
@@ -564,22 +674,32 @@ namespace S1API.Entities
 #else
         // In IL2CPP, dialogueContainers is a property, not a field
 #endif
-        private readonly Dictionary<string, List<Action>> _choiceCallbacks = new Dictionary<string, List<Action>>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, List<Action>> _nodeCallbacks = new Dictionary<string, List<Action>>(StringComparer.OrdinalIgnoreCase);
-        private readonly List<Action> _conversationStartCallbacks = new List<Action>();
-        private bool _eventsHooked;
+        private readonly NPCDialogueCallbackRegistry _choiceCallbacks = new NPCDialogueCallbackRegistry();
+        private readonly NPCDialogueCallbackRegistry _nodeCallbacks = new NPCDialogueCallbackRegistry();
+        private readonly NPCDialogueCallbackRegistry _conversationStartCallbacks = new NPCDialogueCallbackRegistry();
+        private readonly NPCDialogueCallbackRegistry _dialogueEndedCallbacks = new NPCDialogueCallbackRegistry();
+        private S1Dialogue.DialogueHandler? _hookedHandler;
+        private NativeAction? _nativeDialogueEndedDispatcher;
 
 #if IL2CPPMELON
         private Il2CppSystem.Collections.Generic.List<S1Dialogue.DialogueModule>? GetRuntimeModules()
         {
-            return ReflectionUtils.TryGetFieldOrProperty(Handler, "RuntimeModules") as Il2CppSystem.Collections.Generic.List<S1Dialogue.DialogueModule>
-                ?? ReflectionUtils.TryGetFieldOrProperty(Handler, "runtimeModules") as Il2CppSystem.Collections.Generic.List<S1Dialogue.DialogueModule>;
+            var handler = Handler;
+            if (handler == null)
+                return null;
+
+            return ReflectionUtils.TryGetFieldOrProperty(handler, "RuntimeModules") as Il2CppSystem.Collections.Generic.List<S1Dialogue.DialogueModule>
+                ?? ReflectionUtils.TryGetFieldOrProperty(handler, "runtimeModules") as Il2CppSystem.Collections.Generic.List<S1Dialogue.DialogueModule>;
         }
 #else
         private List<S1Dialogue.DialogueModule>? GetRuntimeModules()
         {
-            return ReflectionUtils.TryGetFieldOrProperty(Handler, "runtimeModules") as List<S1Dialogue.DialogueModule>
-                ?? ReflectionUtils.TryGetFieldOrProperty(Handler, "RuntimeModules") as List<S1Dialogue.DialogueModule>;
+            var handler = Handler;
+            if (handler == null)
+                return null;
+
+            return ReflectionUtils.TryGetFieldOrProperty(handler, "runtimeModules") as List<S1Dialogue.DialogueModule>
+                ?? ReflectionUtils.TryGetFieldOrProperty(handler, "RuntimeModules") as List<S1Dialogue.DialogueModule>;
         }
 #endif
 
@@ -592,7 +712,7 @@ namespace S1API.Entities
             return true;
         }
 
-        private bool StartDialogueCompat(S1Dialogue.DialogueContainer container, bool enableBehaviour = true, string entryNodeLabel = "ENTRY")
+        private bool StartDialogueCompat(S1Dialogue.Conversation container, bool enableBehaviour = true, string entryNodeLabel = "ENTRY")
         {
             if (Handler == null || container == null)
                 return false;
@@ -619,5 +739,3 @@ namespace S1API.Entities
 #endif
     }
 }
-
-

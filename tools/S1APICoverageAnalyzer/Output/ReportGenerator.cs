@@ -45,6 +45,7 @@ public static class ReportGenerator
                 {
                     FullName = t.FullName,
                     CoveredBy = t.CoveredByApiType,
+                    MatchStrategy = t.MatchStrategy?.ToString(),
                     MembersCovered = t.CoveredMemberCount,
                     MembersTotal = t.TotalMemberCount
                 })
@@ -148,7 +149,8 @@ public static class ReportGenerator
                 if (!string.IsNullOrEmpty(type.CoveredByApiType))
                 {
                     sb.AppendLine($"  [✓] {type.Name}");
-                    sb.AppendLine($"      -> {type.CoveredByApiType}");
+                    sb.AppendLine(
+                        $"      -> {type.CoveredByApiType} ({type.MatchStrategy})");
                 }
                 else
                 {
@@ -235,6 +237,7 @@ internal sealed class TypeCoverageInfo
 {
     public required string FullName { get; init; }
     public string? CoveredBy { get; init; }
+    public string? MatchStrategy { get; init; }
     public int MembersCovered { get; init; }
     public int MembersTotal { get; init; }
 }

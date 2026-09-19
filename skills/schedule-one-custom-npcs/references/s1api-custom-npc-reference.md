@@ -115,8 +115,9 @@ Choose points that are on walkable surfaces and fit the planned route.
 ### Customer defaults
 
 ```csharp
-builder.EnsureCustomer()
-    .WithCustomerDefaults(cd =>
+public override bool IsCustomer => true;
+
+builder.WithCustomerDefaults(cd =>
     {
         cd.WithSpending(150f, 600f)
             .WithOrdersPerWeek(1, 4)
@@ -153,8 +154,7 @@ Runtime customer work is limited to events and basic actions such as:
 ```csharp
 public override bool IsDealer => true;
 
-builder.EnsureDealer()
-    .WithDealerDefaults(dd =>
+builder.WithDealerDefaults(dd =>
     {
         dd.WithSigningFee(1000f)
             .WithCut(0.15f)

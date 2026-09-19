@@ -65,6 +65,31 @@ namespace S1API.Internal.Utils
         }
 
         /// <summary>
+        /// Checks whether an object has exactly the requested native type, excluding subclasses.
+        /// </summary>
+        internal static bool IsExact<T>(object obj)
+#if IL2CPPMELON
+            where T : Il2CppObjectBase
+#elif MONOMELON
+            where T : class
+#endif
+        {
+#if IL2CPPMELON
+            if (obj is Object il2CppObj)
+            {
+                Type expected = Il2CppType.Of<T>();
+                Type actual = il2CppObj.GetIl2CppType();
+                return expected.IsAssignableFrom(actual) &&
+                       actual.IsAssignableFrom(expected);
+            }
+
+            return false;
+#elif MONOMELON
+            return obj.GetType() == typeof(T);
+#endif
+        }
+
+        /// <summary>
         /// Casts an object to a type.
         /// </summary>
         /// <param name="obj">The object to cast.</param>

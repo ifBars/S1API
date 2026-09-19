@@ -5,14 +5,15 @@ The dialogue system allows you to create interactive conversations with branchin
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Basic Dialogue Setup](#basic-dialogue-setup)
-3. [Dialogue Database](#dialogue-database)
-4. [Dialogue Containers](#dialogue-containers)
-5. [Choice Callbacks](#choice-callbacks)
-6. [Dynamic Navigation](#dynamic-navigation)
-7. [Dialogue Events](#dialogue-events)
-8. [Advanced Features](#advanced-features)
-9. [Best Practices](#best-practices)
+2. [Native Dialogue Reference](#native-dialogue-reference)
+3. [Basic Dialogue Setup](#basic-dialogue-setup)
+4. [Dialogue Database](#dialogue-database)
+5. [Dialogue Containers](#dialogue-containers)
+6. [Choice Callbacks](#choice-callbacks)
+7. [Dynamic Navigation](#dynamic-navigation)
+8. [Dialogue Events](#dialogue-events)
+9. [Advanced Features](#advanced-features)
+10. [Best Practices](#best-practices)
 
 ## Overview
 
@@ -67,6 +68,72 @@ protected override void OnCreated()
     Dialogue.UseContainerOnInteract("ShopDialogue");
 }
 ```
+
+## Native Dialogue Reference
+
+S1API's builders create dialogue that follows the same native model, but they do not expose the game-owned dialogue controller or its serialized content directly. This section explains that model so you can choose the correct module and avoid assuming that a custom container replaces a native interaction.
+
+### How a Native NPC Interaction Runs
+
+Each NPC has a `DialogueHandler`, a dialogue database, and usually a `DialogueController`:
+
+1. The controller decides whether interaction is currently allowed and gathers its enabled choices.
+2. If at least one choice is available, the controller opens its generic dialogue container at `ENTRY`; the greeting becomes that entry's displayed text.
+3. If no choice is available, it displays only a world-space greeting.
+4. A temporary greeting override wins before the normal time- and weather-based greeting selection.
+
+Native controllers can also add temporary choices and greeting overrides for gameplay state. Customer requests, supplier meetings, police interactions, and scripted characters use that layer; a container alone does not automatically opt your NPC into those systems.
+
+### Native Dialogue Modules
+
+The game currently defines these module names. Pass these exact names to `WithModuleEntry`; names are parsed as the native `EDialogueModule` enum, so an unrecognized name is not a safe custom category.
+
+| Module | Native use | Example keys observed in native behaviour |
+| --- | --- | --- |
+| `Generic` | General NPC and progression lines, including text-message chains. Use `WithGeneric` for this module. | `supplier_meeting_greeting`, `cartel_deal_request` |
+| `Greetings` | The default response when a player talks to an NPC without an active choice. | `rainy_greeting`, `morning_greeting`, `afternoon_greeting`, `night_greeting` |
+| `Reactions` | Short reactive world-space lines used by NPC response behaviour. | `noticed_pickpocket` |
+| `Customer` | Deal, contract, product-request, sample, and post-deal dialogue. | `awaiting_deal`, `contract_request`, `deal_completed` |
+| `Police` | Checkpoint and body-search state dialogue. | `checkpoint_search_start`, `bodysearch_begin` |
+| `Supplier` | Supplier delivery, dead-drop, and repayment dialogue. | `deaddrop_requested`, `supplier_request_repayment` |
+| `Dealer` | Dealer robbery and inventory-status messages. | `dealer_rob_defended`, `inventory_depleted` |
+| `CartelGoon` | Cartel ambush dialogue. | `ambush_start` |
+
+These keys describe the currently inspected game build, not a compatibility promise from S1API. Do not overwrite a game-owned key unless your mod intentionally replaces that native line; prefer a distinct key for dialogue used only by your own code.
+
+### Greeting Selection
+
+The stock `DialogueController` checks active greeting overrides first, in list order. If no override is active, it chooses from `Greetings` as follows:
+
+- `rainy_greeting` may be selected when the local weather is rainy (above the native threshold) and the random rainy check succeeds.
+- `morning_greeting` is used from 04:00 through 12:00.
+- `afternoon_greeting` is used from 12:00 through 18:00.
+- `night_greeting` is used at other times.
+
+The greeting is independent of a conversation tree. It becomes the text of the controller's generic `ENTRY` node when there are active choices, or appears as a short world-space line when there are none. For custom NPCs, include the relevant `Greetings` keys only when you rely on this native controller behaviour; otherwise, put your intended opening text directly in your container's `ENTRY` node.
+
+### Database Lookup and Fallback
+
+`DialogueHandler` gives each NPC a runtime `Generic` module, then attaches the modules configured by its dialogue database. A lookup first uses that NPC's runtime module and otherwise falls back to the game-wide dialogue manager's module of the same type. This is why a custom NPC should supply every key that its own native-style behaviour requires instead of depending on a particular vanilla NPC database.
+
+Use `WithGeneric` for general entries and `WithModuleEntry` with an exact module name for the remaining native modules:
+
+```csharp
+Dialogue.BuildAndSetDatabase(db =>
+{
+    db.WithGeneric("my_intro", "I have something to discuss.");
+    db.WithModuleEntry("Greetings", "morning_greeting", "Morning.");
+    db.WithModuleEntry("Greetings", "afternoon_greeting", "Afternoon.");
+    db.WithModuleEntry("Greetings", "night_greeting", "Evening.");
+    db.WithModuleEntry("Reactions", "noticed_pickpocket", "Hey! What was that?");
+});
+```
+
+### Native Systems Versus Custom Containers
+
+Use `BuildAndRegisterContainer` and `UseContainerOnInteract` for an interaction that your mod owns. Use [Dialogue Injection](dialogue-injection.md) to add a branch to an existing vanilla container. Do not use either approach to replace a native customer, supplier, dealer, police, or cartel state machine: those systems can add their own greeting overrides, choices, validation, and callbacks as gameplay state changes.
+
+If you need a native line for reference, inspect your locally installed game build and record only the module and key in your mod's source or documentation. Do not commit or redistribute game assemblies, decompiled source, prefabs, or dialogue assets.
 
 ## Basic Dialogue Setup
 
@@ -283,7 +350,33 @@ Dialogue.OnChoiceSelected("LEAVE", () => {
     Debug.Log("Player chose to leave");
     Dialogue.StopOverride(); // Safe to call here
 });
+
+// When any interaction handled by this NPC ends
+Dialogue.OnDialogueEnded(() => {
+    Quest.Advance("talked-to-shopkeeper");
+});
+
+// Enable or disable a controller-level choice by its destination container
+bool updated = Dialogue.SetChoiceEnabled("ShopDialogue", enabled: false);
 ```
+
+`OnNodeDisplayed` matches the node label supplied by the dialogue container and
+`OnChoiceSelected` matches the `ChoiceLabel` of a node choice. Both labels are
+case-insensitive. `OnDialogueEnded` is handler-wide: it does not identify the
+container that ended. It fires when the native handler ends the interaction,
+including when code calls `Dialogue.End()`; the native handler controls the
+exact ordering relative to other dialogue events.
+
+`SetChoiceEnabled` targets a controller-level choice, not a choice inside the
+current dialogue node. Its key is the destination dialogue container name, not
+the displayed choice text. Matching is case-insensitive. The change is live
+runtime state only; it is not saved, synchronized, or applied to node choices.
+The method returns `false` when the NPC has no matching controller choice.
+
+Callbacks are registered on the NPC's current dialogue handler. Callbacks are
+invoked in registration order, duplicate registrations are preserved, and
+`ClearCallbacks()` removes all four callback categories and their native event
+hooks. Callback exceptions are isolated from other callbacks.
 
 ### Important: StopOverride Usage
 

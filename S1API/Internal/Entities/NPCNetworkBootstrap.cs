@@ -131,7 +131,7 @@ namespace S1API.Internal.Entities
                 var spawnables = nm?.SpawnablePrefabs;
                 if (spawnables != null)
                 {
-                    NPC.PreRegisterAllNpcPrefabs();
+                    NPC.PreRegisterAllNpcPrefabsInternal();
                     if (!AllNetworkPrefabsReady)
                         EnsurePrefabsWarmup();
                 }
@@ -169,7 +169,7 @@ namespace S1API.Internal.Entities
                 {
                     try
                     {
-                        NPC.PreRegisterAllNpcPrefabs();
+                        NPC.PreRegisterAllNpcPrefabsInternal();
                         if (AllNetworkPrefabsReady)
                             break;
                     }

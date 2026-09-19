@@ -23,6 +23,13 @@ namespace S1API.Console
         private static bool _setPlayerEnergyUnavailableWarningLogged;
 
         /// <summary>
+        /// The custom commands registered through <see cref="BaseConsoleCommand"/>, keyed by command word.
+        /// They are routed by patches instead of the game's command list, so this is the only way to enumerate them.
+        /// </summary>
+        public static System.Collections.Generic.IReadOnlyDictionary<string, BaseConsoleCommand> RegisteredCommands
+            => CustomConsoleRegistry.RegisteredCommands;
+
+        /// <summary>
         /// Submits a raw console command string (e.g. "settime 1530").
         /// Works across both IL2CPP and Mono builds.
         /// </summary>

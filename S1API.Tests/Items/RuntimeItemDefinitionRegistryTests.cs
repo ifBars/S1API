@@ -4,7 +4,6 @@ using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1ItemFramework = ScheduleOne.ItemFramework;
 #endif
 
-using System.Runtime.CompilerServices;
 using S1API.Internal.Items;
 
 namespace S1API.Tests.Items;
@@ -63,7 +62,7 @@ public sealed class RuntimeItemDefinitionRegistryTests : IDisposable
     private static S1ItemFramework.ItemDefinition CreateDefinition()
     {
         return (S1ItemFramework.ItemDefinition)
-            RuntimeHelpers.GetUninitializedObject(
+            TestObjectFactory.CreateUninitialized(
                 typeof(S1ItemFramework.StorableItemDefinition));
     }
 

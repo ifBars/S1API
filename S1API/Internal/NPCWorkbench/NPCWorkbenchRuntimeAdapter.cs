@@ -92,7 +92,7 @@ namespace S1API.Internal.NPCWorkbench
                 throw new InvalidOperationException($"Native NPC '{id}' is not available in the current scene.");
 
             var avatar = npc.Avatar ?? npc.gameObject.GetComponentInChildren<S1AvatarFramework.Avatar>(true);
-            var sourceSettings = avatar?.CurrentSettings;
+            S1AvatarFramework.AvatarSettings? sourceSettings = null;
             if (sourceSettings == null && avatar != null)
             {
                 sourceSettings = ReflectionUtils.TryGetFieldOrProperty(

@@ -53,7 +53,7 @@ and document the migration impact in the PR.
 `S1API.Tests/` is the only test implementation that should be committed to this repository. Keep runtime and in-game smoke mods, launchers, harnesses, disposable saves or installs, logs, screenshots, and generated evidence local and ignored, including everything under `tests/Smoke/`. Do not add `.gitignore` exceptions for smoke-test sources. Record the scenario, commands, runtime matrix, and observed pass/fail evidence in the PR description without committing the smoke implementation or game-derived artifacts.
 
 ## Commit & Pull Request Guidelines
-Write imperative, single-purpose commits; lightweight prefixes such as `fix:` or `feat:` appear in history and are encouraged. Target PRs at `bleeding-edge`, include a short change narrative, reproduction or validation notes, and link any external issue. Screenshots or logs are helpful for UI or networking work. Never modify CI workflows without prior discussion.
+Write imperative, single-purpose commits; lightweight prefixes such as `fix:` or `feat:` appear in history and are encouraged. Target regular-game PRs at `stable` and beta-game PRs at `beta`. Include a short change narrative, reproduction or validation notes, and link any external issue. Screenshots or logs are helpful for UI or networking work. Never modify CI workflows without prior discussion.
 
 ## Release & Versioning Workflow
 Always follow [`VERSIONING.md`](VERSIONING.md) for any release, hotfix, tagging, branch-planning, or version-bump work. Treat it as the authoritative release policy.

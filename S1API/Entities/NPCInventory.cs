@@ -1,4 +1,5 @@
 #if (IL2CPPMELON)
+using Il2CppInterop.Runtime;
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1Items = Il2CppScheduleOne.ItemFramework;
 using S1Interaction = Il2CppScheduleOne.Interaction;
@@ -24,6 +25,7 @@ namespace S1API.Entities
     /// </summary>
     public sealed class NPCInventory
     {
+        private const int DefaultCustomNpcSlotCount = 5;
         private static readonly Logging.Log Logger = new Logging.Log("NPCInventory");
         private readonly NPC NPC;
 
@@ -164,10 +166,10 @@ namespace S1API.Entities
                             // ignored
                         }
                     });
-                    slot.onItemDataChanged = (Il2CppSystem.Action)Il2CppSystem.Delegate.Combine(
-                        slot.onItemDataChanged,
-                        (Il2CppSystem.Action)handler
-                    );
+                    slot.onItemDataChanged = Il2CppSystem.Delegate.Combine(
+                            slot.onItemDataChanged,
+                            (Il2CppSystem.Action)handler)
+                        .Cast<Il2CppSystem.Action>();
 #else
                     slot.onItemDataChanged = (Action)Delegate.Combine(
                         slot.onItemDataChanged,
@@ -249,12 +251,42 @@ namespace S1API.Entities
             try { inv.NetworkInitializeIfDisabled(); } catch (Exception ex) { Logger.Warning($"[NPCInventory] EnsureInitialized: NetworkInitializeIfDisabled threw for '{npcId}': {ex.Message}"); }
         }
 
-        private static int GetSlotCount(S1NPCs.NPCInventory inv, int fallback)
+        private int GetSlotCount(S1NPCs.NPCInventory inv, int fallback)
         {
-            var value = ReflectionUtils.TryGetFieldOrProperty(inv, "SlotCount");
-            return value is int slotCount && slotCount >= 0
-                ? slotCount
-                : fallback;
+            var legacyValue = ReflectionUtils.TryGetFieldOrProperty(inv, "SlotCount");
+            int? npcDataSlotCount = null;
+
+            try
+            {
+                var npcData = NPC?.S1NPC?.NPCData;
+                if (npcData?.Inventory != null)
+                    npcDataSlotCount = npcData.Inventory.InventorySlotCount;
+            }
+            catch
+            {
+                // Fall back to the current collection when native data is unavailable.
+            }
+
+            return ResolveTargetSlotCount(
+                legacyValue is int legacySlotCount ? legacySlotCount : null,
+                npcDataSlotCount,
+                fallback,
+                NPC?.IsCustomNPC == true);
+        }
+
+        internal static int ResolveTargetSlotCount(
+            int? legacySlotCount,
+            int? npcDataSlotCount,
+            int fallback,
+            bool isCustomNpc)
+        {
+            if (legacySlotCount > 0)
+                return legacySlotCount.Value;
+            if (npcDataSlotCount > 0)
+                return npcDataSlotCount.Value;
+            if (fallback > 0)
+                return fallback;
+            return isCustomNpc ? DefaultCustomNpcSlotCount : 0;
         }
 
         private static void TryInvokeContentsChanged(S1NPCs.NPCInventory inv)

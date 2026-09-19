@@ -7,6 +7,7 @@ S1API provides a comprehensive item system for Schedule One, including standard 
 The Items system allows you to:
 
 - Create standard `StorableItemDefinition` instances with the Creator API or Builder API
+- Create native grid and surface furniture directly from a mod-provided model
 - Register runtime additives with custom effects
 - Attach equippable behavior and viewmodels to items
 - Add icons from embedded resources or AssetBundles
@@ -22,6 +23,7 @@ The Items system is documented across multiple focused pages:
 - **[Item Registration & Basics](item-registration-basics.md)** - Registration timing, Creator API, Builder API, categories, and common setup tips
 - **[Runtime Additives](runtime-additives.md)** - Creating additive definitions and allowing them on grow containers
 - **[Item Icons](item-icons.md)** - Loading item icons from embedded resources and AssetBundles
+- **[Custom Furniture](furniture-items.md)** - Composing native placeable furniture from a model or embedded GLB
 
 ### Equippables
 - **[Equippable Items](equippable-items.md)** - Basic equippables, viewmodels, use callbacks, and custom equippable behaviors
@@ -74,6 +76,7 @@ public class MyMod : MelonMod
 
 - Start here: **[Item Registration & Basics](item-registration-basics.md)**
 - Then: **[Equippable Items](equippable-items.md)** if the item can be held or used
+- For placeable models: **[Custom Furniture](furniture-items.md)**
 - As needed: **[Runtime Additives](runtime-additives.md)**, **[Item Icons](item-icons.md)**, **[Avatar Equippable Prefabs](avatar-equippable-prefabs.md)**
 
 ## Related Systems

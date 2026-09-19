@@ -1,10 +1,10 @@
 #if (IL2CPPMELON)
-using S1Customization = Il2CppScheduleOne.AvatarFramework.Customization;
+using S1Customization = Il2CppScheduleOne.CharacterCreator;
 using S1DevUtilities = Il2CppScheduleOne.DevUtilities;
 using S1PlayerScripts = Il2CppScheduleOne.PlayerScripts;
 using S1UI = Il2CppScheduleOne.UI;
 #elif MONOMELON
-using S1Customization = ScheduleOne.AvatarFramework.Customization;
+using S1Customization = ScheduleOne.CharacterCreator;
 using S1DevUtilities = ScheduleOne.DevUtilities;
 using S1PlayerScripts = ScheduleOne.PlayerScripts;
 using S1UI = ScheduleOne.UI;
@@ -78,10 +78,7 @@ namespace S1API.UI
             get
             {
                 EnsureInitialized();
-                if (_s1Creator?.ActiveSettings == null)
-                    return null;
-
-                return new BasicAvatarSettings(_s1Creator.ActiveSettings);
+                return null;
             }
         }
 
@@ -112,16 +109,14 @@ namespace S1API.UI
 
             RegisterEvents();
 
-            // If no initial settings provided, try to load player's current settings
-            if (initialSettings == null)
+            if (initialSettings != null || !showUI)
             {
-                initialSettings = GetPlayerAvatarSettings();
+                Logger.Warning(
+                    "Schedule I 0.4.7 no longer accepts legacy initial settings or a hidden " +
+                    "character-creator canvas; opening the native creator with its defaults.");
             }
 
-            var s1Settings = initialSettings?.S1BasicAvatarSettings;
-            _s1Creator.Open(s1Settings);
-            if (!showUI && _s1Creator.Canvas != null)
-                _s1Creator.Canvas.enabled = false;
+            _s1Creator.Open();
 
             try
             {
@@ -152,7 +147,12 @@ namespace S1API.UI
                 return;
             }
 
-            _s1Creator.Close();
+            var closeMethod = typeof(S1Customization.CharacterCreator).GetMethod(
+                "Close",
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.NonPublic);
+            closeMethod?.Invoke(_s1Creator, null);
 
             // Restore camera transform and FOV if no other UI elements are active
             // Use coroutine to wait for base game's Close() coroutine to finish
@@ -218,7 +218,8 @@ namespace S1API.UI
                 return;
             }
 
-            _s1Creator.SelectPreset(presetName);
+            Logger.Warning(
+                "Character-creator presets are not available in Schedule I 0.4.7.");
         }
 
         /// <summary>
@@ -229,20 +230,7 @@ namespace S1API.UI
         {
             EnsureInitialized();
 
-            if (_s1Creator == null || _s1Creator.Presets == null)
-                return Array.Empty<string>();
-
-            var presets = new List<string>();
-            for (int i = 0; i < _s1Creator.Presets.Count; i++)
-            {
-                var preset = _s1Creator.Presets[i];
-                if (preset != null && !string.IsNullOrWhiteSpace(preset.name))
-                {
-                    presets.Add(preset.name);
-                }
-            }
-
-            return presets.ToArray();
+            return Array.Empty<string>();
         }
 
         /// <summary>
@@ -265,7 +253,7 @@ namespace S1API.UI
                 return;
             }
 
-            _s1Creator.SliderChanged(Mathf.Clamp01(normalizedValue));
+            _s1Creator.SetAvatarRotation(Mathf.Clamp01(normalizedValue) * 359f);
         }
 
         /// <summary>
@@ -322,15 +310,12 @@ namespace S1API.UI
 
             try
             {
-                // Register completion event
-                if (_s1Creator.onComplete != null)
-                {
 #if (IL2CPPMELON)
-                    _s1Creator.onComplete.AddListener((Action<S1Customization.BasicAvatarSettings>)OnCreatorCompleted);
+                _s1Creator.add_OnComplete(
+                    (Action<S1Customization.CharacterCreatorState>)OnCreatorCompleted);
 #else
-                    _s1Creator.onComplete.AddListener(OnCreatorCompleted);
+                _s1Creator.OnComplete += OnCreatorCompleted;
 #endif
-                }
 
                 _eventsRegistered = true;
             }
@@ -340,17 +325,34 @@ namespace S1API.UI
             }
         }
 
-        private static void OnCreatorCompleted(S1Customization.BasicAvatarSettings s1Settings)
+        private static void OnCreatorCompleted(S1Customization.CharacterCreatorState state)
         {
             try
             {
-                if (s1Settings == null)
+                if (state?.Appearance == null)
                 {
                     Logger.Warning("CharacterCreator completed with null settings");
                     return;
                 }
 
-                var wrappedSettings = new BasicAvatarSettings(s1Settings);
+                BasicAvatarSettings wrappedSettings = BasicAvatarSettings.Create();
+                wrappedSettings.Gender = (int)state.Appearance.Gender;
+                wrappedSettings.Weight = state.Appearance.Weight;
+                wrappedSettings.SkinColor = state.Appearance.SkinColor;
+                wrappedSettings.HairStyle = state.Appearance.HairStyleId ?? string.Empty;
+                wrappedSettings.HairColor = state.Appearance.HairColor;
+                wrappedSettings.Mouth = state.Appearance.FaceId ?? string.Empty;
+                wrappedSettings.FacialHair = state.Appearance.FacialHairId ?? string.Empty;
+                wrappedSettings.FacialDetails = state.Appearance.FacialDetailId ?? string.Empty;
+                wrappedSettings.FacialDetailsIntensity = state.Appearance.FacialDetailIntensity;
+                wrappedSettings.EyeballColor = state.Appearance.EyeballColor;
+                wrappedSettings.PupilDilation = state.Appearance.PupilDilation;
+                wrappedSettings.UpperEyeLidRestingPosition = state.Appearance.UpperEyelidPosition;
+                wrappedSettings.LowerEyeLidRestingPosition = state.Appearance.LowerEyelidPosition;
+                wrappedSettings.EyebrowScale = state.Appearance.EyebrowScale;
+                wrappedSettings.EyebrowThickness = state.Appearance.EyebrowThickness;
+                wrappedSettings.EyebrowRestingHeight = state.Appearance.EyebrowHeight;
+                wrappedSettings.EyebrowRestingAngle = state.Appearance.EyebrowAngle;
                 
                 // Restore camera after a delay to let the base game's Close() coroutine finish
                 // The base game's Done() calls Close() which starts a coroutine that removes UI element

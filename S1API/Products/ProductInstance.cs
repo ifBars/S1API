@@ -12,11 +12,12 @@ using S1ItemInstance = S1API.Items.ItemInstance;
 namespace S1API.Products
 {
     /// <summary>
-    /// Represents an instance of a product in the game.
+    /// Represents one product stack or item in the active game runtime.
     /// </summary>
     /// <remarks>
-    /// This class defines specific properties and behaviors for a product instance,
-    /// such as quality, packaging, and definition, derived from the S1API's item instance structure.
+    /// Product instances inherit quantity and base item behavior from <see cref="S1ItemInstance"/>.
+    /// This wrapper adds product definition, quality, packaging, and property access without
+    /// exposing runtime-specific native types.
     /// </remarks>
     public class ProductInstance : S1ItemInstance
     {
@@ -27,8 +28,7 @@ namespace S1API.Products
             CrossType.As<S1Product.ProductItemInstance>(S1ItemInstance);
 
         /// <summary>
-        /// Represents an instance of a product, derived from a specific in-game product item instance,
-        /// with additional properties for packaging, quality, and product definition.
+        /// Creates a wrapper around a native product item instance.
         /// </summary>
         internal ProductInstance(S1Product.ProductItemInstance productInstance)
             : base(productInstance)
@@ -36,22 +36,26 @@ namespace S1API.Products
         }
 
         /// <summary>
-        /// Indicates whether the product instance has applied packaging.
+        /// Gets whether the instance currently has native packaging.
         /// </summary>
         public bool IsPackaged => S1ProductInstance.AppliedPackaging;
 
         /// <summary>
-        /// Provides access to the packaging information applied to the product,
-        /// represented as a specific packaging definition instance.
+        /// Gets the packaging applied to this instance.
         /// </summary>
+        /// <remarks>
+        /// Check <see cref="IsPackaged"/> before reading this property. The native runtime only
+        /// provides a packaging definition for packaged instances.
+        /// </remarks>
         public PackagingDefinition AppliedPackaging =>
             new PackagingDefinition(S1ProductInstance.AppliedPackaging);
 
         /// <summary>
-        /// Represents the quality level of the product instance.
+        /// Gets the runtime-agnostic quality level assigned to this instance.
         /// </summary>
         /// <remarks>
-        /// Quality levels provide a measure of the product's grading, ranging from "Trash" to "Heavenly".
+        /// This value comes from the native instance. Creating an instance through
+        /// <see cref="ProductDefinition.CreateInstance(int)"/> uses the native standard quality.
         /// </remarks>
         public Quality Quality => S1ProductInstance.Quality.ToAPI();
 
@@ -63,12 +67,11 @@ namespace S1API.Products
                 CrossType.As<S1Product.ProductDefinition>(S1ProductInstance.Definition));
 
         /// <summary>
-        /// Gets the list of properties associated with the product definition.
+        /// Gets runtime-agnostic wrappers for the properties on <see cref="Definition"/>.
         /// </summary>
         /// <remarks>
-        /// This property provides an unmodifiable list of properties associated
-        /// with the underlying product definition. Each property represents
-        /// a specific characteristic or behavior of the corresponding product.
+        /// Properties belong to the definition, not the individual stack. The returned list is a
+        /// read-only snapshot from <see cref="ProductDefinition.Properties"/>.
         /// </remarks>
         public IReadOnlyList<PropertyBase> Properties => Definition.Properties;
     }

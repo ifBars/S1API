@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using S1API.Internal.Products;
 using UnityEngine;
 
@@ -74,8 +73,7 @@ public sealed class ProductManagerUiRuntimeContractTests : IDisposable
     [Fact]
     public void LiveSectionIconUsesTheRegisteredSpriteAndNeutralTint()
     {
-        Sprite sprite =
-            (Sprite)RuntimeHelpers.GetUninitializedObject(typeof(Sprite));
+        Sprite sprite = TestObjectFactory.CreateUninitialized<Sprite>();
 #if MONOMELON
         typeof(UnityEngine.Object)
             .GetField(

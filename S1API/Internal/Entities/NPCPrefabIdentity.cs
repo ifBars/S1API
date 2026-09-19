@@ -47,6 +47,7 @@ namespace S1API.Internal.Entities
         private string? _dealerHomeBuildingName;
         private string? _prefabName;
         private List<string>? _connectionIds;
+        private bool _hasConfiguredConnections;
         private string? _voiceId;
         private bool _hasVoicePitch;
         private float _voicePitch;
@@ -60,6 +61,7 @@ namespace S1API.Internal.Entities
         [SerializeField] private string? _dealerHomeBuildingName;
         [SerializeField] private string? _prefabName;
         [SerializeField] private List<string>? _connectionIds;
+        [SerializeField] private bool _hasConfiguredConnections;
         [SerializeField] private string? _voiceId;
         [SerializeField] private bool _hasVoicePitch;
         [SerializeField] private float _voicePitch;
@@ -174,6 +176,7 @@ namespace S1API.Internal.Entities
             internal float? RelationDelta;
             internal bool? Unlocked;
             internal int? UnlockType; // Stored as int (0=Recommendation, 1=DirectApproach) to avoid enum dependency
+            internal bool HasConfiguredConnections;
             internal List<string>? ConnectionIDs;
             internal string? PrefabName;
             internal string? VoiceId;
@@ -227,8 +230,9 @@ namespace S1API.Internal.Entities
                 float? relationDelta = snapshot?.RelationDelta;
                 bool? unlocked = snapshot?.Unlocked;
                 NPCRelationship.UnlockType? unlockType = snapshot?.UnlockType;
-                List<string>? connectionIDs = snapshot?.ConnectionIDs != null && snapshot.ConnectionIDs.Count > 0
-                    ? new List<string>(snapshot.ConnectionIDs)
+                bool hasConfiguredConnections = snapshot?.ConnectionsConfigured == true;
+                List<string>? connectionIDs = hasConfiguredConnections
+                    ? new List<string>(snapshot?.ConnectionIDs ?? new List<string>())
                     : null;
 
                 // Get or create identity data entry
@@ -245,8 +249,11 @@ namespace S1API.Internal.Entities
                     updatedData.Unlocked = unlocked;
                 if (unlockType.HasValue)
                     updatedData.UnlockType = (int?)unlockType.Value;
-                if (connectionIDs != null && connectionIDs.Count > 0)
-                    updatedData.ConnectionIDs = new List<string>(connectionIDs);
+                if (hasConfiguredConnections)
+                {
+                    updatedData.HasConfiguredConnections = true;
+                    updatedData.ConnectionIDs = new List<string>(connectionIDs!);
+                }
 
                 _registry[normalizedName] = updatedData;
             }
@@ -318,17 +325,18 @@ namespace S1API.Internal.Entities
                 }
                 
                 // ALWAYS preserve connection IDs from registry if they exist (they come from RegisterRelationshipDataToStaticCache)
-                if (existingData.ConnectionIDs != null && existingData.ConnectionIDs.Count > 0)
+                if (existingData.HasConfiguredConnections)
                 {
-                    connectionIDs = new List<string>(existingData.ConnectionIDs);
+                    connectionIDs = new List<string>(
+                        existingData.ConnectionIDs ?? new List<string>());
                 }
             }
             
             // Only use component field if registry doesn't have connection IDs
             // (Component field is typically empty during prefab configuration, but check it as fallback)
-            if ((connectionIDs == null || connectionIDs.Count == 0) && _connectionIds != null && _connectionIds.Count > 0)
+            if (connectionIDs == null && _hasConfiguredConnections)
             {
-                connectionIDs = new List<string>(_connectionIds);
+                connectionIDs = new List<string>(_connectionIds ?? new List<string>());
             }
 
             var identityData = new IdentityData
@@ -343,6 +351,7 @@ namespace S1API.Internal.Entities
                 RelationDelta = relationDelta,
                 Unlocked = unlocked,
                 UnlockType = unlockType,
+                HasConfiguredConnections = connectionIDs != null,
                 ConnectionIDs = connectionIDs,
                 PrefabName = normalizedName,
                 VoiceId = VoiceId,
@@ -453,6 +462,7 @@ namespace S1API.Internal.Entities
                 this.RelationDelta = dataRef.RelationDelta;
                 this.Unlocked = dataRef.Unlocked;
                 this.UnlockType = dataRef.UnlockType.HasValue ? (NPCRelationship.UnlockType?)dataRef.UnlockType.Value : null;
+                _hasConfiguredConnections = dataRef.HasConfiguredConnections;
                 _connectionIds = dataRef.ConnectionIDs != null ? new List<string>(dataRef.ConnectionIDs) : null;
                 PrefabName = dataRef.PrefabName ?? PrefabName;
                 if (string.IsNullOrEmpty(VoiceId) && !string.IsNullOrEmpty(dataRef.VoiceId))
@@ -608,10 +618,9 @@ namespace S1API.Internal.Entities
                 if (UnlockType.HasValue)
                     builder.SetUnlockType(UnlockType.Value);
 
-                if (_connectionIds != null && _connectionIds.Count > 0)
-                {
-                    builder.WithConnectionsById(_connectionIds);
-                }
+                if (_hasConfiguredConnections)
+                    builder.WithConnectionsById(
+                        (IEnumerable<string>?)_connectionIds ?? Array.Empty<string>());
 
                 builder.ApplyTo(relationData, npc, preserveUnlockState);
             }
@@ -649,7 +658,7 @@ namespace S1API.Internal.Entities
                 if (avatar != null && AppearanceDefaults != null)
                 {
                     EnsureAppearanceImpostorTexture(npc.ID ?? PrefabName ?? gameObject.name);
-                    avatar.LoadAvatarSettings(AppearanceDefaults);
+                    Compatibility.AvatarCompatibility.ApplyLegacySettings(avatar, AppearanceDefaults);
                 }
             }
             catch { }
@@ -926,19 +935,37 @@ namespace S1API.Internal.Entities
                 return;
 
             EnsureRelationshipDataFromRegistry();
-            if (_connectionIds == null || _connectionIds.Count == 0)
+            if (!_hasConfiguredConnections)
                 return;
 
             try
             {
                 var builder = new NPCRelationshipDataBuilder();
-                builder.WithConnectionsById(_connectionIds);
+                builder.WithConnectionsById(
+                    (IEnumerable<string>?)_connectionIds ?? Array.Empty<string>());
                 builder.ApplyTo(npc.RelationData, npc, preserveUnlockState: true);
             }
             catch (Exception ex)
             {
                 Logger.Error($"[Relationship Data] ApplyRelationshipConnectionsTo: Exception applying connections to NPC '{npc.ID ?? "<null>"}': {ex.Message}");
             }
+        }
+
+#if IL2CPPMELON
+        [HideFromIl2Cpp]
+#endif
+        internal IReadOnlyList<string> GetConfiguredConnectionIds()
+        {
+            EnsureRelationshipDataFromRegistry();
+            return _connectionIds == null
+                ? Array.Empty<string>()
+                : new List<string>(_connectionIds);
+        }
+
+        internal bool HasConfiguredConnections()
+        {
+            EnsureRelationshipDataFromRegistry();
+            return _hasConfiguredConnections;
         }
 
         internal bool ApplyAppearanceTo(S1NPCs.NPC npc, S1AvatarFramework.Avatar avatar)
@@ -953,7 +980,7 @@ namespace S1API.Internal.Entities
 
             EnsureAppearanceImpostorTexture(npc.ID ?? PrefabName ?? gameObject.name);
             NPCDataAccess.ApplyAppearance(npc, AppearanceDefaults);
-            avatar.LoadAvatarSettings(AppearanceDefaults);
+            Compatibility.AvatarCompatibility.ApplyLegacySettings(avatar, AppearanceDefaults);
             return true;
         }
 

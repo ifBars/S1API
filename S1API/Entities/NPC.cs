@@ -1,4 +1,5 @@
 #if (IL2CPPMELON)
+using NativeVehicleLifecycleAction = Il2CppSystem.Action<Il2CppScheduleOne.Vehicles.LandVehicle>;
 using S1DevUtilities = Il2CppScheduleOne.DevUtilities;
 using S1AvatarEquipping = Il2CppScheduleOne.AvatarFramework.Equipping;
 using S1Dialogue = Il2CppScheduleOne.Dialogue;
@@ -28,6 +29,7 @@ using S1Registry = Il2CppScheduleOne.Registry;
 using S1Money = Il2CppScheduleOne.Money;
 using ConversationCategoryList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.Messaging.EConversationCategory>;
 #elif MONOMELON
+using NativeVehicleLifecycleAction = System.Action<ScheduleOne.Vehicles.LandVehicle>;
 using S1DevUtilities = ScheduleOne.DevUtilities;
 using S1AvatarEquipping = ScheduleOne.AvatarFramework.Equipping;
 using S1Dialogue = ScheduleOne.Dialogue;
@@ -143,11 +145,12 @@ namespace S1API.Entities
         private static readonly System.Collections.Generic.HashSet<System.Type> CustomerTypes = new System.Collections.Generic.HashSet<System.Type>();
         private static readonly System.Collections.Generic.HashSet<System.Type> DealerTypes = new System.Collections.Generic.HashSet<System.Type>();
         private static readonly System.Collections.Generic.HashSet<System.Type> SupplierTypes = new System.Collections.Generic.HashSet<System.Type>();
-        private const float DefaultRelationDelta = 2f;
         private const string DealerPrefabName = "Dealer";
         private const string CivilianNpcPrefabName = "CivilianNPC";
         private const string BaseNpcPrefabName = "BaseNPC";
         private const string BaseEmployeePrefabName = "BaseEmployee";
+        private const string PropertyInteriorNavMeshAreaName = "PropertyInterior";
+        private const string LadderNavMeshAreaName = "Ladder";
         private static readonly bool LogBetaNpcPrefabDiagnostics = false;
         private static readonly string[] BaseNpcMembersToCopy =
         {
@@ -185,6 +188,10 @@ namespace S1API.Entities
         };
         private static volatile bool _prefabsConfiguredForLocalProcess;
         private static bool _loggedBaseEmployeeNormalization;
+        private static bool _loggedExternalPreRegisterAllCall;
+        private static bool _loggedExternalPreRegisterTypeCall;
+        private static readonly System.Collections.Generic.HashSet<string> WarnedUnsupportedDealerSettings =
+            new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
         private static int _clientNetworkSpawnHydrationDepth;
 #if MONOMELON
         private static readonly FieldInfo BehaviourOwnerField =
@@ -250,9 +257,9 @@ namespace S1API.Entities
                 }
             }
             catch { }
-            if (S1NPCs.NPCManager.InstanceExists && S1NPCs.NPCManager.Instance.NPCContainer != null)
+            if (S1NPCs.NPCManager.InstanceExists)
             {
-                Transform parent = S1NPCs.NPCManager.Instance.NPCContainer;
+                Transform parent = S1NPCs.NPCManager.Instance.transform;
                 if (parent != null && parent.gameObject != null && parent.gameObject.activeInHierarchy)
                     instance.transform.SetParent(parent, false);
             }
@@ -469,6 +476,7 @@ namespace S1API.Entities
             if (sourceNpc == null && existingPlainNpc != null)
             {
                 RepairNpcPrefabReferences(prefabRoot, existingPlainNpc);
+                NormalizeBaseEmployeeNavigation(prefabRoot, rootRole);
                 if (rootRole == NpcRootRole.Dealer)
                     EnsureDealerComponentOnPrefab(prefabRoot);
                 else if (rootRole == NpcRootRole.Supplier)
@@ -533,9 +541,11 @@ namespace S1API.Entities
                 }
 
                 RemoveEmployeeComponentsFromBaseEmployeeFallback(prefabRoot);
+                NormalizeBaseEmployeeDialogueComponents(prefabRoot, rootRole);
                 LogBaseEmployeeComponentState("after employee cleanup", prefabRoot);
                 RewireChildNpcReferences(prefabRoot, replacementNpc);
                 RepairNpcPrefabReferences(prefabRoot, replacementNpc);
+                NormalizeBaseEmployeeNavigation(prefabRoot, rootRole);
                 LogBaseEmployeeNormalization();
             }
             catch (Exception ex)
@@ -594,15 +604,15 @@ namespace S1API.Entities
             if (movement != null)
             {
                 SetGameMember(npc, "Movement", movement);
-                SetGameMember(movement, "npc", npc);
+                SetGameMember(movement, "_npc", npc);
 
-                movement.Agent = EnsureRootNavMeshAgent(prefabRoot);
+                SetGameMember(movement, "_agent", EnsureRootNavMeshAgent(prefabRoot));
 
                 var speedController = prefabRoot.GetComponent<S1NPCs.NPCSpeedController>()
                                       ?? prefabRoot.GetComponentInChildren<S1NPCs.NPCSpeedController>(true);
                 if (speedController != null)
                 {
-                    movement.SpeedController = speedController;
+                    SetGameMember(movement, "_speedController", speedController);
                     SetGameMember(speedController, "Movement", movement);
                 }
             }
@@ -613,6 +623,41 @@ namespace S1API.Entities
             return prefabRoot.GetComponent<UnityEngine.AI.NavMeshAgent>()
                    ?? prefabRoot.AddComponent<UnityEngine.AI.NavMeshAgent>();
         }
+
+        private static void NormalizeBaseEmployeeNavigation(GameObject prefabRoot, NpcRootRole rootRole)
+        {
+            if (prefabRoot == null || rootRole != NpcRootRole.Plain)
+                return;
+
+            var movement = prefabRoot.GetComponent<S1NPCs.NPCMovement>()
+                           ?? prefabRoot.GetComponentInChildren<S1NPCs.NPCMovement>(true);
+            UnityEngine.AI.NavMeshAgent agent = EnsureRootNavMeshAgent(prefabRoot);
+            int propertyInteriorArea = UnityEngine.AI.NavMesh.GetAreaFromName(PropertyInteriorNavMeshAreaName);
+            int ladderArea = UnityEngine.AI.NavMesh.GetAreaFromName(LadderNavMeshAreaName);
+            agent.areaMask = IncludeNavMeshArea(
+                ExcludeNavMeshArea(agent.areaMask, propertyInteriorArea),
+                ladderArea);
+            agent.obstacleAvoidanceType = UnityEngine.AI.ObstacleAvoidanceType.MedQualityObstacleAvoidance;
+
+            if (movement != null)
+            {
+                movement.SetAgentType(S1NPCs.NPCMovement.EAgentType.Humanoid);
+                SetGameMember(
+                    movement,
+                    "_defaultObstacleAvoidanceType",
+                    UnityEngine.AI.ObstacleAvoidanceType.HighQualityObstacleAvoidance);
+            }
+        }
+
+        internal static int ExcludeNavMeshArea(int areaMask, int areaIndex) =>
+            areaIndex is >= 0 and < 32
+                ? areaMask & ~(1 << areaIndex)
+                : areaMask;
+
+        internal static int IncludeNavMeshArea(int areaMask, int areaIndex) =>
+            areaIndex is >= 0 and < 32
+                ? areaMask | (1 << areaIndex)
+                : areaMask;
 
         private static S1Economy.Dealer? EnsureDealerComponentOnPrefab(GameObject prefabRoot)
         {
@@ -678,8 +723,10 @@ namespace S1API.Entities
 
         private static void RepairDealerPrefabReferences(GameObject prefabRoot, S1Economy.Dealer dealer)
         {
-            dealer.HomeEvent ??=
-                prefabRoot.GetComponentInChildren<S1NPCsSchedules.NPCEvent_StayInBuilding>(true);
+            dealer.HomeEvent ??= prefabRoot
+                .GetComponentsInChildren<S1NPCsSchedules.NPCEvent_StayInBuilding>(true)
+                .FirstOrDefault(action =>
+                    NPCPrefabBuilder.IsDealerHomeEventName(action?.gameObject?.name));
 
             S1Dialogue.DialogueController_Dealer controller =
                 prefabRoot.GetComponentInChildren<S1Dialogue.DialogueController_Dealer>(true);
@@ -694,8 +741,14 @@ namespace S1API.Entities
                 controller = controllerObject.AddComponent<S1Dialogue.DialogueController_Dealer>();
                 if (source != null)
                 {
-                    controller.IntObj = source.IntObj;
-                    controller.GenericDialogue = source.GenericDialogue;
+                    SetGameMember(
+                        controller,
+                        "_interactable",
+                        GetGameMember(source, "_interactable"));
+                    SetGameMember(
+                        controller,
+                        "_genericConversation",
+                        GetGameMember(source, "_genericConversation"));
                     controller.DialogueEnabled = source.DialogueEnabled;
                     controller.UseDialogueBehaviour = source.UseDialogueBehaviour;
                     controller.Choices = source.Choices;
@@ -822,6 +875,56 @@ namespace S1API.Entities
             }
         }
 
+        private static void NormalizeBaseEmployeeDialogueComponents(
+            GameObject prefabRoot,
+            NpcRootRole rootRole)
+        {
+            if (prefabRoot == null || rootRole != NpcRootRole.Plain)
+                return;
+
+            try
+            {
+                var employeeControllers =
+                    prefabRoot.GetComponentsInChildren<S1Dialogue.DialogueController_Employee>(true);
+                foreach (S1Dialogue.DialogueController_Employee employeeController in employeeControllers)
+                {
+                    if (employeeController == null)
+                        continue;
+
+                    GameObject controllerObject = employeeController.gameObject;
+                    var civilianController = controllerObject.GetComponent<S1Dialogue.DialogueController>();
+                    if (civilianController == null || civilianController == employeeController)
+                    {
+                        civilianController = controllerObject.AddComponent<S1Dialogue.DialogueController>();
+                        SetGameMember(
+                            civilianController,
+                            "_interactable",
+                            GetGameMember(employeeController, "_interactable"));
+                        SetGameMember(
+                            civilianController,
+                            "_genericConversation",
+                            GetGameMember(employeeController, "_genericConversation"));
+                        civilianController.DialogueEnabled = employeeController.DialogueEnabled;
+                        civilianController.UseDialogueBehaviour = employeeController.UseDialogueBehaviour;
+                        // Customer and other runtime components rebuild their own role-specific dialogue state.
+                        civilianController.Choices = new List<S1Dialogue.DialogueController.DialogueChoice>();
+                        civilianController.GreetingOverrides = new List<S1Dialogue.DialogueController.GreetingOverride>();
+                        civilianController.OverrideContainer = null;
+                    }
+
+                    RemoveComponentImmediate(employeeController);
+                    Logger.Debug(
+                        $"[S1API][BaseEmployeeFallback][Dialogue] Replaced employee dialogue controller on " +
+                        $"'{controllerObject.name}' with the base civilian controller.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning(
+                    $"[S1API][BaseEmployeeFallback][Dialogue] Failed to normalize employee dialogue components: {ex.Message}");
+            }
+        }
+
         private static void RemoveComponentImmediate(Component component)
         {
             try
@@ -867,7 +970,8 @@ namespace S1API.Entities
                 NetworkObject? chosen = null;
                 int count = spawnablePrefabs.GetObjectCount();
                 
-                NpcRootRole rootRole = GetDeclaredRootRole(npcType);
+                NpcRoleDeclaration roleDeclaration = GetDeclaredRoles(npcType);
+                NpcRootRole rootRole = roleDeclaration.RootRole;
                 chosen = ResolveNpcSpawnablePrefab(spawnablePrefabs, count, rootRole);
 
                 if (chosen == null)
@@ -948,6 +1052,7 @@ namespace S1API.Entities
                     throw new InvalidOperationException("NPC prefab is missing its NetworkObject.");
                 var prefabRoot = prefabNO.gameObject ?? throw new InvalidOperationException("NPC prefab is missing its GameObject.");
                 var builder = new NPCPrefabBuilder(prefabRoot, npcType);
+                PrepareDeclaredRoleInfrastructure(builder, roleDeclaration);
                 if (owner != null)
                 {
                     owner.ConfigurePrefab(builder);
@@ -957,27 +1062,37 @@ namespace S1API.Entities
                     InvokeConfigurePrefabWithoutInstance(npcType, builder);
                 }
 
-                // ConfigurePrefab may declare a specialized root role even when the virtual property was not overridden.
-                rootRole = GetDeclaredRootRole(npcType);
+                // Legacy builder calls may declare roles that were not exposed by type-level properties.
+                roleDeclaration = GetDeclaredRoles(npcType);
+                rootRole = roleDeclaration.RootRole;
+                S1Economy.Dealer? dealerComponent = null;
+                S1Economy.Supplier? supplierComponent = null;
                 switch (rootRole)
                 {
                     case NpcRootRole.Dealer:
-                    {
-                        var dealerComponent = EnsureDealerComponentOnPrefab(prefabNO.gameObject);
-                        var dealerDefaults = BuildDealerDefaultsForType(npcType);
-                        if (dealerComponent != null && dealerDefaults != null)
-                            TryApplyDealerDefaults(dealerComponent, dealerDefaults);
+                        dealerComponent = EnsureDealerComponentOnPrefab(prefabNO.gameObject);
                         break;
-                    }
                     case NpcRootRole.Supplier:
-                    {
-                        var supplierComponent = EnsureSupplierComponentOnPrefab(prefabNO.gameObject);
-                        var supplierDefaults = BuildSupplierDefaultsForType(npcType);
-                        if (supplierComponent != null && supplierDefaults != null)
-                            TryApplySupplierDefaults(supplierComponent, supplierDefaults);
-                        SupplierRuntimeCoordinator.FinalizePrefabInfrastructure(prefabNO.gameObject);
+                        supplierComponent = EnsureSupplierComponentOnPrefab(prefabNO.gameObject);
                         break;
-                    }
+                }
+
+                // Root replacement can invalidate references prepared against the donor NPC, so this
+                // pass is deliberately repeated after compatibility roles have been materialized.
+                PrepareDeclaredRoleInfrastructure(builder, roleDeclaration);
+
+                var dealerDefaults = BuildDealerDefaultsForType(npcType);
+                if (dealerComponent != null && dealerDefaults != null)
+                    TryApplyDealerDefaults(dealerComponent, dealerDefaults);
+
+                var supplierDefaults = BuildSupplierDefaultsForType(npcType);
+                if (supplierComponent != null && supplierDefaults != null)
+                    TryApplySupplierDefaults(supplierComponent, supplierDefaults);
+                if (supplierComponent != null)
+                {
+                    SupplierRuntimeCoordinator.FinalizePrefabInfrastructure(
+                        prefabNO.gameObject,
+                        supplierDefaults?.PersistentId);
                 }
 
                 // Ensure schedule actions exist on the template so NetworkBehaviour indices are stable
@@ -990,34 +1105,6 @@ namespace S1API.Entities
                 if (sourcePrefabName == BaseEmployeePrefabName)
                 {
                     RemoveEmployeeComponentsFromBaseEmployeeFallback(prefabNO.gameObject);
-                }
-
-                // If we are pre-registering without an instance owner, ensure baseline Customer exists when applicable
-                if (owner == null)
-                {
-                    try
-                    {
-                        // Only add Customer for types that opted-in via EnsureCustomer
-                        if (IsCustomerType(npcType))
-                        {
-                            var existingCustomer = prefabNO.gameObject.GetComponent<S1Economy.Customer>();
-                            if (existingCustomer == null)
-                            {
-                                existingCustomer = prefabNO.gameObject.AddComponent<S1Economy.Customer>();
-                            }
-
-                            // Apply defaults if the mod registered them
-                            var defaults = GetCustomerDefaultsForType(npcType);
-                            if (defaults != null && existingCustomer != null)
-                            {
-                                var data = BuildCustomerDefaultsForType(npcType);
-                                if (data != null)
-                                    TrySetCustomerDataOnComponent(existingCustomer, data);
-                            }
-                        }
-                        
-                    }
-                    catch { }
                 }
 
                 RepairBehaviourOwnership(prefabRoot, GetPreferredNpcComponent(prefabRoot));
@@ -1062,49 +1149,44 @@ namespace S1API.Entities
             if (prefabRoot == null || GetDeclaredRootRole(npcType) != NpcRootRole.Supplier)
                 return;
 
-            SupplierRuntimeCoordinator.FinalizePrefabInfrastructure(prefabRoot);
+            SupplierRuntimeCoordinator.FinalizePrefabInfrastructure(
+                prefabRoot,
+                BuildSupplierDefaultsForType(npcType)?.PersistentId);
         }
 
-        private static NpcRootRole GetDeclaredRootRole(System.Type npcType)
+        private static NpcRoleDeclaration GetDeclaredRoles(System.Type npcType)
         {
-            bool isDealer = IsDealerType(npcType);
-            bool isSupplier = IsSupplierType(npcType);
-            bool isPhysical = false;
+            NpcRoleDeclaration declaration = NpcRoleDeclarationResolver
+                .GetDeclaredProperties(npcType)
+                .WithCompatibilityRoles(
+                    IsCustomerType(npcType),
+                    IsDealerType(npcType),
+                    IsSupplierType(npcType))
+                .Validate(npcType);
 
-            try
-            {
-                NPC tempInstance = (NPC)FormatterServices.GetUninitializedObject(npcType);
-                isDealer |= tempInstance.IsDealer;
-                isSupplier |= tempInstance.IsSupplier;
-                isPhysical = tempInstance.IsPhysical;
-            }
-            catch
-            {
-            }
-
-            if (isDealer && isSupplier)
-            {
-                throw new InvalidOperationException(
-                    $"Custom NPC type '{npcType.FullName}' cannot be both a dealer and a supplier root.");
-            }
-
-            if (isSupplier)
-            {
-                if (!isPhysical)
-                {
-                    throw new InvalidOperationException(
-                        $"Custom supplier type '{npcType.FullName}' must override IsPhysical to return true.");
-                }
-
+            if (declaration.IsCustomer)
+                RegisterCustomerType(npcType);
+            if (declaration.IsSupplier)
                 RegisterSupplierType(npcType);
-                return NpcRootRole.Supplier;
-            }
-            if (isDealer)
-            {
+            else if (declaration.IsDealer)
                 RegisterDealerType(npcType);
-                return NpcRootRole.Dealer;
-            }
-            return NpcRootRole.Plain;
+
+            return declaration;
+        }
+
+        private static NpcRootRole GetDeclaredRootRole(System.Type npcType) =>
+            GetDeclaredRoles(npcType).RootRole;
+
+        private static void PrepareDeclaredRoleInfrastructure(
+            NPCPrefabBuilder builder,
+            NpcRoleDeclaration declaration)
+        {
+            if (declaration.IsCustomer)
+                builder.EnsureCustomerInfrastructure();
+            if (declaration.IsDealer)
+                builder.EnsureDealerInfrastructure();
+            if (declaration.IsSupplier)
+                builder.EnsureSupplierInfrastructure();
         }
 
         private static void InvokeConfigurePrefabWithoutInstance(System.Type npcType, NPCPrefabBuilder builder)
@@ -1198,29 +1280,11 @@ namespace S1API.Entities
                     return null;
 
                 // Find the NPC type in loaded assemblies
-                System.Type? npcType = null;
-                var baseType = typeof(NPC);
-                var asms = AppDomain.CurrentDomain.GetAssemblies();
-                for (int ai = 0; ai < asms.Length && npcType == null; ai++)
-                {
-                    var asm = asms[ai];
-                    if (asm == baseType.Assembly)
-                        continue; // Skip S1API assembly (internal wrappers)
-
-                    System.Type[] types;
-                    try { types = asm.GetTypes(); } catch { continue; }
-                    for (int ti = 0; ti < types.Length; ti++)
-                    {
-                        var t = types[ti];
-                        if (t == null || t.IsAbstract || !baseType.IsAssignableFrom(t))
-                            continue;
-                        if (t.Name == typeName)
-                        {
-                            npcType = t;
-                            break;
-                        }
-                    }
-                }
+                var baseAssembly = typeof(NPC).Assembly;
+                System.Type? npcType = ReflectionUtils.GetDerivedClasses<NPC>()
+                    .FirstOrDefault(type =>
+                        type.Assembly != baseAssembly &&
+                        type.Name == typeName);
 
                 if (npcType == null)
                     return null;
@@ -1296,6 +1360,7 @@ namespace S1API.Entities
 
                 // Add to All list
                 All.Add(wrapper);
+                ReconcileAllCustomNpcRelationshipConnections();
 
                 return wrapper;
             }
@@ -1319,6 +1384,14 @@ namespace S1API.Entities
                 wrapper.Appearance = new NPCAppearance(wrapper, runtimeAvatar);
                 wrapper.RestoreRuntimeAvatarAppearance();
 
+                try
+                {
+                    var registry = S1NPCs.NPCManager.NPCRegistry;
+                    if (registry != null && !registry.Contains(baseNpc))
+                        registry.Add(baseNpc);
+                }
+                catch { }
+
                 var identity = baseNpc.gameObject?.GetComponent<NPCPrefabIdentity>();
                 if (identity != null)
                 {
@@ -1330,14 +1403,6 @@ namespace S1API.Entities
 
                 wrapper.RefreshMessagingIcons();
                 wrapper._relationshipDataAppliedFromPrefab = identity != null && baseNpc.RelationData != null;
-
-                try
-                {
-                    var registry = S1NPCs.NPCManager.NPCRegistry;
-                    if (registry != null && !registry.Contains(baseNpc))
-                        registry.Add(baseNpc);
-                }
-                catch { }
             }
             catch (Exception ex)
             {
@@ -1413,10 +1478,25 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Pre-registers a per-type NPC prefab into FishNet spawnables without creating a live instance.
-        /// Should be called on both server and client before any NPC instances are spawned.
+        /// Compatibility shim for manually pre-registering a per-type NPC prefab.
         /// </summary>
+        /// <remarks>S1API owns prefab registration and retry timing. Mods should not call this method.</remarks>
+        /// <param name="npcType">The custom NPC type whose prefab S1API will pre-register.</param>
+        [Obsolete("S1API automatically pre-registers NPC prefabs. Remove this call.", false)]
         public static void PreRegisterPrefabForType(System.Type npcType)
+        {
+            if (!_loggedExternalPreRegisterTypeCall)
+            {
+                _loggedExternalPreRegisterTypeCall = true;
+                Logger.Warning(
+                    "[S1API][NPCPrefabRegistration] A mod called the legacy NPC.PreRegisterPrefabForType API. " +
+                    "S1API already owns prefab registration and retry timing; remove this call from mod initialization.");
+            }
+
+            PreRegisterPrefabForTypeInternal(npcType);
+        }
+
+        internal static void PreRegisterPrefabForTypeInternal(System.Type npcType)
         {
             try
             {
@@ -1435,9 +1515,24 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Scans loaded assemblies for subclasses of S1API.Entities.NPC and pre-registers their prefabs.
+        /// Compatibility shim for manually scanning and pre-registering NPC prefabs.
         /// </summary>
+        /// <remarks>S1API owns prefab registration and retry timing. Mods should not call this method.</remarks>
+        [Obsolete("S1API automatically pre-registers NPC prefabs. Remove this call.", false)]
         public static void PreRegisterAllNpcPrefabs()
+        {
+            if (!_loggedExternalPreRegisterAllCall)
+            {
+                _loggedExternalPreRegisterAllCall = true;
+                Logger.Warning(
+                    "[S1API][NPCPrefabRegistration] A mod called the legacy NPC.PreRegisterAllNpcPrefabs API. " +
+                    "S1API already scans and registers NPC prefabs when FishNet is ready; remove this call from mod initialization.");
+            }
+
+            PreRegisterAllNpcPrefabsInternal();
+        }
+
+        internal static void PreRegisterAllNpcPrefabsInternal()
         {
             try
             {
@@ -1447,35 +1542,15 @@ namespace S1API.Entities
                 if (spawnables == null)
                     return;
 
-                var baseType = typeof(NPC);
-                var baseAssembly = baseType.Assembly;
-                var candidateTypes = new System.Collections.Generic.List<System.Type>();
-                var asms = AppDomain.CurrentDomain.GetAssemblies();
-                for (int ai = 0; ai < asms.Length; ai++)
-                {
-                    var asm = asms[ai];
-                    Type[] types;
-                    try { types = asm.GetTypes(); } catch { continue; }
-                    for (int ti = 0; ti < types.Length; ti++)
-                    {
-                        var t = types[ti];
-                        if (t == null || t.IsAbstract)
-                            continue;
-                        if (baseType.IsAssignableFrom(t))
-                        {
-                            // Skip internal S1API NPC wrappers; only pre-register mod-defined types
-                            if (t.Assembly == baseAssembly)
-                                continue;
-                            candidateTypes.Add(t);
-                        }
-                    }
-                }
+                var baseAssembly = typeof(NPC).Assembly;
+                var candidateTypes = ReflectionUtils.GetDerivedClasses<NPC>()
+                    .Where(type => type.Assembly != baseAssembly);
 
                 foreach (System.Type type in candidateTypes.OrderBy(
                              candidate => candidate.FullName,
                              StringComparer.Ordinal))
                 {
-                    PreRegisterPrefabForType(type);
+                    PreRegisterPrefabForTypeInternal(type);
                 }
 
                 SupplierRuntimeCoordinator.EnsureAllDeliveryPrefabsRegistered();
@@ -1669,13 +1744,69 @@ namespace S1API.Entities
             {
                 var builder = new DealerDataBuilder();
                 configure(builder);
-                TypeToBuiltDealerDefaults[npcType] = builder.BuildInternal();
+                var built = builder.BuildInternal();
+                TypeToBuiltDealerDefaults[npcType] = built;
+                WarnForUnsupportedDealerSettings(DescribeNpcTypeOwner(npcType), built);
             }
             catch (Exception ex)
             {
                 TypeToBuiltDealerDefaults.Remove(npcType);
                 Logger.Warning($"[S1API] Failed to cache dealer defaults for '{npcType.Name}': {ex.Message}");
             }
+        }
+
+        private static void WarnForUnsupportedDealerSettings(
+            string dealerOwner,
+            DealerDataBuilder.DealerConfigData data)
+        {
+            if (data.InsufficientQualityConfigured || data.ExcessQualityConfigured)
+            {
+                var configuredOptions = new System.Collections.Generic.List<string>();
+                if (data.InsufficientQualityConfigured)
+                    configuredOptions.Add("AllowInsufficientQuality");
+                if (data.ExcessQualityConfigured)
+                    configuredOptions.Add("AllowExcessQuality");
+
+                WarnUnsupportedDealerSettingOnce(
+                    dealerOwner,
+                    "quality",
+                    $"{string.Join(" and ", configuredOptions)} cannot be applied because the native dealer quality fields were removed. " +
+                    "Remove these calls; S1API has preserved them as compatibility no-ops.");
+            }
+
+            if (data.CompletedDealsVariableConfigured)
+            {
+                WarnUnsupportedDealerSettingOnce(
+                    dealerOwner,
+                    "completed-deals-variable",
+                    $"WithCompletedDealsVariable('{data.CompletedDealsVariable}') is not supported for custom dealers and is not applied. " +
+                    "Remove this call or track completed deals in the mod's own save data.");
+            }
+        }
+
+        private static void WarnUnsupportedDealerSettingOnce(
+            string dealerOwner,
+            string settingKey,
+            string guidance)
+        {
+            string normalizedOwner = string.IsNullOrWhiteSpace(dealerOwner)
+                ? "<unknown-dealer>"
+                : dealerOwner;
+            string warningKey = normalizedOwner + "|" + settingKey;
+            lock (WarnedUnsupportedDealerSettings)
+            {
+                if (!WarnedUnsupportedDealerSettings.Add(warningKey))
+                    return;
+            }
+
+            Logger.Warning($"[S1API][DealerConfiguration] Dealer '{normalizedOwner}': {guidance}");
+        }
+
+        private static string DescribeNpcTypeOwner(System.Type npcType)
+        {
+            string typeName = npcType.FullName ?? npcType.Name;
+            string assemblyName = npcType.Assembly.GetName().Name ?? "<unknown-assembly>";
+            return $"{typeName} (assembly={assemblyName})";
         }
 
         internal static void RegisterDealerType(System.Type npcType)
@@ -1934,7 +2065,7 @@ namespace S1API.Entities
             if (Icon == null)
                 NPCDataAccess.ApplyIcon(S1NPC, S1DevUtilities.PlayerSingleton<S1ContactApps.ContactsApp>.Instance.AppIcon);
 
-            S1NPC.BakedGUID = Guid.NewGuid().ToString();
+            AssignPersistentGuid(id);
             
             if (IsPhysical)
                 ResetConversationCategoriesToDefaults();
@@ -1993,6 +2124,7 @@ namespace S1API.Entities
             bool hasLastName = !string.IsNullOrEmpty(lastName);
 
             NPCDataAccess.ApplyIdentity(S1NPC, id, firstName, lastName);
+            AssignPersistentGuid(id);
             if (icon != null)
             {
                 NPCDataAccess.ApplyIcon(S1NPC, icon);
@@ -2196,6 +2328,7 @@ namespace S1API.Entities
                 _hasExplicitIcon = value != null;
                 NPCDataAccess.ApplyIcon(S1NPC, value);
                 RefreshMessagingIcons();
+                Internal.Patches.ContactsAppPatches.RefreshContactIcon(S1NPC);
             }
         }
 
@@ -2206,6 +2339,7 @@ namespace S1API.Entities
 
             NPCDataAccess.ApplyIcon(S1NPC, icon);
             RefreshMessagingIcons();
+            Internal.Patches.ContactsAppPatches.RefreshContactIcon(S1NPC);
         }
 
         /// <summary>
@@ -2253,7 +2387,18 @@ namespace S1API.Entities
         /// Non-physical NPCs (<c>false</c>): Invisible, primarily for messaging and phone contacts, cannot move or be directly interacted with.
         /// </remarks>
         public virtual bool IsPhysical => false;
-        
+
+        /// <summary>
+        /// Determines whether this NPC has native customer functionality.
+        /// Override as true for NPCs that should buy products from the player.
+        /// </summary>
+        /// <remarks>
+        /// This declarative type-level value is inspected while S1API prepares the NPC prefab.
+        /// Overrides must be stable, side-effect-free, and must not depend on constructor or field initialization.
+        /// When true, S1API adds and configures the customer component before network registration.
+        /// </remarks>
+        public virtual bool IsCustomer => false;
+
         /// <summary>
         /// Determines if the NPC has dealer functionality. Override as true for NPCs that should be dealers.
         /// </summary>
@@ -2261,6 +2406,7 @@ namespace S1API.Entities
         /// Dealer NPCs (<c>true</c>): Can manage customers, handle contracts, accept cash payments, and track inventory for sales.
         /// When true, the NPC prefab will use the "Dealer" network prefab instead of "CivilianNPC".
         /// Non-dealer NPCs (<c>false</c>): Regular NPCs without dealer-specific functionality.
+        /// This declarative type-level value must be stable, side-effect-free, and independent of normal instance initialization.
         /// </remarks>
         public virtual bool IsDealer => false;
 
@@ -2270,6 +2416,8 @@ namespace S1API.Entities
         /// <remarks>
         /// Supplier NPCs can provide dead-drop orders, meetings, delivery unlocks, and debt tracking.
         /// A custom NPC cannot be both a dealer and a supplier.
+        /// Suppliers must also override <see cref="IsPhysical"/> to return <c>true</c>.
+        /// This declarative type-level value must be stable, side-effect-free, and independent of normal instance initialization.
         /// </remarks>
         public virtual bool IsSupplier => false;
 
@@ -2409,12 +2557,10 @@ namespace S1API.Entities
 
             if (S1NPC.MSGConversation == null)
             {
-#if IL2CPPMELON
-                S1NPC.CreateMessageConversation();
-#elif MONOMELON
-                MethodInfo createConvoMethod = AccessTools.Method(typeof(S1NPCs.NPC), "CreateMessageConversation");
+                MethodInfo createConvoMethod = AccessTools.Method(
+                    typeof(S1NPCs.NPC),
+                    "CreateAndAssignDefaultMessageConversation");
                 createConvoMethod?.Invoke(S1NPC, null);
-#endif
                 if (S1NPC.MSGConversation == null)
                 {
                     Logger.Warning($"EnsureMessageConversationInstance: creation failed for '{GetSafeNpcId()}'.");
@@ -2442,19 +2588,6 @@ namespace S1API.Entities
             catch (Exception ex)
             {
                 Logger.Warning($"EnsureMessageConversationInstance: failed to apply categories for '{GetSafeNpcId()}': {ex.Message}");
-            }
-        }
-
-        private static bool SafeIsServer()
-        {
-            try
-            {
-                var nm = InstanceFinder.NetworkManager;
-                return nm != null && nm.IsServer;
-            }
-            catch
-            {
-                return false;
             }
         }
 
@@ -2621,23 +2754,67 @@ namespace S1API.Entities
         /// </summary>
         public bool RequiresRegionUnlocked
         {
-#if IL2CPPMELON
-            get => DefaultRequiresRegionUnlocked;
-            set { /* no-op under IL2CPP; constant in base game so non accessible */ }
-#else
-            get => _requiresRegionUnlockedField != null && (bool)_requiresRegionUnlockedField.GetValue(S1NPC)!;
-            set { _requiresRegionUnlockedField?.SetValue(S1NPC, value); }
-#endif
+            get => ResolveRequiresRegionUnlocked(S1NPC);
+            set => TrySetRequiresRegionUnlocked(S1NPC, value);
         }
 
-        // TODO: Add CurrentBuilding (currently missing NPCEnterableBuilding abstraction)
-        // public ??? CurrentBuilding { get; set; }
+        /// <summary>
+        /// The enterable building the NPC is currently in, if any.
+        /// </summary>
+        public Map.Building? CurrentBuilding
+        {
+            get
+            {
+                object? currentBuilding = S1NPC.CurrentBuilding;
+                return currentBuilding == null
+                    ? null
+                    : Map.Building.All.FirstOrDefault(building => ReferenceEquals(building._gameBuilding, currentBuilding));
+            }
+        }
 
         /// <summary>
         /// The current vehicle the NPC is occupying, if any.
         /// </summary>
         public LandVehicle? CurrentVehicle =>
             S1NPC.CurrentVehicle != null ? new LandVehicle(S1NPC.CurrentVehicle) : null;
+
+        /// <summary>
+        /// Occurs when the NPC enters a vehicle.
+        /// </summary>
+        /// <remarks>This event preserves the timing of the native vehicle-entry callback.</remarks>
+        public event Action<LandVehicle> OnEnterVehicle
+        {
+            add => AddVehicleLifecycleHandler(
+                value,
+                _enterVehicleRegistrations ??=
+                    new ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>(),
+                SubscribeEnterVehicle,
+                nameof(OnEnterVehicle));
+            remove => RemoveVehicleLifecycleHandler(
+                value,
+                _enterVehicleRegistrations,
+                UnsubscribeEnterVehicle,
+                nameof(OnEnterVehicle));
+        }
+
+        /// <summary>
+        /// Occurs when the NPC exits a vehicle.
+        /// </summary>
+        /// <remarks>This event preserves the timing of the native vehicle-exit callback.</remarks>
+        public event Action<LandVehicle> OnExitVehicle
+        {
+            add => AddVehicleLifecycleHandler(
+                value,
+                _exitVehicleRegistrations ??=
+                    new ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>(),
+                SubscribeExitVehicle,
+                nameof(OnExitVehicle));
+            remove => RemoveVehicleLifecycleHandler(
+                value,
+                _exitVehicleRegistrations,
+                UnsubscribeExitVehicle,
+                nameof(OnExitVehicle));
+        }
 
         // TODO: Add Inventory (currently missing NPCInventory abstraction)
         // public ??? Inventory { get; set; }
@@ -2673,9 +2850,9 @@ namespace S1API.Entities
         }
 
         /// <summary>
-        /// Revives the NPC.
-        /// Note: custom NPC revive currently routes through a temporary NPCHealth patch with a reflective fallback meant
-        /// for pre-network-init safety; live multiplayer calls should eventually stay on the authoritative network path.
+        /// Revives the NPC. For a network-spawned custom NPC, the server uses the native revive method.
+        /// A client call does not alter local state.
+        /// Unspawned custom NPCs use a temporary compatibility fallback until FishNet initializes.
         /// </summary>
         public void Revive() =>
             S1NPC.Health.Revive();
@@ -2728,19 +2905,10 @@ namespace S1API.Entities
             S1NPC.SetScale(scale, lerpTime);
 
         /// <summary>
-        /// Causes the NPC to become panicked.
-        /// Currently host/server-only: non-host clients hit the SafeIsServer guard below and this becomes a silent no-op,
-        /// which is inconsistent with other server-RPC-style wrappers in the API and with the runtime docs.
+        /// Requests that the NPC become panicked.
         /// </summary>
-        public void Panic()
-        {
-            // TODO: Revisit this guard. Unlike wrappers such as Cartel.SetStatus and CombatBehaviour.SetAndAttackTarget,
-            // Panic() can no longer be invoked meaningfully from multiplayer clients because non-host callers return here.
-            if (!SafeIsServer())
-                return;
-
+        public void Panic() =>
             S1NPC.SetPanicked_Server();
-        }
 
         /// <summary>
         /// Causes the NPC to stop panicking, if they are currently.
@@ -2780,35 +2948,149 @@ namespace S1API.Entities
             }
         }
 
-        // TODO: Add OnEnterVehicle listener (currently missing LandVehicle abstraction)
-        // public event Action OnEnterVehicle { }
+        /// <summary>
+        /// Called when this NPC hears an explosion. The snapshot is null only when the native event has no noise event.
+        /// </summary>
+        public event Action<NPCNoiseEvent?> OnExplosionHeard
+        {
+            add => AddAwarenessHandler(
+                value,
+                _explosionHeardRegistrations ??=
+                    new ManagedEventRegistrationTracker<AwarenessEventRegistration<S1Noise.NoiseEvent>>(),
+                awareness => awareness.onExplosionHeard,
+                ResolveNoiseEvent,
+                nameof(OnExplosionHeard));
+            remove => RemoveAwarenessHandler(
+                value,
+                _explosionHeardRegistrations,
+                nameof(OnExplosionHeard));
+        }
 
-        // TODO: Add OnExitVehicle listener (currently missing LandVehicle abstraction)
-        // public event Action OnExitVehicle { }
+        /// <summary>
+        /// Called when this NPC hears a gunshot. The snapshot is null only when the native event has no noise event.
+        /// </summary>
+        public event Action<NPCNoiseEvent?> OnGunshotHeard
+        {
+            add => AddAwarenessHandler(
+                value,
+                _gunshotHeardRegistrations ??=
+                    new ManagedEventRegistrationTracker<AwarenessEventRegistration<S1Noise.NoiseEvent>>(),
+                awareness => awareness.onGunshotHeard,
+                ResolveNoiseEvent,
+                nameof(OnGunshotHeard));
+            remove => RemoveAwarenessHandler(
+                value,
+                _gunshotHeardRegistrations,
+                nameof(OnGunshotHeard));
+        }
 
-        // TODO: Add OnExplosionHeard listener (currently missing NoiseEvent abstraction)
-        // public event Action OnExplosionHeard { }
+        /// <summary>
+        /// Called when this NPC is hit by a vehicle. The vehicle is null when the native event has no vehicle.
+        /// </summary>
+        public event Action<LandVehicle?> OnHitByCar
+        {
+            add => AddAwarenessHandler(
+                value,
+                _hitByCarRegistrations ??=
+                    new ManagedEventRegistrationTracker<AwarenessEventRegistration<S1Vehicles.LandVehicle>>(),
+                awareness => awareness.onHitByCar,
+                ResolveVehicle,
+                nameof(OnHitByCar));
+            remove => RemoveAwarenessHandler(
+                value,
+                _hitByCarRegistrations,
+                nameof(OnHitByCar));
+        }
 
-        // TODO: Add OnGunshotHeard listener (currently missing NoiseEvent abstraction)
-        // public event Action OnGunshotHeard { }
+        /// <summary>
+        /// Called when this NPC notices a player dealing drugs. The player is null when S1API has no wrapper for the native player.
+        /// </summary>
+        public event Action<Player?> OnNoticedDrugDealing
+        {
+            add => AddAwarenessHandler(
+                value,
+                _noticedDrugDealingRegistrations ??=
+                    new ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>(),
+                awareness => awareness.onNoticedDrugDealing,
+                ResolvePlayer,
+                nameof(OnNoticedDrugDealing));
+            remove => RemoveAwarenessHandler(
+                value,
+                _noticedDrugDealingRegistrations,
+                nameof(OnNoticedDrugDealing));
+        }
 
-        // TODO: Add OnHitByCar listener (currently missing LandVehicle abstraction)
-        // public event Action OnHitByCar { }
+        /// <summary>
+        /// Called when this NPC notices a player committing a general crime. The player is null when S1API has no wrapper for the native player.
+        /// </summary>
+        public event Action<Player?> OnNoticedGeneralCrime
+        {
+            add => AddAwarenessHandler(
+                value,
+                _noticedGeneralCrimeRegistrations ??=
+                    new ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>(),
+                awareness => awareness.onNoticedGeneralCrime,
+                ResolvePlayer,
+                nameof(OnNoticedGeneralCrime));
+            remove => RemoveAwarenessHandler(
+                value,
+                _noticedGeneralCrimeRegistrations,
+                nameof(OnNoticedGeneralCrime));
+        }
 
-        // TODO: Add OnNoticedDrugDealing listener (currently missing Player abstraction)
-        // public event Action OnNoticedDrugDealing { }
+        /// <summary>
+        /// Called when this NPC notices a player committing a petty crime. The player is null when S1API has no wrapper for the native player.
+        /// </summary>
+        public event Action<Player?> OnNoticedPettyCrime
+        {
+            add => AddAwarenessHandler(
+                value,
+                _noticedPettyCrimeRegistrations ??=
+                    new ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>(),
+                awareness => awareness.onNoticedPettyCrime,
+                ResolvePlayer,
+                nameof(OnNoticedPettyCrime));
+            remove => RemoveAwarenessHandler(
+                value,
+                _noticedPettyCrimeRegistrations,
+                nameof(OnNoticedPettyCrime));
+        }
 
-        // TODO: Add OnNoticedGeneralCrime listener (currently missing Player abstraction)
-        // public event Action OnNoticedGeneralCrime { }
+        /// <summary>
+        /// Called when this NPC notices a player violating curfew. The player is null when S1API has no wrapper for the native player.
+        /// </summary>
+        public event Action<Player?> OnNoticedPlayerViolatingCurfew
+        {
+            add => AddAwarenessHandler(
+                value,
+                _noticedPlayerViolatingCurfewRegistrations ??=
+                    new ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>(),
+                awareness => awareness.onNoticedPlayerViolatingCurfew,
+                ResolvePlayer,
+                nameof(OnNoticedPlayerViolatingCurfew));
+            remove => RemoveAwarenessHandler(
+                value,
+                _noticedPlayerViolatingCurfewRegistrations,
+                nameof(OnNoticedPlayerViolatingCurfew));
+        }
 
-        // TODO: Add OnNoticedPettyCrime listener (currently missing Player abstraction)
-        // public event Action OnNoticedPettyCrime { }
-
-        // TODO: Add OnPlayerViolatingCurfew listener (currently missing Player abstraction)
-        // public event Action OnPlayerViolatingCurfew { }
-
-        // TODO: Add OnNoticedSuspiciousPlayer listener (currently missing Player abstraction)
-        // public event Action OnNoticedSuspiciousPlayer { }
+        /// <summary>
+        /// Called when this NPC notices a suspicious player. The player is null when S1API has no wrapper for the native player.
+        /// </summary>
+        public event Action<Player?> OnNoticedSuspiciousPlayer
+        {
+            add => AddAwarenessHandler(
+                value,
+                _noticedSuspiciousPlayerRegistrations ??=
+                    new ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>(),
+                awareness => awareness.onNoticedSuspiciousPlayer,
+                ResolvePlayer,
+                nameof(OnNoticedSuspiciousPlayer));
+            remove => RemoveAwarenessHandler(
+                value,
+                _noticedSuspiciousPlayerRegistrations,
+                nameof(OnNoticedSuspiciousPlayer));
+        }
 
         /// <summary>
         /// Called when the NPC died.
@@ -3077,6 +3359,29 @@ namespace S1API.Entities
         internal bool RelationshipDataAppliedFromPrefab => _relationshipDataAppliedFromPrefab;
 
         /// <summary>
+        /// INTERNAL: Whether native relationship state was hydrated from save data.
+        /// </summary>
+        internal bool RelationshipLoadedFromSave { get; private set; }
+
+        /// <summary>
+        /// INTERNAL: Applies relationship data from a native save payload and retains it through activation.
+        /// </summary>
+        internal void LoadRelationshipFromSave(
+            float relationDelta,
+            bool unlocked,
+            S1Relation.NPCRelationData.EUnlockType unlockType)
+        {
+            if (!NPCRelationshipPersistencePolicy.IsValidSavedDelta(relationDelta))
+                return;
+
+            _loadedRelationshipDelta = relationDelta;
+            _loadedRelationshipUnlocked = unlocked;
+            _loadedRelationshipUnlockType = unlockType;
+            RelationshipLoadedFromSave = true;
+            RestoreLoadedRelationship();
+        }
+
+        /// <summary>
         /// INTERNAL: Constructor used for base game NPCs.
         /// </summary>
         /// <param name="npc">Reference to a base game NPC.</param>
@@ -3143,6 +3448,8 @@ namespace S1API.Entities
             {
                 _clientNetworkSpawnHydrationDepth--;
             }
+
+            MarkCustomNpcFinalized();
         }
 
         internal override void SaveInternal(string folderPath, ref List<string> extraSaveables)
@@ -3247,6 +3554,7 @@ namespace S1API.Entities
             {
                 awareness.Responses = validCivilianResponses;
             }
+
         }
 
         private void InitializeBehaviourComponents()
@@ -3434,6 +3742,27 @@ namespace S1API.Entities
                 npcBehaviour.DeadBehaviour = existing;
             }
 
+            // Bridge NPCScheduleManager into the Behaviour priority stack. Without this,
+            // custom NPCs' schedules run entirely outside the priority system: nothing ever
+            // pauses NPCScheduleManager when a higher-priority behaviour (dialogue, combat,
+            // flee, etc.) activates, so e.g. NPCs keep walking their schedule while a
+            // conversation is in progress. ScheduleBehaviour.Priority is left at the lowest
+            // value so every other behaviour preempts it, matching vanilla NPC prefabs where
+            // the schedule is the baseline/fallback activity.
+            var scheduleManager = gameObject.GetComponentInChildren<S1NPCs.NPCScheduleManager>(true);
+            if (scheduleManager != null)
+            {
+                var scheduleBehaviour = npcBehaviour.GetComponentInChildren<S1Behaviour.ScheduleBehaviour>(true);
+                if (scheduleBehaviour == null)
+                {
+                    GameObject go = new GameObject("ScheduleBehaviour");
+                    go.transform.SetParent(npcBehaviour.transform, false);
+                    scheduleBehaviour = go.AddComponent<S1Behaviour.ScheduleBehaviour>();
+                }
+                scheduleBehaviour.schedule = scheduleManager;
+                scheduleBehaviour.Priority = -1;
+            }
+
             RepairBehaviourOwnership(gameObject, S1NPC);
 
             foreach (S1Behaviour.Behaviour behaviour in
@@ -3616,6 +3945,8 @@ namespace S1API.Entities
                 Logger.Error($"[NPC] InitializeRelationshipData: Stack trace: {ex.StackTrace}");
                 /* ignore: base game will handle in its own lifecycle if not ready */
             }
+
+            _relationship?.EnsureUnlockedHook();
         }
 
         private void ApplyRandomInventoryDefaults()
@@ -3853,6 +4184,52 @@ namespace S1API.Entities
             }
         }
 
+        private void AssignPersistentGuid(string? npcId)
+        {
+            Guid guid = NPCPersistentIds.TryGetGuid(npcId, out Guid persistentGuid)
+                ? persistentGuid
+                : Guid.NewGuid();
+#if IL2CPPMELON
+            S1NPC.SetGUID(new Il2CppSystem.Guid(guid.ToString()));
+#else
+            S1NPC.SetGUID(guid);
+#endif
+        }
+
+        internal void RegisterPersistentGuidForContractLoad()
+        {
+            if (!Guid.TryParse(S1NPC.GUID.ToString(), out Guid guid))
+                return;
+
+            try
+            {
+#if IL2CPPMELON
+                S1NPC.SetGUID(new Il2CppSystem.Guid(guid.ToString()));
+#else
+                S1NPC.SetGUID(guid);
+#endif
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning(
+                    $"[NPC] Failed to register persistent GUID for '{GetSafeNpcId()}': {ex.Message}");
+            }
+        }
+
+        private void RestoreLoadedRelationship()
+        {
+            if (!_loadedRelationshipDelta.HasValue || S1NPC.RelationData == null)
+                return;
+
+            S1NPC.RelationData.SetRelationship(_loadedRelationshipDelta.Value, false);
+            if (_loadedRelationshipUnlocked)
+            {
+                S1NPC.RelationData.Unlock(
+                    _loadedRelationshipUnlockType,
+                    notify: false);
+            }
+        }
+
         private void RestoreRuntimeAvatarAppearance()
         {
             if (_runtimeAvatar == null)
@@ -3868,11 +4245,15 @@ namespace S1API.Entities
 
         internal readonly bool IsCustomNPC;
 
-#if IL2CPPMELON
         private const bool DefaultRequiresRegionUnlocked = true;
-#else
-        private readonly FieldInfo _requiresRegionUnlockedField = AccessTools.Field(typeof(S1NPCs.NPC), "RequiresRegionUnlocked");
-#endif
+
+        internal static bool ResolveRequiresRegionUnlocked(object npc) =>
+            Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(npc, "RequiresRegionUnlocked") is bool value
+                ? value
+                : DefaultRequiresRegionUnlocked;
+
+        internal static bool TrySetRequiresRegionUnlocked(object npc, bool value) =>
+            Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(npc, "RequiresRegionUnlocked", value);
 
         private readonly MethodInfo _unsettleMethod = AccessTools.Method(typeof(S1NPCs.NPC), "SetUnsettled");
         private readonly MethodInfo _removePanicMethod = AccessTools.Method(typeof(S1NPCs.NPC), "RemovePanicked");
@@ -3885,11 +4266,32 @@ namespace S1API.Entities
         private NPCSupplier? _supplier;
         private NPCRelationship? _relationship;
         private NPCMessaging? _messaging;
+        private ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>?
+            _noticedDrugDealingRegistrations;
+        private ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>?
+            _noticedGeneralCrimeRegistrations;
+        private ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>?
+            _noticedPettyCrimeRegistrations;
+        private ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>?
+            _noticedPlayerViolatingCurfewRegistrations;
+        private ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>?
+            _noticedSuspiciousPlayerRegistrations;
+        private ManagedEventRegistrationTracker<AwarenessEventRegistration<S1Noise.NoiseEvent>>?
+            _gunshotHeardRegistrations;
+        private ManagedEventRegistrationTracker<AwarenessEventRegistration<S1Noise.NoiseEvent>>?
+            _explosionHeardRegistrations;
+        private ManagedEventRegistrationTracker<AwarenessEventRegistration<S1Vehicles.LandVehicle>>?
+            _hitByCarRegistrations;
         private NPCSmoking? _smoking;
         private NPCSprayPainting? _sprayPainting;
         private NPCDrinking? _drinking;
         private NPCItemHolding? _itemHolding;
+        private ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>? _enterVehicleRegistrations;
+        private ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>? _exitVehicleRegistrations;
         private bool _relationshipDataAppliedFromPrefab;
+        private float? _loadedRelationshipDelta;
+        private bool _loadedRelationshipUnlocked;
+        private S1Relation.NPCRelationData.EUnlockType _loadedRelationshipUnlockType;
         private readonly System.Collections.Generic.List<DealerRecommendationSubscription> _recommendationSubscriptions =
             new System.Collections.Generic.List<DealerRecommendationSubscription>();
 
@@ -3926,6 +4328,7 @@ namespace S1API.Entities
                 }
 
                 NPCDataAccess.PrepareForRuntime(S1NPC);
+                RestoreLoadedRelationship();
 
                 var customer = gameObject.GetComponent<S1Economy.Customer>();
                 if (customer != null)
@@ -3978,11 +4381,7 @@ namespace S1API.Entities
                         ? "Avatar"
                         : "Avatar(active)");
             }
-            else if (activeAvatar.HeadBone == null)
-            {
-                missing.Add("Avatar.HeadBone");
-            }
-            else if (activeAvatar.HeadBone.GetComponentInChildren<S1VoiceOver.VOEmitter>() == null)
+            else if (activeAvatar.GetComponentInChildren<S1VoiceOver.VOEmitter>() == null)
             {
                 missing.Add(nameof(S1VoiceOver.VOEmitter));
             }
@@ -4008,6 +4407,8 @@ namespace S1API.Entities
         {
             try
             {
+                RestoreLoadedRelationship();
+
                 // Ensure NPCAwareness.Responses reference is valid after spawn
                 // Network spawning can sometimes break component references
                 if (S1NPC.Awareness != null && S1NPC.Responses is S1Responses.NPCResponses_Civilian validResponses)
@@ -4102,24 +4503,10 @@ namespace S1API.Entities
                     Logger.Error($"Stack trace: {ex.StackTrace}");
                 }
 
-                // Apply per-type relationship defaults after base fields are present, unless loaded from save
-                // Also preserve unlock state if NPC is already unlocked (might have been loaded from save)
-                var currentRelationData = S1NPC.RelationData;
-                
-                // Check if relationship data appears to have been loaded from save (unlocked or non-default delta)
-                // This handles the case where load happens after FinalizeNetworkSpawn but before it runs
-                bool appearsLoadedFromSave = false;
-                if (currentRelationData != null)
-                {
-                    bool isUnlocked = currentRelationData.Unlocked;
-                    float delta = currentRelationData.RelationDelta;
-                    
-                    // If NPC is unlocked or delta is not default (2.0), it likely came from save data
-                    // This prevents defaults from overwriting loaded relationship data
-                    appearsLoadedFromSave = isUnlocked || (Math.Abs(delta - DefaultRelationDelta) > 0.01f);
-                }
-                
-                if (!appearsLoadedFromSave)
+                // Apply per-type relationship defaults after base fields are present, unless
+                // the native relationship payload has already been hydrated from save data.
+                if (NPCRelationshipPersistencePolicy.ShouldApplyDefaults(
+                    RelationshipLoadedFromSave))
                 {
                     try
                     {
@@ -4196,6 +4583,8 @@ namespace S1API.Entities
                     _relationshipDataAppliedFromPrefab = true;
                 }
 
+                _relationship?.EnsureUnlockedHook();
+
                 // Note: Random inventory defaults are applied in InitializeInventoryComponent, not here
                 // to avoid duplicate item insertion when StartupItems is processed by NPCInventory.Awake
 
@@ -4235,8 +4624,7 @@ namespace S1API.Entities
 
                 // Check if all custom NPCs are now ready (finalized)
                 // This sets the CustomNpcsReady flag once all custom NPCs have been spawned and finalized
-                FinalizedCustomNpcTypes.Add(GetType());
-                CheckAndSetCustomNpcsReady();
+                MarkCustomNpcFinalized();
             }
             catch (Exception ex)
             {
@@ -4246,7 +4634,7 @@ namespace S1API.Entities
 
         /// <summary>
         /// Checks if all custom NPCs have been finalized and sets the CustomNpcsReady flag.
-        /// This is called from FinalizeNetworkSpawn to signal when all custom NPCs are ready.
+        /// Called after server finalization and client network-spawn hydration.
         /// </summary>
         internal static void CheckAndSetCustomNpcsReady()
         {
@@ -4264,8 +4652,8 @@ namespace S1API.Entities
                 if (customNpcTypes.Count == 0)
                     return;
 
-                bool allTypesFinalized = customNpcTypes.All(
-                    type => FinalizedCustomNpcTypes.Contains(type));
+                bool allTypesFinalized = Internal.Entities.CustomNpcReadinessPolicy
+                    .AreAllTypesFinalized(customNpcTypes, FinalizedCustomNpcTypes);
 
                 if (allTypesFinalized)
                     CustomNpcsReady = true;
@@ -4273,6 +4661,81 @@ namespace S1API.Entities
             catch (Exception ex)
             {
                 Logger.Warning($"[NPC] Failed to check CustomNpcsReady status: {ex.Message}");
+            }
+        }
+
+        private void MarkCustomNpcFinalized()
+        {
+            Internal.Entities.CustomNpcReadinessPolicy.MarkFinalized(
+                GetType(),
+                FinalizedCustomNpcTypes);
+            ReconcileAllCustomNpcRelationshipConnections();
+            CheckAndSetCustomNpcsReady();
+        }
+
+        internal static void ReconcileAllCustomNpcRelationshipConnections()
+        {
+            var configuredNpcs = All
+                .Where(wrapper => wrapper?.S1NPC != null && wrapper.IsCustomNPC)
+                .Select(wrapper => new
+                {
+                    Wrapper = wrapper,
+                    Identity = wrapper.gameObject?.GetComponent<NPCPrefabIdentity>()
+                })
+                .Where(entry => entry.Identity != null && !string.IsNullOrWhiteSpace(entry.Wrapper.ID))
+                .ToArray();
+
+            var declarations =
+                new global::System.Collections.Generic.Dictionary<
+                    string,
+                    global::System.Collections.Generic.IReadOnlyList<string>>(
+                    StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in configuredNpcs)
+            {
+                if (!declarations.TryAdd(
+                        entry.Wrapper.ID,
+                        entry.Identity!.GetConfiguredConnectionIds()))
+                {
+                    Logger.Warning(
+                        $"[Relationship Data] Duplicate custom NPC ID '{entry.Wrapper.ID}' " +
+                        "prevents deterministic connection reconciliation for that duplicate.");
+                }
+            }
+
+            foreach (var entry in configuredNpcs)
+            {
+                try
+                {
+                    global::System.Collections.Generic.IReadOnlyList<string> connectionIds =
+                        NPCRelationshipGraphPolicy.BuildUndirectedConnectionIds(
+                            entry.Wrapper.ID,
+                            declarations);
+                    if (connectionIds.Count == 0
+                        && !entry.Identity!.HasConfiguredConnections())
+                        continue;
+
+                    var builder = new NPCRelationshipDataBuilder();
+                    builder.WithConnectionsById(connectionIds);
+                    var relationData = entry.Wrapper.S1NPC.RelationData;
+                    if (relationData == null)
+                    {
+                        Logger.Warning(
+                            $"[Relationship Data] RelationData is null for " +
+                            $"'{entry.Wrapper.GetSafeNpcId()}'; skipping connection reconciliation.");
+                        continue;
+                    }
+
+                    builder.ApplyTo(
+                        relationData,
+                        entry.Wrapper.S1NPC,
+                        preserveUnlockState: true);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning(
+                        $"[Relationship Data] Could not reconcile connections for " +
+                        $"'{entry.Wrapper.GetSafeNpcId()}': {ex.Message}");
+                }
             }
         }
 
@@ -4363,10 +4826,326 @@ namespace S1API.Entities
             _recommendationSubscriptions.Clear();
         }
 
+        private void AddAwarenessHandler<TManaged, TNative>(
+            Action<TManaged>? handler,
+            ManagedEventRegistrationTracker<AwarenessEventRegistration<TNative>> registrations,
+            Func<S1NPCs.NPCAwareness, UnityEvent<TNative>?> selectEvent,
+            Func<TNative, TManaged> convert,
+            string eventName)
+        {
+            if (handler == null)
+                return;
+
+            S1NPCs.NPCAwareness? awareness = S1NPC?.Awareness;
+            UnityEvent<TNative>? nativeEvent = awareness == null
+                ? null
+                : selectEvent(awareness);
+            if (nativeEvent == null)
+                return;
+
+            try
+            {
+                Action<TNative> managedHandler = value =>
+                {
+                    try
+                    {
+                        handler(convert(value));
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warning(
+                            $"NPC.{eventName} subscriber " +
+                            $"'{handler.Method.DeclaringType?.FullName}.{handler.Method.Name}' failed: {ex}");
+                    }
+                };
+
+#if IL2CPPMELON
+                UnityAction<TNative> nativeHandler =
+                    DelegateSupport.ConvertDelegate<UnityAction<TNative>>(managedHandler)
+                    ?? throw new InvalidOperationException(
+                        $"Could not create the native {eventName} listener.");
+#else
+                UnityAction<TNative> nativeHandler = new UnityAction<TNative>(managedHandler);
+#endif
+                nativeEvent.AddListener(nativeHandler);
+                registrations.Add(
+                    handler,
+                    new AwarenessEventRegistration<TNative>(nativeEvent, nativeHandler));
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning(
+                    $"Could not subscribe to NPC.{eventName} for '{GetSafeNpcId()}': {ex}");
+            }
+        }
+
+        private void RemoveAwarenessHandler<TManaged, TNative>(
+            Action<TManaged>? handler,
+            ManagedEventRegistrationTracker<AwarenessEventRegistration<TNative>>? registrations,
+            string eventName)
+        {
+            if (handler == null || registrations == null ||
+                !registrations.TryTakeLast(handler, out var registration))
+                return;
+
+            try
+            {
+                registration.Event.RemoveListener(registration.Handler);
+            }
+            catch (Exception ex)
+            {
+                registrations.Add(handler, registration);
+                Logger.Warning(
+                    $"Could not unsubscribe from NPC.{eventName} for '{GetSafeNpcId()}': {ex}");
+            }
+        }
+
+        private void CleanupAwarenessEventHooks()
+        {
+            CleanupAwarenessHandlers(
+                _noticedDrugDealingRegistrations,
+                nameof(OnNoticedDrugDealing));
+            CleanupAwarenessHandlers(
+                _noticedGeneralCrimeRegistrations,
+                nameof(OnNoticedGeneralCrime));
+            CleanupAwarenessHandlers(
+                _noticedPettyCrimeRegistrations,
+                nameof(OnNoticedPettyCrime));
+            CleanupAwarenessHandlers(
+                _noticedPlayerViolatingCurfewRegistrations,
+                nameof(OnNoticedPlayerViolatingCurfew));
+            CleanupAwarenessHandlers(
+                _noticedSuspiciousPlayerRegistrations,
+                nameof(OnNoticedSuspiciousPlayer));
+            CleanupAwarenessHandlers(
+                _gunshotHeardRegistrations,
+                nameof(OnGunshotHeard));
+            CleanupAwarenessHandlers(
+                _explosionHeardRegistrations,
+                nameof(OnExplosionHeard));
+            CleanupAwarenessHandlers(
+                _hitByCarRegistrations,
+                nameof(OnHitByCar));
+        }
+
+        private void CleanupAwarenessHandlers<TNative>(
+            ManagedEventRegistrationTracker<AwarenessEventRegistration<TNative>>? registrations,
+            string eventName)
+        {
+            if (registrations == null)
+                return;
+
+            foreach (var registration in registrations.TakeAll())
+            {
+                try
+                {
+                    registration.NativeHandler.Event.RemoveListener(
+                        registration.NativeHandler.Handler);
+                }
+                catch (Exception ex)
+                {
+                    registrations.Add(
+                        registration.ManagedHandler,
+                        registration.NativeHandler);
+                    Logger.Warning(
+                        $"Could not clean up NPC.{eventName} for '{GetSafeNpcId()}': {ex}");
+                }
+            }
+        }
+
+        private static Player? ResolvePlayer(S1PlayerScripts.Player player) =>
+            player == null
+                ? null
+                : Player.All.FirstOrDefault(apiPlayer => apiPlayer.S1Player == player);
+
+        private static NPCNoiseEvent? ResolveNoiseEvent(S1Noise.NoiseEvent noiseEvent) =>
+            noiseEvent == null
+                ? null
+                : new NPCNoiseEvent(noiseEvent);
+
+        private static LandVehicle? ResolveVehicle(S1Vehicles.LandVehicle vehicle) =>
+            vehicle == null
+                ? null
+                : new LandVehicle(vehicle);
+
+        private sealed class AwarenessEventRegistration<TNative>
+        {
+            internal UnityEvent<TNative> Event { get; }
+            internal UnityAction<TNative> Handler { get; }
+
+            internal AwarenessEventRegistration(
+                UnityEvent<TNative> nativeEvent,
+                UnityAction<TNative> handler)
+            {
+                Event = nativeEvent;
+                Handler = handler;
+            }
+        }
+
         internal void CleanupRuntimeHooks()
         {
             ClearDealerRecommendationHooks();
+            CleanupAwarenessEventHooks();
+            _dealer?.Cleanup();
             _messaging?.Cleanup();
+            CleanupVehicleLifecycleHooks();
+        }
+
+        private void AddVehicleLifecycleHandler(
+            Action<LandVehicle>? handler,
+            ManagedEventRegistrationTracker<NativeVehicleLifecycleAction> registrations,
+            Action<NativeVehicleLifecycleAction> subscribe,
+            string eventName)
+        {
+            if (handler == null)
+                return;
+
+            try
+            {
+                NativeVehicleLifecycleAction nativeHandler =
+                    CreateVehicleLifecycleHandler(handler, eventName);
+                subscribe(nativeHandler);
+                registrations.Add(handler, nativeHandler);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning(
+                    $"Could not subscribe to NPC.{eventName} for '{GetSafeNpcId()}': {ex}");
+            }
+        }
+
+        private void RemoveVehicleLifecycleHandler(
+            Action<LandVehicle>? handler,
+            ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>? registrations,
+            Action<NativeVehicleLifecycleAction> unsubscribe,
+            string eventName)
+        {
+            if (handler == null || registrations == null ||
+                !registrations.TryTakeLast(handler, out var nativeHandler))
+                return;
+
+            try
+            {
+                unsubscribe(nativeHandler);
+            }
+            catch (Exception ex)
+            {
+                registrations.Add(handler, nativeHandler);
+                Logger.Warning(
+                    $"Could not unsubscribe from NPC.{eventName} for '{GetSafeNpcId()}': {ex}");
+            }
+        }
+
+        private NativeVehicleLifecycleAction CreateVehicleLifecycleHandler(
+            Action<LandVehicle> handler,
+            string eventName)
+        {
+            Action<S1Vehicles.LandVehicle> managedHandler = vehicle =>
+            {
+                try
+                {
+                    handler(new LandVehicle(vehicle));
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning(
+                        $"NPC.{eventName} subscriber " +
+                        $"'{handler.Method.DeclaringType?.FullName}.{handler.Method.Name}' failed: {ex}");
+                }
+            };
+
+#if IL2CPPMELON
+            return DelegateSupport.ConvertDelegate<NativeVehicleLifecycleAction>(managedHandler)
+                ?? throw new InvalidOperationException(
+                    $"Could not create the native {eventName} delegate.");
+#else
+            return managedHandler;
+#endif
+        }
+
+        private void SubscribeEnterVehicle(NativeVehicleLifecycleAction handler)
+        {
+#if IL2CPPMELON
+            S1NPC.onEnterVehicle = S1NPC.onEnterVehicle == null
+                ? handler
+                : Il2CppSystem.Delegate.Combine(S1NPC.onEnterVehicle, handler)
+                    .Cast<NativeVehicleLifecycleAction>();
+#else
+            S1NPC.onEnterVehicle += handler;
+#endif
+        }
+
+        private void UnsubscribeEnterVehicle(NativeVehicleLifecycleAction handler)
+        {
+#if IL2CPPMELON
+            Il2CppSystem.Delegate? remaining = Il2CppSystem.Delegate.Remove(
+                S1NPC.onEnterVehicle,
+                handler);
+            S1NPC.onEnterVehicle = remaining?.Cast<NativeVehicleLifecycleAction>();
+#else
+            S1NPC.onEnterVehicle -= handler;
+#endif
+        }
+
+        private void SubscribeExitVehicle(NativeVehicleLifecycleAction handler)
+        {
+#if IL2CPPMELON
+            S1NPC.onExitVehicle = S1NPC.onExitVehicle == null
+                ? handler
+                : Il2CppSystem.Delegate.Combine(S1NPC.onExitVehicle, handler)
+                    .Cast<NativeVehicleLifecycleAction>();
+#else
+            S1NPC.onExitVehicle += handler;
+#endif
+        }
+
+        private void UnsubscribeExitVehicle(NativeVehicleLifecycleAction handler)
+        {
+#if IL2CPPMELON
+            Il2CppSystem.Delegate? remaining = Il2CppSystem.Delegate.Remove(
+                S1NPC.onExitVehicle,
+                handler);
+            S1NPC.onExitVehicle = remaining?.Cast<NativeVehicleLifecycleAction>();
+#else
+            S1NPC.onExitVehicle -= handler;
+#endif
+        }
+
+        private void CleanupVehicleLifecycleHooks()
+        {
+            CleanupVehicleLifecycleHandlers(
+                _enterVehicleRegistrations,
+                UnsubscribeEnterVehicle,
+                nameof(OnEnterVehicle));
+            CleanupVehicleLifecycleHandlers(
+                _exitVehicleRegistrations,
+                UnsubscribeExitVehicle,
+                nameof(OnExitVehicle));
+        }
+
+        private void CleanupVehicleLifecycleHandlers(
+            ManagedEventRegistrationTracker<NativeVehicleLifecycleAction>? registrations,
+            Action<NativeVehicleLifecycleAction> unsubscribe,
+            string eventName)
+        {
+            if (registrations == null)
+                return;
+
+            foreach (var registration in registrations.TakeAll())
+            {
+                try
+                {
+                    unsubscribe(registration.NativeHandler);
+                }
+                catch (Exception ex)
+                {
+                    registrations.Add(
+                        registration.ManagedHandler,
+                        registration.NativeHandler);
+                    Logger.Warning(
+                        $"Could not clean up NPC.{eventName} for '{GetSafeNpcId()}': {ex}");
+                }
+            }
         }
 
         private sealed class DealerRecommendationSubscription
@@ -4414,8 +5193,9 @@ namespace S1API.Entities
             isPhysical && (!isSupplier || isSupplierMeeting);
 
         internal static bool ShouldApplyLoadedVisibilityBeforeSpawn(
+            bool isPhysical,
             bool isSupplier) =>
-            !isSupplier;
+            isPhysical && !isSupplier;
 
         private IEnumerator DelayedVisibilityRPC()
         {
@@ -4537,17 +5317,9 @@ namespace S1API.Entities
                 // Best-effort wire internal references so actions have context even while inactive
                 try
                 {
-#if MONOMELON
-                    var npcField = t.GetField("npc", BindingFlags.NonPublic | BindingFlags.Instance);
-                    var schedField = t.GetField("schedule", BindingFlags.NonPublic | BindingFlags.Instance);
-#else
-                    var npcField = t.GetField("npc", Il2CppSystem.Reflection.BindingFlags.NonPublic | Il2CppSystem.Reflection.BindingFlags.Public | Il2CppSystem.Reflection.BindingFlags.Instance);
-                    var schedField = t.GetField("schedule", Il2CppSystem.Reflection.BindingFlags.NonPublic | Il2CppSystem.Reflection.BindingFlags.Public | Il2CppSystem.Reflection.BindingFlags.Instance);
-#endif
                     var baseNpc = prefabRoot.GetComponent<S1NPCs.NPC>();
-                    
-                    npcField?.SetValue(comp, baseNpc);
-                    schedField?.SetValue(comp, existingMgr);
+                    Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(comp, "npc", baseNpc);
+                    Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(comp, "schedule", existingMgr);
                 }
                 catch { }
                 go.SetActive(false);

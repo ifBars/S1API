@@ -43,9 +43,7 @@ namespace S1API.Internal.NPCWorkbench
             _camera = camera;
             _texture = texture;
             _renderLayer = renderLayer;
-            _template = avatar.CurrentSettings != null
-                ? Object.Instantiate(avatar.CurrentSettings)
-                : null;
+            _template = null;
             UpdateCamera();
         }
 
@@ -54,8 +52,11 @@ namespace S1API.Internal.NPCWorkbench
         internal static bool TryCreate(out NPCWorkbenchPreview? preview, out string failure)
         {
             preview = null;
-            failure = string.Empty;
+            failure = "NPC avatar previews are unavailable with the Schedule I 0.4.7 avatar pipeline.";
+            return false;
 
+#if false
+            failure = string.Empty;
             var generator = S1AvatarFramework.MugshotGenerator.Instance;
             var source = generator != null ? generator.MugshotRig : null;
             if (source == null)
@@ -85,8 +86,6 @@ namespace S1API.Internal.NPCWorkbench
                     throw new InvalidOperationException("The cloned native preview rig has no Avatar component.");
 
                 avatar.SetVisible(true);
-                if (avatar.Animation != null)
-                    avatar.Animation.AllowCulling = false;
                 foreach (var renderer in avatarObject.GetComponentsInChildren<SkinnedMeshRenderer>(true))
                     renderer.updateWhenOffscreen = true;
 
@@ -143,6 +142,7 @@ namespace S1API.Internal.NPCWorkbench
                     Object.Destroy(root);
                 return false;
             }
+#endif
         }
 
         internal void ScheduleApply(NPCWorkbenchDraft draft)
@@ -207,11 +207,8 @@ namespace S1API.Internal.NPCWorkbench
             var settings = NPCWorkbenchRuntimeAdapter.CreateSettings(draft, _template);
             try
             {
-                _avatar.LoadAvatarSettings(settings);
+                Compatibility.AvatarCompatibility.ApplyLegacySettings(_avatar, settings);
                 _avatar.SetVisible(true);
-                _avatar.Impostor.DisableImpostor();
-                if (_avatar.Animation != null)
-                    _avatar.Animation.AllowCulling = false;
                 RefreshRenderers();
                 _rendererRefreshFrames = 2;
 

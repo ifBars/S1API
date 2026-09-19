@@ -8,8 +8,8 @@ namespace S1API.Products
     /// </summary>
     /// <remarks>
     /// This descriptor deliberately contains no Unity objects, asset references, delegates, or
-    /// process-local references. A provider may use <see cref="ProviderData"/> to retain its own
-    /// bounded scalar configuration.
+    /// process-local references. A provider may use <see cref="ProviderData"/> for its own
+    /// bounded scalar configuration. It must recreate assets and callbacks from local mod resources.
     /// </remarks>
     public sealed class CustomProductSaveDescriptor
     {
@@ -65,15 +65,19 @@ namespace S1API.Products
     }
 
     /// <summary>Reconstructs a custom product from a persisted scalar descriptor.</summary>
+    /// <remarks>
+    /// Register the provider before save restoration. The returned builder must retain the descriptor's
+    /// stable product ID. Returning <see langword="null"/> preserves S1API's safe missing-content path.
+    /// </remarks>
     public interface ICustomProductSaveProvider
     {
         /// <summary>Gets the stable, namespaced provider ID.</summary>
         string ProviderId { get; }
         /// <summary>Gets the highest provider descriptor version this provider accepts.</summary>
         int MaximumDescriptorVersion { get; }
-        /// <summary>Recreates and registers the descriptor's product.</summary>
+        /// <summary>Returns the fully configured builder that recreates the descriptor's product.</summary>
         /// <param name="descriptor">The validated scalar descriptor.</param>
-        /// <returns>A fully configured, unbuilt definition builder, or <see langword="null"/> to use S1API's safe fallback.</returns>
+        /// <returns>A fully configured, unbuilt definition builder, or <see langword="null"/> to skip restoration safely.</returns>
         CustomProductDefinitionBuilder? Restore(CustomProductSaveDescriptor descriptor);
     }
 }

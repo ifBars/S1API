@@ -71,6 +71,32 @@ namespace S1API.Internal.Patches
             _hasCustomNpcTypesCache = null;
         }
 
+        internal static void RefreshContactIcon(S1NPCs.NPC npc)
+        {
+            if (npc == null || string.IsNullOrWhiteSpace(npc.ID))
+                return;
+
+            try
+            {
+                foreach (S1Relations.RelationCircle circle in
+                         Object.FindObjectsOfType<S1Relations.RelationCircle>(true))
+                {
+                    if (!string.Equals(
+                            GetAssignedNpcId(circle),
+                            npc.ID,
+                            global::System.StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    SetAssignedNpc(circle, npc);
+                    circle.AssignNPC(npc);
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Logger.Warning($"Could not refresh Contacts icon for NPC '{npc.ID}': {ex.Message}");
+            }
+        }
+
         /// <summary>
         /// Checks if any custom NPC types exist (excluding S1API internal types).
         /// Caches the result to avoid repeated reflection calls.
@@ -166,9 +192,10 @@ namespace S1API.Internal.Patches
             yield return null;
             yield return null;
 
-            // Wait for mugshots to be generated before creating circles
-            // This ensures HeadshotImg.sprite gets the correct mugshot, not the default icon
-            yield return new WaitUntil((Func<bool>)(() => NPCAppearance.MugshotsProcessingComplete));
+            // Wait per NPC rather than using only the global queue. Explicit-icon NPC sets
+            // never enqueue a mugshot, while early-generated NPCs may enqueue before the rig exists.
+            yield return new WaitUntil((Func<bool>)(() =>
+                customNPCs.All(npc => npc.Appearance.MugshotReady)));
 
             // Add circles after native Start so they are not processed as serialized native circles.
             AddRelationCircles(contactsApp);
@@ -207,7 +234,12 @@ namespace S1API.Internal.Patches
                 var existing = regionUI.Container.GetComponentsInChildren<S1Relations.RelationCircle>(true)
                     .FirstOrDefault(c => GetAssignedNpcId(c) == npc.S1NPC.ID);
                 if (existing != null)
+                {
+                    SetAssignedNpc(existing, npc.S1NPC);
+                    existing.AssignNPC(npc.S1NPC);
+                    ApplyRoleIndicators(existing, npc.GetType());
                     continue;
+                }
 
                 // Find a base game template - exclude circles we've already created
                 var allCirclesInRegion = regionUI.Container.GetComponentsInChildren<S1Relations.RelationCircle>(true);

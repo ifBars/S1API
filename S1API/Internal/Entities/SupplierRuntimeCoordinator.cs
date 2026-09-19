@@ -76,7 +76,9 @@ namespace S1API.Internal.Entities
 
             try
             {
-                string stableId = SupplierRuntimeIds.ResolveStableId(supplier.gameObject, supplierId);
+                string stableId = SupplierRuntimeIds.ResolveStableId(
+                    supplier.gameObject,
+                    config?.PersistentId ?? supplierId);
                 SupplierStashRuntime.Bind(
                     supplier,
                     stableId,

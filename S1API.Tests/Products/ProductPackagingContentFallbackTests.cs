@@ -5,7 +5,6 @@ using NativeProductDefinition = ScheduleOne.Product.ProductDefinition;
 #endif
 
 using System;
-using System.Runtime.CompilerServices;
 using S1API.Internal.Products;
 using S1API.Products;
 using Xunit;
@@ -92,11 +91,7 @@ public sealed class ProductPackagingContentFallbackTests : IDisposable
 
     private static NativeProductDefinition CreateDefinition()
     {
-        var definition =
-            (NativeProductDefinition)RuntimeHelpers.GetUninitializedObject(
-                typeof(NativeProductDefinition));
-        GC.SuppressFinalize(definition);
-        return definition;
+        return TestObjectFactory.CreateUninitialized<NativeProductDefinition>();
     }
 
     private sealed class FakeProductRuntime :

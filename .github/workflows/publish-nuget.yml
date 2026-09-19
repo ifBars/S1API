@@ -2,63 +2,63 @@ name: Publish NuGet Package
 
 on:
   push:
-    branches: [ 'releases/**' ]
-    paths:
-      - S1API/S1API.csproj
+    tags:
+      - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable release tag to publish (for example v3.1.3)
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   publish:
+    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout S1API
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect Version Bump
+      - name: Resolve stable release version
         id: version
         shell: bash
         run: |
-          NEW_VERSION=$(grep -oPm1 '(?<=<Version>)[^<]+' S1API/S1API.csproj)
-
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-            echo "Publishing version $NEW_VERSION from manual dispatch"
-            exit 0
+            tag="${{ inputs.tag }}"
+          else
+            tag="${GITHUB_REF_NAME}"
           fi
 
-          OLD_VERSION=$(git show "${{ github.event.before }}:S1API/S1API.csproj" 2>/dev/null | grep -oPm1 '(?<=<Version>)[^<]+' || true)
-
-          if [[ -z "$NEW_VERSION" ]]; then
-            echo "Unable to read current package version"
+          if [[ ! "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "::error::Tag '$tag' is not a stable semantic version tag"
             exit 1
           fi
 
-          if [[ "$OLD_VERSION" == "$NEW_VERSION" ]]; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-            echo "Version unchanged at $NEW_VERSION; skipping publish"
-            exit 0
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "new_version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout S1API
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.version.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Verify source version matches tag
+        shell: bash
+        run: |
+          source_version=$(grep -oPm1 '(?<=<Version>)[^<]+' S1API/S1API.csproj)
+
+          if [[ "$source_version" != "${{ steps.version.outputs.new_version }}" ]]; then
+            echo "::error::S1API project version '$source_version' does not match tag '${{ steps.version.outputs.tag }}'"
+            exit 1
           fi
 
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-          echo "old_version=$OLD_VERSION" >> "$GITHUB_OUTPUT"
-          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-          echo "Version bump detected: ${OLD_VERSION:-none} -> $NEW_VERSION"
-
       - name: Setup .NET
-        if: steps.version.outputs.changed == 'true'
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
       - name: Checkout Game Assemblies
-        if: steps.version.outputs.changed == 'true'
         uses: actions/checkout@v4
         with:
           repository: ${{ secrets.GAME_ASSEMBLIES_REPO }}
@@ -67,7 +67,6 @@ jobs:
           fetch-depth: 1
 
       - name: Prepare Build Inputs
-        if: steps.version.outputs.changed == 'true'
         shell: bash
         run: |
           mkdir -p S1API/ScheduleOneAssemblies/Managed
@@ -111,19 +110,15 @@ jobs:
           EOF
 
       - name: Restore Dependencies
-        if: steps.version.outputs.changed == 'true'
         run: dotnet restore S1API/S1API.csproj -p:Configuration=MonoMelon
 
       - name: Build Package Assembly
-        if: steps.version.outputs.changed == 'true'
         run: dotnet build S1API/S1API.csproj --no-restore -c MonoMelon -v minimal
 
       - name: Pack NuGet Package
-        if: steps.version.outputs.changed == 'true'
         run: dotnet pack S1API/S1API.csproj --no-build --no-restore -c MonoMelon /p:ContinuousIntegrationBuild=true
 
       - name: Publish to NuGet
-        if: steps.version.outputs.changed == 'true'
         shell: bash
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}

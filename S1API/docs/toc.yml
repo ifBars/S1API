@@ -16,6 +16,10 @@
   items:
     - name: Module Overview
       href: modules-overview.md
+    - name: Weather
+      href: weather.md
+    - name: Jukeboxes
+      href: jukebox.md
     - name: NPCs
       items:
         - name: Overview
@@ -56,6 +60,8 @@
       href: quests-system.md
     - name: Map POIs
       href: map-pois.md
+    - name: Native Interaction Prompts
+      href: interaction-prompts.md
     - name: Cutscenes
       href: cutscenes.md
     - name: Products
@@ -84,6 +90,8 @@
           href: item-registration-basics.md
         - name: Item Icons
           href: item-icons.md
+        - name: Custom Furniture
+          href: furniture-items.md
         - name: Equippable Items
           href: equippable-items.md
         - name: Avatar Equippable Prefabs
@@ -116,7 +124,9 @@
       href: stations.md
     - name: UI
       href: ui.md
-    - name: Casino Slots
+    - name: Casino Games
+      href: casino-games.md
+    - name: NPC Casino Slots
       href: casino-slot-machines.md
     - name: Cartel
       href: cartel-system.md

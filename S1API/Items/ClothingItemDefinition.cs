@@ -1,8 +1,10 @@
 #if (IL2CPPMELON)
 using S1Clothing = Il2CppScheduleOne.Clothing;
+using S1CoreAvatar = Il2CppScheduleOne.Core.Avatar;
 using Il2CppCollections = Il2CppSystem.Collections.Generic;
 #elif MONOMELON
 using S1Clothing = ScheduleOne.Clothing;
+using S1CoreAvatar = ScheduleOne.Core.Avatar;
 using Il2CppCollections = System.Collections.Generic;
 #endif
 
@@ -78,8 +80,8 @@ namespace S1API.Items
         /// </summary>
         public ClothingApplicationType ApplicationType
         {
-            get => (ClothingApplicationType)S1ClothingDefinition.ApplicationType;
-            set => S1ClothingDefinition.ApplicationType = (S1Clothing.EClothingApplicationType)value;
+            get => ClothingApplicationType.Accessory;
+            set { }
         }
 
         /// <summary>
@@ -87,8 +89,9 @@ namespace S1API.Items
         /// </summary>
         public string ClothingAssetPath
         {
-            get => S1ClothingDefinition.ClothingAssetPath;
-            set => S1ClothingDefinition.ClothingAssetPath = value;
+            get => S1ClothingDefinition.ClothingAvatarObject?.name ?? string.Empty;
+            set => S1ClothingDefinition.ClothingAvatarObject =
+                UnityEngine.Resources.Load<S1CoreAvatar.AvatarObject>(value);
         }
 
         /// <summary>

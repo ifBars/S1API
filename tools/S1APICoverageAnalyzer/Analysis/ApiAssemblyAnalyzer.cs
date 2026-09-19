@@ -12,6 +12,7 @@ public sealed class ApiAssemblyAnalyzer : AssemblyAnalyzer
 {
     private readonly HashSet<string> _wrappedGameTypes = new();
     private readonly Dictionary<string, HashSet<string>> _typeToAccessedMembers = new();
+    private readonly Dictionary<string, string> _explicitCoverageMappings = new(StringComparer.Ordinal);
     private readonly List<ApiTypeInfo> _apiTypes = new();
     
     public ApiAssemblyAnalyzer(Assembly assembly, string assemblyPath) 
@@ -67,12 +68,20 @@ public sealed class ApiAssemblyAnalyzer : AssemblyAnalyzer
             
             // Strategy 9: Attributes that reference game types
             AnalyzeAttributes(type, apiTypeInfo);
+
+            // Strategy 10: Analyzer-owned declarations for runtime-agnostic mirrors.
+            AnalyzeExplicitCoverage(type, apiTypeInfo);
             
             if (apiTypeInfo.WrappedGameTypes.Count > 0)
             {
                 _apiTypes.Add(apiTypeInfo);
             }
         }
+
+        _apiTypes.Sort((left, right) =>
+            StringComparer.Ordinal.Compare(left.FullName, right.FullName));
+
+        ValidateExplicitCoverageMappings();
     }
     
     /// <summary>
@@ -89,6 +98,12 @@ public sealed class ApiAssemblyAnalyzer : AssemblyAnalyzer
     /// Get information about all API types that wrap game types.
     /// </summary>
     public List<ApiTypeInfo> GetApiTypes() => _apiTypes;
+
+    /// <summary>
+    /// Get semantic coverage declarations keyed by game type name.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> GetExplicitCoverageMappings() =>
+        _explicitCoverageMappings;
     
     /// <summary>
     /// Analyze fields that are primary wrappers (S1*, Inner*, etc.).
@@ -230,14 +245,20 @@ public sealed class ApiAssemblyAnalyzer : AssemblyAnalyzer
     
     private void RegisterGameTypeReference(Type type, Type apiType, ApiTypeInfo apiTypeInfo)
     {
+        if (type.HasElementType)
+        {
+            var elementType = type.GetElementType();
+            if (elementType != null)
+                RegisterGameTypeReference(elementType, apiType, apiTypeInfo);
+            return;
+        }
+
         if (IsGameType(type))
         {
             var normalizedName = NormalizeScheduleOneTypeName(type.FullName);
             if (!string.IsNullOrEmpty(normalizedName))
             {
-                _wrappedGameTypes.Add(normalizedName);
-                apiTypeInfo.WrappedGameTypes.Add(normalizedName);
-                TrackTypeAccess(normalizedName, apiType);
+                RegisterGameTypeName(normalizedName, apiType, apiTypeInfo);
             }
 
             if (type.DeclaringType != null && IsGameType(type.DeclaringType))
@@ -256,13 +277,41 @@ public sealed class ApiAssemblyAnalyzer : AssemblyAnalyzer
                     var normalizedName = NormalizeScheduleOneTypeName(arg.FullName);
                     if (!string.IsNullOrEmpty(normalizedName))
                     {
-                        _wrappedGameTypes.Add(normalizedName);
-                        apiTypeInfo.WrappedGameTypes.Add(normalizedName);
-                        TrackTypeAccess(normalizedName, apiType);
+                        RegisterGameTypeName(normalizedName, apiType, apiTypeInfo);
                     }
                 }
             }
         }
+    }
+
+    private void AnalyzeExplicitCoverage(Type apiType, ApiTypeInfo apiTypeInfo)
+    {
+        foreach (var gameTypeName in ExplicitCoverageConfig.GetGameTypesCoveredBy(apiTypeInfo.FullName))
+        {
+            RegisterGameTypeName(gameTypeName, apiType, apiTypeInfo);
+            _explicitCoverageMappings.Add(gameTypeName, apiTypeInfo.FullName);
+        }
+    }
+
+    private void ValidateExplicitCoverageMappings()
+    {
+        foreach (var mapping in ExplicitCoverageConfig.GetMappings())
+        {
+            if (_explicitCoverageMappings.ContainsKey(mapping.Key))
+                continue;
+
+            throw new InvalidOperationException(
+                $"Explicit coverage mapping for '{mapping.Key}' references " +
+                $"missing API type '{mapping.Value}'.");
+        }
+    }
+
+    private void RegisterGameTypeName(string gameTypeName, Type apiType, ApiTypeInfo apiTypeInfo)
+    {
+        _wrappedGameTypes.Add(gameTypeName);
+        if (!apiTypeInfo.WrappedGameTypes.Contains(gameTypeName, StringComparer.Ordinal))
+            apiTypeInfo.WrappedGameTypes.Add(gameTypeName);
+        TrackTypeAccess(gameTypeName, apiType);
     }
     
     private bool IsGameType(Type type)

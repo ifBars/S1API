@@ -39,7 +39,7 @@ Building the same case-insensitive ID with the same compatibility metadata retur
 
 This makes per-load setup calls safe when they repeat an equivalent registration while rejecting two mods that claim the same logical ID differently.
 
-## Register presentation and Product Manager metadata
+## Add optional presentation and Product Manager metadata
 
 Product-kind identity and UI registration are separate. Register immutable
 metadata only when the kind needs a user-facing name, color, search aliases, or
@@ -119,7 +119,7 @@ discover or list a definition.
 
 ## Keep definition and catalog actions explicit
 
-These operations remain separate:
+Keep these operations separate:
 
 1. `ProductKindBuilder.Build()` registers logical identity.
 2. `ProductKindMetadataBuilder.Build()` registers optional presentation and

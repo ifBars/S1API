@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Reflection;
+using S1API.Deliveries;
 using S1API.Logging;
 using UnityEngine;
 using S1API.Internal.Utils;
@@ -20,6 +22,8 @@ namespace S1API.Property
     public class PropertyWrapper : BaseProperty
     {
         private static readonly Log Logger = new Log("PropertyWrapper");
+        private static readonly IReadOnlyList<LoadingDock> EmptyLoadingDocks =
+            new ReadOnlyCollection<LoadingDock>(System.Array.Empty<LoadingDock>());
 
         /// <summary>
         /// A readonly backing field encapsulating the core property instance
@@ -139,6 +143,28 @@ namespace S1API.Property
         /// </summary>
         public int LoadingDockCount =>
             InnerProperty.LoadingDockCount;
+
+        /// <summary>
+        /// Gets an immutable snapshot of the loading docks assigned to this property.
+        /// </summary>
+        public IReadOnlyList<LoadingDock> LoadingDocks
+        {
+            get
+            {
+                var nativeDocks = InnerProperty.LoadingDocks;
+                if (nativeDocks == null || nativeDocks.Length == 0)
+                    return EmptyLoadingDocks;
+
+                var docks = new List<LoadingDock>(nativeDocks.Length);
+                for (int i = 0; i < nativeDocks.Length; i++)
+                {
+                    if (nativeDocks[i] != null)
+                        docks.Add(LoadingDock.Wrap(nativeDocks[i]));
+                }
+
+                return new ReadOnlyCollection<LoadingDock>(docks);
+            }
+        }
 
         /// <summary>
         /// Gets the default rotation value for the property.

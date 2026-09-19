@@ -11,6 +11,18 @@ namespace S1API.Internal.Utils
     /// </summary>
     internal static class ReflectionUtils
     {
+        private static readonly Log Logger = new Log("ReflectionUtils");
+
+        private const BindingFlags InstanceMemberFlags = BindingFlags.Public
+            | BindingFlags.NonPublic
+            | BindingFlags.Instance
+            | BindingFlags.DeclaredOnly;
+
+        private const BindingFlags StaticMemberFlags = BindingFlags.Public
+            | BindingFlags.NonPublic
+            | BindingFlags.Static
+            | BindingFlags.DeclaredOnly;
+
         /// <summary>
         /// Identifies all classes derived from another class.
         /// </summary>
@@ -19,9 +31,23 @@ namespace S1API.Internal.Utils
         internal static List<Type> GetDerivedClasses<TBaseClass>()
         {
             List<Type> derivedClasses = new List<Type>();
-            Assembly[] applicableAssemblies = AppDomain.CurrentDomain.GetAssemblies()
-                .Where(assembly => !ShouldSkipAssembly(assembly))
+            Type baseType = typeof(TBaseClass);
+            Assembly baseAssembly = baseType.Assembly;
+            Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+            IReadOnlyDictionary<string, Assembly[]> assembliesBySimpleName =
+                IndexAssembliesBySimpleName(loadedAssemblies);
+            Assembly[] applicableAssemblies = loadedAssemblies
+                .Where(assembly => assembly == baseAssembly || !ShouldSkipAssembly(assembly))
+                .Where(assembly => CanContainTypesDerivedFrom(
+                    assembly,
+                    baseAssembly.GetName(),
+                    assembliesBySimpleName))
                 .ToArray();
+
+            Logger.Debug(
+                $"[S1API][Reflection] Scanning {applicableAssemblies.Length} of {loadedAssemblies.Length} " +
+                $"loaded assemblies for types derived from '{baseType.FullName}'.");
+
             foreach (Assembly assembly in applicableAssemblies)
                 foreach (Type type in SafeGetTypes(assembly))
                 {
@@ -29,8 +55,8 @@ namespace S1API.Internal.Utils
                     {
                         if (type == null)
                             continue;
-                        if (typeof(TBaseClass).IsAssignableFrom(type)
-                            && type != typeof(TBaseClass)
+                        if (baseType.IsAssignableFrom(type)
+                            && type != baseType
                             && !type.IsAbstract)
                         {
                             derivedClasses.Add(type);
@@ -47,6 +73,104 @@ namespace S1API.Internal.Utils
                 }
             return derivedClasses;
         }
+
+        internal static bool CanContainTypesDerivedFrom(
+            Assembly candidateAssembly,
+            Assembly baseAssembly,
+            IEnumerable<Assembly> loadedAssemblies)
+        {
+            if (candidateAssembly == baseAssembly)
+                return true;
+
+            IReadOnlyDictionary<string, Assembly[]> assembliesBySimpleName =
+                IndexAssembliesBySimpleName(loadedAssemblies);
+
+            return ReferencesAssemblyTransitively(
+                candidateAssembly,
+                baseAssembly.GetName(),
+                assembliesBySimpleName,
+                new HashSet<Assembly>());
+        }
+
+        private static IReadOnlyDictionary<string, Assembly[]> IndexAssembliesBySimpleName(
+            IEnumerable<Assembly> loadedAssemblies)
+        {
+            return loadedAssemblies
+                .Where(assembly => assembly != null)
+                .GroupBy(assembly => assembly.GetName().Name ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static bool CanContainTypesDerivedFrom(
+            Assembly candidateAssembly,
+            AssemblyName baseAssemblyName,
+            IReadOnlyDictionary<string, Assembly[]> assembliesBySimpleName)
+        {
+            if (AssemblyIdentityMatches(candidateAssembly.GetName(), baseAssemblyName))
+                return true;
+
+            return ReferencesAssemblyTransitively(
+                candidateAssembly,
+                baseAssemblyName,
+                assembliesBySimpleName,
+                new HashSet<Assembly>());
+        }
+
+        private static bool ReferencesAssemblyTransitively(
+            Assembly candidateAssembly,
+            AssemblyName baseAssemblyName,
+            IReadOnlyDictionary<string, Assembly[]> assembliesBySimpleName,
+            HashSet<Assembly> visitedAssemblies)
+        {
+            if (!visitedAssemblies.Add(candidateAssembly))
+                return false;
+
+            AssemblyName[] referencedAssemblies;
+            try
+            {
+                referencedAssemblies = candidateAssembly.GetReferencedAssemblies();
+            }
+            catch
+            {
+                return false;
+            }
+
+            foreach (AssemblyName referencedAssembly in referencedAssemblies)
+            {
+                if (AssemblyIdentityMatches(referencedAssembly, baseAssemblyName))
+                    return true;
+
+                string referencedName = referencedAssembly.Name ?? string.Empty;
+                if (!assembliesBySimpleName.TryGetValue(referencedName, out Assembly[]? loadedReferences)
+                    || loadedReferences == null)
+                    continue;
+
+                foreach (Assembly loadedReference in loadedReferences)
+                {
+                    if (!AssemblyIdentityMatches(loadedReference.GetName(), referencedAssembly))
+                        continue;
+
+                    if (ReferencesAssemblyTransitively(
+                            loadedReference,
+                            baseAssemblyName,
+                            assembliesBySimpleName,
+                            visitedAssemblies))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static bool AssemblyIdentityMatches(
+            AssemblyName referenceAssemblyName,
+            AssemblyName definitionAssemblyName) =>
+            string.Equals(
+                referenceAssemblyName.FullName,
+                definitionAssemblyName.FullName,
+                StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// INTERNAL: Gets all types by their name.
@@ -127,16 +251,26 @@ namespace S1API.Internal.Utils
         /// <returns>The types that were successfully loaded from the assembly.</returns>
         private static IEnumerable<Type> SafeGetTypes(Assembly asm)
         {
+            string assemblyName = asm.FullName ?? asm.GetName().Name ?? "<unknown>";
+            Logger.Debug($"[S1API][Reflection] About to enumerate types in '{assemblyName}'.");
+
             try
             {
-                return asm.GetTypes();
+                Type[] types = asm.GetTypes();
+                Logger.Debug(
+                    $"[S1API][Reflection] Enumerated {types.Length} types in '{assemblyName}'.");
+                return types;
             }
             catch (ReflectionTypeLoadException ex)
             {
-                return ex.Types.Where(t => t != null)!.Cast<Type>();
+                Type[] loadedTypes = ex.Types.Where(type => type != null).Cast<Type>().ToArray();
+                Logger.Debug(
+                    $"[S1API][Reflection] Partially enumerated {loadedTypes.Length} types in '{assemblyName}'.");
+                return loadedTypes;
             }
             catch
             {
+                Logger.Debug($"[S1API][Reflection] Failed to enumerate types in '{assemblyName}'.");
                 return Array.Empty<Type>();
             }
         }
@@ -283,7 +417,7 @@ namespace S1API.Internal.Utils
                 return false;
 
             var type = target.GetType();
-            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            const BindingFlags flags = InstanceMemberFlags;
             
             // Try field first
             var fi = GetField(type, memberName, flags);
@@ -321,13 +455,7 @@ namespace S1API.Internal.Utils
                 }
             }
 
-            string[] backingFieldNames =
-            {
-                $"<{memberName}>k__BackingField",
-                $"_{memberName}_k__BackingField"
-            };
-
-            foreach (string backingFieldName in backingFieldNames)
+            foreach (string backingFieldName in GetBackingFieldNames(memberName))
             {
                 var backingField = GetField(type, backingFieldName, flags);
                 if (backingField == null)
@@ -360,7 +488,7 @@ namespace S1API.Internal.Utils
         internal static object? TryGetFieldOrProperty(object target, string memberName)
         {
             var type = target.GetType();
-            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            const BindingFlags flags = InstanceMemberFlags;
             
             // Try field first
             var fi = GetField(type, memberName, flags);
@@ -390,13 +518,7 @@ namespace S1API.Internal.Utils
                 }
             }
 
-            string[] backingFieldNames =
-            {
-                $"<{memberName}>k__BackingField",
-                $"_{memberName}_k__BackingField"
-            };
-
-            foreach (string backingFieldName in backingFieldNames)
+            foreach (string backingFieldName in GetBackingFieldNames(memberName))
             {
                 var backingField = GetField(type, backingFieldName, flags);
                 if (backingField == null)
@@ -453,10 +575,10 @@ namespace S1API.Internal.Utils
         /// <returns>The value of the member, or <c>null</c> if not found or inaccessible.</returns>
         internal static object? TryGetStaticFieldOrProperty(Type type, string memberName)
         {
-            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+            const BindingFlags flags = StaticMemberFlags;
             
             // Try field first
-            var fi = type.GetField(memberName, flags);
+            var fi = GetField(type, memberName, flags);
             if (fi != null)
             {
                 try
@@ -470,15 +592,33 @@ namespace S1API.Internal.Utils
             }
             
             // Try property
-            var pi = type.GetProperty(memberName, flags);
-            if (pi == null || !pi.CanRead) return null;
-            try
+            var pi = GetProperty(type, memberName, flags);
+            if (pi != null && pi.CanRead)
             {
-                return pi.GetValue(null);
+                try
+                {
+                    return pi.GetValue(null);
+                }
+                catch
+                {
+                    // ignored
+                }
             }
-            catch
+
+            foreach (string backingFieldName in GetBackingFieldNames(memberName))
             {
-                // ignored
+                var backingField = GetField(type, backingFieldName, flags);
+                if (backingField == null)
+                    continue;
+
+                try
+                {
+                    return backingField.GetValue(null);
+                }
+                catch
+                {
+                    // ignored
+                }
             }
 
             return null;
@@ -494,10 +634,10 @@ namespace S1API.Internal.Utils
         /// <param name="value">The value to set.</param>
         internal static void TrySetStaticFieldOrProperty(Type type, string memberName, object? value)
         {
-            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+            const BindingFlags flags = StaticMemberFlags;
             
             // Try field first
-            var fi = type.GetField(memberName, flags);
+            var fi = GetField(type, memberName, flags);
             if (fi != null)
             {
                 try
@@ -515,20 +655,49 @@ namespace S1API.Internal.Utils
             }
             
             // Try property
-            var pi = type.GetProperty(memberName, flags);
-            if (pi == null || !pi.CanWrite) return;
-            try
+            var pi = GetProperty(type, memberName, flags);
+            if (pi != null && pi.CanWrite)
             {
-                if (CanAssignValue(pi.PropertyType, value))
+                try
                 {
-                    pi.SetValue(null, value);
+                    if (CanAssignValue(pi.PropertyType, value))
+                    {
+                        pi.SetValue(null, value);
+                        return;
+                    }
+                }
+                catch
+                {
+                    // ignored
                 }
             }
-            catch
+
+            foreach (string backingFieldName in GetBackingFieldNames(memberName))
             {
-                // ignored
+                var backingField = GetField(type, backingFieldName, flags);
+                if (backingField == null)
+                    continue;
+
+                try
+                {
+                    if (CanAssignValue(backingField.FieldType, value))
+                    {
+                        backingField.SetValue(null, value);
+                        return;
+                    }
+                }
+                catch
+                {
+                    // ignored
+                }
             }
         }
+
+        private static string[] GetBackingFieldNames(string memberName) =>
+        [
+            $"<{memberName}>k__BackingField",
+            $"_{memberName}_k__BackingField"
+        ];
 
         private static bool CanAssignValue(Type memberType, object? value)
         {

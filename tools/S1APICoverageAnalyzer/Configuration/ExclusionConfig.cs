@@ -20,9 +20,15 @@ public static class ExclusionConfig
         "ScheduleOne.Tutorials",
         "ScheduleOne.Tools", // Internal tools
         "ScheduleOne.DevUtilities", // Internal dev utilities
+        "ScheduleOne.Development", // Development and experimental tooling
+        "ScheduleOne.Reporting", // Built-in diagnostics and report submission
+        "ScheduleOne.Configuration", // Internal configuration services
         
         // FishNet networking internals
         "ScheduleOne.Networking",
+
+        // Platform integration and authentication internals
+        "ScheduleOne.Platform",
         
         // Audio system (internal implementation, likely not wrapped)
         "ScheduleOne.Audio",
@@ -38,6 +44,7 @@ public static class ExclusionConfig
         "ScheduleOne.Packaging", // Visuals for packaging
         "ScheduleOne.PostProcessing",
         "ScheduleOne.Shaders",
+        "ScheduleOne.Instancing",
         
         // Physics / Math / Core Utils
         "ScheduleOne.GamePhysics",
@@ -49,6 +56,8 @@ public static class ExclusionConfig
         "ScheduleOne.Polling", // Internal polling/feedback
         "ScheduleOne.Dragging",
         "ScheduleOne.Decoration",
+        "ScheduleOne.Map.Infrastructure",
+        "ScheduleOne.Core.Utilities",
         
         // Avatar internals (Animation, Rendering, etc.) - API wraps high level Avatar only
         "ScheduleOne.AvatarFramework.Animation",
@@ -64,6 +73,12 @@ public static class ExclusionConfig
         
         // UI - Entire UI namespace is internal implementation
         "ScheduleOne.UI",
+        "ScheduleOne.Casino.UI",
+        "ScheduleOne.CustomUI",
+
+        // Input implementation
+        "ScheduleOne.Gamepad",
+        "ScheduleOne.GamepadInput",
         
         // Calling internals (CallManager is wrapped, but PayPhone etc are not)
         "ScheduleOne.Calling",
@@ -82,8 +97,7 @@ public static class ExclusionConfig
         
         // Player Tasks (Mini-games internals)
         "ScheduleOne.PlayerTasks",
-        "ScheduleOne.Experimental", // Prototype/tuning data, not stable modding surface
-        "Casino.UI",
+        "ScheduleOne.TV",
         "ScheduleOne.Console",
     ];
     

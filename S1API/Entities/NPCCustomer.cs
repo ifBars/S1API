@@ -42,6 +42,7 @@ using S1API.Economy;
 using S1API.Internal.Abstraction;
 using S1API.Internal.Utils;
 #if (IL2CPPMELON)
+using Il2CppInterop.Runtime;
 using Il2CppFishNet;
 using Il2CppFishNet.Managing;
 using Il2CppFishNet.Managing.Object;
@@ -88,7 +89,7 @@ namespace S1API.Entities
         {
             if (Component == null)
             {
-                Logger.Warning($"Customer component not present on NPC prefab for {NPC.ID}. Add it via NPC.ConfigurePrefab(builder.EnsureCustomer()).");
+                Logger.Warning($"Customer component not present on NPC prefab for {NPC.ID}. Override NPC.IsCustomer to return true.");
                 return;
             }
             
@@ -581,7 +582,18 @@ namespace S1API.Entities
                 // Ensure the deal-attendance implementation used by this game version is present.
                 try
                 {
-                    EnsureDealAttendanceSupport(NPC?.gameObject, NPC?.GetType());
+                    if (EnsureDealAttendanceSupport(NPC?.gameObject, NPC?.GetType()))
+                    {
+                        var attendance = NPC?.gameObject
+                            .GetComponentInChildren<S1NPCs.Behaviour.CustomerAttendDealBehaviour>(true);
+                        if (attendance != null)
+                        {
+                            ReflectionUtils.TrySetFieldOrProperty(
+                                customer,
+                                "_attendDealBehaviour",
+                                attendance);
+                        }
+                    }
                 }
                 catch { /* ignore */ }
             }
@@ -611,6 +623,7 @@ namespace S1API.Entities
                 component = behaviourObject.AddComponent<S1NPCs.Behaviour.CustomerAttendDealBehaviour>();
             }
 
+            component.gameObject.SetActive(NPCPrefabBuilder.BehaviourObjectsRemainActive);
             component.EnabledOnAwake = false;
             component.Name = "Customer attend deal";
             component.Priority = 4;
@@ -770,21 +783,21 @@ namespace S1API.Entities
 
             try
             {
-                var onContractAssignedField = typeof(S1Economy.Customer).GetField("onContractAssigned", BindingFlags.Public | BindingFlags.Instance);
-                var evt = onContractAssignedField?.GetValue(Component);
+                UnityEvent<S1Quests.Contract>? evt = Component.onContractAssigned;
                 if (evt == null)
                     return false;
 
-                var contractType = typeof(S1Quests.Contract);
-                var unityActionType = typeof(UnityAction<>).MakeGenericType(contractType);
-                var method = GetType().GetMethod(nameof(HandleContractAssigned), BindingFlags.NonPublic | BindingFlags.Instance);
-                if (method == null)
-                    return false;
-
-                var del = Delegate.CreateDelegate(unityActionType, this, method);
-                var addListener = evt.GetType().GetMethod("AddListener", new[] { unityActionType });
-                addListener?.Invoke(evt, new object[] { del });
-                _contractAssignedBridge = del;
+#if IL2CPPMELON
+                _contractAssignedBridge =
+                    DelegateSupport.ConvertDelegate<UnityAction<S1Quests.Contract>>(
+                        new Action<S1Quests.Contract>(HandleContractAssigned))
+                    ?? throw new InvalidOperationException(
+                        "Could not create the native contract-assigned listener.");
+#else
+                _contractAssignedBridge =
+                    new UnityAction<S1Quests.Contract>(HandleContractAssigned);
+#endif
+                evt.AddListener(_contractAssignedBridge);
                 _contractAssignedUnityEvent = evt;
                 return true;
             }
@@ -802,9 +815,7 @@ namespace S1API.Entities
 
             try
             {
-                var unityActionType = _contractAssignedBridge.GetType();
-                var removeListener = _contractAssignedUnityEvent.GetType().GetMethod("RemoveListener", new[] { unityActionType });
-                removeListener?.Invoke(_contractAssignedUnityEvent, new object[] { _contractAssignedBridge });
+                _contractAssignedUnityEvent.RemoveListener(_contractAssignedBridge);
             }
             catch (Exception ex)
             {
@@ -818,11 +829,11 @@ namespace S1API.Entities
         }
 
         private Action<float, int, int, int>? _onContractAssigned;
-        private Delegate? _contractAssignedBridge;
-        private object? _contractAssignedUnityEvent;
+        private UnityAction<S1Quests.Contract>? _contractAssignedBridge;
+        private UnityEvent<S1Quests.Contract>? _contractAssignedUnityEvent;
 
         // Maps Contract to safe primitives for modders
-        private void HandleContractAssigned(object contract)
+        private void HandleContractAssigned(S1Quests.Contract contract)
         {
             try
             {
@@ -834,36 +845,35 @@ namespace S1API.Entities
                 int winStart = 0;
                 int winEnd = 0;
 
-                var contractType = contract.GetType();
-                var paymentProp = contractType.GetProperty("Payment", BindingFlags.Public | BindingFlags.Instance);
-                if (paymentProp != null)
-                    payment = Convert.ToSingle(paymentProp.GetValue(contract));
+                var paymentValue = Utils.ReflectionUtils.TryGetFieldOrProperty(contract, "Payment");
+                if (paymentValue != null)
+                    payment = Convert.ToSingle(paymentValue);
 
-                var productListProp = contractType.GetProperty("ProductList", BindingFlags.Public | BindingFlags.Instance);
-                var productList = productListProp?.GetValue(contract);
+                var productList = Utils.ReflectionUtils.TryGetFieldOrProperty(contract, "ProductList");
                 if (productList != null)
                 {
-                    var entriesField = productList.GetType().GetField("entries", BindingFlags.Public | BindingFlags.Instance);
-                    var entries = entriesField?.GetValue(productList) as System.Collections.IEnumerable;
+                    var entries = Utils.ReflectionUtils.TryGetFieldOrProperty(productList, "entries") as System.Collections.IEnumerable;
                     if (entries != null)
                     {
                         foreach (var e in entries)
                         {
-                            var qtyField = e.GetType().GetField("Quantity", BindingFlags.Public | BindingFlags.Instance);
-                            if (qtyField != null)
-                                totalQty += Convert.ToInt32(qtyField.GetValue(e));
+                            if (e != null)
+                            {
+                                var quantity = Utils.ReflectionUtils.TryGetFieldOrProperty(e, "Quantity");
+                                if (quantity != null)
+                                    totalQty += Convert.ToInt32(quantity);
+                            }
                         }
                     }
                 }
 
-                var windowProp = contractType.GetProperty("DeliveryWindow", BindingFlags.Public | BindingFlags.Instance);
-                var window = windowProp?.GetValue(contract);
+                var window = Utils.ReflectionUtils.TryGetFieldOrProperty(contract, "DeliveryWindow");
                 if (window != null)
                 {
-                    var startField = window.GetType().GetField("WindowStartTime", BindingFlags.Public | BindingFlags.Instance);
-                    var endField = window.GetType().GetField("WindowEndTime", BindingFlags.Public | BindingFlags.Instance);
-                    if (startField != null) winStart = Convert.ToInt32(startField.GetValue(window));
-                    if (endField != null) winEnd = Convert.ToInt32(endField.GetValue(window));
+                    var start = Utils.ReflectionUtils.TryGetFieldOrProperty(window, "WindowStartTime");
+                    var end = Utils.ReflectionUtils.TryGetFieldOrProperty(window, "WindowEndTime");
+                    if (start != null) winStart = Convert.ToInt32(start);
+                    if (end != null) winEnd = Convert.ToInt32(end);
                 }
 
                 foreach (Action<float, int, int, int> handler in handlers.GetInvocationList())
@@ -1046,7 +1056,7 @@ namespace S1API.Entities
                             dialogueLine = dialogueLine.Replace("<NAME>", dealer.NPC.FullName);
                             
                             // Create dialogue container
-                            var container = ScriptableObject.CreateInstance<S1Dialogue.DialogueContainer>();
+                            var container = ScriptableObject.CreateInstance<S1Dialogue.Conversation>();
                             var nodeData = new S1Dialogue.DialogueNodeData
                             {
                                 DialogueText = dialogueLine,
@@ -1078,7 +1088,7 @@ namespace S1API.Entities
             }
         }
 
-        private System.Collections.IEnumerator WaitAndShowDialogue(S1Dialogue.DialogueContainer container, S1Dialogue.DialogueHandler handler)
+        private System.Collections.IEnumerator WaitAndShowDialogue(S1Dialogue.Conversation container, S1Dialogue.DialogueHandler handler)
         {
             yield return new WaitForSeconds(0.1f);
             if (handler != null && container != null)
@@ -1113,19 +1123,8 @@ namespace S1API.Entities
 
         private static void SetNonPublicInstanceField(object target, string fieldName, object? value)
         {
-            try
-            {
-                if (target == null || string.IsNullOrEmpty(fieldName)) return;
-                var type = target.GetType();
-                FieldInfo? field = null;
-                while (type != null && field == null)
-                {
-                    field = type.GetField(fieldName, BindingFlags.Instance | System.Reflection.BindingFlags.Public | BindingFlags.NonPublic);
-                    type = type.BaseType;
-                }
-                field?.SetValue(target, value);
-            }
-            catch (Exception) { }
+            if (target == null || string.IsNullOrEmpty(fieldName)) return;
+            Utils.ReflectionUtils.TrySetFieldOrProperty(target, fieldName, value);
         }
     }
 }

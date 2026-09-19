@@ -7,6 +7,12 @@ namespace S1API.Tests.Products;
 public sealed class CustomProductManifestClientGateTests
 {
     [Fact]
+    public void HostAcknowledgementTimeoutAllowsForClientWorldLoading()
+    {
+        Assert.Equal(60, CustomProductManifestRuntime.HostAcknowledgementTimeoutSeconds);
+    }
+
+    [Fact]
     public void PlayerDataRequestRunsOnlyAfterMatchingManifestIsAccepted()
     {
         var gate = new CustomProductManifestClientGate();

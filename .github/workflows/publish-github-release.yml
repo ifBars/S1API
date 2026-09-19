@@ -27,6 +27,7 @@ permissions:
 env:
   NEXUSMODS_API_KEY: ${{ secrets.NEXUSMODS_API_KEY }}
   NEXUSMODS_FILE_GROUP_ID: ${{ secrets.NEXUSMODS_FILE_GROUP_ID || vars.NEXUSMODS_FILE_GROUP_ID }}
+  NEXUSMODS_MOD_ID: ${{ secrets.NEXUSMODS_MOD_ID || vars.NEXUSMODS_MOD_ID }}
   RELEASE_DESCRIPTION: S1API is an open source collaboration project to help standardize Schedule One modding processes. The goal is to provide a standard place for common functionalities so you can focus on making content versus reverse engineering the game.
   THUNDERSTORE_COMMUNITY: schedule-i
   THUNDERSTORE_TOKEN: ${{ secrets.THUNDERSTORE_TOKEN }}
@@ -320,18 +321,23 @@ jobs:
           echo "thunderstore_zip_path=${thunderstore_zip_path}" >> "$GITHUB_OUTPUT"
 
       - name: Publish or update GitHub release
+        id: github-release
         uses: actions/github-script@v7
         env:
           RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
           RELEASE_NAME: ${{ steps.metadata.outputs.release_name }}
+          RELEASE_VERSION: ${{ steps.metadata.outputs.release_version }}
           RELEASE_BRANCH: ${{ steps.metadata.outputs.release_branch }}
           PRERELEASE: ${{ steps.metadata.outputs.prerelease }}
         with:
           script: |
+            const fs = require("fs");
+            const path = require("path");
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const tag = process.env.RELEASE_TAG;
             const releaseName = process.env.RELEASE_NAME;
+            const releaseVersion = process.env.RELEASE_VERSION;
             const releaseBranch = process.env.RELEASE_BRANCH;
             const prerelease = process.env.PRERELEASE === "true";
 
@@ -369,12 +375,32 @@ jobs:
             };
 
             const targetCommitish = await resolveTargetCommitish();
-            const notes = await github.rest.repos.generateReleaseNotes({
-              owner,
-              repo,
-              tag_name: tag,
-              target_commitish: targetCommitish
-            });
+            const curatedNotesPath = path.join(
+              process.env.GITHUB_WORKSPACE,
+              ".github",
+              "release-notes",
+              `${releaseVersion}.md`
+            );
+            let releaseNotes;
+            if (fs.existsSync(curatedNotesPath)) {
+              releaseNotes = fs.readFileSync(curatedNotesPath, "utf8").trim();
+              if (!releaseNotes) {
+                throw new Error(`Curated release notes are empty: ${curatedNotesPath}`);
+              }
+              core.notice(`Using curated release notes from ${curatedNotesPath}`);
+            } else {
+              core.warning(
+                `No curated release notes found for ${releaseVersion}; using GitHub-generated notes.`
+              );
+              const generatedNotes = await github.rest.repos.generateReleaseNotes({
+                owner,
+                repo,
+                tag_name: tag,
+                target_commitish: targetCommitish
+              });
+              releaseNotes = generatedNotes.data.body;
+            }
+            core.setOutput("release_notes", releaseNotes);
 
             const payload = {
               owner,
@@ -382,7 +408,7 @@ jobs:
               tag_name: tag,
               target_commitish: targetCommitish,
               name: releaseName,
-              body: notes.data.body,
+              body: releaseNotes,
               draft: false,
               prerelease,
               make_latest: prerelease ? "false" : "legacy"
@@ -422,25 +448,31 @@ jobs:
           gh release upload "${{ steps.metadata.outputs.tag }}" "${{ steps.package.outputs.zip_path }}" --clobber
 
       - name: Upload Nexus Mods release
-        if: ${{ steps.metadata.outputs.prerelease != 'true' && (github.event_name != 'workflow_dispatch' || inputs.publish_nexus) && env.NEXUSMODS_API_KEY != '' && env.NEXUSMODS_FILE_GROUP_ID != '' }}
-        uses: Nexus-Mods/upload-action@v1.0.0-beta.7
+        if: ${{ steps.metadata.outputs.prerelease != 'true' && (github.event_name != 'workflow_dispatch' || inputs.publish_nexus) && env.NEXUSMODS_API_KEY != '' && env.NEXUSMODS_FILE_GROUP_ID != '' && env.NEXUSMODS_MOD_ID != '' }}
+        uses: Nexus-Mods/upload-action@v1.0.0-beta.10
         with:
           api_key: ${{ env.NEXUSMODS_API_KEY }}
-          file_group_id: ${{ env.NEXUSMODS_FILE_GROUP_ID }}
+          file_id: ${{ env.NEXUSMODS_FILE_GROUP_ID }}
+          mod_id: ${{ env.NEXUSMODS_MOD_ID }}
           filename: ${{ steps.package.outputs.zip_path }}
           version: ${{ steps.metadata.outputs.release_version }}
           display_name: S1API Forked ${{ steps.metadata.outputs.release_version }}
           description: ${{ env.RELEASE_DESCRIPTION }}
-          file_category: main
-          archive_existing_file: true
+          # Nexus file publishing and changelog publishing use separate API resources.
+          # The changelog endpoint currently rejects this mod even after creating the
+          # file version, which turns a successful upload into a failed release run.
+          # Keep release notes on GitHub and omit the optional Nexus changelog input.
+          category: main
+          archive_existing_version: true
+          update_mod_version: true
           primary_mod_manager_download: true
           allow_mod_manager_download: true
           show_requirements_pop_up: false
 
       - name: Skip Nexus Mods upload
-        if: ${{ steps.metadata.outputs.prerelease != 'true' && (github.event_name != 'workflow_dispatch' || inputs.publish_nexus) && (env.NEXUSMODS_API_KEY == '' || env.NEXUSMODS_FILE_GROUP_ID == '') }}
+        if: ${{ steps.metadata.outputs.prerelease != 'true' && (github.event_name != 'workflow_dispatch' || inputs.publish_nexus) && (env.NEXUSMODS_API_KEY == '' || env.NEXUSMODS_FILE_GROUP_ID == '' || env.NEXUSMODS_MOD_ID == '') }}
         shell: bash
-        run: echo "::notice::Skipping Nexus Mods upload because NEXUSMODS_API_KEY or NEXUSMODS_FILE_GROUP_ID is not configured."
+        run: echo "::notice::Skipping Nexus Mods upload because NEXUSMODS_API_KEY, NEXUSMODS_FILE_GROUP_ID, or NEXUSMODS_MOD_ID is not configured."
 
       - name: Upload Thunderstore release
         if: ${{ steps.metadata.outputs.prerelease != 'true' && (github.event_name != 'workflow_dispatch' || inputs.publish_thunderstore) && env.THUNDERSTORE_TOKEN != '' }}

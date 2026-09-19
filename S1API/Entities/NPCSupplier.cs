@@ -139,14 +139,14 @@ namespace S1API.Entities
         /// Ensures supplier-specific messaging state is initialized for the wrapped NPC.
         /// </summary>
         /// <remarks>
-        /// The native supplier root must be declared during <see cref="NPC.ConfigurePrefab"/> with
-        /// <see cref="NPCPrefabBuilder.EnsureSupplier"/>. This method does not replace an already spawned root component.
+        /// The native supplier root must be declared by overriding <see cref="NPC.IsSupplier"/>.
+        /// This method does not replace an already spawned root component.
         /// </remarks>
         internal void EnsureSupplier()
         {
             if (Component == null)
             {
-                Logger.Warning($"Supplier root not present for NPC '{npc.ID}'. Configure it with NPCPrefabBuilder.EnsureSupplier().");
+                Logger.Warning($"Supplier root not present for NPC '{npc.ID}'. Override NPC.IsSupplier to return true.");
                 return;
             }
 

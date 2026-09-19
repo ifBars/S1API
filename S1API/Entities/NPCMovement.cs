@@ -129,11 +129,15 @@ namespace S1API.Entities
         /// </summary>
         public float SpeedMultiplier
         {
-            get => SpeedController?.SpeedMultiplier ?? 1f;
+            get => SpeedController != null && ReflectionUtils.TryGetFieldOrProperty(
+                    SpeedController,
+                    "_speedMultiplier") is float multiplier
+                ? multiplier
+                : 1f;
             set
             {
                 if (SpeedController != null)
-                    SpeedController.SpeedMultiplier = value;
+                    SpeedController.SetSpeedMultiplier(value);
             }
         }
 
@@ -155,8 +159,11 @@ namespace S1API.Entities
         public void AddSpeedControl(string id, int priority, float speed)
         {
             if (SpeedController == null) return;
-            var control = new S1NPCs.NPCSpeedController.SpeedControl(id, priority, speed);
-            SpeedController.AddSpeedControl(control);
+            SpeedController.AddSpeedControl(
+                id,
+                speed,
+                priority,
+                S1NPCs.SpeedControl.EType.Normalized);
         }
 
         /// <summary>

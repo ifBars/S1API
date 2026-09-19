@@ -31,6 +31,7 @@ namespace S1API.Entities.Supplier
             public string SupplierUnlockHint { get; set; } =
                 "You can now order <PRODUCT> from <NAME>. <PRODUCT> can be used to <PURPOSE>.";
             public string? StashDeadDropGuid { get; set; }
+            public string? PersistentId { get; set; }
 
             internal IReadOnlyList<S1ItemFramework.StorableItemDefinition>
                 ResolveDeliveryItems()
@@ -103,6 +104,31 @@ namespace S1API.Entities.Supplier
 
             data.MinimumDeaddropOrderLimit = minimum;
             data.MaximumDeaddropOrderLimit = maximum;
+            return this;
+        }
+
+        /// <summary>
+        /// Keeps this supplier's generated shop, delivery vehicle, and generated stash
+        /// identities on an existing persistent ID.
+        /// </summary>
+        /// <remarks>
+        /// This does not change the NPC's runtime <c>ID</c>. Use it only when a released
+        /// supplier must adopt a new runtime NPC ID while preserving the supplier data
+        /// derived from its former ID.
+        /// </remarks>
+        /// <param name="persistentId">The non-empty ID used by the previous supplier release.</param>
+        /// <returns>The current builder for chaining.</returns>
+        /// <exception cref="ArgumentException">Thrown when the ID is empty or whitespace.</exception>
+        public SupplierDataBuilder WithPersistentId(string persistentId)
+        {
+            if (string.IsNullOrWhiteSpace(persistentId))
+            {
+                throw new ArgumentException(
+                    "The persistent supplier ID cannot be empty.",
+                    nameof(persistentId));
+            }
+
+            data.PersistentId = persistentId.Trim();
             return this;
         }
 

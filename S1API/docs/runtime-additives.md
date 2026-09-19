@@ -1,97 +1,66 @@
-# Runtime Additives
+# Runtime additives
 
-Create runtime additives (`AdditiveDefinition`) through the additive builder API.
+Create `AdditiveDefinition` instances with the additive builder. Definitions
+are read-only after registration, so configure their effects before `Build()`.
 
-## Important Notes
+Register additives before save restoration, preferably in
+`GameLifecycle.OnPreLoad`. An additive that registers later may not be
+available to restored items or grow containers.
 
-- `AdditiveDefinition` is builder-only and intentionally read-only after registration to avoid mid-session mutation issues
-- Configure additive effects during build time
-- For best results, register additives before save data loads
-- Prefer `GameLifecycle.OnPreLoad` when possible
-
-## Example: Recommended Timing
+## Register an additive
 
 ```csharp
-using MelonLoader;
 using S1API.Items;
 using S1API.Lifecycle;
 
-public class MyMod : MelonMod
+GameLifecycle.OnPreLoad += () =>
 {
-    public override void OnSceneWasLoaded(int buildIndex, string sceneName)
-    {
-        if (sceneName != "Main")
-            return;
-
-        GameLifecycle.OnPreLoad += RegisterItems;
-    }
-
-    private static void RegisterItems()
-    {
-        var growthBooster = AdditiveItemCreator.CreateBuilder()
-            .WithBasicInfo(
-                id: "mymod_growth_booster",
-                name: "Growth Booster",
-                description: "A custom growth enhancer additive.",
-                category: ItemCategory.Growing
-            )
-            .WithStackLimit(10)
-            .WithPricing(basePurchasePrice: 150f, resellMultiplier: 0.5f)
-            .WithEffects(
-                yieldMultiplier: 1.5f,
-                instantGrowth: 0.5f,
-                qualityChange: 1.0f
-            )
-            .Build();
-
-        MelonLogger.Msg($"Registered additive: {growthBooster.Name} ({growthBooster.ID})");
-    }
-}
+    AdditiveDefinition growthBooster = AdditiveItemCreator.CreateBuilder()
+        .WithBasicInfo(
+            id: "my-mod:growth-booster",
+            name: "Growth Booster",
+            description: "A custom growing additive.",
+            category: ItemCategory.Growing)
+        .WithStackLimit(10)
+        .WithPricing(basePurchasePrice: 150f, resellMultiplier: 0.5f)
+        .WithEffects(
+            yieldMultiplier: 1.5f,
+            instantGrowth: 0.5f,
+            qualityChange: 1f)
+        .Build();
+};
 ```
 
-## Cloning an Existing Additive
+## Clone a native additive
 
 ```csharp
-var variant = AdditiveItemCreator.CloneFrom("pgr")
-    .WithBasicInfo("mymod_pgr_variant", "PGR Variant", "A tweaked PGR.", ItemCategory.Growing)
-    .WithEffects(1.25f, 0.25f, 0.0f)
+AdditiveDefinition variant = AdditiveItemCreator.CloneFrom("pgr")
+    .WithBasicInfo(
+        "my-mod:pgr-variant",
+        "PGR Variant",
+        "A modified growing additive.",
+        ItemCategory.Growing)
+    .WithEffects(1.25f, 0.25f, 0f)
     .Build();
 ```
 
-## Allowing Additives on Grow Containers
+## Allow an additive in grow containers
 
-Grow containers have a fixed additive allowlist (`GrowContainer.AllowedAdditives`). S1API can extend that allowlist globally so mods do not need to patch `GrowContainer.InitializeGridItem`.
-
-Notes:
-
-- Applies to all grow containers
-- Duplicate `AllowAdditive(...)` calls are a no-op
-- If an ID cannot be resolved to an `AdditiveDefinition` at runtime, S1API warns once and skips it
+Grow containers use a global allowlist. Register the additive first, then add
+its stable ID during `OnPreLoad`:
 
 ```csharp
-using MelonLoader;
 using S1API.Growing;
-using S1API.Lifecycle;
 
-public class MyMod : MelonMod
-{
-    public override void OnSceneWasLoaded(int buildIndex, string sceneName)
-    {
-        if (sceneName != "Main")
-            return;
-
-        GameLifecycle.OnPreLoad += () =>
-        {
-            GrowContainerAdditives.AllowAdditive("mymod_growth_booster");
-        };
-    }
-}
+GameLifecycle.OnPreLoad += () =>
+    GrowContainerAdditives.AllowAdditive("my-mod:growth-booster");
 ```
 
-## See Also
+Repeated calls for the same ID do nothing. If S1API cannot resolve the ID to an
+`AdditiveDefinition`, it logs one warning and skips it.
 
-- [Item Registration & Basics](item-registration-basics.md)
-- [Builder API Reference](item-builder-reference.md)
+## See also
+
+- [Item registration](item-registration-basics.md)
+- [Item builder reference](item-builder-reference.md)
 - <xref:S1API.Items.AdditiveItemCreator>
-- <xref:S1API.Items.AdditiveDefinitionBuilder>
-- <xref:S1API.Items.AdditiveDefinition>

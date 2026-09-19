@@ -5,11 +5,11 @@ This repository uses branch-based version maintenance so active development can 
 ## Core Rules
 
 - `stable` always represents the next planned release line.
-- Every shipped version gets its own maintenance branch named `releases/x.y.z`.
-- Release branches only receive fixes that are safe for that shipped version.
+- Every shipped version gets an immutable branch named `releases/x.y.z` that points to the same commit as its tag.
+- A release branch may be pushed before publication as the pull-request branch for that version, but it becomes immutable once `vX.Y.Z` is tagged.
 - Breaking changes, refactors, and new feature work stay on `stable` unless they are intentionally backported.
 - Each public release is identified by a git tag.
-- NuGet publishing automation only runs from `releases/x.y.z` branches, not from `stable`.
+- Stable package publication is triggered by the exact `vX.Y.Z` tag, not by a branch push.
 
 ## Branch Roles
 
@@ -23,13 +23,22 @@ This repository uses branch-based version maintenance so active development can 
 
 ### `releases/x.y.z`
 
-Each release branch preserves the source for one shipped version.
+Each release branch preserves the source for exactly one shipped version.
 
-- Create the branch immediately after publishing `x.y.z`.
-- For an active maintenance line, work from the newest shipped patch branch in that line.
-- Only put hotfixes, packaging fixes, and other low-risk corrections on that branch.
-- Do not merge unrelated `stable` work into a release branch.
-- If a fix starts on a release branch, cherry-pick it back to `stable` if the issue also exists there.
+- Prepare `releases/X.Y.Z` from the intended stable base and use it as the PR head for that release.
+- Merge the release PR into `stable`, then fast-forward `releases/X.Y.Z` to the resulting stable merge commit.
+- Tag that exact shared commit as `vX.Y.Z`; from that point onward, do not add commits to the release branch.
+- Prepare the next patch on a new branch such as `releases/X.Y.(Z+1)` instead of changing the previous version branch.
+- Do not merge unrelated future `stable` work into a patch release candidate.
+
+### `beta`
+
+`beta` is the optional public-prerelease lane.
+
+- Synchronize it from the intended stable release base before starting a new prerelease series.
+- Use versions such as `X.Y.Z-beta.N` and tags such as `vX.Y.Z-beta.N`.
+- Beta builds use the beta game-assembly branches and publish only as GitHub prereleases.
+- A stable patch does not need to pass through `beta` unless public beta validation is intentionally part of that release.
 
 ## Tag Format
 
@@ -55,48 +64,51 @@ Patch numbers are ordinary integers, not single digits. That means `2.9.10` is t
 
 ### New release line
 
-1. Finish the planned work on `stable`.
-2. Publish the release as tag `vX.Y.Z`.
-3. Branch from that exact release commit to `releases/X.Y.Z`.
-4. Verify the branch name matches the `releases/x.y.z` convention exactly so GitHub automation can detect it.
-5. Continue forward development on `stable` toward the next version.
+1. Prepare the release changes and version bump on `releases/X.Y.Z`, based on the intended `stable` commit.
+2. Add curated release notes at `.github/release-notes/X.Y.Z.md`, following the grouped format used by recent releases.
+3. Open a PR from `releases/X.Y.Z` into `stable` and complete validation.
+4. Merge the PR into `stable` with a merge commit.
+5. Fast-forward `releases/X.Y.Z` to that exact stable merge commit.
+6. Tag the shared commit as `vX.Y.Z` to publish the stable release.
+7. Treat both the tag and release branch as immutable release records.
+8. Continue forward development on `stable` toward the next version.
 
 ### Hotfix release for an existing line
 
-1. Create a short-lived branch from `releases/X.Y.Z`, such as `hotfix/X.Y.Z/fix-name`.
-2. Apply only the fixes intended for that shipped line.
-3. Open a PR back into `releases/X.Y.Z` and merge it after validation.
-4. Bump the version on that release branch to the next patch version by incrementing the patch number normally, such as `2.9.10` after `2.9.9`.
-5. Tag the updated release branch as that new patch version, such as `v2.9.10`.
-6. Create `releases/X.Y.(Z+1)` from that exact tagged commit so the newly shipped version has its own maintenance branch.
-7. Cherry-pick the merged fix back to `stable` if it still applies there, or open a matching PR if adaptation is needed.
+1. Create `releases/X.Y.(Z+1)` from the current stable tree when it still matches the shipped version, or from the `vX.Y.Z` tag when stable has unrelated future work.
+2. Apply only the intended hotfixes, release-tooling changes, and the `X.Y.(Z+1)` version bump to that new release branch.
+3. Add curated release notes at `.github/release-notes/X.Y.(Z+1).md` for the exact previous-tag comparison range.
+4. Open a PR from `releases/X.Y.(Z+1)` into `stable` and merge it after validation.
+5. Fast-forward `releases/X.Y.(Z+1)` to the resulting stable merge commit.
+6. Tag that exact commit as `vX.Y.(Z+1)` to publish the new patch.
+7. Leave `releases/X.Y.Z` and its tag unchanged as the immutable record of the previous release.
 
-Using PRs for hotfixes keeps review history attached to the release line and improves GitHub auto-generated release notes by linking each fix to its PR and author.
+Using the new version's branch as the PR head keeps review history attached to the release while ensuring every version branch continues to identify the assembly it shipped.
 
 ## Pull Request Guidance
 
-- Prefer a dedicated hotfix branch and PR for each maintenance fix.
+- Prefer the new `releases/X.Y.Z` branch and a narrowly scoped PR for each release candidate.
 - Keep hotfix PRs narrowly scoped so release notes stay easy to read.
-- Merge hotfix PRs into `releases/x.y.z` before tagging the next patch release.
-- Backport the merged change to `stable` with a cherry-pick when possible.
-- If `stable` has diverged too far for a clean cherry-pick, use a separate PR into `stable` that references the release-branch PR.
+- Merge release PRs into `stable` before tagging.
+- Fast-forward the release branch to the stable merge commit before creating the tag.
+- Never put a new version bump on a branch named for an already shipped version.
 
 ## NuGet Publishing
 
-The NuGet package publish workflow is intentionally tied to release branches.
+The NuGet package publish workflow uses the stable release tag as its authority.
 
-- Automatic publish only runs for pushes to `releases/**`.
-- Automatic publish only runs when `S1API/S1API.csproj` changes and the `<Version>` value changes.
-- `workflow_dispatch` can be used to rerun the publish workflow manually, but it should be run from the relevant `releases/x.y.z` branch.
-- A version bump on `stable` does not publish to NuGet. That is expected.
-- If a release branch does not exist yet, create `releases/x.y.z` from the tagged release commit before expecting NuGet automation to run.
+- Automatic publication runs for stable `vX.Y.Z` tag pushes.
+- Prerelease tags such as `vX.Y.Z-beta.N` do not publish to NuGet.
+- The workflow checks out the tag and requires `S1API/S1API.csproj` `<Version>` to exactly match it.
+- `workflow_dispatch` can republish an existing stable tag when explicitly supplied.
+- Branch creation, release-PR merges, and ordinary version bumps do not publish packages by themselves.
 
 ### Contributor checklist
 
 Before expecting a NuGet package to publish:
 
-1. Confirm the shipped line has a matching `releases/x.y.z` branch.
-2. Confirm the version change is being merged into that release branch, not only into `stable`.
+1. Confirm `stable`, `releases/x.y.z`, and `vX.Y.Z` identify the same release commit.
+2. Confirm the project and Melon versions match `X.Y.Z`.
 3. Confirm the branch name uses `releases/`, not `release/`.
 4. Confirm the publish workflow secrets are configured in GitHub.
 
@@ -105,37 +117,33 @@ Before expecting a NuGet package to publish:
 The GitHub release workflow packages public mod archives and can publish the same release to mod distribution platforms.
 
 - `publish-github-release.yml` runs from release tags and can also be rerun with `workflow_dispatch`.
+- When `.github/release-notes/X.Y.Z.md` exists at the tagged commit, its curated Markdown is used as the GitHub release body. Historical tags and manual reruns without that file fall back to GitHub-generated notes.
+- Curated notes should use concise domain-specific change sections, a compatibility and validation section, PR-linked contributor credits, and release links, matching the structure of recent stable releases.
 - The GitHub/Nexus archive is `S1API-Forked-x.y.z.zip` and contains `Mods/` and `Plugins/` at the archive root.
 - GitHub Releases should only publish `S1API-Forked-x.y.z.zip` as a release asset.
 - The Thunderstore archive is `S1API-TS-x.y.z.zip` and contains `icon.png`, `README.md`, `manifest.json`, `Mods/`, and `Plugins/` at the archive root, but it is only used for Thunderstore publishing.
 - The uppercase `Mods/` and `Plugins/` paths are intentional so case-sensitive filesystems do not create parallel lowercase install folders.
 - The GitHub release asset is always uploaded by the workflow.
-- Nexus Mods upload runs when `NEXUSMODS_API_KEY` and `NEXUSMODS_FILE_GROUP_ID` are configured.
+- Nexus Mods upload runs when `NEXUSMODS_API_KEY`, `NEXUSMODS_FILE_GROUP_ID`, and `NEXUSMODS_MOD_ID` are configured.
+- The workflow publishes versioned curated Markdown on GitHub when present and falls back to GitHub-generated notes only when it is absent. The Nexus Mods upload intentionally omits the optional changelog input because Nexus handles file versions and changelogs through separate endpoints, and a rejected changelog request would otherwise fail the workflow after a successful file upload.
 - Thunderstore upload runs when `THUNDERSTORE_TOKEN` is configured.
 - `workflow_dispatch` exposes `publish_nexus` and `publish_thunderstore` toggles for refreshing GitHub assets without re-publishing external platforms.
 
 ## Backporting Rules
 
-- Prefer cherry-picking specific commits instead of merging branches.
-- Backport only fixes that are relevant and low risk for the release line.
-- Preserve the original commit message when possible so history stays easy to trace.
-- If a cherry-pick needs adaptation because `stable` has diverged, keep the behavior equivalent and mention the branch-specific adjustment in the commit body or PR notes.
+- When `stable` contains unrelated future work, create the next release branch from the previous stable tag and cherry-pick only the relevant fixes.
+- Preserve original commit messages when possible so history stays easy to trace.
+- Merge the completed release branch back into `stable`; resolve divergence without pulling unrelated stable work into the release candidate.
+- If a cherry-pick needs adaptation, keep the behavior equivalent and mention the branch-specific adjustment in the commit body or PR notes.
 
-## Current Example
+## Example Patch Flow
 
-The current repository state follows this model:
+For a `3.1.3` hotfix after `3.1.2` has shipped:
 
-- `releases/2.9.9` holds the shipped `2.9.9` code line until the next patch in that line ships.
-- If a hotfix release is published from that line, tag it as `v2.9.10` and then create `releases/2.9.10` from that exact release commit.
-- `stable` is already moving toward `3.0.0`.
-- Fixes that still matter to both lines can be cherry-picked between the two branches as needed.
+1. Leave `releases/3.1.2` and `v3.1.2` unchanged.
+2. Prepare the fix and version bump on `releases/3.1.3`.
+3. Merge `releases/3.1.3` into `stable` after validation.
+4. Fast-forward `releases/3.1.3` to the stable merge commit.
+5. Tag that shared commit `v3.1.3` to publish it.
 
-## History Snapshot
-
-At the time this policy was written:
-
-- `stable` and `releases/2.9.9` diverge from `v2.9.9`.
-- `stable` contains forward-looking `3.0.0` work that should not be merged wholesale into the `2.9.9` maintenance branch.
-- `releases/2.9.9` contains hotfix-oriented commits suitable for selective cherry-picking.
-
-This keeps maintenance releases isolated while allowing ongoing development to move ahead without blocking urgent fixes.
+This keeps maintenance work isolated without allowing a version branch to drift away from the artifact named by that branch.

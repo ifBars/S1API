@@ -581,6 +581,14 @@ namespace S1API.Internal.Products
             Append(builder, descriptor.DefaultQuality.ToString(CultureInfo.InvariantCulture));
             Append(builder, descriptor.PlayerEffectDurationSeconds.ToString(CultureInfo.InvariantCulture));
             Append(builder, descriptor.NpcEffectDurationSeconds.ToString(CultureInfo.InvariantCulture));
+            Append(builder, descriptor.HasGeneratedMixColor ? "1" : "0");
+            if (descriptor.HasGeneratedMixColor)
+            {
+                Append(builder, descriptor.GeneratedMixColorR.ToString(CultureInfo.InvariantCulture));
+                Append(builder, descriptor.GeneratedMixColorG.ToString(CultureInfo.InvariantCulture));
+                Append(builder, descriptor.GeneratedMixColorB.ToString(CultureInfo.InvariantCulture));
+                Append(builder, descriptor.GeneratedMixColorA.ToString(CultureInfo.InvariantCulture));
+            }
             for (int i = 0; i < descriptor.PropertyIds.Length; i++)
                 AppendIdentifier(builder, descriptor.PropertyIds[i]);
             // Provider data remains local; only its deterministic digest participates in compatibility.

@@ -1,5 +1,4 @@
 using S1API.Products;
-using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace S1API.Tests.Products;
@@ -204,8 +203,6 @@ public sealed class ProductPackagingContentProfileTests
 
     private static ProductPresentationTransform CreatePlacementWithoutUnityRuntime()
     {
-        return
-            (ProductPresentationTransform)RuntimeHelpers.GetUninitializedObject(
-                typeof(ProductPresentationTransform));
+        return TestObjectFactory.CreateUninitialized<ProductPresentationTransform>();
     }
 }

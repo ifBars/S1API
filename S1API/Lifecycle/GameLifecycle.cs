@@ -5,6 +5,7 @@ using S1Persistence = ScheduleOne.Persistence;
 #endif
 
 using System;
+using S1API.Internal.Map;
 using UnityEngine.Events;
 
 namespace S1API.Lifecycle
@@ -193,6 +194,7 @@ namespace S1API.Lifecycle
         {
             try
             {
+                DeferredMapResolver.ResolveAll();
                 OnLoadComplete?.Invoke();
             }
             catch (Exception ex)

@@ -8,7 +8,30 @@ Apps integrate with the native Home Screen, spawn icons, and manage open/close s
 - Derive from `PhoneApp`
 - Do not manually register; S1API auto-discovers `PhoneApp` subclasses when the phone `HomeScreen` starts
 - Implement `OnCreatedUI(GameObject container)` to build your UI
-- Optionally override `OnPhoneClosed()` and `Exit(ExitAction exit)` for UX
+- Optionally override `OnPhoneClosed()` and `Exit(S1API.PhoneApp.ExitAction exit)` for UX
+
+`S1API.PhoneApp.ExitAction` is a cross-runtime wrapper. Its `Used` property is
+forwarded to the active Mono or IL2CPP game action, so phone apps do not need to
+reference either native Schedule One type.
+
+### Migrating from S1API 3.0.6
+
+S1API 3.0.6 exposed `ScheduleOne.DevUtilities.ExitAction` directly. Schedule I
+0.4.6f11 moved that native type and made the old signature impossible to retain.
+Change phone-app overrides to use the S1API-owned wrapper:
+
+```csharp
+public override void Exit(S1API.PhoneApp.ExitAction exit)
+{
+    if (!exit.Used)
+    {
+        exit.Used = true;
+        // Close or reset custom UI state here.
+    }
+}
+```
+
+This is the only intentional public signature exception in the 3.1.0 promotion.
 
 ## Minimal example
 

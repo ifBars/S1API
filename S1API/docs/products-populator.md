@@ -1,91 +1,68 @@
-# ProductPopulator (Storage Helpers)
+# ProductPopulator
 
-`S1API.Products.ProductPopulator` contains convenience helpers for creating product instances (optionally packaged) and adding them to a `S1API.Storages.StorageInstance`.
+`ProductPopulator` creates product instances and adds them to a
+`S1API.Storages.StorageInstance`. Use it for scripted rewards, test setups, or
+stock that your mod owns. It does not register products, discover them, or add
+them to shops.
 
-This is mainly useful for:
-
-- shop/vendor inventories
-- debug/testing
-- scripted rewards and stashes
-
-## Get packaging by ID
+## Resolve packaging
 
 ```csharp
 using S1API.Products;
 
-var jar = ProductPopulator.GetPackaging("jar");
-var baggie = ProductPopulator.GetPackaging("baggie");
+PackagingDefinition? jar = ProductPopulator.GetPackaging("jar");
 ```
 
-Common IDs depend on the base game (examples mentioned in code include: `baggie`, `jar`, `brick`).
+Packaging IDs come from the installed game. Check for `null` before using one.
 
-## Enumerate discovered products
+## Read discovered products
 
-`ProductPopulator.GetAllProductDefinitions()` reads `ProductManager.DiscoveredProducts` and returns the discovered product definitions for the current save.
+`GetAllProductDefinitions()` returns products discovered in the current save.
+It returns an empty collection until that save has discovered products.
 
 ```csharp
+using System.Collections.Generic;
 using S1API.Products;
 
-var defs = ProductPopulator.GetAllProductDefinitions();
+IReadOnlyList<ProductDefinition> products =
+    ProductPopulator.GetAllProductDefinitions();
 ```
 
-There are also typed filters:
-
-- `GetWeedDefinitions()`
-- `GetMethDefinitions()`
-- `GetCocaineDefinitions()`
-- `GetShroomDefinitions()`
+Use `GetWeedDefinitions()`, `GetMethDefinitions()`, `GetCocaineDefinitions()`,
+or `GetShroomDefinitions()` when the native family matters.
 
 ## Create a packaged instance
 
 ```csharp
-using S1API.Products;
+PackagingDefinition? packaging = ProductPopulator.GetPackaging("jar");
+IReadOnlyList<ProductDefinition> products =
+    ProductPopulator.GetAllProductDefinitions();
 
-var packaging = ProductPopulator.GetPackaging("jar");
-if (packaging != null)
+if (packaging != null && products.Count > 0)
 {
-    var productDef = ProductPopulator.GetAllProductDefinitions()[0];
-    var inst = ProductPopulator.CreatePackagedProduct(productDef, packaging, quantity: 20);
+    ProductInstance? instance = ProductPopulator.CreatePackagedProduct(
+        products[0], packaging, quantity: 20);
 }
 ```
 
-## Populate a storage
+## Populate storage
 
-### From a StorageInstance
-
-```csharp
-using S1API.Products;
-using S1API.Storages;
-
-int added = ProductPopulator.PopulateWithPackagedProducts(storage, packagingId: "jar", quantityPerItem: 20);
-```
-
-### From a GameObject
-
-If you have a `GameObject` containing a storage entity (or in children), you can populate it directly:
+In this example, `storage` already refers to the target
+`S1API.Storages.StorageInstance`.
 
 ```csharp
-using S1API.Products;
-
-int added = ProductPopulator.PopulateFromGameObject(someGameObject, packagingId: "jar", quantityPerItem: 20);
+int added = ProductPopulator.PopulateWithPackagedProducts(
+    storage,
+    packagingId: "jar",
+    quantityPerItem: 20);
 ```
 
-### Specific product IDs
+Use `PopulateFromGameObject(...)` when you have a game object that contains a
+storage entity. Use `PopulateWithSpecificPackagedProducts(...)` when the mod
+owns an explicit list of product IDs.
 
-```csharp
-using S1API.Products;
+## See also
 
-var ids = new System.Collections.Generic.List<string> { "weed", "cocaine" };
-int added = ProductPopulator.PopulateWithSpecificPackagedProducts(storage, ids, packagingId: "baggie", quantityPerProduct: 5);
-```
-
-## Notes
-
-- `ProductManager.DiscoveredProducts` is save-dependent; if nothing is discovered yet, populators that rely on it will add nothing.
-- The helper methods log a lot via `UnityEngine.Debug` (intended for debugging).
-
-## See Also
-
-- `S1API/docs/products-api.md`
+- [Products API](products-api.md)
+- [Generic custom products](generic-custom-products.md)
 - <xref:S1API.Products.ProductPopulator>
-- <xref:S1API.Storages>

@@ -3,6 +3,9 @@ name: API Coverage Analysis
 on:
   push:
     branches: [ master, main, stable ]
+    paths-ignore:
+      - README.md
+      - tools/S1APICoverageAnalyzer/coverage-history.json
   pull_request:
     branches: [ master, main, stable ]
   workflow_dispatch:
@@ -21,6 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Checkout S1API
         uses: actions/checkout@v4
@@ -56,7 +60,7 @@ jobs:
 
       # Try to restore assemblies from cache first (for external PRs)
       # Cache key includes assembly branch to separate beta from main
-      # v3 suffix allows cache invalidation by bumping version
+      # v4 suffix allows cache invalidation by bumping version
       # Only use cache for PR events to avoid stale assemblies after merges
       - name: Restore Game Assemblies from Cache
         id: cache-assemblies
@@ -64,9 +68,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: S1API/ScheduleOneAssemblies
-          key: game-assemblies-v3-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
+          key: game-assemblies-v4-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
           restore-keys: |
-            game-assemblies-v3-${{ steps.assembly-branch.outputs.branch }}-
+            game-assemblies-v4-${{ steps.assembly-branch.outputs.branch }}-
 
       # Only checkout game assemblies if cache miss AND we have access to secrets
       - name: Checkout Game Assemblies
@@ -220,76 +224,37 @@ jobs:
             echo "Covered Classes: $(jq -r '.classCoverage.covered' coverage-report.json) / $(jq -r '.classCoverage.total' coverage-report.json)"
           fi
 
-      - name: Update README Badge and Chart
+      - name: Generate README Badge and Chart Updates
+        id: coverage-files
         if: steps.verify-assemblies.outputs.has_assemblies == 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable')
         run: |
           COVERAGE_CHANGED="${{ steps.coverage.outputs.coverage_changed }}"
           echo "Coverage changed status: $COVERAGE_CHANGED"
-          
-          # Configure git early for potential commits
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Check if history was deduplicated (has changes)
-          HISTORY_DEDUPLICATED=false
-          if ! git diff --quiet tools/S1APICoverageAnalyzer/coverage-history.json; then
-            echo "History file was deduplicated"
-            HISTORY_DEDUPLICATED=true
-          fi
-          
-          # If coverage hasn't changed, only commit history deduplication and chart update if needed
+
+          # The analyzer refreshes the latest history timestamp on every run.
+          # Discard that metadata churn unless the measured coverage changed.
           if [ "$COVERAGE_CHANGED" != "true" ]; then
-            echo "Coverage percentage unchanged - skipping badge update"
-            
-            if [ "$HISTORY_DEDUPLICATED" = true ]; then
-              echo "Updating chart with deduplicated history..."
-              
-              # Update coverage chart in README if chart file exists
-              if [ -f coverage-chart.md ]; then
-                echo "Updating coverage chart in README..."
-                
-                # Extract the chart image URL from coverage-chart.md (line 3)
-                CHART_URL=$(sed -n '3p' coverage-chart.md)
-                
-                # Find the line number with the existing chart in README
-                CHART_LINE=$(grep -n "!\[Coverage Chart\]" README.md | head -1 | cut -d: -f1)
-                
-                if [ -n "$CHART_LINE" ]; then
-                  echo "Found chart at line $CHART_LINE, updating..."
-                  # Replace the chart line
-                  awk -v line="$CHART_LINE" -v new_chart="$CHART_URL" 'NR==line {print new_chart; next} {print}' README.md > README.md.tmp
-                  mv README.md.tmp README.md
-                else
-                  echo "Chart line not found in README"
-                fi
-              fi
-              
-              echo "Committing deduplicated history and updated chart..."
-              git add README.md tools/S1APICoverageAnalyzer/coverage-history.json
-              git commit -m "chore: deduplicate coverage history and update chart [skip ci]"
-              git push
-            else
-              echo "No changes to commit"
-            fi
-            
+            echo "Coverage percentage unchanged - discarding generated metadata churn"
+            git restore -- README.md tools/S1APICoverageAnalyzer/coverage-history.json
+            echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          
+
           # Coverage changed - update README badge and chart
           if [ -f coverage-badge.md ]; then
             # Read the new badge markdown (trim whitespace)
             NEW_BADGE=$(cat coverage-badge.md | tr -d '\n\r')
-            
+
             # Replace the link to point to the GitHub Actions workflow
             # Extract the badge image URL and replace the link URL
             WORKFLOW_URL="https://github.com/${{ github.repository }}/actions/workflows/coverage.yml"
             NEW_BADGE=$(echo "$NEW_BADGE" | sed "s|](docs/coverage-report.json)|]($WORKFLOW_URL)|g")
-            
+
             echo "New badge: $NEW_BADGE"
-            
+
             # Find the line number with the API Coverage badge in README
             BADGE_LINE=$(grep -n "\[!\[API Coverage\]" README.md | head -1 | cut -d: -f1)
-            
+
             if [ -n "$BADGE_LINE" ]; then
               echo "Found API Coverage badge at line $BADGE_LINE, updating..."
               # Update the badge line in README.md
@@ -299,51 +264,69 @@ jobs:
             else
               echo "Warning: API Coverage badge not found in README.md"
             fi
-            
-            # Update coverage chart in README if chart file exists
-            if [ -f coverage-chart.md ]; then
-              echo "Updating coverage chart in README..."
-              
-              # Extract the chart image URL from coverage-chart.md (line 3)
-              CHART_URL=$(sed -n '3p' coverage-chart.md)
-              
-              # Find the line number with the existing chart in README
-              CHART_LINE=$(grep -n "!\[Coverage Chart\]" README.md | head -1 | cut -d: -f1)
-              
-              if [ -n "$CHART_LINE" ]; then
-                echo "Found chart at line $CHART_LINE, updating..."
-                # Replace the chart line
-                awk -v line="$CHART_LINE" -v new_chart="$CHART_URL" 'NR==line {print new_chart; next} {print}' README.md > README.md.tmp
-                mv README.md.tmp README.md
-              else
-                echo "Chart line not found in README"
-              fi
-            fi
-            
-            # Check if there are changes to commit
-            CHANGES_EXIST=false
-            
-            if ! git diff --quiet README.md; then
-              echo "README.md has changes"
-              CHANGES_EXIST=true
-            fi
-            
-            if ! git diff --quiet tools/S1APICoverageAnalyzer/coverage-history.json; then
-              echo "coverage-history.json has changes"
-              CHANGES_EXIST=true
-            fi
-            
-            if [ "$CHANGES_EXIST" = true ]; then
-              echo "Committing changes..."
-              git diff README.md
-              git add README.md tools/S1APICoverageAnalyzer/coverage-history.json
-              git commit -m "chore: update API coverage badge and history [skip ci]"
-              git push
-            else
-              echo "No changes to commit"
-            fi
           else
-            echo "coverage-badge.md not found, skipping README update"
+            echo "Coverage badge file unavailable - skipping badge update"
+          fi
+
+          if [ -f coverage-chart.md ]; then
+            echo "Updating coverage chart in README..."
+            CHART_URL=$(sed -n '3p' coverage-chart.md)
+            CHART_LINE=$(grep -n "!\[Coverage Chart\]" README.md | head -1 | cut -d: -f1)
+
+            if [ -n "$CHART_LINE" ]; then
+              echo "Found chart at line $CHART_LINE, updating..."
+              awk -v line="$CHART_LINE" -v new_chart="$CHART_URL" 'NR==line {print new_chart; next} {print}' README.md > README.md.tmp
+              mv README.md.tmp README.md
+            else
+              echo "Chart line not found in README"
+            fi
+          fi
+
+          if git diff --quiet -- README.md tools/S1APICoverageAnalyzer/coverage-history.json; then
+            echo "No coverage files changed"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Coverage files changed"
+            git diff -- README.md tools/S1APICoverageAnalyzer/coverage-history.json
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open Coverage Update Pull Request
+        if: steps.coverage-files.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_BRANCH: ${{ github.ref_name }}
+          UPDATE_BRANCH: automation/coverage-${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md tools/S1APICoverageAnalyzer/coverage-history.json
+          git commit -m "chore: update API coverage badge and history"
+
+          REMOTE_SHA=$(git ls-remote --heads origin "refs/heads/$UPDATE_BRANCH" | cut -f1)
+          if [ -n "$REMOTE_SHA" ]; then
+            git push --force-with-lease="refs/heads/$UPDATE_BRANCH:$REMOTE_SHA" origin "HEAD:$UPDATE_BRANCH"
+          else
+            git push origin "HEAD:$UPDATE_BRANCH"
+          fi
+
+          EXISTING_PR=$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --base "$BASE_BRANCH" \
+            --head "$UPDATE_BRANCH" \
+            --state open \
+            --json url \
+            --jq '.[0].url')
+
+          if [ -n "$EXISTING_PR" ]; then
+            echo "Updated existing coverage pull request: $EXISTING_PR"
+          else
+            gh pr create \
+              --repo "${{ github.repository }}" \
+              --base "$BASE_BRANCH" \
+              --head "$UPDATE_BRANCH" \
+              --title "chore: update API coverage badge and history" \
+              --body "Automated coverage metadata update generated by [workflow run ${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
           fi
 
       # Save cache even if build fails (to enable beta cache priming)
@@ -353,7 +336,7 @@ jobs:
         if: always() && (github.event_name == 'pull_request' || (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable'))) && steps.cache-assemblies.outputs.cache-hit != 'true'
         with:
           path: S1API/ScheduleOneAssemblies
-          key: game-assemblies-v3-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
+          key: game-assemblies-v4-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
 
       - name: Coverage Skipped Notice
         if: steps.verify-assemblies.outputs.has_assemblies != 'true'

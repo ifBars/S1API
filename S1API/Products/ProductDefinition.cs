@@ -20,8 +20,14 @@ using UnityEngine;
 namespace S1API.Products
 {
     /// <summary>
-    /// Represents a product definition in the game.
+    /// Represents one registered product type in the active game runtime.
     /// </summary>
+    /// <remarks>
+    /// A definition supplies the shared identity, price, properties, icon, and packaging policy
+    /// for its instances. It is a wrapper over a native definition, not a new product-registration
+    /// mechanism. Use the custom-product or native-family builders when a mod needs to register
+    /// a definition.
+    /// </remarks>
     public class ProductDefinition : Items.Storable.StorableItemDefinition
     {
         /// <summary>
@@ -39,43 +45,50 @@ namespace S1API.Products
         {
         }
         /// <summary>
-        /// The price associated with this product.
+        /// Gets the current price selected by the native product system.
         /// </summary>
         public float Price =>
             S1ProductDefinition.Price;
 
         /// <summary>
-        /// The base price associated with this product.
+        /// Gets the native base price before market adjustments.
         /// </summary>
         public float BasePrice =>
             S1ProductDefinition.BasePrice;
         
         /// <summary>
-        /// The market value associated with this product.
+        /// Gets the product's native market value.
         /// </summary>
         public float MarketValue =>
             S1ProductDefinition.MarketValue;
 
         /// <summary>
-        /// Creates an instance of this product in-game.
+        /// Creates an unpackaged standard-quality instance of this definition.
         /// </summary>
-        /// <param name="quantity">The quantity of product.</param>
-        /// <returns>An instance of the product.</returns>
+        /// <param name="quantity">The native product quantity for the new instance.</param>
+        /// <returns>A new API wrapper around the native product instance.</returns>
         public override ItemInstance CreateInstance(int quantity = 1) =>
             new ProductInstance(CrossType.As<S1Product.ProductItemInstance>(S1ProductDefinition.GetDefaultInstance(quantity)));
 
         /// <summary>
-        /// Gets the in-game icon associated with the product.
+        /// Gets the current native inventory icon.
         /// </summary>
+        /// <remarks>
+        /// The returned sprite is owned by the active Unity runtime. Do not destroy it. A
+        /// generated custom-product icon can replace this reference after its capture completes.
+        /// </remarks>
         public new Sprite Icon
         {
             get { return S1ProductDefinition.Icon; }
         }
 
         /// <summary>
-        /// The list of product properties for this definition.
-        /// Returns runtime-agnostic property wrappers that work on both Mono and IL2CPP.
+        /// Gets runtime-agnostic wrappers for the definition's product properties.
         /// </summary>
+        /// <remarks>
+        /// Each call creates a read-only snapshot that works on both Mono and IL2CPP. Do not use
+        /// the wrapper objects as stable identity keys; use their IDs when identity matters.
+        /// </remarks>
         public IReadOnlyList<PropertyBase> Properties
         {
             get
@@ -166,11 +179,14 @@ namespace S1API.Products
             S1ProductDefinition.DrugType;
 
         /// <summary>
-        /// Creates a packaged instance of this product with the specified packaging.
+        /// Creates a standard-quality instance with the supplied native packaging.
         /// </summary>
-        /// <param name="quantity">The quantity of the product.</param>
-        /// <param name="packaging">The packaging to apply to the product.</param>
-        /// <returns>A packaged product instance, or null if packaging is not found.</returns>
+        /// <param name="quantity">The native product quantity for the new instance.</param>
+        /// <param name="packaging">A live packaging definition from the active game runtime.</param>
+        /// <returns>
+        /// A packaged product instance, or <see langword="null"/> when the packaging cannot be
+        /// converted for the active runtime or native construction fails.
+        /// </returns>
         public ProductInstance? CreatePackagedInstance(int quantity, PackagingDefinition packaging)
         {
             try

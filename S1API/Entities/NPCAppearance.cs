@@ -39,6 +39,8 @@ namespace S1API.Entities
     public class NPCAppearance
     {
         private static readonly Log _logger = new Log("NPCAppearance");
+        private bool _mugshotQueued;
+        private bool _mugshotCompleted;
 
         #region Internal Members
 
@@ -61,10 +63,9 @@ namespace S1API.Entities
 
             if (_runtimeAvatar != null)
             {
-                if (_runtimeAvatar.CurrentSettings != null)
-                    sourceSettings = _runtimeAvatar.CurrentSettings;
-                else
-                    sourceSettings = global::S1API.Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(_runtimeAvatar, "InitialAvatarSettings") as S1AvatarFramework.AvatarSettings;
+                sourceSettings = global::S1API.Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(
+                    _runtimeAvatar,
+                    "InitialAvatarSettings") as S1AvatarFramework.AvatarSettings;
             }
 
             if (sourceSettings != null)
@@ -88,15 +89,19 @@ namespace S1API.Entities
         internal void GenerateMugshot()
         {
             if (NPC.HasExplicitIcon)
+            {
+                _mugshotCompleted = true;
                 return;
-
-            // Enqueue serialized mugshot generation to avoid shared rig race conditions
-            var generator = S1AvatarFramework.MugshotGenerator.Instance;
-            if (generator == null || generator.MugshotRig == null)
-                return;
+            }
 
             lock (_mugshotQueueLock)
             {
+                if (_mugshotQueued || _mugshotCompleted)
+                    return;
+
+                // Queue even before MugshotGenerator is ready. The processor waits for the
+                // native rig, avoiding a permanent shared Contacts icon on early OnCreated calls.
+                _mugshotQueued = true;
                 _mugshotQueue.Enqueue(this);
                 _hasQueuedMugshots = true;
                 if (!_isProcessingMugshots)
@@ -109,6 +114,46 @@ namespace S1API.Entities
 
         private static IEnumerator ProcessMugshotQueue()
         {
+            while (true)
+            {
+                IEnumerator processor = ProcessMugshotQueueCore();
+                bool restart = false;
+
+                while (true)
+                {
+                    bool hasNext;
+                    object? current = null;
+                    try
+                    {
+                        hasNext = processor.MoveNext();
+                        if (hasNext)
+                            current = processor.Current;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"[Mugshot] Capture job failed: {ex}");
+                        restart = CompleteActiveMugshot();
+                        if (!restart)
+                            AbortQueuedMugshots();
+                        break;
+                    }
+
+                    if (!hasNext)
+                        yield break;
+
+                    yield return current;
+                }
+
+                if (!restart)
+                    yield break;
+
+                yield return null;
+            }
+        }
+
+        private static IEnumerator ProcessMugshotQueueCore()
+        {
+#if false
             var generator = S1AvatarFramework.MugshotGenerator.Instance;
             var mugshotRig = generator != null ? generator.MugshotRig : null;
             var iconGenerator = generator != null ? generator.Generator : null;
@@ -170,7 +215,10 @@ namespace S1API.Entities
                 }
 
                 if (next.NPC.HasExplicitIcon)
+                {
+                    next.MarkMugshotCompleted();
                     continue;
+                }
 
                 // Refresh references in case they became stale
                 generator = S1AvatarFramework.MugshotGenerator.Instance;
@@ -185,12 +233,91 @@ namespace S1API.Entities
                     continue;
                 }
 
-                S1AvatarFramework.Avatar previousAvatar = next.NPC.S1NPC.Avatar;
-                global::S1API.Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(next.NPC.S1NPC, "Avatar", mugshotRig);
+                _activeMugshot = next;
 
                 // Use a per-capture clone so subsequent appearance edits don't mutate the in-flight mugshot
                 var mugshotSettings = ScriptableObject.Instantiate(next._customAvatarSettings);
                 mugshotSettings.Height = 1f;
+
+                // The mugshot rig is shared scene state. Keep it detached from the live NPC:
+                // since the NPC rewrite, assigning it to NPC.Avatar lets runtime LOD/look logic
+                // alter the rig while this coroutine yields, producing impostor captures and
+                // player-directed eyes.
+                bool previousAllowCulling = mugshotRig.Animation != null && mugshotRig.Animation.AllowCulling;
+                var lookController = mugshotRig.LookController;
+                bool previousLookControllerEnabled = lookController != null && lookController.enabled;
+                var animator = mugshotRig.Animation != null ? mugshotRig.Animation.animator : null;
+                float previousAnimatorSpeed = animator != null ? animator.speed : 1f;
+                var eyes = mugshotRig.Eyes;
+                bool previousBlinkingEnabled = eyes != null && eyes.BlinkingEnabled;
+                Transform? leftPupil = eyes != null && eyes.leftEye != null ? eyes.leftEye.PupilContainer : null;
+                Transform? rightPupil = eyes != null && eyes.rightEye != null ? eyes.rightEye.PupilContainer : null;
+                Quaternion previousLeftPupilRotation = leftPupil != null ? leftPupil.localRotation : Quaternion.identity;
+                Quaternion previousRightPupilRotation = rightPupil != null ? rightPupil.localRotation : Quaternion.identity;
+
+                _restoreActiveMugshotRig = () =>
+                {
+                    TryRestoreRigState(
+                        () =>
+                        {
+                            if (defaultSettings != null)
+                                mugshotRig.LoadAvatarSettings(defaultSettings);
+                        },
+                        "default appearance");
+                    TryRestoreRigState(
+                        () =>
+                        {
+                            if (mugshotRig.Animation != null)
+                                mugshotRig.Animation.AllowCulling = previousAllowCulling;
+                        },
+                        "animation culling");
+                    TryRestoreRigState(
+                        () =>
+                        {
+                            if (lookController != null)
+                            {
+                                lookController.ResetIKWeight();
+                                lookController.enabled = previousLookControllerEnabled;
+                            }
+                        },
+                        "look controller");
+                    TryRestoreRigState(
+                        () =>
+                        {
+                            if (animator != null)
+                                animator.speed = previousAnimatorSpeed;
+                        },
+                        "animator speed");
+                    TryRestoreRigState(
+                        () =>
+                        {
+                            if (eyes != null)
+                                eyes.BlinkingEnabled = previousBlinkingEnabled;
+                        },
+                        "blinking");
+                    TryRestoreRigState(
+                        () =>
+                        {
+                            if (leftPupil != null)
+                                leftPupil.localRotation = previousLeftPupilRotation;
+                            if (rightPupil != null)
+                                rightPupil.localRotation = previousRightPupilRotation;
+                        },
+                        "pupil rotation");
+                    TryRestoreRigState(
+                        () => mugshotRig.gameObject.SetActive(false),
+                        "rig visibility");
+                };
+
+                if (mugshotRig.Animation != null)
+                    mugshotRig.Animation.AllowCulling = false;
+                if (lookController != null)
+                {
+                    lookController.OverrideIKWeight(0f);
+                    lookController.enabled = false;
+                }
+                if (eyes != null)
+                    eyes.BlinkingEnabled = false;
 
                 // === Content-validated capture with retry ===
                 // On cold start the rig's renderers may not be ready, producing completely
@@ -203,6 +330,7 @@ namespace S1API.Entities
                 const float contentBrightnessFloor = 0.01f;
                 Texture2D? generatedMugshot = null;
                 bool hasContent = false;
+                bool poseReset = false;
 
                 for (int attempt = 0; attempt <= maxRetries; attempt++)
                 {
@@ -212,12 +340,24 @@ namespace S1API.Entities
                     mugshotRig.gameObject.SetActive(true);
 
                     // Disable distance culling so the mugshot rig never hides while the player camera is far away
-                    bool previousAllowCulling = mugshotRig.Animation != null && mugshotRig.Animation.AllowCulling;
-                    if (mugshotRig.Animation != null)
-                        mugshotRig.Animation.AllowCulling = false;
                     mugshotRig.SetVisible(true);
                     mugshotRig.Impostor.DisableImpostor();
 
+                    if (animator != null)
+                    {
+                        animator.speed = previousAnimatorSpeed;
+                        if (!poseReset)
+                        {
+                            animator.Rebind();
+                            animator.Update(0f);
+                            poseReset = true;
+                        }
+                        animator.speed = 0f;
+                    }
+
+                    // Rebind before applying appearance data. Rebinding afterwards can restore
+                    // the prefab's animated scale/shape and produce a visibly shorter, wider
+                    // portrait even though the mugshot settings specify Height = 1.
                     mugshotRig.LoadAvatarSettings(mugshotSettings);
                     SetLayerRecursively(mugshotRig.gameObject, LayerMask.NameToLayer("IconGeneration"));
 
@@ -230,6 +370,24 @@ namespace S1API.Entities
                     yield return null;
                     yield return new WaitForEndOfFrame();
 
+                    // Live scene systems can toggle visibility late in the frame. Reassert the
+                    // portrait-only state immediately before reading pixels.
+                    mugshotRig.SetVisible(true);
+                    mugshotRig.Impostor.DisableImpostor();
+                    // IconGenerator uses a fixed camera; it does not normalize model scale.
+                    // Keep the preview rig at the base game's canonical mugshot height even if
+                    // an Animator or scene callback changed the shared transform while yielding.
+                    mugshotRig.transform.localScale = Vector3.one;
+                    if (eyes != null)
+                        eyes.SetEyesOpen(true);
+                    if (leftPupil != null)
+                        leftPupil.localRotation = Quaternion.identity;
+                    if (rightPupil != null)
+                        rightPupil.localRotation = Quaternion.identity;
+                    // Neutral pupil rotations produce a straight-ahead portrait. EyeController's
+                    // runtime target is player-driven and the thumbnail camera is deliberately
+                    // offset, either of which makes the eyes visibly track to one side.
+
                     generatedMugshot = null;
                     try
                     {
@@ -240,27 +398,10 @@ namespace S1API.Entities
                         _logger.Error($"Direct GetTexture failed: {ex.Message}");
                     }
 
-                    // Check if capture has actual content (not black/empty)
-                    hasContent = false;
-                    if (generatedMugshot != null && generatedMugshot.width > 0 && generatedMugshot.height > 0)
-                    {
-                        int cx = generatedMugshot.width / 2;
-                        int cy = generatedMugshot.height / 2;
-                        Color centerPx = generatedMugshot.GetPixel(cx, cy);
-                        Color topPx = generatedMugshot.GetPixel(cx, (int)(generatedMugshot.height * 0.85f));
-                        Color botPx = generatedMugshot.GetPixel(cx, (int)(generatedMugshot.height * 0.15f));
-                        Color leftPx = generatedMugshot.GetPixel((int)(generatedMugshot.width * 0.25f), cy);
-                        Color rightPx = generatedMugshot.GetPixel((int)(generatedMugshot.width * 0.75f), cy);
-
-                        float maxBrightness = 0f;
-                        Color[] samples = { centerPx, topPx, botPx, leftPx, rightPx };
-                        foreach (var s in samples)
-                        {
-                            float b = s.r + s.g + s.b;
-                            if (b > maxBrightness) maxBrightness = b;
-                        }
-                        hasContent = maxBrightness > contentBrightnessFloor;
-                    }
+                    // Reject empty frames and partially initialized meshes. The previous five-
+                    // pixel brightness check accepted a stray impostor or a single clothing mesh
+                    // as a valid portrait.
+                    hasContent = HasPortraitContent(generatedMugshot, contentBrightnessFloor);
 
                     if (hasContent)
                         break;
@@ -268,15 +409,15 @@ namespace S1API.Entities
                     // No content — deactivate and retry
                     if (defaultSettings != null)
                         mugshotRig.LoadAvatarSettings(defaultSettings);
-                    if (mugshotRig.Animation != null)
-                        mugshotRig.Animation.AllowCulling = previousAllowCulling;
+                    if (animator != null)
+                        animator.speed = previousAnimatorSpeed;
                     mugshotRig.gameObject.SetActive(false);
 
                     if (attempt == maxRetries)
                         _logger.Warning($"[Mugshot] {next.NPC.FirstName}: no content after {maxRetries + 1} attempts, using last capture");
                 }
 
-                if (generatedMugshot != null)
+                if (generatedMugshot != null && hasContent)
                 {
                     try
                     {
@@ -293,23 +434,154 @@ namespace S1API.Entities
                         _logger.Error($"Failed to finalize mugshot: {ex.Message}");
                     }
                 }
+                else
+                {
+                    _logger.Error($"[Mugshot] {next.NPC.FirstName}: no complete portrait was captured; keeping the existing icon");
+                }
 
-                // Restore avatar reference
-                global::S1API.Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(next.NPC.S1NPC, "Avatar", previousAvatar ?? next._runtimeAvatar);
-                next.ApplyToAvatar(next._runtimeAvatar);
-
-                // Reset rig and deactivate
-                bool finalAllowCulling = mugshotRig.Animation != null && mugshotRig.Animation.AllowCulling;
-                if (defaultSettings != null)
-                    mugshotRig.LoadAvatarSettings(defaultSettings);
-                if (mugshotRig.Animation != null)
-                    mugshotRig.Animation.AllowCulling = finalAllowCulling;
-                mugshotRig.gameObject.SetActive(false);
+                CompleteActiveMugshot();
 
                 // Small delay between jobs to let the mugshot rig fully reset
                 yield return new WaitForSeconds(0.1f);
             }
+#else
+            while (true)
+            {
+                NPCAppearance? next;
+                lock (_mugshotQueueLock)
+                {
+                    if (_mugshotQueue.Count == 0)
+                    {
+                        _isProcessingMugshots = false;
+                        yield break;
+                    }
+
+                    next = _mugshotQueue.Dequeue();
+                }
+
+                next.MarkMugshotCompleted();
+                yield return null;
+            }
+#endif
         }
+
+        private void MarkMugshotCompleted()
+        {
+            lock (_mugshotQueueLock)
+            {
+                _mugshotQueued = false;
+                _mugshotCompleted = true;
+            }
+        }
+
+        private static bool CompleteActiveMugshot()
+        {
+            NPCAppearance? active = _activeMugshot;
+            if (active == null)
+                return false;
+
+            try
+            {
+                active.ApplyToAvatar(active._runtimeAvatar);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"[Mugshot] Failed to restore the runtime avatar: {ex.Message}");
+            }
+
+            try
+            {
+                _restoreActiveMugshotRig?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"[Mugshot] Failed to restore shared rig state: {ex.Message}");
+            }
+            finally
+            {
+                active.MarkMugshotCompleted();
+                _activeMugshot = null;
+                _restoreActiveMugshotRig = null;
+            }
+
+            return true;
+        }
+
+        private static void AbortQueuedMugshots()
+        {
+            lock (_mugshotQueueLock)
+            {
+                while (_mugshotQueue.Count > 0)
+                    _mugshotQueue.Dequeue().MarkMugshotCompleted();
+                _isProcessingMugshots = false;
+            }
+        }
+
+        private static void TryRestoreRigState(Action restore, string stateName)
+        {
+            try
+            {
+                restore();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"[Mugshot] Failed to restore {stateName}: {ex.Message}");
+            }
+        }
+
+        internal bool MugshotReady => IsMugshotReady(NPC.HasExplicitIcon, _mugshotCompleted);
+
+        internal static bool IsMugshotReady(bool hasExplicitIcon, bool generationCompleted) =>
+            hasExplicitIcon || generationCompleted;
+
+        private static bool HasPortraitContent(Texture2D? texture, float brightnessFloor)
+        {
+            if (texture == null || texture.width <= 0 || texture.height <= 0)
+                return false;
+
+            int stepX = Math.Max(1, texture.width / 64);
+            int stepY = Math.Max(1, texture.height / 64);
+            int sampled = 0;
+            int visible = 0;
+            int minX = texture.width;
+            int minY = texture.height;
+            int maxX = -1;
+            int maxY = -1;
+
+            for (int y = 0; y < texture.height; y += stepY)
+            {
+                for (int x = 0; x < texture.width; x += stepX)
+                {
+                    sampled++;
+                    Color pixel = texture.GetPixel(x, y);
+                    if (pixel.a <= 0.05f || pixel.r + pixel.g + pixel.b <= brightnessFloor)
+                        continue;
+
+                    visible++;
+                    minX = Math.Min(minX, x);
+                    minY = Math.Min(minY, y);
+                    maxX = Math.Max(maxX, x);
+                    maxY = Math.Max(maxY, y);
+                }
+            }
+
+            if (maxX < minX || maxY < minY)
+                return false;
+
+            float contentWidth = (maxX - minX + stepX) / (float)texture.width;
+            float contentHeight = (maxY - minY + stepY) / (float)texture.height;
+            return IsPortraitCoverageSufficient(visible, sampled, contentWidth, contentHeight);
+        }
+
+        internal static bool IsPortraitCoverageSufficient(
+            int visibleSamples,
+            int totalSamples,
+            float contentWidth,
+            float contentHeight) =>
+            totalSamples > 0 &&
+            visibleSamples >= totalSamples * 0.1f &&
+            contentWidth >= 0.4f &&
+            contentHeight >= 0.82f;
 
         /// <summary>
         /// INTERNAL: Applies the currently configured avatar settings to a runtime avatar instance.
@@ -320,7 +592,9 @@ namespace S1API.Entities
             if (avatar == null)
                 return;
 
-            avatar.LoadAvatarSettings(_customAvatarSettings);
+            global::S1API.Internal.Compatibility.AvatarCompatibility.ApplyLegacySettings(
+                avatar,
+                _customAvatarSettings);
         }
 
         #endregion
@@ -698,6 +972,8 @@ namespace S1API.Entities
         private static readonly Queue<NPCAppearance> _mugshotQueue = new Queue<NPCAppearance>();
         private static bool _isProcessingMugshots = false;
         private static bool _hasQueuedMugshots = false;
+        private static NPCAppearance? _activeMugshot;
+        private static Action? _restoreActiveMugshotRig;
 
         /// <summary>
         /// INTERNAL: Resets mugshot queue state on scene change so warmup runs fresh on reload.
@@ -710,6 +986,8 @@ namespace S1API.Entities
                 _mugshotQueue.Clear();
                 _isProcessingMugshots = false;
                 _hasQueuedMugshots = false;
+                _activeMugshot = null;
+                _restoreActiveMugshotRig = null;
             }
         }
 

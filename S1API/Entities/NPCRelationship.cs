@@ -1,7 +1,10 @@
 #if (IL2CPPMELON)
+using Il2CppInterop.Runtime;
+using NativeRelationshipUnlockedAction = Il2CppSystem.Action<Il2CppScheduleOne.NPCs.Relation.NPCRelationData.EUnlockType, bool>;
 using S1Relation = Il2CppScheduleOne.NPCs.Relation;
 using S1NPCs = Il2CppScheduleOne.NPCs;
 #elif MONOMELON
+using NativeRelationshipUnlockedAction = System.Action<ScheduleOne.NPCs.Relation.NPCRelationData.EUnlockType, bool>;
 using S1Relation = ScheduleOne.NPCs.Relation;
 using S1NPCs = ScheduleOne.NPCs;
 #endif
@@ -10,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using S1API.Entities.Relation;
+using S1API.Logging;
 
 namespace S1API.Entities
 {
@@ -23,6 +27,8 @@ namespace S1API.Entities
     /// </remarks>
     public sealed class NPCRelationship
     {
+        private static readonly Log Logger = new Log("NPCRelationship");
+
         #region Types
 
         /// <summary>
@@ -43,12 +49,11 @@ namespace S1API.Entities
         /// </summary>
         internal readonly NPC NPC;
         private readonly Dictionary<Action<float>, Delegate> _relationshipChangedHandlers = new Dictionary<Action<float>, Delegate>();
-        private readonly Dictionary<Action<UnlockType, bool>, Delegate> _relationshipUnlockedHandlers = new Dictionary<Action<UnlockType, bool>, Delegate>();
+        private Action<UnlockType, bool>? _relationshipUnlockedHandlers;
+        private S1Relation.NPCRelationData? _subscribedRelationship;
+        private NativeRelationshipUnlockedAction? _nativeRelationshipUnlockedDispatcher;
         private static readonly MemberInfo? RelationshipChangedMember =
             ResolveNativeEventMember("OnRelationshipChange", "onRelationshipChange");
-        private static readonly MemberInfo? RelationshipUnlockedMember =
-            ResolveNativeEventMember("OnUnlocked", "onUnlocked");
-
         internal NPCRelationship(NPC npc)
         {
             NPC = npc;
@@ -236,75 +241,34 @@ namespace S1API.Entities
 
         /// <summary>
         /// Subscribes to unlocked events. Callback receives unlock type and notify flag.
-        /// Best-effort under IL2CPP; silently no-ops if delegate bridging is unavailable.
+        /// The wrapper retains a native dispatcher and bridges it explicitly under IL2CPP.
         /// </summary>
         public event Action<UnlockType, bool> OnUnlocked
         {
             add
             {
-                if (value == null || Component == null)
+                if (value == null)
                     return;
 
-                if (_relationshipUnlockedHandlers.ContainsKey(value))
-                    return;
-
-                try
+                if (_relationshipUnlockedHandlers != null &&
+                    Array.IndexOf(
+                        _relationshipUnlockedHandlers.GetInvocationList(),
+                        value) >= 0)
                 {
-                    MemberInfo? member = RelationshipUnlockedMember;
-                    if (member == null)
-                        return;
-
-                    object? existing = GetNativeEventValue(member, Component);
-#if IL2CPPMELON
-                    System.Action<S1Relation.NPCRelationData.EUnlockType, bool> wrapped = new System.Action<S1Relation.NPCRelationData.EUnlockType, bool>((t, notify) =>
-                    {
-                        try { value(FromS1(t), notify); } catch { }
-                    });
-                    var combined = (Il2CppSystem.Delegate)Il2CppSystem.Delegate.Combine(existing as Il2CppSystem.Delegate, (Il2CppSystem.Delegate)(object)wrapped);
-                    SetNativeEventValue(member, Component, combined);
-                    _relationshipUnlockedHandlers[value] = wrapped;
-#else
-                    Action<S1Relation.NPCRelationData.EUnlockType, bool> wrapped = (t, notify) =>
-                    {
-                        try { value(FromS1(t), notify); } catch { }
-                    };
-                    var combined = Delegate.Combine(existing as Delegate, wrapped);
-                    SetNativeEventValue(member, Component, combined);
-                    _relationshipUnlockedHandlers[value] = wrapped;
-#endif
+                    return;
                 }
-                catch { }
+
+                _relationshipUnlockedHandlers += value;
+                EnsureUnlockedHook();
             }
             remove
             {
-                if (value == null || Component == null)
+                if (value == null)
                     return;
 
-                if (!_relationshipUnlockedHandlers.TryGetValue(value, out var wrapped))
-                    return;
-
-                _relationshipUnlockedHandlers.Remove(value);
-                try
-                {
-                    MemberInfo? member = RelationshipUnlockedMember;
-                    if (member == null)
-                        return;
-
-#if IL2CPPMELON
-                    var existing = GetNativeEventValue(member, Component);
-                    var remaining = existing != null
-                        ? Il2CppSystem.Delegate.Remove(existing as Il2CppSystem.Delegate, (Il2CppSystem.Delegate)(object)wrapped)
-                        : null;
-                    SetNativeEventValue(member, Component, remaining);
-#else
-                    var existing = GetNativeEventValue(member, Component);
-                    var remaining = existing != null
-                        ? Delegate.Remove(existing as Delegate, (Delegate)wrapped)
-                        : null;
-                    SetNativeEventValue(member, Component, remaining);
-#endif
-                }
-                catch { }
+                _relationshipUnlockedHandlers -= value;
+                if (_relationshipUnlockedHandlers == null)
+                    RemoveUnlockedHook();
             }
         }
 
@@ -320,6 +284,115 @@ namespace S1API.Entities
         #endregion
 
         #region Private Helpers
+
+        internal void EnsureUnlockedHook()
+        {
+            if (_relationshipUnlockedHandlers == null)
+                return;
+
+            S1Relation.NPCRelationData? relationship = Component;
+            if (relationship == null || ReferenceEquals(relationship, _subscribedRelationship))
+                return;
+
+            try
+            {
+                RemoveUnlockedHook();
+                NativeRelationshipUnlockedAction dispatcher =
+                    GetOrCreateNativeUnlockedDispatcher();
+
+#if IL2CPPMELON
+                relationship.OnUnlocked = relationship.OnUnlocked == null
+                    ? dispatcher
+                    : Il2CppSystem.Delegate.Combine(
+                            relationship.OnUnlocked,
+                            dispatcher)
+                        .Cast<NativeRelationshipUnlockedAction>();
+#else
+                relationship.OnUnlocked += dispatcher;
+#endif
+                _subscribedRelationship = relationship;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning(
+                    $"Could not attach the native relationship-unlocked hook: {ex}");
+            }
+        }
+
+        private NativeRelationshipUnlockedAction GetOrCreateNativeUnlockedDispatcher()
+        {
+            if (_nativeRelationshipUnlockedDispatcher != null)
+                return _nativeRelationshipUnlockedDispatcher;
+
+#if IL2CPPMELON
+            _nativeRelationshipUnlockedDispatcher =
+                DelegateSupport.ConvertDelegate<NativeRelationshipUnlockedAction>(
+                    new Action<S1Relation.NPCRelationData.EUnlockType, bool>(
+                        DispatchUnlocked))
+                ?? throw new InvalidOperationException(
+                    "Could not create the native relationship-unlocked dispatcher.");
+#else
+            _nativeRelationshipUnlockedDispatcher = DispatchUnlocked;
+#endif
+            return _nativeRelationshipUnlockedDispatcher;
+        }
+
+        private void RemoveUnlockedHook()
+        {
+            if (_subscribedRelationship == null ||
+                _nativeRelationshipUnlockedDispatcher == null)
+            {
+                _subscribedRelationship = null;
+                return;
+            }
+
+            try
+            {
+#if IL2CPPMELON
+                Il2CppSystem.Delegate? remaining = Il2CppSystem.Delegate.Remove(
+                    _subscribedRelationship.OnUnlocked,
+                    _nativeRelationshipUnlockedDispatcher);
+                _subscribedRelationship.OnUnlocked =
+                    remaining?.Cast<NativeRelationshipUnlockedAction>();
+#else
+                _subscribedRelationship.OnUnlocked -=
+                    _nativeRelationshipUnlockedDispatcher;
+#endif
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning(
+                    $"Could not remove the native relationship-unlocked hook: {ex}");
+            }
+            finally
+            {
+                _subscribedRelationship = null;
+            }
+        }
+
+        private void DispatchUnlocked(
+            S1Relation.NPCRelationData.EUnlockType type,
+            bool notify)
+        {
+            Action<UnlockType, bool>? handlers = _relationshipUnlockedHandlers;
+            if (handlers == null)
+                return;
+
+            foreach (Action<UnlockType, bool> handler in handlers.GetInvocationList())
+            {
+                try
+                {
+                    handler(FromS1(type), notify);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning(
+                        $"NPCRelationship.OnUnlocked subscriber " +
+                        $"'{handler.Method.DeclaringType?.FullName}.{handler.Method.Name}' " +
+                        $"failed: {ex}");
+                }
+            }
+        }
 
         internal static MemberInfo? ResolveNativeEventMember(
             string canonicalName,

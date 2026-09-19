@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 
 namespace S1API.Console
 {
@@ -13,7 +14,11 @@ namespace S1API.Console
 
         private static readonly Dictionary<string, BaseConsoleCommand> registry = new Dictionary<string, BaseConsoleCommand>(StringComparer.OrdinalIgnoreCase);
 
-        internal static IReadOnlyDictionary<string, BaseConsoleCommand> RegisteredCommands => registry;
+        // Live view of the same storage; blocks the cast back to IDictionary<,>
+        private static readonly ReadOnlyDictionary<string, BaseConsoleCommand> readOnlyRegistry =
+            new ReadOnlyDictionary<string, BaseConsoleCommand>(registry);
+
+        internal static IReadOnlyDictionary<string, BaseConsoleCommand> RegisteredCommands => readOnlyRegistry;
 
         internal static void Register(BaseConsoleCommand command)
         {

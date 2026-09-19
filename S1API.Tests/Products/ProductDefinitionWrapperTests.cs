@@ -1,7 +1,6 @@
 #if IL2CPPMELON
 using NativeProductDefinition = Il2CppScheduleOne.Product.ProductDefinition;
 #elif MONOMELON
-using System.Runtime.CompilerServices;
 using NativeProductDefinition = ScheduleOne.Product.ProductDefinition;
 #endif
 
@@ -57,7 +56,8 @@ public sealed class ProductDefinitionWrapperTests
         Type nativeDefinitionType,
         Type expectedWrapperType)
     {
-        var nativeDefinition = (NativeProductDefinition)RuntimeHelpers.GetUninitializedObject(nativeDefinitionType);
+        var nativeDefinition = (NativeProductDefinition)
+            TestObjectFactory.CreateUninitialized(nativeDefinitionType);
 
         var wrappedFromNative = ProductDefinitionWrapper.Wrap(nativeDefinition);
         var wrappedFromExistingWrapper = ProductDefinitionWrapper.Wrap(new ProductDefinition(nativeDefinition));
@@ -69,8 +69,7 @@ public sealed class ProductDefinitionWrapperTests
     [Fact]
     public void ExistingGenericWrapperRemainsTheFallbackInstance()
     {
-        var nativeDefinition = (NativeProductDefinition)RuntimeHelpers.GetUninitializedObject(
-            typeof(NativeProductDefinition));
+        var nativeDefinition = TestObjectFactory.CreateUninitialized<NativeProductDefinition>();
         var existingWrapper = new ProductDefinition(nativeDefinition);
 
         var wrapped = ProductDefinitionWrapper.Wrap(existingWrapper);

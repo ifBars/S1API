@@ -12,6 +12,7 @@ namespace S1API.Internal.Products
         public int MixerMap;
         public string OutputFactoryIdentity = string.Empty;
         public int OutputFactoryVersion;
+        public bool UsePropertyColorMixing;
 
         internal static CustomProductMixingProfileManifestEntryData Create(ProductMixingProfile profile) =>
             new CustomProductMixingProfileManifestEntryData
@@ -19,7 +20,8 @@ namespace S1API.Internal.Products
                 ProductKindId = profile.ProductKind.Id,
                 MixerMap = (int)profile.MixerMap,
                 OutputFactoryIdentity = profile.OutputFactoryIdentity,
-                OutputFactoryVersion = profile.OutputFactoryVersion
+                OutputFactoryVersion = profile.OutputFactoryVersion,
+                UsePropertyColorMixing = profile.UsePropertyColorMixing
             };
 
         internal bool IsValid() =>
@@ -39,6 +41,7 @@ namespace S1API.Internal.Products
             builder.Append(MixerMap.ToString(CultureInfo.InvariantCulture)).Append('|');
             builder.Append(OutputFactoryIdentity.ToUpperInvariant()).Append('|');
             builder.Append(OutputFactoryVersion.ToString(CultureInfo.InvariantCulture)).Append('|');
+            builder.Append(UsePropertyColorMixing ? "1|" : "0|");
         }
 
         internal string? DescribeMismatch(CustomProductMixingProfileManifestEntryData local)
@@ -50,6 +53,8 @@ namespace S1API.Internal.Products
             {
                 return "output-factory compatibility identity or version differs";
             }
+            if (UsePropertyColorMixing != local.UsePropertyColorMixing)
+                return "property-color mixing strategy differs";
             return null;
         }
     }

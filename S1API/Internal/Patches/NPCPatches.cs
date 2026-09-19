@@ -13,6 +13,7 @@ using S1Datas = Il2CppScheduleOne.Persistence.Datas;
 using S1Items = Il2CppScheduleOne.ItemFramework;
 using S1GameTime = Il2CppScheduleOne.GameTime;
 using S1Quests = Il2CppScheduleOne.Quests;
+using S1Properties = Il2CppScheduleOne.Property;
 using Il2CppFishNet;
 using Il2CppFishNet.Object;
 using Il2CppScheduleOne.DevUtilities;
@@ -35,6 +36,7 @@ using S1Datas = ScheduleOne.Persistence.Datas;
 using S1Items = ScheduleOne.ItemFramework;
 using S1GameTime = ScheduleOne.GameTime;
 using S1Quests = ScheduleOne.Quests;
+using S1Properties = ScheduleOne.Property;
 #endif
 
 using System;
@@ -43,6 +45,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using NumericsVector3 = System.Numerics.Vector3;
 using HarmonyLib;
 using MelonLoader;
 using S1API.Entities;
@@ -64,7 +67,6 @@ namespace S1API.Internal.Patches
     {
         private static readonly Logging.Log Logger = new Logging.Log("NPCPatches");
         private static readonly HashSet<string> _loadingDealers = new HashSet<string>();
-        private const float DefaultRelationDelta = 2f;
         public static bool CustomNpcsReady = false;
         // Pending custom NPC types to instantiate when using consolidated NPCs.json saves (non-physical/custom contacts).
         private static readonly System.Collections.Generic.List<Type> _pendingCustomNpcTypes = new System.Collections.Generic.List<Type>();
@@ -78,10 +80,6 @@ namespace S1API.Internal.Patches
         private static readonly System.Collections.Generic.Dictionary<S1Economy.Customer, float> _savedCurrentAddiction
             = new System.Collections.Generic.Dictionary<S1Economy.Customer, float>();
 
-        // Pending inventory loads for custom dealers - stored until NPCInventory.Awake creates slots
-        private static readonly System.Collections.Generic.Dictionary<string, S1Datas.DeserializedItemSet> _pendingInventoryLoads
-            = new System.Collections.Generic.Dictionary<string, S1Datas.DeserializedItemSet>();
-
         private static object? GetInventoryMember(S1NPCs.NPCInventory inventory, string memberName)
         {
             return ReflectionUtils.TryGetFieldOrProperty(inventory, memberName);
@@ -90,6 +88,295 @@ namespace S1API.Internal.Patches
         private static bool SetInventoryMember(S1NPCs.NPCInventory inventory, string memberName, object? value)
         {
             return ReflectionUtils.TrySetFieldOrProperty(inventory, memberName, value);
+        }
+
+        internal static bool ShouldExitCustomNpcAfterSummon(
+            bool isServer,
+            bool isCustomNpc,
+            bool isInsideBuilding) =>
+            isServer && isCustomNpc && isInsideBuilding;
+
+        internal static bool ShouldSuppressResidenceReentry(
+            bool isServer,
+            bool isCustomNpc,
+            bool isSummonBehaviourEnabled) =>
+            isServer && isCustomNpc && isSummonBehaviourEnabled;
+
+        internal static MethodBase? FindSummonLogicMethod(Type behaviourType)
+        {
+            return behaviourType
+                .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .FirstOrDefault(method =>
+                {
+                    if (!method.Name.StartsWith("RpcLogic___Summon_", StringComparison.Ordinal))
+                        return false;
+
+                    ParameterInfo[] parameters = method.GetParameters();
+                    return method.ReturnType == typeof(void)
+                        && parameters.Length == 3
+                        && parameters[0].ParameterType == typeof(string)
+                        && parameters[1].ParameterType == typeof(int)
+                        && parameters[2].ParameterType == typeof(float);
+                });
+        }
+
+        internal static MethodBase? FindNpcMovementDestinationMethod(Type movementType)
+        {
+            return movementType.GetMethod(
+                "SetDestination",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(Vector3) },
+                modifiers: null);
+        }
+
+        internal static bool TryGetCustomNpcFollowDestination(
+            bool isCustomNpc,
+            bool isFollowingPlayer,
+            Vector3 playerPosition,
+            Vector3 npcPosition,
+            Vector3 fallbackDirection,
+            out Vector3 destination)
+        {
+            destination = default;
+            if (!TryCalculateCustomNpcFollowDestination(
+                    isCustomNpc,
+                    isFollowingPlayer,
+                    new NumericsVector3(playerPosition.x, playerPosition.y, playerPosition.z),
+                    new NumericsVector3(npcPosition.x, npcPosition.y, npcPosition.z),
+                    new NumericsVector3(fallbackDirection.x, fallbackDirection.y, fallbackDirection.z),
+                    out NumericsVector3 calculatedDestination))
+            {
+                return false;
+            }
+
+            destination = new Vector3(
+                calculatedDestination.X,
+                calculatedDestination.Y,
+                calculatedDestination.Z);
+            return true;
+        }
+
+        internal static bool TryCalculateCustomNpcFollowDestination(
+            bool isCustomNpc,
+            bool isFollowingPlayer,
+            NumericsVector3 playerPosition,
+            NumericsVector3 npcPosition,
+            NumericsVector3 fallbackDirection,
+            out NumericsVector3 destination)
+        {
+            destination = default;
+            if (!isCustomNpc || !isFollowingPlayer)
+                return false;
+
+            NumericsVector3 direction = npcPosition - playerPosition;
+            if (direction.LengthSquared() <= 0.0001f)
+                direction = fallbackDirection;
+            if (direction.LengthSquared() <= 0.0001f)
+                direction = -NumericsVector3.UnitZ;
+
+            destination = playerPosition + NumericsVector3.Normalize(direction) * 2.5f;
+            return true;
+        }
+
+        internal static bool TryCalculateCustomNpcPropertyApproachDestination(
+            bool isCustomNpc,
+            bool isInitialApproach,
+            bool playerInsideOwnedProperty,
+            NumericsVector3? propertyExteriorSpawnPosition,
+            out NumericsVector3 destination)
+        {
+            destination = default;
+            if (!isCustomNpc || !isInitialApproach || !playerInsideOwnedProperty ||
+                propertyExteriorSpawnPosition is not NumericsVector3 spawnPosition ||
+                !IsValidNavigationPosition(spawnPosition))
+            {
+                return false;
+            }
+
+            destination = spawnPosition;
+            return true;
+        }
+
+        private static bool IsValidNavigationPosition(NumericsVector3 position) =>
+            float.IsFinite(position.X) &&
+            float.IsFinite(position.Y) &&
+            float.IsFinite(position.Z) &&
+            position.LengthSquared() <= 100_000_000f;
+
+        private static bool TryGetCustomNpcPropertyApproachDestination(
+            bool isCustomNpc,
+            bool isInitialApproach,
+            Vector3 playerPosition,
+            out Vector3 destination)
+        {
+            destination = default;
+            foreach (S1Properties.Property property in S1Properties.Property.OwnedProperties)
+            {
+                if (property == null || !property.DoBoundsContainPoint(playerPosition))
+                    continue;
+
+                Vector3? spawnPosition = property.SpawnPoint != null
+                    ? property.SpawnPoint.position
+                    : null;
+                NumericsVector3? numericSpawnPosition = spawnPosition.HasValue
+                    ? new NumericsVector3(
+                        spawnPosition.Value.x,
+                        spawnPosition.Value.y,
+                        spawnPosition.Value.z)
+                    : null;
+                if (!TryCalculateCustomNpcPropertyApproachDestination(
+                        isCustomNpc,
+                        isInitialApproach,
+                        playerInsideOwnedProperty: true,
+                        numericSpawnPosition,
+                        out NumericsVector3 calculatedDestination))
+                {
+                    return false;
+                }
+
+                destination = new Vector3(
+                    calculatedDestination.X,
+                    calculatedDestination.Y,
+                    calculatedDestination.Z);
+                return true;
+            }
+
+            return false;
+        }
+
+        [HarmonyPatch]
+        private static class RequestProductMovementDestinationPatch
+        {
+            private static MethodBase? TargetMethod() =>
+                FindNpcMovementDestinationMethod(typeof(S1NPCs.NPCMovement));
+
+            [HarmonyPrefix]
+            private static void Prefix(S1NPCs.NPCMovement __instance, ref Vector3 pos)
+            {
+                S1NPCs.NPC? nativeNpc = __instance?.GetComponent<S1NPCs.NPC>();
+                S1NPCsBehaviour.RequestProductBehaviour? request =
+                    nativeNpc?.Behaviour?.RequestProductBehaviour;
+                var targetPlayer = request?.TargetPlayer;
+                if (nativeNpc == null || request == null || targetPlayer == null)
+                    return;
+
+                bool isCustomNpc = IsS1ApiCustomNpcComponent(nativeNpc);
+                bool isInitialApproach =
+                    request.Active &&
+                    request.State == S1NPCsBehaviour.RequestProductBehaviour.EState.InitialApproach;
+                if (TryGetCustomNpcPropertyApproachDestination(
+                        isCustomNpc,
+                        isInitialApproach,
+                        targetPlayer.transform.position,
+                        out Vector3 propertyApproachDestination))
+                {
+                    pos = propertyApproachDestination;
+                    return;
+                }
+
+                bool isFollowingPlayer =
+                    request.Active &&
+                    request.State == S1NPCsBehaviour.RequestProductBehaviour.EState.FollowPlayer;
+                if (!TryGetCustomNpcFollowDestination(
+                        isCustomNpc,
+                        isFollowingPlayer,
+                        targetPlayer.transform.position,
+                        nativeNpc.transform.position,
+                        -targetPlayer.transform.forward,
+                        out Vector3 desiredDestination))
+                {
+                    return;
+                }
+
+                var agent = __instance == null
+                    ? null
+                    : ReflectionUtils.TryGetFieldOrProperty(
+                        __instance,
+                        "_agent") as UnityEngine.AI.NavMeshAgent;
+                if (agent != null && NavMeshUtility.SamplePosition(
+                        desiredDestination,
+                        out var hit,
+                        15f,
+                        agent.areaMask))
+                {
+                    pos = hit.position;
+                }
+                else
+                {
+                    Logger.Warning(
+                        $"[RequestProduct] Failed to find a spaced follow destination for custom NPC '{nativeNpc.ID}'; preserving the native destination.");
+                }
+            }
+        }
+
+        internal static S1NPCs.NPC? GetScheduleActionNpc(S1NPCsSchedules.NPCAction action)
+        {
+            return ReflectionUtils.TryGetFieldOrProperty(action, "npc") as S1NPCs.NPC;
+        }
+
+        [HarmonyPatch]
+        private static class NpcBehaviourSummonLogicPatch
+        {
+            private static MethodBase? TargetMethod() =>
+                FindSummonLogicMethod(typeof(S1NPCsBehaviour.NPCBehaviour));
+
+            [HarmonyPostfix]
+            private static void Postfix(S1NPCsBehaviour.NPCBehaviour __instance)
+            {
+                S1NPCs.NPC? npc = __instance?.Npc;
+                if (npc == null)
+                    return;
+
+                bool isCustomNpc = NPC.All.Any(
+                    wrapper => wrapper != null && wrapper.IsCustomNPC && wrapper.S1NPC == npc);
+                var building = npc.CurrentBuilding;
+                bool isInsideBuilding = building != null;
+                if (!ShouldExitCustomNpcAfterSummon(InstanceFinder.IsServer, isCustomNpc, isInsideBuilding))
+                    return;
+
+                Logger.Debug(
+                    $"[NPCDoorKnock] Exiting summoned custom NPC '{npc.ID}' from " +
+                    $"'{building!.BuildingName}' after native summon behaviour activation.");
+                npc.ExitBuilding();
+            }
+        }
+
+        [HarmonyPatch(typeof(S1NPCsSchedules.NPCEvent_StayInBuilding), nameof(S1NPCsSchedules.NPCEvent_StayInBuilding.OnActiveTick))]
+        [HarmonyPrefix]
+        private static bool StayInBuilding_OnActiveTick_Prefix(
+            S1NPCsSchedules.NPCEvent_StayInBuilding __instance)
+        {
+            // Prevent the residence action from scheduling a new entrance during native summon dwell.
+            return !IsCustomNpcSummonedDuringResidence(__instance);
+        }
+
+        [HarmonyPatch(typeof(S1NPCsSchedules.NPCEvent_StayInBuilding), "PlayEnterAnimation")]
+        [HarmonyPrefix]
+        private static bool StayInBuilding_PlayEnterAnimation_Prefix(
+            S1NPCsSchedules.NPCEvent_StayInBuilding __instance)
+        {
+            // Guard callbacks already queued before the NPC was summoned out of the building.
+            return !IsCustomNpcSummonedDuringResidence(__instance);
+        }
+
+        private static bool IsCustomNpcSummonedDuringResidence(
+            S1NPCsSchedules.NPCEvent_StayInBuilding action)
+        {
+            var npc = GetScheduleActionNpc(action);
+            if (npc == null)
+                return false;
+
+            bool isSummonBehaviourEnabled = npc.Behaviour?.SummonBehaviour?.Enabled == true;
+            if (!isSummonBehaviourEnabled)
+                return false;
+
+            bool isCustomNpc = NPC.All.Any(
+                wrapper => wrapper != null && wrapper.IsCustomNPC && wrapper.S1NPC == npc);
+            return ShouldSuppressResidenceReentry(
+                InstanceFinder.IsServer,
+                isCustomNpc,
+                isSummonBehaviourEnabled);
         }
 
         private static bool GetInventoryBool(S1NPCs.NPCInventory inventory, string memberName)
@@ -208,7 +495,14 @@ namespace S1API.Internal.Patches
         {
             _savedCurrentAddiction.Clear();
             _loadingDealers.Clear();
-            _pendingInventoryLoads.Clear();
+        }
+
+        internal static void RestoreInventoryAfterInitialization(
+            Action ensureInitialized,
+            Action restoreInventory)
+        {
+            ensureInitialized();
+            restoreInventory();
         }
 
         private static void LogCustomNpcInstantiationException(Type? type, string context, Exception? ex)
@@ -284,7 +578,43 @@ namespace S1API.Internal.Patches
                 if (type.Assembly == Assembly.GetExecutingAssembly())
                     continue; // skip S1API internal wrapper types
 
-                _pendingCustomNpcTypes.Add(type);
+                if (CustomNpcPreparationPolicy.FindExactType(NPC.All, type) == null)
+                    _pendingCustomNpcTypes.Add(type);
+            }
+        }
+
+        /// <summary>
+        /// Creates inactive custom NPCs and registers their persistent GUIDs before native contracts load.
+        /// NPCsLoader later hydrates and queues the same instances for network spawn.
+        /// </summary>
+        internal static void PrepareCustomNpcsForContractLoad()
+        {
+            if (!IsInMainScene() || !InstanceFinder.IsServer)
+                return;
+
+            foreach (Type type in ReflectionUtils.GetDerivedClasses<NPC>())
+            {
+                if (type == null || type.IsAbstract || type.Assembly == Assembly.GetExecutingAssembly())
+                    continue;
+
+                NPC? customNpc = CustomNpcPreparationPolicy.FindExactType(NPC.All, type);
+                if (customNpc == null)
+                {
+                    try
+                    {
+                        customNpc = (NPC)Activator.CreateInstance(type, true)!;
+                    }
+                    catch (Exception ex)
+                    {
+                        LogCustomNpcInstantiationException(type, "before contract loading", ex);
+                        continue;
+                    }
+                }
+
+                if (customNpc.gameObject.GetComponent<S1Economy.Customer>() != null)
+                    customNpc.Customer.EnsureCustomer();
+
+                customNpc.RegisterPersistentGuidForContractLoad();
             }
         }
 
@@ -491,6 +821,15 @@ namespace S1API.Internal.Patches
             }
         }
 
+        private static void RegisterPreparedCustomNpcsForNetworking()
+        {
+            foreach (NPC customNpc in NPC.All)
+            {
+                if (customNpc.IsCustomNPC)
+                    RegisterCustomNpcForNetworking(customNpc);
+            }
+        }
+
         /// <summary>
         /// Patching performed for when game NPCs are loaded.
         /// Creates custom NPC instances before the loader runs.
@@ -532,16 +871,19 @@ namespace S1API.Internal.Patches
             int createdCount = 0;
             foreach (Type type in ReflectionUtils.GetDerivedClasses<NPC>())
             {
-                if (type.IsAbstract)
+                if (type.IsAbstract || type.Assembly == Assembly.GetExecutingAssembly())
                     continue;
-                
-                NPC? customNPC = (NPC)Activator.CreateInstance(type, true)!;
-                if (customNPC == null)
-                    throw new Exception($"Unable to create instance of {type.FullName}!");
 
-                // We skip any S1API NPCs, as they are base NPC wrappers.
-                if (type.Assembly == Assembly.GetExecutingAssembly())
-                    continue;
+                // QuestsLoader may have prepared this instance already so accepted contracts can
+                // resolve its persistent GUID. Reuse it rather than creating a duplicate wrapper
+                // whose default state would later win during save serialization.
+                NPC? customNPC = CustomNpcPreparationPolicy.FindExactType(NPC.All, type);
+                if (customNPC == null)
+                {
+                    customNPC = (NPC?)Activator.CreateInstance(type, true);
+                    if (customNPC == null)
+                        throw new Exception($"Unable to create instance of {type.FullName}!");
+                }
 
                 var baseNpc = customNPC.S1NPC
                     ?? throw new InvalidOperationException(
@@ -665,6 +1007,7 @@ namespace S1API.Internal.Patches
 
                         // Instantiate any new custom NPCs that don't have save entries yet (e.g., newly added mods)
                         InstantiateRemainingCustomNpcs(mainPath);
+                        RegisterPreparedCustomNpcsForNetworking();
                         return false; // Skip original loader
                     }
                 }
@@ -778,13 +1121,6 @@ namespace S1API.Internal.Patches
                 {
                     var wrapperInventory = new NPCInventory(apiNpc);
                     wrapperInventory.EnsureInitialized();
-
-                    // Load pending inventory after slots are initialized
-                    if (baseNpc != null && _pendingInventoryLoads.TryGetValue(baseNpc.ID, out var pendingItemSet))
-                    {
-                        pendingItemSet.LoadTo(__instance.ItemSlots);
-                        _pendingInventoryLoads.Remove(baseNpc.ID);
-                    }
                 }
                 catch (Exception ex)
                 {
@@ -840,6 +1176,26 @@ namespace S1API.Internal.Patches
                 }
             }
             return true;
+        }
+
+        [HarmonyPatch(typeof(S1Economy.Dealer), "SetUpDialogue")]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static void Dealer_SetUpDialogue_Prefix(S1Economy.Dealer __instance)
+        {
+            if (!IsS1ApiCustomNpcComponent(__instance))
+                return;
+
+            try
+            {
+                NPCDataAccess.EnsureDealerDialogueDefaults(__instance);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(
+                    $"Dealer_SetUpDialogue_Prefix: Failed to repair dealer dialogue for " +
+                    $"'{__instance?.ID ?? "<unknown>"}': {ex.Message}");
+            }
         }
 
         internal static bool IsS1ApiCustomNpcComponent(Component component)
@@ -925,7 +1281,6 @@ namespace S1API.Internal.Patches
                 else
                 {
                     apiNpc.CreateFromClientNetworkSpawn();
-                    NPC.CheckAndSetCustomNpcsReady();
                 }
                 
                 // Ensure visibility is set correctly on clients based on IsPhysical
@@ -1098,8 +1453,8 @@ namespace S1API.Internal.Patches
 
         /// <summary>
         /// Temporary patch while S1API NPCs are not networked
-        /// Handle NPCLoader.Load for custom S1API NPCs to avoid inventory hydration which uses networking.
-        /// Replicates core parts of the original loader except Inventory and Health (Health already guarded).
+        /// Handles NPCLoader.Load for custom S1API NPCs without native networked inventory hydration.
+        /// Restores saved inventory after the final slot collection is initialized.
         /// </summary>
         [HarmonyPatch(typeof(S1Loaders.NPCLoader), nameof(S1Loaders.NPCLoader.Load))]
         [HarmonyPrefix]
@@ -1147,6 +1502,7 @@ namespace S1API.Internal.Patches
             {
                 return true; // run original for base NPCs
             }
+            var customNpc = apiNpc;
 
             // Custom S1API NPC: perform safe subset of loading and skip original
             try
@@ -1161,51 +1517,15 @@ namespace S1API.Internal.Patches
 
                 s1BaseNpc.Load(saveData, baseData);
 
-                // Check if relationship data exists in save
+                // Native relationship data is authoritative whenever a finite saved delta exists.
                 if (saveData.TryGetData("Relationship", out S1Datas.RelationshipData rel) && rel != null && s1BaseNpc.RelationData != null)
                 {
-                    if (!float.IsNaN(rel.RelationDelta) && !float.IsInfinity(rel.RelationDelta))
-                    {
-                        s1BaseNpc.RelationData.SetRelationship(rel.RelationDelta);
-                    }
-                    
-                    if (rel.Unlocked)
-                    {
-                        s1BaseNpc.RelationData.Unlock(rel.UnlockType, notify: false);
-                        
-                        // Store unlock type for potential restoration
-                        try
-                        {
-                            apiNpc = FindWrapperForS1Npc(s1BaseNpc);
-                            if (apiNpc != null)
-                            {
-                                var unlockTypeField = typeof(NPC).GetField("_loadedUnlockType", BindingFlags.NonPublic | BindingFlags.Instance);
-                                if (unlockTypeField != null)
-                                {
-                                    var s1UnlockType = rel.UnlockType == S1Relation.NPCRelationData.EUnlockType.Recommendation
-                                        ? S1Relation.NPCRelationData.EUnlockType.Recommendation
-                                        : S1Relation.NPCRelationData.EUnlockType.DirectApproach;
-                                    unlockTypeField.SetValue(apiNpc, s1UnlockType);
-                                }
-                            }
-                        }
-                        catch { }
-                    }
+                    apiNpc.LoadRelationshipFromSave(
+                        rel.RelationDelta,
+                        rel.Unlocked,
+                        rel.UnlockType);
                 }
                 
-                // IMPORTANT: Mark as loaded from save IMMEDIATELY after processing relationship data
-                // This must happen before FinalizeNetworkSpawn runs, otherwise defaults will overwrite loaded data
-                try
-                {
-                    apiNpc = FindWrapperForS1Npc(s1BaseNpc);
-                    if (apiNpc != null)
-                    {
-                        typeof(NPC).GetMethod("MarkLoadedFromSave", BindingFlags.NonPublic | BindingFlags.Instance)
-                            ?.Invoke(apiNpc, null);
-                    }
-                }
-                catch { }
-
                 if (saveData.TryGetData("MessageConversation", out S1Datas.MSGConversationData convo))
                 {
                     apiNpc?.EnsureMessageConversationReady(resetDefaults: false);
@@ -1276,7 +1596,19 @@ namespace S1API.Internal.Patches
                     {
                         if (S1Datas.ItemSet.TryDeserialize(inventoryData, out var itemSet))
                         {
-                            itemSet.LoadTo(s1BaseNpc.Inventory.ItemSlots);
+                            RestoreInventoryAfterInitialization(
+                                customNpc.Inventory.EnsureInitialized,
+                                () =>
+                                {
+                                    var inventory = s1BaseNpc.GetComponent<S1NPCs.NPCInventory>();
+                                    if (inventory?.ItemSlots == null)
+                                    {
+                                        throw new InvalidOperationException(
+                                            $"Inventory slots were not initialized for custom NPC '{baseData.ID}'.");
+                                    }
+
+                                    itemSet.LoadTo(inventory.ItemSlots);
+                                });
                         }
                         else
                         {
@@ -1289,7 +1621,6 @@ namespace S1API.Internal.Patches
                             $"NPCLoader_Load_Prefix: Exception loading Inventory data for '{baseData.ID}': {ex.Message}");
                     }
                 }
-
             }
             catch (Exception ex)
             {
@@ -1302,37 +1633,24 @@ namespace S1API.Internal.Patches
                 var wrap = FindWrapperForS1Npc(s1BaseNpc);
                 if (wrap != null)
                 {
-                    // Mark that this instance was hydrated from save data FIRST to prevent defaults overwrite
-                    typeof(NPC).GetMethod("MarkLoadedFromSave", BindingFlags.NonPublic | BindingFlags.Instance)
-                        ?.Invoke(wrap, null);
-                    
                     var npcType = wrap.GetType();
                     bool hasDefaults = NPC.TypeToRelationshipDefaults.TryGetValue(npcType, out var relCfg) && relCfg != null;
-                    
-                    if (hasDefaults)
+
+                    if (!NPCRelationshipPersistencePolicy.ShouldApplyDefaults(
+                        wrap.RelationshipLoadedFromSave))
+                    {
+                        s1BaseNpc.GetComponent<NPCPrefabIdentity>()
+                            ?.ApplyRelationshipConnectionsTo(s1BaseNpc);
+                    }
+                    else if (hasDefaults)
                     {
                         var builder = new NPCRelationshipDataBuilder();
                         relCfg!(builder);
                         var rel = s1BaseNpc.RelationData;
                         if (rel != null)
                         {
-                            // Preserve relationship delta if it was loaded from save (non-default value)
-                            // Default relationship delta is 2.0, so if it's different, it came from save
-                            float currentDelta = rel.RelationDelta;
-                            bool deltaWasLoadedFromSave = Math.Abs(currentDelta - DefaultRelationDelta) > 0.01f;
-                            
-                            // Store the loaded delta before applying defaults
-                            float savedDelta = currentDelta;
-                            
                             bool beforeApplyDefaults = rel.Unlocked;
                             builder.ApplyTo(rel, s1BaseNpc, preserveUnlockState: true);
-                            
-                            // Restore relationship delta if it was loaded from save
-                            if (deltaWasLoadedFromSave)
-                            {
-                                rel.SetRelationship(savedDelta);
-                            }
-                            
                             bool afterApplyDefaults = rel.Unlocked;
                             
                             if (beforeApplyDefaults && !afterApplyDefaults)
@@ -1346,10 +1664,13 @@ namespace S1API.Internal.Patches
                         }
                     }
 
-                    // SetVisible(false) deactivates the Avatar GameObject. Custom suppliers
-                    // must remain active through FishNet spawn so native NPC.Awake can find
-                    // the Avatar reference; FinalizeNetworkSpawn applies idle visibility.
-                    if (NPC.ShouldApplyLoadedVisibilityBeforeSpawn(wrap.IsSupplier))
+                    // SetVisible(false) deactivates the Avatar GameObject. Invisible NPCs and
+                    // custom suppliers must remain active through FishNet spawn so native
+                    // NPC.Awake can find the Avatar reference; FinalizeNetworkSpawn applies
+                    // their intended visibility.
+                    if (NPC.ShouldApplyLoadedVisibilityBeforeSpawn(
+                        wrap.IsPhysical,
+                        wrap.IsSupplier))
                     {
                         s1BaseNpc.SetVisible(
                             wrap.ShouldBeVisibleAfterSpawn(),
@@ -1388,58 +1709,31 @@ namespace S1API.Internal.Patches
                 // Ensure internal data structures exist first
                 try
                 {
-                    // Use reflection to access currentAffinityData field/property
-                    PropertyInfo? currentAffinityProp;
-                    FieldInfo? currentAffinityField;
-                    currentAffinityField = customerType.GetField("currentAffinityData",
-                        BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-                    currentAffinityProp = customerType.GetProperty("currentAffinityData",
-                        BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-
-                    S1Economy.CustomerAffinityData? currentAffinity = null;
-                    if (currentAffinityField != null)
-                    {
-                        if (currentAffinityField is FieldInfo field)
-                        {
-                            currentAffinity = field.GetValue(customerComponent) as S1Economy.CustomerAffinityData;
-                        }
-                        else if (currentAffinityProp is PropertyInfo prop)
-                        {
-                            currentAffinity = prop.GetValue(customerComponent) as S1Economy.CustomerAffinityData;
-                        }
-                    }
+                    var currentAffinity = Utils.ReflectionUtils.TryGetFieldOrProperty(
+                        customerComponent,
+                        "currentAffinityData") as S1Economy.CustomerAffinityData;
 
                     if (currentAffinity == null)
                     {
                         currentAffinity = new S1Economy.CustomerAffinityData();
-                        var customerDataProp = customerType.GetProperty("CustomerData",
-                            BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-                        if (customerDataProp != null)
+                        var customerData = Utils.ReflectionUtils.TryGetFieldOrProperty(customerComponent, "CustomerData");
+                        if (customerData != null)
                         {
-                            var customerData = customerDataProp.GetValue(customerComponent);
-                            if (customerData != null)
+                            var defaults = Utils.ReflectionUtils.TryGetFieldOrProperty(
+                                customerData,
+                                "DefaultAffinityData");
+                            if (defaults != null)
                             {
-                                var defaultAffinityProp = customerData.GetType().GetProperty("DefaultAffinityData",
-                                    BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-                                var defaults = defaultAffinityProp?.GetValue(customerData);
-                                if (defaults != null)
-                                {
-                                    var copyToMethod = defaults.GetType().GetMethod("CopyTo",
-                                        BindingFlags.Public | BindingFlags.Instance);
-                                    copyToMethod?.Invoke(defaults, new object[] { currentAffinity });
-                                }
+                                var copyToMethod = defaults.GetType().GetMethod("CopyTo",
+                                    BindingFlags.Public | BindingFlags.Instance);
+                                copyToMethod?.Invoke(defaults, new object[] { currentAffinity });
                             }
                         }
 
-                        // Set the new currentAffinityData back
-                        if (currentAffinityField is FieldInfo setField)
-                        {
-                            setField.SetValue(customerComponent, currentAffinity);
-                        }
-                        else if (currentAffinityProp is PropertyInfo setProp && setProp.CanWrite)
-                        {
-                            setProp.SetValue(customerComponent, currentAffinity);
-                        }
+                        Utils.ReflectionUtils.TrySetFieldOrProperty(
+                            customerComponent,
+                            "currentAffinityData",
+                            currentAffinity);
                     }
 
                     if (cust.ProductAffinities != null && currentAffinity != null)
@@ -1774,29 +2068,39 @@ namespace S1API.Internal.Patches
         }
 
         /// <summary>
-        /// Temporary patch while S1API NPCs are not networked
-        /// Guard Revive() for custom S1API NPCs to avoid Health SyncVar access before FishNet init.
-        /// Applies equivalent revive effects without touching the SyncVar setter path.
-        /// TODO: Restrict this reflective fallback to the pre-network-init window only.
-        /// Once a custom NPC is live/networked, revive should stay on the authoritative server/original path instead of
-        /// mutating local health/death state and skipping the replicated revive flow.
+        /// Guard Revive() for custom S1API NPCs before FishNet initialization.
+        /// Applies equivalent revive effects without touching the SyncVar setter path until the NPC is spawned.
         /// </summary>
         [HarmonyPatch(typeof(S1NPCs.NPCHealth), nameof(S1NPCs.NPCHealth.Revive))]
         [HarmonyPrefix]
         private static bool NPCHealth_Revive_Prefix(S1NPCs.NPCHealth __instance)
         {
-            if (!IsInMainScene())
-                return true; // allow original behaviour outside of Main
+            bool isInMainScene = IsInMainScene();
+            if (!isInMainScene)
+                return true;
+
             var baseNpc = __instance.GetComponent<S1NPCs.NPC>();
             var apiNpc = baseNpc != null ? FindWrapperForS1Npc(baseNpc) : null;
             if (apiNpc == null || !apiNpc.IsCustomNPC)
-                return true; // use original for base NPCs
+                return true;
+
+            if (NPCHealthRevivePolicy.ShouldSuppressSpawnedClientRevive(
+                    __instance.IsSpawned,
+                    InstanceFinder.IsServer))
+            {
+                return false;
+            }
+
+            if (!NPCHealthRevivePolicy.ShouldUsePreSpawnFallback(
+                    isInMainScene,
+                    true,
+                    __instance.IsSpawned))
+            {
+                return true;
+            }
 
             try
             {
-                // NOTE: This currently mutates revive state locally and then always skips the original revive call below.
-                // That is only safe before networking is initialized; on live/networked NPCs, client-side calls can revive
-                // only the local wrapper copy while server-side calls bypass the authoritative replicated revive path.
                 bool healthSet = Utils.ReflectionUtils.TrySetFieldOrProperty(
                     __instance, "<Health>k__BackingField", __instance.MaxHealth);
                 bool isDeadSet = Utils.ReflectionUtils.TrySetFieldOrProperty(__instance, "IsDead", false);
@@ -1817,7 +2121,7 @@ namespace S1API.Internal.Patches
                 // Fire revive event so downstream listeners still react
                 __instance.onRevive?.Invoke();
 
-                return false; // skip original to avoid SyncVar/networking calls; revisit for post-init/live NPC revives.
+                return false; // skip original to avoid SyncVar/networking calls before FishNet initialization.
             }
             catch (Exception ex)
             {
@@ -1858,17 +2162,16 @@ namespace S1API.Internal.Patches
 
             apiNpc.LoadFromDynamic(saveData);
 
-            // Mark as loaded from save so prefab defaults won't overwrite
-            try
+            if (saveData.TryGetData(
+                    "Relationship",
+                    out S1Datas.RelationshipData relationshipData)
+                && relationshipData != null)
             {
-                typeof(NPC).GetMethod("MarkLoadedFromSave", BindingFlags.NonPublic | BindingFlags.Instance)
-                    ?.Invoke(apiNpc, null);
+                apiNpc.LoadRelationshipFromSave(
+                    relationshipData.RelationDelta,
+                    relationshipData.Unlocked,
+                    relationshipData.UnlockType);
             }
-            catch (Exception ex)
-            {
-                Logger.Warning($"[S1API] NPCLoader_Load_Postfix: Exception marking NPC '{baseData.ID}' as loaded: {ex.Message}");
-            }
-
         }
 
         /// <summary>
@@ -2124,14 +2427,7 @@ namespace S1API.Internal.Patches
         [HarmonyPrefix]
         private static bool NPCMovement_SetGravityMultiplier_Prefix(S1NPCs.NPCMovement __instance, float multiplier)
         {
-#if !IL2CPPMELON
-            var ragdollForceComponentsField = typeof(S1NPCs.NPCMovement).GetField("ragdollForceComponents",
-                BindingFlags.NonPublic | BindingFlags.Instance);
-            var ragdollForceComponents = ragdollForceComponentsField?.GetValue(__instance) as List<ConstantForce>;
-#else
-            var ragdollForceComponents = __instance.ragdollForceComponents;
-#endif
-            return ragdollForceComponents == null || ragdollForceComponents.ToArray().All(comp => comp != null);
+            return true;
         }
 
         /// <summary>
@@ -2150,7 +2446,7 @@ namespace S1API.Internal.Patches
             var npc = __instance.GetComponent<S1NPCs.NPC>();
 #if (!IL2CPPMELON)
             var npcField = typeof(S1NPCs.NPCHealth)
-                .GetField("npc", BindingFlags.NonPublic | BindingFlags.Instance);
+                .GetField("_npc", BindingFlags.NonPublic | BindingFlags.Instance);
             if (npcField != null)
                 npcField.SetValue(__instance, npc);
             
@@ -2177,7 +2473,7 @@ namespace S1API.Internal.Patches
                     (Action)Delegate.Combine(TimeManagerShim.Instance.onHourPass, hourPassDelegate);
             }
 #else
-            __instance.npc = npc;
+            __instance._npc = npc;
 
             TimeManagerShim.Instance.onSleepStart =
                 (Action)Delegate.Combine(TimeManagerShim.Instance.onSleepStart, new Action(__instance.SleepStart));
@@ -2460,16 +2756,6 @@ namespace S1API.Internal.Patches
                     }
                 }
 
-                if (isCustomNPC)
-                {
-                    if (dynamicData.TryGetData("Inventory", out var inventoryData))
-                    {
-                        if (S1Datas.ItemSet.TryDeserialize(inventoryData, out var itemSet))
-                            _pendingInventoryLoads[__instance.ID] = itemSet;
-                        else
-                            Logger.Warning($"Failed to deserialize inventory data for custom NPC dealer {__instance.ID}");
-                    }
-                }
             }
             catch (Exception ex)
             {

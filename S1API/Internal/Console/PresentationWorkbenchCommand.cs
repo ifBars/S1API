@@ -14,13 +14,13 @@ namespace S1API.Internal.Console
         {
         }
 
-        public override string CommandWord => "presentation_workbench";
+        public override string CommandWord => "presentationworkbench";
 
         public override string CommandDescription =>
             "Open the local icon and equippable presentation authoring workbench.";
 
         public override string ExampleUsage =>
-            "presentation_workbench [product|item] <id> | close";
+            "presentationworkbench [product|item] <id> | close";
 
         public override void ExecuteCommand(List<string> args)
         {

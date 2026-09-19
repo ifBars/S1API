@@ -28,6 +28,8 @@ The `ConfigurePrefab` method is called during NPC prefab creation and allows you
 
 **Important**: Customer, relationship, and schedule configuration must be done in `ConfigurePrefab` to ensure proper save/load behavior and network compatibility.
 
+Declare fundamental roles with `IsCustomer`, `IsDealer`, and `IsSupplier` on the NPC type. S1API reads these properties from an uninitialized instance before `ConfigurePrefab`, so overrides must be stable, side-effect-free constants that do not depend on constructors or initialized fields. A dealer cannot also be a supplier, and every supplier must be physical.
+
 ## NPCPrefabBuilder Methods
 
 ### WithIdentity
@@ -162,18 +164,18 @@ builder.WithAppearanceDefaults(avatar => avatar.WithRandomImpostor(71, "Kyle", "
 
 If no impostor is configured, S1API preserves the existing custom NPC behavior.
 
-### EnsureCustomer
+### IsCustomer
 
-Adds customer behavior component to the NPC.
+Declares customer capability at the NPC type level. S1API adds the native customer component before `ConfigurePrefab` and network registration.
 
 ```csharp
-builder.EnsureCustomer();
+public override bool IsCustomer => true;
 ```
 
 **What it does:**
 - Adds the `Customer` component to the NPC
 - Enables customer behavior
-- Required for `WithCustomerDefaults` to work
+- Makes the infrastructure available to `WithCustomerDefaults`
 
 **Use when:**
 - NPC should act as a business customer
@@ -469,7 +471,7 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 }
 ```
 
-`WithSupplierDefaults(...)` ensures the supplier root automatically. `EnsureSupplier()` is also available when the default order limits, empty listings, and default messages are sufficient.
+`IsSupplier` ensures the supplier root automatically. `WithSupplierDefaults(...)` adds optional order limits, listings, and messages; omit it when the native defaults are sufficient.
 
 Supplier delivery items must be registered and storable before prefab configuration runs. Order limits must be finite; the minimum must be non-negative, the maximum must be positive, and the maximum cannot be below the minimum. Keep the identity ID stable: S1API uses it for the supplier's persistent stash, shop, and delivery vehicle.
 
@@ -569,7 +571,7 @@ plan.Add(new DriveToCarParkSpec {
 1. **Set identity** (id, firstName, lastName)
 2. **Set icon** (optional)
 3. **Set spawn position**
-4. **Choose one specialized role** (customer component, dealer root, or supplier root, if needed)
+4. **Declare roles on the NPC type** (`IsCustomer`, `IsDealer`, and `IsSupplier`); customer can compose with either root, while dealer and supplier are mutually exclusive
 5. **Configure role defaults**
 6. **Set relationship defaults**
 7. **Define schedule** (if physical NPC)
@@ -577,6 +579,9 @@ plan.Add(new DriveToCarParkSpec {
 ### Complete Example
 
 ```csharp
+public override bool IsPhysical => true;
+public override bool IsCustomer => true;
+
 protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 {
     Vector3 shopPosition = new Vector3(-28.060f, 1.065f, 62.070f);
@@ -588,7 +593,6 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
             lastName: "Shopkeeper")
             .WithIcon(null)
             .WithSpawnPosition(spawnPosition)
-            .EnsureCustomer()
             .WithCustomerDefaults(cd => {
                 cd.WithSpending(200f, 800f)
                   .WithOrdersPerWeek(2, 5)
@@ -634,7 +638,7 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 - **Don't modify customer, relationship, or schedule data at runtime** (except through proper APIs)
 - **Don't spawn NPCs in inaccessible locations**
 - **Don't use invalid GUIDs** for buildings, vehicles, or machines
-- **Don't forget to call `EnsureCustomer()`** before `WithCustomerDefaults()`
+- **Don't make role properties depend on constructor state**; S1API reads them from an uninitialized instance
 - **Don't mark one NPC as both a dealer and a supplier**
 - **Don't configure a supplier as non-physical**
 - **Don't assign native supplier scene objects**; use the S1API wrappers and hidden runtime integration
@@ -644,13 +648,14 @@ protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 Wrap configuration code in try-catch blocks:
 
 ```csharp
+public override bool IsCustomer => true;
+
 protected override void ConfigurePrefab(NPCPrefabBuilder builder)
 {
     try
     {
         // Configuration code here
         builder.WithSpawnPosition(spawnPos)
-               .EnsureCustomer()
                .WithCustomerDefaults(cd => {
                    // Customer configuration
                });

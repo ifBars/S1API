@@ -30,18 +30,25 @@ namespace S1API.Building
         /// <remarks>
         /// Subscribers receive a BuildEventArgs containing the item and GameObject.
         /// The GameObject can be modified to change appearance or behavior.
+        /// <see cref="BuildEventArgs.Storage"/> is null for items that are not storage containers.
         /// </remarks>
         public static event Action<BuildEventArgs>? OnGridItemCreated;
 
         /// <summary>
         /// Event raised after a surface item (table-top item) is created.
         /// </summary>
+        /// <remarks>
+        /// <see cref="BuildEventArgs.Storage"/> is null for items that are not storage containers.
+        /// </remarks>
         public static event Action<BuildEventArgs>? OnSurfaceItemCreated;
 
         /// <summary>
         /// Event raised after a buildable item component is initialized.
         /// This event fires for all buildable items and can be used for additional setup.
         /// </summary>
+        /// <remarks>
+        /// <see cref="BuildEventArgs.Storage"/> is null for items that are not storage containers.
+        /// </remarks>
         public static event Action<BuildEventArgs>? OnBuildableItemInitialized;
 
         /// <summary>

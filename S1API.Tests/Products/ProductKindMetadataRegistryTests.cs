@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using S1API.Internal.Products;
 using S1API.Products;
 using UnityEngine;
@@ -282,8 +281,7 @@ public sealed class ProductKindMetadataRegistryTests : IDisposable
         Assert.True(ProductKindIconLifetime.IsNullOrDestroyed(null));
 
 #if MONOMELON
-        Sprite destroyedIcon =
-            (Sprite)RuntimeHelpers.GetUninitializedObject(typeof(Sprite));
+        Sprite destroyedIcon = TestObjectFactory.CreateUninitialized<Sprite>();
         Assert.True(ProductKindIconLifetime.IsNullOrDestroyed(destroyedIcon));
         Assert.Throws<ArgumentNullException>(
             () => new ProductKindMetadataBuilder(kind)
@@ -405,8 +403,7 @@ public sealed class ProductKindMetadataRegistryTests : IDisposable
 
     private static Sprite CreateSprite()
     {
-        var sprite =
-            (Sprite)RuntimeHelpers.GetUninitializedObject(typeof(Sprite));
+        var sprite = TestObjectFactory.CreateUninitialized<Sprite>();
 #if MONOMELON
         SetCachedPointer(sprite, new IntPtr(1));
 #endif

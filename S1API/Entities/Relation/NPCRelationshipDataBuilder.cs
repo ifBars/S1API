@@ -28,6 +28,7 @@ namespace S1API.Entities.Relation
         private bool? _unlocked;
         private NPCRelationship.UnlockType? _unlockType;
         private readonly List<string> _connectionIDs = new List<string>();
+        private bool _connectionsConfigured;
 
         /// <summary>
         /// Sets the relationship delta in [0, 5].
@@ -81,25 +82,32 @@ namespace S1API.Entities.Relation
         /// </summary>
         public NPCRelationshipDataBuilder WithConnectionsById(IEnumerable<string> ids)
         {
+            _connectionsConfigured = true;
             _connectionIDs.Clear();
-            if (ids == null)
-            {
-                return this;
-            }
-            
-            int addedCount = 0;
-            foreach (var id in ids)
-            {
-                if (string.IsNullOrEmpty(id))
-                    continue;
-                if (!_connectionIDs.Contains(id, StringComparer.OrdinalIgnoreCase))
-                {
-                    _connectionIDs.Add(id);
-                    addedCount++;
-                }
-            }
-            
+            _connectionIDs.AddRange(NormalizeConnectionIds(ids));
+
             return this;
+        }
+
+        internal static IReadOnlyList<string> NormalizeConnectionIds(IEnumerable<string>? ids)
+        {
+            if (ids == null)
+                return Array.Empty<string>();
+
+            var normalized = new List<string>();
+            foreach (string? id in ids)
+            {
+                string value = id?.Trim() ?? string.Empty;
+                if (value.Length == 0
+                    || normalized.Contains(value, StringComparer.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                normalized.Add(value);
+            }
+
+            return normalized;
         }
 
         /// <summary>
@@ -154,6 +162,7 @@ namespace S1API.Entities.Relation
         /// </summary>
         public NPCRelationshipDataBuilder WithConnections(params System.Type?[]? npcTypes)
         {
+            _connectionsConfigured = true;
             _connectionIDs.Clear();
             if (npcTypes == null || npcTypes.Length == 0)
             {
@@ -221,7 +230,8 @@ namespace S1API.Entities.Relation
                 RelationDelta = _relationDelta,
                 Unlocked = _unlocked,
                 UnlockType = _unlockType,
-                ConnectionIDs = _connectionIDs.Count > 0 ? new List<string>(_connectionIDs) : null
+                ConnectionsConfigured = _connectionsConfigured,
+                ConnectionIDs = new List<string>(_connectionIDs)
             };
         }
 
@@ -245,7 +255,7 @@ namespace S1API.Entities.Relation
 
             try
             {
-                if (_connectionIDs.Count > 0)
+                if (_connectionsConfigured)
                 {
                     var registry = S1NPCs.NPCManager.NPCRegistry;
                     var targetList = relationData.Connections;
@@ -356,6 +366,7 @@ namespace S1API.Entities.Relation
             public float? RelationDelta;
             public bool? Unlocked;
             public NPCRelationship.UnlockType? UnlockType;
+            public bool ConnectionsConfigured;
             public List<string>? ConnectionIDs;
         }
     }

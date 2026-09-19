@@ -25,6 +25,11 @@ namespace S1API.Internal.Products
         public int ProviderVersion;
         public string ProviderData = string.Empty;
         public bool IsGeneratedMix;
+        public bool HasGeneratedMixColor;
+        public byte GeneratedMixColorR;
+        public byte GeneratedMixColorG;
+        public byte GeneratedMixColorB;
+        public byte GeneratedMixColorA;
     }
 
     [Serializable]

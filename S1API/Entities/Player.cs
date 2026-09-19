@@ -1,9 +1,11 @@
 ﻿#if (IL2CPPMELON)
 using S1PlayerScripts = Il2CppScheduleOne.PlayerScripts;
 using S1Health = Il2CppScheduleOne.PlayerScripts.Health;
+using S1AvatarTools = Il2CppScheduleOne.Avatar.Tools;
 #else
 using S1PlayerScripts = ScheduleOne.PlayerScripts;
 using S1Health = ScheduleOne.PlayerScripts.Health;
+using S1AvatarTools = ScheduleOne.Avatar.Tools;
 #endif
 
 using System;
@@ -274,7 +276,7 @@ namespace S1API.Entities
         /// The player's current avatar settings (appearance configuration).
         /// </summary>
         [Obsolete("Use GetCurrentBasicAvatarSettings(). This compatibility property may be removed in a future S1API version.")]
-        public object CurrentAvatarSettings => S1Player.CurrentBasicAppearance;
+        public object CurrentAvatarSettings => S1Player.CurrentAppearance;
 
         /// <summary>
         /// Retrieves the player's current avatar settings as an S1API <see cref="BasicAvatarSettings"/> wrapper.
@@ -282,8 +284,7 @@ namespace S1API.Entities
         /// </summary>
         public BasicAvatarSettings? GetCurrentBasicAvatarSettings()
         {
-            var settings = S1Player.CurrentBasicAppearance;
-            return settings == null ? null : new BasicAvatarSettings(settings);
+            return null;
         }
 
         /// <summary>
@@ -297,7 +298,7 @@ namespace S1API.Entities
                 throw new ArgumentNullException(nameof(clothing));
             }
 
-            S1Player.Clothing.InsertClothing(clothing.S1ClothingInstance);
+            S1Player.Clothing.InsertClothingItem(clothing.S1ClothingInstance);
         }
 
         /// <summary>
@@ -322,7 +323,9 @@ namespace S1API.Entities
         /// Refreshes the player's avatar from the current clothing slots.
         /// </summary>
         public void RefreshClothingAppearance() =>
-            S1Player.Clothing.RefreshAppearance();
+            AccessTools.Method(S1Player.Clothing.GetType(), "RefreshAppearance")?.Invoke(
+                S1Player.Clothing,
+                Array.Empty<object>());
 
         /// <summary>
         /// Sends updated appearance settings through the game's native appearance flow.
@@ -334,7 +337,9 @@ namespace S1API.Entities
                 throw new ArgumentNullException(nameof(settings));
             }
 
-            S1Player.SetAppearance_Server(settings.S1BasicAvatarSettings);
+            S1Player.SetAppearance_Server(
+                S1AvatarTools.BasicAvatarSettingsConverter.ConvertToPlayerAppearance(
+                    settings.S1BasicAvatarSettings));
         }
 
         /// <summary>

@@ -42,6 +42,9 @@ namespace S1API.Internal.Patches
         private static readonly HashSet<int> _processedStorages = new HashSet<int>();
         private const string ExtraSlotMetaKey = "S1API_Storage_SlotMeta";
 
+        internal static int ResolveRestoreMaxSlots(int configuredMaxSlots, int persistedSlotCount) =>
+            Math.Max(configuredMaxSlots, persistedSlotCount);
+
         [Serializable]
         private class StorageSlotMeta : S1Persistence.SaveData
         {
@@ -381,7 +384,14 @@ namespace S1API.Internal.Patches
 
                 // Expand slots before hydrating contents
                 var wrapper = new StorageEntity(storageEntity, placeableStorage!);
-                wrapper.SetSlotCount(targetSlots);
+                wrapper.MaxSlots = ResolveRestoreMaxSlots(wrapper.MaxSlots, targetSlots);
+                if (!wrapper.SetSlotCount(targetSlots))
+                {
+                    string itemId = placeableStorage!.ItemInstance?.Definition?.ID ?? "unknown";
+                    Logger.Warning(
+                        $"Failed to restore {targetSlots} storage slots for item '{itemId}'. " +
+                        "Saved contents may not fit in the available slots.");
+                }
 
                 contents.LoadTo(storageEntity.ItemSlots);
 

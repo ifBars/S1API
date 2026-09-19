@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Suppressions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <!--
+    Schedule I moved ExitAction between native namespaces across game updates.
+    S1API replaces the runtime-specific signature with S1API.PhoneApp.ExitAction
+    so phone apps retain one public API across Mono and IL2CPP.
+  -->
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:S1API.PhoneApp.PhoneApp.Exit(ScheduleOne.ExitAction)</Target>
+  </Suppression>
+</Suppressions>

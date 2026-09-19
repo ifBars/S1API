@@ -13,8 +13,13 @@ using S1API.Products.Packaging;
 namespace S1API.Products
 {
     /// <summary>
-    /// Represents a type of packaging in-game.
+    /// Represents a native packaging type in the active game runtime.
     /// </summary>
+    /// <remarks>
+    /// Packaging definitions describe capacity and stealth. They do not create packaging assets
+    /// or alter a product's allowed packaging policy. Resolve a live definition through
+    /// <see cref="ProductPopulator.GetPackaging(string)"/> or the item registry.
+    /// </remarks>
     public class PackagingDefinition : ItemDefinition
     {
         /// <summary>
@@ -31,13 +36,13 @@ namespace S1API.Products
             base(s1ItemDefinition) { }
 
         /// <summary>
-        /// The quantity that this packaging can hold.
+        /// Gets the native product quantity this packaging can hold.
         /// </summary>
         public int Quantity =>
             S1PackagingDefinition.Quantity;
 
         /// <summary>
-        /// The stealth level of this packaging.
+        /// Gets the runtime-agnostic stealth level for this packaging.
         /// </summary>
         public StealthLevel StealthLevel =>
             S1PackagingDefinition.StealthLevel.ToAPI();

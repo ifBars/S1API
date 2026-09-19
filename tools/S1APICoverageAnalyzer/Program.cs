@@ -228,15 +228,16 @@ public class Program
             var wrappedTypes = apiAnalyzer.GetWrappedGameTypes();
             var accessedMembers = apiAnalyzer.GetAccessedMembers();
             var apiTypes = apiAnalyzer.GetApiTypes();
+            var explicitCoverageMappings = apiAnalyzer.GetExplicitCoverageMappings();
             Console.WriteLine($"  Found {wrappedTypes.Count} wrapped game types across {apiTypes.Count} API types");
             
             // Calculate coverage
             Console.WriteLine("Calculating coverage...");
             var calculator = new CoverageCalculator(
-                gameTypes, 
-                wrappedTypes, 
-                accessedMembers, 
+                gameTypes,
+                accessedMembers,
                 apiTypes,
+                explicitCoverageMappings,
                 excludedTypeCount);
             var result = calculator.Calculate();
             
@@ -321,7 +322,10 @@ public class Program
                 {
                     Console.WriteLine($"  [covered] {type.FullName}");
                     if (!string.IsNullOrEmpty(type.CoveredByApiType))
-                        Console.WriteLine($"      -> Wrapped by: {type.CoveredByApiType}");
+                    {
+                        Console.WriteLine(
+                            $"      -> Wrapped by: {type.CoveredByApiType} ({type.MatchStrategy})");
+                    }
                 }
                 
                 Console.WriteLine();

@@ -94,11 +94,20 @@ public sealed class ProductApiCompatibilityTests
     {
         var primaryDrugType = typeof(ProductDefinition).GetProperty(nameof(ProductDefinition.PrimaryDrugType));
         var drugTypeValues = typeof(ProductDefinition).GetProperty(nameof(ProductDefinition.DrugTypeValues));
+        var propertyColorMixing = typeof(ProductMixingProfileBuilder).GetMethod(
+            nameof(ProductMixingProfileBuilder.WithPropertyColorMixing),
+            Type.EmptyTypes);
+        var usesPropertyColorMixing = typeof(ProductMixingProfile).GetProperty(
+            nameof(ProductMixingProfile.UsePropertyColorMixing));
 
         Assert.NotNull(primaryDrugType);
         Assert.Equal(typeof(DrugType), primaryDrugType.PropertyType);
         Assert.NotNull(drugTypeValues);
         Assert.Equal(typeof(IReadOnlyList<DrugType>), drugTypeValues.PropertyType);
+        Assert.NotNull(propertyColorMixing);
+        Assert.Equal(typeof(ProductMixingProfileBuilder), propertyColorMixing.ReturnType);
+        Assert.NotNull(usesPropertyColorMixing);
+        Assert.Equal(typeof(bool), usesPropertyColorMixing.PropertyType);
     }
 
     [Fact]

@@ -37,16 +37,16 @@ Open the native developer console after the local player has spawned. The
 explicit forms are:
 
 ```text
-presentation_workbench product example.mod:products/focus-tablet
-presentation_workbench item example.mod:items/storage-pallet
-presentation_workbench close
+presentationworkbench product example.mod:products/focus-tablet
+presentationworkbench item example.mod:items/storage-pallet
+presentationworkbench close
 ```
 
 For convenience, omit the target kind to resolve a value in product, then
 item order:
 
 ```text
-presentation_workbench example.mod:products/focus-tablet
+presentationworkbench example.mod:products/focus-tablet
 ```
 
 A consuming mod does not need initialization code for the workbench. If the

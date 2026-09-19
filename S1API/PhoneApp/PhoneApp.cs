@@ -1,12 +1,14 @@
+using System;
+using System.Collections.Generic;
 using System.IO;
-using UnityEngine;
-using UnityEngine.UI;
-using Object = UnityEngine.Object;
+using HarmonyLib;
+using MelonLoader;
 using S1API.Internal.Abstraction;
 using S1API.Internal.Patches;
 using S1API.Internal.Utils;
-using System;
-using MelonLoader;
+using UnityEngine;
+using UnityEngine.UI;
+using Object = UnityEngine.Object;
 #if IL2CPPMELON
 using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne.UI.Phone;
@@ -15,6 +17,7 @@ using Il2CppScheduleOne.DevUtilities;
 using MelonLoader.Utils;
 using Il2CppInterop.Runtime;
 using S1GameInput = Il2CppScheduleOne.GameInput;
+using S1ExitAction = Il2CppScheduleOne.ExitAction;
 #elif MONOMELON
 using ScheduleOne.UI;
 using ScheduleOne.DevUtilities;
@@ -22,6 +25,7 @@ using ScheduleOne.UI.Phone;
 using ScheduleOne;
 using MelonLoader.Utils;
 using S1GameInput = ScheduleOne.GameInput;
+using S1ExitAction = ScheduleOne.ExitAction;
 #endif
 namespace S1API.PhoneApp
 {
@@ -218,8 +222,10 @@ namespace S1API.PhoneApp
         }
 
         /// <summary>
-        /// Handles exit/home button functionality. Called when user presses escape or home.
+        /// Handles exit/home button functionality without exposing runtime-specific game types.
+        /// Called when the user presses escape or home.
         /// </summary>
+        /// <param name="exit">The cross-runtime exit request.</param>
         public virtual void Exit(ExitAction exit)
         {
             if (!exit.Used && IsOpen() && Phone.InstanceExists && Phone.Instance.IsOpen)
@@ -285,9 +291,9 @@ namespace S1API.PhoneApp
                 
                 // Create IL2CPP-safe delegate instance
 #if IL2CPPMELON
-                _exitDelegate = DelegateSupport.ConvertDelegate<S1GameInput.ExitDelegate>(new System.Action<ExitAction>(Exit));
+                _exitDelegate = DelegateSupport.ConvertDelegate<S1GameInput.ExitDelegate>(new System.Action<S1ExitAction>(HandleNativeExit));
 #else
-                _exitDelegate = new S1GameInput.ExitDelegate(Exit);
+                _exitDelegate = new S1GameInput.ExitDelegate(HandleNativeExit);
 #endif
                 GameInput.RegisterExitListener(_exitDelegate, 1);
 
@@ -295,6 +301,13 @@ namespace S1API.PhoneApp
                 _onPhoneClosedAction = OnPhoneClosed;
                 Phone.Instance.onPhoneClosed += _onPhoneClosedAction;
             }
+        }
+
+        private void HandleNativeExit(S1ExitAction exit)
+        {
+            Exit(new ExitAction(
+                () => exit.Used,
+                used => exit.Used = used));
         }
 
         /// <summary>
@@ -314,16 +327,14 @@ namespace S1API.PhoneApp
                 return;
             }
 
-            // Find the LAST icon (the one most recently added)
-            Transform? lastIcon = appIcons.transform.childCount > 0 ? appIcons.transform.GetChild(appIcons.transform.childCount - 1) : null;
-            if (lastIcon == null)
+            GameObject? iconObj = CreateAppIcon(homeScreenInstance, appIcons.transform);
+            if (iconObj == null)
             {
-                Logger.Error("No icons found in AppIcons.");
+                Logger.Error($"Failed to create an icon for {AppName}.");
                 return;
             }
 
-            GameObject iconObj = lastIcon.gameObject;
-            iconObj.name = AppName; // Rename it now
+            iconObj.name = AppName;
             
             // Cache icon image for future updates
             Transform imageTransform = iconObj.transform.Find("Mask/Image");
@@ -362,6 +373,57 @@ namespace S1API.PhoneApp
                 iconButton.onClick.RemoveAllListeners();
                 global::S1API.Utils.EventHelper.AddListener(OpenApp, iconButton.onClick);
             }
+        }
+
+        /// <summary>
+        /// Creates and registers an independent home-screen icon using the native icon prefab.
+        /// </summary>
+        private static GameObject? CreateAppIcon(HomeScreen homeScreenInstance, Transform parent)
+        {
+#if IL2CPPMELON
+            GameObject? iconPrefab = homeScreenInstance.appIconPrefab;
+#else
+            GameObject? iconPrefab = AccessTools.Field(
+                typeof(HomeScreen),
+                "appIconPrefab")?.GetValue(homeScreenInstance) as GameObject;
+#endif
+            if (iconPrefab == null)
+            {
+                Logger.Error("HomeScreen appIconPrefab was unavailable.");
+                return null;
+            }
+
+            GameObject iconObject = Object.Instantiate(iconPrefab, parent);
+            iconObject.transform.Find("Notifications")?.gameObject.SetActive(false);
+
+            Button? button = iconObject.GetComponent<Button>();
+            UISelectable? selectable = iconObject.GetComponent<UISelectable>();
+            if (button == null || selectable == null)
+            {
+                Logger.Error("Native phone app icon prefab is missing Button or UISelectable.");
+                Object.Destroy(iconObject);
+                return null;
+            }
+
+#if IL2CPPMELON
+            var nativeButtons = homeScreenInstance.appIcons;
+            var uiPanel = homeScreenInstance.uiPanel;
+#else
+            var appIconsField = AccessTools.Field(typeof(HomeScreen), "appIcons");
+            var uiPanelField = AccessTools.Field(typeof(HomeScreen), "uiPanel");
+            var nativeButtons = appIconsField?.GetValue(homeScreenInstance) as List<Button>;
+            var uiPanel = uiPanelField?.GetValue(homeScreenInstance) as UIPanel;
+#endif
+            if (nativeButtons == null || uiPanel == null)
+            {
+                Logger.Error("HomeScreen icon registration fields were unavailable.");
+                Object.Destroy(iconObject);
+                return null;
+            }
+
+            nativeButtons.Add(button);
+            uiPanel.AddSelectable(selectable);
+            return iconObject;
         }
 
         /// <summary>

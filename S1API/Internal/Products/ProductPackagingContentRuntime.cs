@@ -562,50 +562,66 @@ namespace S1API.Internal.Products
                     continue;
                 }
 
-                yield return null;
-                yield return new WaitForEndOfFrame();
-
-                if (generation != _iconQueueGeneration)
-                    yield break;
-
+                ProductIconRenderRigArbiter.CaptureLease renderLease =
+                    ProductIconRenderRigArbiter.Enqueue();
                 try
                 {
-                    S1DevUtilities.IconGenerator generator =
-                        IconFactory.S1IconGenerator;
-                    bool iconCached = false;
-                    lock (IconGate)
+                    while (!ProductIconRenderRigArbiter.TryAcquire(renderLease))
                     {
-                        EnsureIconCacheMatches(generator);
-                        if (!GeneratedIcons.ContainsKey(registration.Key) &&
-                            TryGeneratePackagingIconCore(
-                                generator,
-                                registration,
-                                out Texture2D? texture) &&
-                            texture != null)
-                        {
-                            iconCached =
-                                TryCacheGeneratedIcon(registration, texture);
-                        }
+                        if (generation != _iconQueueGeneration)
+                            yield break;
+
+                        yield return null;
                     }
 
-                    if (iconCached)
-                        RefreshMatchingItemUis(registration);
-                }
-                catch (Exception exception)
-                {
-                    LogFailureOnce(
-                        registration,
-                        "composite icon",
-                        exception.Message);
+                    yield return null;
+                    yield return new WaitForEndOfFrame();
+
+                    if (generation != _iconQueueGeneration)
+                        yield break;
+
+                    try
+                    {
+                        S1DevUtilities.IconGenerator generator =
+                            IconFactory.S1IconGenerator;
+                        bool iconCached = false;
+                        lock (IconGate)
+                        {
+                            EnsureIconCacheMatches(generator);
+                            if (!GeneratedIcons.ContainsKey(registration.Key) &&
+                                TryGeneratePackagingIconCore(
+                                    generator,
+                                    registration,
+                                    out Texture2D? texture) &&
+                                texture != null)
+                            {
+                                iconCached =
+                                    TryCacheGeneratedIcon(registration, texture);
+                            }
+                        }
+
+                        if (iconCached)
+                            RefreshMatchingItemUis(registration);
+                    }
+                    catch (Exception exception)
+                    {
+                        LogFailureOnce(
+                            registration,
+                            "composite icon",
+                            exception.Message);
+                    }
+
+                    // TryGeneratePackagingIconCore restores the native rig in
+                    // its finally block. Hold the lease through a full settled
+                    // frame before the next queued subject can capture.
+                    yield return null;
+                    yield return new WaitForEndOfFrame();
                 }
                 finally
                 {
+                    ProductIconRenderRigArbiter.Release(renderLease);
                     CompleteQueuedIcon(registration.Key, generation);
                 }
-
-                // RuntimePreviewGenerator uses a shared render rig. Give its
-                // temporary model a frame to leave the rig before the next pair.
-                yield return null;
             }
         }
 

@@ -19,15 +19,21 @@ using UnityEngine;
 namespace S1API.Products
 {
     /// <summary>
-    /// Utility methods for populating storage with product instances.
+    /// Creates product instances and adds them to storage for mod-owned setup flows.
     /// </summary>
+    /// <remarks>
+    /// Discovery-based helpers read products discovered in the active save. ID-based helpers
+    /// resolve registered definitions through the item registry, while direct-creation helpers
+    /// use the supplied definition. These APIs do not register products or stock shops. Use
+    /// explicit custom-product lifecycle APIs before calling them for mod-owned definitions.
+    /// </remarks>
     public static class ProductPopulator
     {
         /// <summary>
-        /// Gets a packaging definition by its ID.
+        /// Resolves a native packaging definition by its item ID.
         /// </summary>
         /// <param name="packagingId">The ID of the packaging (e.g., "baggie", "jar", "brick").</param>
-        /// <returns>The packaging definition, or null if not found.</returns>
+        /// <returns>The live packaging definition, or <see langword="null"/> when the item is absent or not packaging.</returns>
         public static PackagingDefinition? GetPackaging(string packagingId)
         {
             var packaging = ItemManager.GetDefinition(packagingId);
@@ -44,9 +50,9 @@ namespace S1API.Products
         }
 
         /// <summary>
-        /// Gets all available product definitions from the game registry.
+        /// Gets product definitions discovered in the active save.
         /// </summary>
-        /// <returns>A list of product definitions.</returns>
+        /// <returns>A new list of discovered product definitions. It is empty when the save has discovered none.</returns>
         public static List<ProductDefinition> GetAllProductDefinitions()
         {
             Debug.Log("[ProductPopulator] Getting all product definitions from ProductManager.DiscoveredProducts");
@@ -67,7 +73,7 @@ namespace S1API.Products
         }
 
         /// <summary>
-        /// Gets weed product definitions from the game registry.
+        /// Gets discovered marijuana-family product definitions.
         /// </summary>
         /// <returns>A list of weed product definitions.</returns>
         public static List<WeedDefinition> GetWeedDefinitions()
@@ -79,7 +85,7 @@ namespace S1API.Products
         }
 
         /// <summary>
-        /// Gets meth product definitions from the game registry.
+        /// Gets discovered methamphetamine-family product definitions.
         /// </summary>
         /// <returns>A list of meth product definitions.</returns>
         public static List<MethDefinition> GetMethDefinitions()
@@ -91,7 +97,7 @@ namespace S1API.Products
         }
 
         /// <summary>
-        /// Gets cocaine product definitions from the game registry.
+        /// Gets discovered cocaine-family product definitions.
         /// </summary>
         /// <returns>A list of cocaine product definitions.</returns>
         public static List<CocaineDefinition> GetCocaineDefinitions()
@@ -103,7 +109,7 @@ namespace S1API.Products
         }
 
         /// <summary>
-        /// Gets shroom product definitions from the game registry.
+        /// Gets discovered shroom-family product definitions.
         /// </summary>
         /// <returns>A list of shroom product definitions.</returns>
         public static List<ShroomDefinition> GetShroomDefinitions()
@@ -115,12 +121,12 @@ namespace S1API.Products
         }
 
         /// <summary>
-        /// Populates a storage container with packaged products.
+        /// Fills available storage slots with packaged discovered products.
         /// </summary>
         /// <param name="storage">The storage instance to populate.</param>
         /// <param name="packagingId">The ID of the packaging to use (e.g., "baggie", "jar", "brick").</param>
         /// <param name="quantityPerItem">The quantity of each product item.</param>
-        /// <returns>The number of items successfully added.</returns>
+        /// <returns>The number of stacks added before storage fills, a product cannot fit, or setup fails.</returns>
         public static int PopulateWithPackagedProducts(StorageInstance storage, string packagingId, int quantityPerItem = 1)
         {
             Debug.Log($"[ProductPopulator] PopulateWithPackagedProducts called with packaging: {packagingId}");
@@ -190,13 +196,13 @@ namespace S1API.Products
         }
 
         /// <summary>
-        /// Populates a storage container with specific packaged products by ID.
+        /// Adds one packaged stack for each supplied product ID that resolves and fits.
         /// </summary>
         /// <param name="storage">The storage instance to populate.</param>
-        /// <param name="productIds">List of product IDs to add.</param>
+        /// <param name="productIds">Product IDs to resolve through the item registry.</param>
         /// <param name="packagingId">The ID of the packaging to use (e.g., "baggie", "jar", "brick").</param>
         /// <param name="quantityPerProduct">Quantity of each product to add (default 1).</param>
-        /// <returns>The number of items successfully added.</returns>
+        /// <returns>The number of stacks added. Unknown IDs and stacks that do not fit are skipped.</returns>
         public static int PopulateWithSpecificPackagedProducts(StorageInstance storage, List<string> productIds, string packagingId, int quantityPerProduct = 1)
         {
             if (storage == null)
@@ -245,12 +251,12 @@ namespace S1API.Products
         }
 
         /// <summary>
-        /// Creates a packaged product instance.
+        /// Creates a standard-quality packaged product instance.
         /// </summary>
         /// <param name="productDef">The product definition.</param>
         /// <param name="packaging">The packaging definition.</param>
         /// <param name="quantity">The quantity of the product.</param>
-        /// <returns>The created product instance, or null if failed.</returns>
+        /// <returns>A new product instance, or <see langword="null"/> when native packaging conversion or construction fails.</returns>
         public static ProductInstance? CreatePackagedProduct(ProductDefinition productDef, PackagingDefinition packaging, int quantity)
         {
             try
@@ -283,11 +289,11 @@ namespace S1API.Products
         }
 
         /// <summary>
-        /// Populates a storage container with non-packaged products.
+        /// Fills available storage slots with unpackaged discovered products.
         /// </summary>
         /// <param name="storage">The storage instance to populate.</param>
         /// <param name="quantityPerItem">The quantity of each product item.</param>
-        /// <returns>The number of items successfully added.</returns>
+        /// <returns>The number of stacks added before storage fills, a product cannot fit, or setup fails.</returns>
         public static int PopulateWithUnpackagedProducts(StorageInstance storage, int quantityPerItem = 1)
         {
             Debug.Log("[ProductPopulator] PopulateWithUnpackagedProducts called");
@@ -350,12 +356,12 @@ namespace S1API.Products
         }
 
         /// <summary>
-        /// Populates a storage container with specific non-packaged products by ID.
+        /// Adds one unpackaged stack for each supplied product ID that resolves and fits.
         /// </summary>
         /// <param name="storage">The storage instance to populate.</param>
-        /// <param name="productIds">List of product IDs to add.</param>
+        /// <param name="productIds">Product IDs to resolve through the item registry.</param>
         /// <param name="quantityPerProduct">Quantity of each product to add (default 1).</param>
-        /// <returns>The number of items successfully added.</returns>
+        /// <returns>The number of stacks added. Unknown IDs and stacks that do not fit are skipped.</returns>
         public static int PopulateWithSpecificProducts(StorageInstance storage, List<string> productIds, int quantityPerProduct = 1)
         {
             if (storage == null)
@@ -397,24 +403,22 @@ namespace S1API.Products
         }
 
         /// <summary>
-        /// Populates a storage container with packaged weed products in jars.
-        /// Fills all available slots with 20 units (4 jars) of each product.
+        /// Fills available storage slots with discovered products in native jar packaging.
         /// </summary>
         /// <param name="storage">The storage instance to populate.</param>
-        /// <returns>The number of items successfully added.</returns>
+        /// <returns>The number of stacks successfully added.</returns>
         public static int PopulateWithWeedProducts(StorageInstance storage)
         {
             return PopulateWithPackagedProducts(storage, "jar", 20);
         }
 
         /// <summary>
-        /// Populates a storage container by finding it from a GameObject.
-        /// Fills all slots with packaged products in the specified packaging.
+        /// Finds a storage entity on a game object or one of its children, then fills it with packaged products.
         /// </summary>
         /// <param name="gameObject">The GameObject with a StorageEntity component.</param>
         /// <param name="packagingId">The ID of the packaging to use (e.g., "baggie", "jar", "brick").</param>
         /// <param name="quantityPerItem">The quantity of each product item.</param>
-        /// <returns>The number of items successfully added, or -1 if storage not found.</returns>
+        /// <returns>The number of stacks added, or <c>-1</c> when no storage entity is found.</returns>
         public static int PopulateFromGameObject(GameObject gameObject, string packagingId, int quantityPerItem = 1)
         {
             Debug.Log($"[ProductPopulator] PopulateFromGameObject called for '{gameObject?.name}' with packaging '{packagingId}'");

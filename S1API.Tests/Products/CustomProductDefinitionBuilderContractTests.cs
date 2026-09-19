@@ -4,7 +4,6 @@ using NativeProductDefinition = Il2CppScheduleOne.Product.ProductDefinition;
 using NativeProductDefinition = ScheduleOne.Product.ProductDefinition;
 #endif
 
-using System.Runtime.CompilerServices;
 using S1API.Products;
 
 namespace S1API.Tests.Products;
@@ -185,10 +184,7 @@ public sealed class CustomProductDefinitionBuilderContractTests
 
     private static ProductDefinition CreateUninitializedTemplate()
     {
-        var native =
-            (NativeProductDefinition)RuntimeHelpers.GetUninitializedObject(
-                typeof(NativeProductDefinition));
-        GC.SuppressFinalize(native);
+        var native = TestObjectFactory.CreateUninitialized<NativeProductDefinition>();
         return new ProductDefinition(native);
     }
 }
