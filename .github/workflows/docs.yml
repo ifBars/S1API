@@ -311,18 +311,39 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
           git checkout --detach --force "$BASE_SHA"
 
-          baseline_tag="$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$BASE_SHA" 2>/dev/null || true)"
-          if [[ -n "$baseline_tag" ]] && git diff --quiet "$baseline_tag" "$BASE_SHA" -- \
-            ':(glob)S1API/**/*.cs' \
-            S1API/S1API.csproj \
-            S1API/Directory.Build.props \
-            Directory.Build.props; then
+          use_release_baseline=false
+          if [[ "$BASE_REF" == "beta" ]]; then
+            baseline_tag="$(gh release list \
+              --repo "$GITHUB_REPOSITORY" \
+              --limit 100 \
+              --json tagName,isPrerelease,publishedAt \
+              --jq '[.[] | select(.isPrerelease and (.tagName | contains("-beta.")))] | sort_by(.publishedAt) | last | .tagName // ""')"
+            if [[ -z "$baseline_tag" ]]; then
+              baseline_tag="$(gh release view \
+                --repo "$GITHUB_REPOSITORY" \
+                --json tagName \
+                --jq '.tagName')"
+            fi
+            use_release_baseline=true
+          else
+            baseline_tag="$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$BASE_SHA" 2>/dev/null || true)"
+            if [[ -n "$baseline_tag" ]] && git diff --quiet "$baseline_tag" "$BASE_SHA" -- \
+              ':(glob)S1API/**/*.cs' \
+              S1API/S1API.csproj \
+              S1API/Directory.Build.props \
+              Directory.Build.props; then
+              use_release_baseline=true
+            fi
+          fi
+
+          if [[ "$use_release_baseline" == "true" ]]; then
             baseline_version="${baseline_tag#v}"
             release_dir="$RUNNER_TEMP/s1api-api-compat/release"
             release_zip="$release_dir/S1API-Forked-${baseline_version}.zip"
