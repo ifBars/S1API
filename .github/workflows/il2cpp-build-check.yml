@@ -1,7 +1,7 @@
 name: IL2CPP Build Check
 
 env:
-  IL2CPP_ASSEMBLIES_CACHE_VERSION: v5
+  IL2CPP_ASSEMBLIES_CACHE_VERSION: v6
 
 on:
   push:
