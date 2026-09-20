@@ -1,7 +1,9 @@
 #if IL2CPPMELON
 using S1AvatarFramework = Il2CppScheduleOne.AvatarFramework;
+using S1AvatarTools = Il2CppScheduleOne.Avatar.Tools;
 #elif MONOMELON
 using S1AvatarFramework = ScheduleOne.AvatarFramework;
+using S1AvatarTools = ScheduleOne.Avatar.Tools;
 #endif
 
 using System;
@@ -26,9 +28,9 @@ namespace S1API.Internal.NPCWorkbench
         private NPCWorkbenchDraft? _pendingDraft;
         private int _settleFrames;
         private int _rendererRefreshFrames;
-        private float _yaw = 180f;
+        private float _yaw;
         private float _pitch;
-        private float _distance = 2.8f;
+        private float _distance = 3.8f;
         private bool _disposed;
 
         private NPCWorkbenchPreview(
@@ -52,13 +54,11 @@ namespace S1API.Internal.NPCWorkbench
         internal static bool TryCreate(out NPCWorkbenchPreview? preview, out string failure)
         {
             preview = null;
-            failure = "NPC avatar previews are unavailable with the Schedule I 0.4.7 avatar pipeline.";
-            return false;
-
-#if false
             failure = string.Empty;
-            var generator = S1AvatarFramework.MugshotGenerator.Instance;
-            var source = generator != null ? generator.MugshotRig : null;
+            var generator = Compatibility.AvatarCompatibility.FindMugshotGenerator();
+            var source = generator != null
+                ? Utils.ReflectionUtils.TryGetFieldOrProperty(generator, "_avatar") as S1AvatarFramework.Avatar
+                : null;
             if (source == null)
             {
                 failure = "The native avatar preview rig is not ready. Load a save, then reopen the workbench.";
@@ -78,12 +78,16 @@ namespace S1API.Internal.NPCWorkbench
 
                 var avatarObject = Object.Instantiate(source.gameObject, root.transform, false);
                 avatarObject.name = "Detached Avatar";
+                avatarObject.transform.localPosition = Vector3.zero;
+                avatarObject.transform.localRotation = Quaternion.identity;
                 avatarObject.SetActive(true);
                 SetLayerRecursively(avatarObject, layer);
 
                 var avatar = avatarObject.GetComponent<S1AvatarFramework.Avatar>();
                 if (avatar == null)
                     throw new InvalidOperationException("The cloned native preview rig has no Avatar component.");
+
+                Compatibility.AvatarCompatibility.PrepareDetachedAvatar(avatar);
 
                 avatar.SetVisible(true);
                 foreach (var renderer in avatarObject.GetComponentsInChildren<SkinnedMeshRenderer>(true))
@@ -109,13 +113,14 @@ namespace S1API.Internal.NPCWorkbench
 
                 var keyObject = new GameObject("Key Light");
                 keyObject.transform.SetParent(root.transform, false);
-                keyObject.transform.localPosition = new Vector3(-2f, 3f, -3f);
+                keyObject.transform.localPosition = new Vector3(-2f, 3f, 3f);
                 keyObject.transform.LookAt(root.transform.position + Vector3.up);
                 var key = keyObject.AddComponent<Light>();
                 key.type = LightType.Directional;
                 key.intensity = 1.25f;
                 key.color = new Color(1f, 0.88f, 0.76f);
                 key.cullingMask = 1 << layer;
+                key.shadows = LightShadows.None;
 
                 var fillObject = new GameObject("Fill Light");
                 fillObject.transform.SetParent(root.transform, false);
@@ -125,6 +130,7 @@ namespace S1API.Internal.NPCWorkbench
                 fill.intensity = 0.65f;
                 fill.color = new Color(0.55f, 0.72f, 1f);
                 fill.cullingMask = 1 << layer;
+                fill.shadows = LightShadows.None;
 
                 preview = new NPCWorkbenchPreview(root, avatar, camera, texture, layer);
                 return true;
@@ -142,7 +148,6 @@ namespace S1API.Internal.NPCWorkbench
                     Object.Destroy(root);
                 return false;
             }
-#endif
         }
 
         internal void ScheduleApply(NPCWorkbenchDraft draft)
@@ -195,9 +200,9 @@ namespace S1API.Internal.NPCWorkbench
 
         internal void ResetView()
         {
-            _yaw = 180f;
+            _yaw = 0f;
             _pitch = 0f;
-            _distance = 2.8f;
+            _distance = 3.8f;
             SetPose(0);
             UpdateCamera();
         }
@@ -226,6 +231,8 @@ namespace S1API.Internal.NPCWorkbench
         private void RefreshRenderers()
         {
             SetLayerRecursively(_avatar.gameObject, _renderLayer);
+            foreach (var lod in _avatar.gameObject.GetComponentsInChildren<LODGroup>(true))
+                lod.ForceLOD(0);
             foreach (var renderer in _avatar.gameObject.GetComponentsInChildren<SkinnedMeshRenderer>(true))
                 renderer.updateWhenOffscreen = true;
         }

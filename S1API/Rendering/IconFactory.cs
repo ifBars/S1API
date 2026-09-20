@@ -69,7 +69,7 @@ namespace S1API.Rendering
         /// INTERNAL: Reference to the game's MugshotGenerator instance.
         /// </summary>
         internal static S1AvatarTools.MugshotGenerator? S1MugshotGenerator =>
-            UnityEngine.Object.FindObjectOfType<S1AvatarTools.MugshotGenerator>();
+            global::S1API.Internal.Compatibility.AvatarCompatibility.FindMugshotGenerator();
 
         /// <summary>
         /// Generates a preview texture for the specified model.
@@ -795,8 +795,11 @@ namespace S1API.Rendering
                 yield return new WaitForSeconds(0.05f);
             }
 #else
+            var renderingEpoch = global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch;
             while (true)
             {
+                if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
+                    yield break;
                 AccessoryIconRequest? next;
                 lock (_accessoryIconQueueLock)
                 {
@@ -809,10 +812,86 @@ namespace S1API.Rendering
                     next = _accessoryIconQueue.Dequeue();
                 }
 
-                Logger.Warning(
-                    "Accessory icon generation is unavailable with the Schedule I 0.4.7 avatar pipeline.");
-                next.Callback?.Invoke(null);
-                yield return null;
+                var generator = S1MugshotGenerator;
+                while (generator == null)
+                {
+                    if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
+                        yield break;
+                    yield return null;
+                    generator = S1MugshotGenerator;
+                }
+
+                while (!global::S1API.Internal.Compatibility.AvatarCompatibility
+                           .TryAcquireMugshotGenerator(generator))
+                {
+                    if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
+                        yield break;
+                    yield return null;
+                }
+
+                if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
+                {
+                    global::S1API.Internal.Compatibility.AvatarCompatibility.ReleaseMugshotGenerator();
+                    yield break;
+                }
+
+                var settings = CreateMinimalAvatarSettings(next.AccessoryPath, next.AccessoryColor);
+                global::S1API.Internal.Compatibility.AvatarCompatibility.CreateRenderInputs(
+                    settings,
+                    out var appearance,
+                    out var outfit);
+
+                bool completed = false;
+                Texture2D? capturedTexture = null;
+                try
+                {
+                    global::S1API.Internal.Compatibility.AvatarCompatibility.StartPortraitCapture(
+                        generator,
+                        appearance,
+                        outfit,
+                        (Action<Texture2D>)(texture =>
+                        {
+                            capturedTexture = texture;
+                            completed = true;
+                        }));
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Failed to start accessory icon capture: {ex.Message}");
+                    completed = true;
+                }
+
+                var waitFrames = 0;
+                while (!completed && waitFrames++ < 300)
+                    yield return null;
+
+                if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
+                {
+                    UnityEngine.Object.Destroy(outfit);
+                    UnityEngine.Object.Destroy(settings);
+                    yield break;
+                }
+
+                global::S1API.Internal.Compatibility.AvatarCompatibility.ReleaseMugshotGenerator();
+                UnityEngine.Object.Destroy(outfit);
+                UnityEngine.Object.Destroy(settings);
+                capturedTexture?.Apply();
+                if (capturedTexture != null)
+                {
+                    var source = capturedTexture;
+                    capturedTexture = global::S1API.Internal.Compatibility.AvatarCompatibility
+                        .ResizePortrait(source, next.IconSize);
+                    UnityEngine.Object.Destroy(source);
+                }
+                if (capturedTexture == null || !HasVisibleContent(capturedTexture))
+                {
+                    Logger.Error($"Failed to generate accessory icon for '{next.AccessoryPath}'.");
+                    next.Callback?.Invoke(null);
+                    continue;
+                }
+
+                next.Callback?.Invoke(capturedTexture);
+                yield return new WaitForSeconds(0.05f);
             }
 #endif
         }
@@ -846,6 +925,15 @@ namespace S1API.Rendering
             });
 
             return settings;
+        }
+
+        internal static void ResetAccessoryIconState()
+        {
+            lock (_accessoryIconQueueLock)
+            {
+                _accessoryIconQueue.Clear();
+                _isProcessingAccessoryIcons = false;
+            }
         }
 
         /// <summary>
