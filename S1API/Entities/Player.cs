@@ -284,7 +284,10 @@ namespace S1API.Entities
         /// </summary>
         public BasicAvatarSettings? GetCurrentBasicAvatarSettings()
         {
-            return null;
+            var appearance = S1Player.CurrentAppearance;
+            return appearance == null
+                ? null
+                : BasicAvatarSettings.FromPlayerAppearance(appearance);
         }
 
         /// <summary>

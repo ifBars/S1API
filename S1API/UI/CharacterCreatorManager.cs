@@ -78,7 +78,14 @@ namespace S1API.UI
             get
             {
                 EnsureInitialized();
-                return null;
+                if (_s1Creator == null || !_s1Creator.IsOpen)
+                    return null;
+
+                var state = ReflectionUtils.TryGetFieldOrProperty(_s1Creator, "_currentState")
+                    as S1Customization.CharacterCreatorState;
+                return state?.Appearance == null
+                    ? null
+                    : BasicAvatarSettings.FromPlayerAppearance(state.Appearance);
             }
         }
 
