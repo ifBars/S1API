@@ -1016,6 +1016,15 @@ namespace S1API.Entities
                 NormalizeBaseEmployeePrefab(prefabNO.gameObject, sourcePrefabName, rootRole);
                 prefabNO.gameObject.name = prefabName;
 
+                // Some native plain NPC prefabs have no framework data object. Attach one
+                // before ConfigurePrefab applies identity and other saved defaults.
+                if (rootRole == NpcRootRole.Plain)
+                {
+                    S1NPCs.NPC? plainNpc = FindPlainNpcComponent(prefabNO.gameObject);
+                    if (plainNpc != null && NPCDataAccess.GetDataObject(plainNpc) == null)
+                        NPCDataAccess.AssignNewData(plainNpc, rootRole, plainNpc);
+                }
+
                 // Ensure template prefab does not execute runtime logic or remain in NPC registry
                 try
                 {
