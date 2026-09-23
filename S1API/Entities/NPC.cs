@@ -3722,8 +3722,11 @@ namespace S1API.Entities
             }
 
 
-            if (npcBehaviour.ConsumeProductBehaviour.onConsumeDone == null)
-                npcBehaviour.ConsumeProductBehaviour.onConsumeDone = new UnityEvent();
+            // Older game builds expose this UnityEvent; f6 replaced it with a product-consumed event.
+            var consumeProductBehaviour = npcBehaviour.ConsumeProductBehaviour;
+            if (consumeProductBehaviour.GetType().GetMember("onConsumeDone", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Length > 0
+                && GetGameMember(consumeProductBehaviour, "onConsumeDone") == null)
+                SetGameMember(consumeProductBehaviour, "onConsumeDone", new UnityEvent());
 
             // UnconsciousBehaviour and DeadBehaviour are required by NPC.IsConscious
             // which is checked during pickpocketing and other interactions
