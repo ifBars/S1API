@@ -1149,6 +1149,18 @@ namespace S1API.Internal.Patches
                 {
                     identity.ApplyCriticalIdentityBeforeAwake(__instance!);
                 }
+
+                bool isCustomNpc = IsS1ApiCustomNpcComponent(__instance!);
+                if (!isCustomNpc)
+                {
+                    // Legacy contacts can be activated without the prefab identity component.
+                    string npcId = NPCDataAccess.GetId(__instance!);
+                    isCustomNpc = !string.IsNullOrWhiteSpace(npcId) && NPC.All.Any(npc =>
+                        npc.IsCustomNPC && string.Equals(npc.ID, npcId, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (isCustomNpc)
+                    NPCDataAccess.PrepareForNativeAwake(__instance!);
             }
             catch (Exception ex)
             {

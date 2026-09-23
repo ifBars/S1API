@@ -90,6 +90,14 @@ namespace S1API.Internal.Entities
             SetCurrentData(npc, data);
         }
 
+        internal static void PrepareForNativeAwake(S1NPCs.NPC npc)
+        {
+            // Construction reads NPCData while the object is inactive. Native Awake must
+            // initialize it from the configured data object without deinitializing first.
+            if (GetDataObject(npc) != null)
+                SetCurrentData(npc, null!);
+        }
+
         internal static bool ApplyIdentity(
             S1NPCs.NPC npc,
             string? id,
