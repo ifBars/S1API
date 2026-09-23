@@ -37,7 +37,11 @@ namespace S1API.Internal.Deliveries
             if (previous == current)
                 return;
 
-            LoadingDock.Wrap(native).NotifyStaticOccupantChanged(
+            var dock = LoadingDock.Wrap(native);
+            if (!dock.HasStaticOccupantChangedSubscribers)
+                return;
+
+            dock.NotifyStaticOccupantChanged(
                 VehicleRegistry.Wrap(previous),
                 VehicleRegistry.Wrap(current));
         }

@@ -144,6 +144,8 @@ namespace S1API.Deliveries
         /// </summary>
         public event Action<LandVehicle?, LandVehicle?>? StaticOccupantChanged;
 
+        internal bool HasStaticOccupantChangedSubscribers => StaticOccupantChanged != null;
+
         /// <summary>
         /// Raised after the accepting-items state changes.
         /// </summary>
