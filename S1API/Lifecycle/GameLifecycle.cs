@@ -30,6 +30,14 @@ namespace S1API.Lifecycle
     public static class GameLifecycle
     {
         private static bool _initialized;
+        private static S1Persistence.LoadManager? _loadManager;
+        private static S1Persistence.SaveManager? _saveManager;
+        private static UnityAction? _preLoadListener;
+        private static UnityAction? _loadCompleteListener;
+        private static UnityAction? _preSceneChangeListener;
+        private static UnityAction? _saveInfoLoadedListener;
+        private static UnityAction? _saveStartListener;
+        private static UnityAction? _saveCompleteListener;
 
         /// <summary>
         /// Fired before the game begins loading saved data.
@@ -151,21 +159,30 @@ namespace S1API.Lifecycle
                 return;
 
 #if IL2CPPMELON
-            loadManager.onPreLoad.AddListener((UnityAction)InvokeOnPreLoad);
-            loadManager.onLoadComplete.AddListener((UnityAction)InvokeOnLoadComplete);
-            loadManager.onPreSceneChange.AddListener((UnityAction)InvokeOnPreSceneChange);
-            loadManager.onSaveInfoLoaded.AddListener((UnityAction)InvokeOnSaveInfoLoaded);
-            saveManager.onSaveStart.AddListener((UnityAction)InvokeOnSaveStart);
-            saveManager.onSaveComplete.AddListener((UnityAction)InvokeOnSaveComplete);
+            _preLoadListener ??= (UnityAction)InvokeOnPreLoad;
+            _loadCompleteListener ??= (UnityAction)InvokeOnLoadComplete;
+            _preSceneChangeListener ??= (UnityAction)InvokeOnPreSceneChange;
+            _saveInfoLoadedListener ??= (UnityAction)InvokeOnSaveInfoLoaded;
+            _saveStartListener ??= (UnityAction)InvokeOnSaveStart;
+            _saveCompleteListener ??= (UnityAction)InvokeOnSaveComplete;
 #elif MONOMELON
-            loadManager.onPreLoad.AddListener(new UnityAction(InvokeOnPreLoad));
-            loadManager.onLoadComplete.AddListener(new UnityAction(InvokeOnLoadComplete));
-            loadManager.onPreSceneChange.AddListener(new UnityAction(InvokeOnPreSceneChange));
-            loadManager.onSaveInfoLoaded.AddListener(new UnityAction(InvokeOnSaveInfoLoaded));
-            saveManager.onSaveStart.AddListener(new UnityAction(InvokeOnSaveStart));
-            saveManager.onSaveComplete.AddListener(new UnityAction(InvokeOnSaveComplete));
+            _preLoadListener ??= new UnityAction(InvokeOnPreLoad);
+            _loadCompleteListener ??= new UnityAction(InvokeOnLoadComplete);
+            _preSceneChangeListener ??= new UnityAction(InvokeOnPreSceneChange);
+            _saveInfoLoadedListener ??= new UnityAction(InvokeOnSaveInfoLoaded);
+            _saveStartListener ??= new UnityAction(InvokeOnSaveStart);
+            _saveCompleteListener ??= new UnityAction(InvokeOnSaveComplete);
 #endif
 
+            loadManager.onPreLoad.AddListener(_preLoadListener);
+            loadManager.onLoadComplete.AddListener(_loadCompleteListener);
+            loadManager.onPreSceneChange.AddListener(_preSceneChangeListener);
+            loadManager.onSaveInfoLoaded.AddListener(_saveInfoLoadedListener);
+            saveManager.onSaveStart.AddListener(_saveStartListener);
+            saveManager.onSaveComplete.AddListener(_saveCompleteListener);
+
+            _loadManager = loadManager;
+            _saveManager = saveManager;
             _initialized = true;
         }
 
@@ -175,6 +192,22 @@ namespace S1API.Lifecycle
         /// </summary>
         internal static void Reset()
         {
+            if (_loadManager != null)
+            {
+                _loadManager.onPreLoad.RemoveListener(_preLoadListener);
+                _loadManager.onLoadComplete.RemoveListener(_loadCompleteListener);
+                _loadManager.onPreSceneChange.RemoveListener(_preSceneChangeListener);
+                _loadManager.onSaveInfoLoaded.RemoveListener(_saveInfoLoadedListener);
+            }
+
+            if (_saveManager != null)
+            {
+                _saveManager.onSaveStart.RemoveListener(_saveStartListener);
+                _saveManager.onSaveComplete.RemoveListener(_saveCompleteListener);
+            }
+
+            _loadManager = null;
+            _saveManager = null;
             _initialized = false;
         }
 
