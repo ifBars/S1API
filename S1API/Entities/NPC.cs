@@ -1431,6 +1431,32 @@ namespace S1API.Entities
                 if (convo == null)
                     return;
 
+                string contactName = GetNpcFullName();
+#if IL2CPPMELON
+                var sender = convo._sender;
+#else
+                if (Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(convo, "_sender")
+                    is not S1Messaging.MessageContactInfo sender)
+                    return;
+#endif
+                if (!string.IsNullOrWhiteSpace(contactName) &&
+                    (!string.Equals(sender.Name, contactName, StringComparison.Ordinal) || sender.Icon != sprite))
+                {
+                    var updatedSender = new S1Messaging.MessageContactInfo(
+                        contactName,
+                        ID,
+                        sprite,
+                        sender.CanConversationBeHidden,
+                        sender.DisplayRelationshipInfo);
+#if IL2CPPMELON
+                    convo._sender = updatedSender;
+#else
+                    if (!Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(convo, "_sender", updatedSender))
+                        return;
+#endif
+                    convo.SetIsKnown(convo.IsSenderKnown);
+                }
+
                 var entryRect = convo.entry ?? ResolveConversationRect(convo, "entry");
                 var containerRect = ResolveConversationRect(convo, "container");
 
