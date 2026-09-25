@@ -31,6 +31,7 @@ namespace S1API.Lifecycle
     {
         private static bool _initialized;
         private static S1Persistence.LoadManager? _loadManager;
+        private static S1Persistence.LoadManager? _preSceneChangeManager;
         private static S1Persistence.SaveManager? _saveManager;
         private static UnityAction? _preLoadListener;
         private static UnityAction? _loadCompleteListener;
@@ -176,7 +177,14 @@ namespace S1API.Lifecycle
 
             loadManager.onPreLoad.AddListener(_preLoadListener);
             loadManager.onLoadComplete.AddListener(_loadCompleteListener);
-            loadManager.onPreSceneChange.AddListener(_preSceneChangeListener);
+            if (_preSceneChangeManager != loadManager)
+            {
+                if (_preSceneChangeManager != null)
+                    _preSceneChangeManager.onPreSceneChange.RemoveListener(_preSceneChangeListener);
+
+                loadManager.onPreSceneChange.AddListener(_preSceneChangeListener);
+                _preSceneChangeManager = loadManager;
+            }
             loadManager.onSaveInfoLoaded.AddListener(_saveInfoLoadedListener);
             saveManager.onSaveStart.AddListener(_saveStartListener);
             saveManager.onSaveComplete.AddListener(_saveCompleteListener);
@@ -196,7 +204,6 @@ namespace S1API.Lifecycle
             {
                 _loadManager.onPreLoad.RemoveListener(_preLoadListener);
                 _loadManager.onLoadComplete.RemoveListener(_loadCompleteListener);
-                _loadManager.onPreSceneChange.RemoveListener(_preSceneChangeListener);
                 _loadManager.onSaveInfoLoaded.RemoveListener(_saveInfoLoadedListener);
             }
 
