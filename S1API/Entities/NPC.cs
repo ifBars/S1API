@@ -1419,6 +1419,9 @@ namespace S1API.Entities
             }
         }
 
+        /// <summary>
+        /// Refreshes this NPC's name and icon in its message conversation and visible phone entries.
+        /// </summary>
         public void RefreshMessagingIcons()
         {
             try
@@ -1430,6 +1433,12 @@ namespace S1API.Entities
                 var convo = S1NPC?.MSGConversation;
                 if (convo == null)
                     return;
+
+                var entryRect = convo.entry ?? ResolveConversationRect(convo, "entry");
+                var containerRect = ResolveConversationRect(convo, "container");
+
+                TryApplyIconToRect(entryRect, sprite);
+                TryApplyIconToRect(containerRect, sprite);
 
                 string contactName = GetNpcFullName();
 #if IL2CPPMELON
@@ -1457,11 +1466,6 @@ namespace S1API.Entities
                     convo.SetIsKnown(convo.IsSenderKnown);
                 }
 
-                var entryRect = convo.entry ?? ResolveConversationRect(convo, "entry");
-                var containerRect = ResolveConversationRect(convo, "container");
-
-                TryApplyIconToRect(entryRect, sprite);
-                TryApplyIconToRect(containerRect, sprite);
             }
             catch (Exception ex)
             {
