@@ -1160,7 +1160,10 @@ namespace S1API.Internal.Patches
                 }
 
                 if (isCustomNpc)
+                {
+                    FindWrapperForS1Npc(__instance)?.PreserveConversationBeforeNativeAwake();
                     NPCDataAccess.PrepareForNativeAwake(__instance!);
+                }
             }
             catch (Exception ex)
             {

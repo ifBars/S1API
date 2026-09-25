@@ -4373,18 +4373,7 @@ namespace S1API.Entities
                     return false;
                 }
 
-                var conversation = S1NPC.MSGConversation;
-                if (conversation != null && (conversation.MessageHistoryCount > 0 || conversation.AreResponsesActive))
-                {
-                    try
-                    {
-                        _conversationBeforeNetworkSpawn = conversation.GetSaveData();
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Warning($"[NPC] Could not preserve conversation before spawning '{GetSafeNpcId()}': {ex.Message}");
-                    }
-                }
+                PreserveConversationBeforeNativeAwake();
 
                 NPCDataAccess.PrepareForRuntime(S1NPC);
                 RestoreLoadedRelationship();
@@ -4411,6 +4400,22 @@ namespace S1API.Entities
             {
                 Logger.Warning($"[S1API] Failed to prepare NPC runtime data before spawn: {ex.Message}");
                 return false;
+            }
+        }
+
+        internal void PreserveConversationBeforeNativeAwake()
+        {
+            var conversation = S1NPC.MSGConversation;
+            if (_conversationBeforeNetworkSpawn != null || conversation == null)
+                return;
+
+            try
+            {
+                _conversationBeforeNetworkSpawn = conversation.GetSaveData();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[NPC] Could not preserve conversation before spawning '{GetSafeNpcId()}': {ex.Message}");
             }
         }
 
