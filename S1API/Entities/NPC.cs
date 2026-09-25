@@ -28,6 +28,7 @@ using S1NPCsSchedules = Il2CppScheduleOne.NPCs.Schedules;
 using S1Registry = Il2CppScheduleOne.Registry;
 using S1Money = Il2CppScheduleOne.Money;
 using ConversationCategoryList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.Messaging.EConversationCategory>;
+using S1MessageConversationData = Il2CppScheduleOne.Persistence.Datas.MSGConversationData;
 #elif MONOMELON
 using NativeVehicleLifecycleAction = System.Action<ScheduleOne.Vehicles.LandVehicle>;
 using S1DevUtilities = ScheduleOne.DevUtilities;
@@ -58,6 +59,7 @@ using S1NPCsSchedules = ScheduleOne.NPCs.Schedules;
 using S1Registry = ScheduleOne.Registry;
 using S1Money = ScheduleOne.Money;
 using ConversationCategoryList = System.Collections.Generic.List<ScheduleOne.Messaging.EConversationCategory>;
+using S1MessageConversationData = ScheduleOne.Persistence.Datas.MSGConversationData;
 #endif
 
 #if IL2CPPMELON
@@ -4308,6 +4310,7 @@ namespace S1API.Entities
         private NPCSupplier? _supplier;
         private NPCRelationship? _relationship;
         private NPCMessaging? _messaging;
+        private S1MessageConversationData? _conversationBeforeNetworkSpawn;
         private ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>?
             _noticedDrugDealingRegistrations;
         private ManagedEventRegistrationTracker<AwarenessEventRegistration<S1PlayerScripts.Player>>?
@@ -4360,6 +4363,7 @@ namespace S1API.Entities
 
         internal bool PrepareForNetworkSpawn()
         {
+            _conversationBeforeNetworkSpawn = null;
             try
             {
                 if (!TryValidateNativeAwakeReferences(out string diagnostic))
@@ -4367,6 +4371,19 @@ namespace S1API.Entities
                     Logger.Error(
                         $"[NPC] Refusing to spawn custom NPC '{GetSafeNpcId()}' because its native Awake reference graph is invalid: {diagnostic}");
                     return false;
+                }
+
+                var conversation = S1NPC.MSGConversation;
+                if (conversation != null && (conversation.MessageHistoryCount > 0 || conversation.AreResponsesActive))
+                {
+                    try
+                    {
+                        _conversationBeforeNetworkSpawn = conversation.GetSaveData();
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warning($"[NPC] Could not preserve conversation before spawning '{GetSafeNpcId()}': {ex.Message}");
+                    }
                 }
 
                 NPCDataAccess.PrepareForRuntime(S1NPC);
@@ -4463,6 +4480,19 @@ namespace S1API.Entities
                 S1NPC.SetVisible(ShouldBeVisibleAfterSpawn(), networked: false);
 
                 EnsureMessageConversationReady(resetDefaults: false);
+                var savedConversation = _conversationBeforeNetworkSpawn;
+                _conversationBeforeNetworkSpawn = null;
+                if (savedConversation != null && S1NPC.MSGConversation != null && S1NPC.MSGConversation.MessageHistoryCount == 0)
+                {
+                    try
+                    {
+                        S1NPC.MSGConversation.Load(savedConversation);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warning($"[NPC] Could not restore conversation after spawning '{GetSafeNpcId()}': {ex.Message}");
+                    }
+                }
                 
                 // If we're the server, also broadcast to clients via RPC after a delay
                 // This ensures the NPC is fully spawned before the RPC is sent
