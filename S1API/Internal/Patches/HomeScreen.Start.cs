@@ -5,6 +5,7 @@ using S1API.Internal.Utils;
 using S1API.Internal.Abstraction;
 using S1API.PhoneApp;
 using S1API.Logging;
+using S1API.ExternalHosting;
 
 #if (IL2CPPMELON)
 using Il2CppScheduleOne.UI.Phone;
@@ -41,6 +42,8 @@ namespace S1API.Internal.Patches
             if (!string.Equals(SceneManager.GetActiveScene().name, "Main", StringComparison.OrdinalIgnoreCase))
                 return;
 
+            // The phone registry retains old instances across scene loads; external hosts must not.
+            ExternalAppCatalog.Clear(ExternalAppFamily.Phone);
             // Re-register all PhoneApps
             var phoneApps = ReflectionUtils.GetDerivedClasses<PhoneApp.PhoneApp>();
             foreach (var type in phoneApps)
