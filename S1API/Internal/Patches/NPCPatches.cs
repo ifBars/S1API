@@ -1305,6 +1305,7 @@ namespace S1API.Internal.Patches
                     apiNpc.CreateInternal();
                 else
                 {
+                    MelonCoroutines.Start(NPCConversationLifecycle.RebindWhenSpawned(__instance));
                     apiNpc.CreateFromClientNetworkSpawn();
                 }
                 
