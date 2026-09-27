@@ -36,12 +36,10 @@ The recommended way to get S1API is through official releases:
 
 These releases are thoroughly tested and recommended for both mod users and developers.
 
-### **Experimental/Bleeding Edge Builds**
-For mod developers or users seeking the latest features and fixes before official releases, experimental builds are automatically generated via GitHub Actions:
-- **IL2CPP Build**: Available as artifacts from the [IL2CPP Build Check workflow](https://github.com/ifBars/S1API/actions/workflows/il2cpp-build-check.yml)
-- **Mono Build**: Available as artifacts from the [Documentation workflow](https://github.com/ifBars/S1API/actions/workflows/docs.yml)
+### **Beta Game Pre-releases**
+When Schedule One updates on its beta game branch, S1API publishes matching beta builds as **GitHub pre-releases**. Find them on the [GitHub Releases page](https://github.com/ifBars/S1API/releases) by looking for a release marked **Pre-release** (for example, `S1API 3.1.0-beta.1`). Download the attached `S1API-Forked-...zip` asset and install it like a stable release.
 
-⚠️ **Note**: These artifacts represent the bleeding edge of development and may contain untested features or bugs. Use at your own risk. Stable releases remain the recommended choice for most users.
+These beta game pre-releases are published only on GitHub. They are separate from downloadable files under a GitHub Actions workflow run's **Artifacts** section, which are temporary CI outputs and are not the beta release package. Beta pre-releases are for matching beta game builds and may be unstable; stable releases remain recommended for most users.
 
 ## What Does it Do?
 * Allows creation of new game elements (quests, npcs, etc.)

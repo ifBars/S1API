@@ -38,6 +38,7 @@ Each release branch preserves the source for exactly one shipped version.
 - Synchronize it from the intended stable release base before starting a new prerelease series.
 - Use versions such as `X.Y.Z-beta.N` and tags such as `vX.Y.Z-beta.N`.
 - Beta builds use the beta game-assembly branches and publish only as GitHub prereleases.
+- The downloadable beta package is attached to the GitHub Release as `S1API-Forked-x.y.z-beta.n.zip`. It is not a GitHub Actions workflow artifact; workflow-run artifacts are separate CI outputs.
 - A stable patch does not need to pass through `beta` unless public beta validation is intentionally part of that release.
 
 ## Tag Format
