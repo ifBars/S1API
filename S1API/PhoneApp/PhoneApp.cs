@@ -6,6 +6,7 @@ using MelonLoader;
 using S1API.Internal.Abstraction;
 using S1API.Internal.Patches;
 using S1API.Internal.Utils;
+using S1API.ExternalHosting;
 using UnityEngine;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;
@@ -174,6 +175,8 @@ namespace S1API.PhoneApp
         protected override void OnCreated()
         {
             PhoneAppRegistry.Register(this);
+            ExternalAppCatalog.Register(ExternalAppFamily.Phone, this, () => AppName, () => AppTitle,
+                () => IconSprite);
         }
 
         /// <summary>
@@ -186,6 +189,7 @@ namespace S1API.PhoneApp
                 return;
 
             _isDestroying = true;
+            ExternalAppCatalog.Unregister(this);
 
             if (_appPanel != null)
             {
