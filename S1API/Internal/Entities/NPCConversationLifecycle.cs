@@ -10,12 +10,32 @@ using S1NPCs = ScheduleOne.NPCs;
 using ConversationRegistry = System.Collections.Generic.Dictionary<string, ScheduleOne.Messaging.MSGConversation>;
 #endif
 using System;
+using System.Collections;
 using S1API.Internal.Utils;
 
 namespace S1API.Internal.Entities
 {
     internal static class NPCConversationLifecycle
     {
+        internal static IEnumerator RebindWhenSpawned(S1NPCs.NPC npc)
+        {
+            // Client Start can precede FishNet assigning the final object ID.
+            while (npc != null && npc.NetworkObject != null && !npc.NetworkObject.IsSpawned)
+                yield return null;
+
+            if (npc == null)
+                yield break;
+
+            try
+            {
+                RebindAfterSpawn(npc);
+            }
+            catch (Exception ex)
+            {
+                MelonLoader.MelonLogger.Warning($"[NPC] Could not rebind client conversation for '{npc.ID}': {ex.Message}");
+            }
+        }
+
         internal static void RebindAfterSpawn(S1NPCs.NPC npc)
         {
             var conversation = npc.MSGConversation;
@@ -24,10 +44,7 @@ namespace S1API.Internal.Entities
 
             // Construction can create a conversation before FishNet assigns an object ID.
             // Keep its UI, history and subscriptions, but use the ID native Awake would assign.
-            string previousId = conversation.ConversationId;
             string spawnedId = "messageconversation_" + npc.NetworkObject.ObjectId;
-            if (string.Equals(previousId, spawnedId, StringComparison.Ordinal))
-                return;
 
             var manager = S1DevUtilities.NetworkSingleton<S1Messaging.MessagingManager>.Instance;
             if (manager == null)
@@ -51,11 +68,15 @@ namespace S1API.Internal.Entities
             string spawnedId)
         {
             string previousId = conversation.ConversationId;
-            if (string.Equals(previousId, spawnedId, StringComparison.Ordinal))
-                return;
-
             if (registry.TryGetValue(spawnedId, out var current) && !conversation.Equals(current))
                 throw new InvalidOperationException($"A different conversation is already registered for '{spawnedId}'.");
+
+            if (string.Equals(previousId, spawnedId, StringComparison.Ordinal))
+            {
+                if (current == null)
+                    registry[spawnedId] = conversation;
+                return;
+            }
 
             if (!ReflectionUtils.TrySetFieldOrProperty(conversation, nameof(conversation.ConversationId), spawnedId))
                 throw new InvalidOperationException("Could not update the conversation's native network ID.");

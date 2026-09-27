@@ -3480,6 +3480,7 @@ namespace S1API.Entities
 
         internal void CreateFromClientNetworkSpawn()
         {
+            MelonCoroutines.Start(NPCConversationLifecycle.RebindWhenSpawned(S1NPC));
             _clientNetworkSpawnHydrationDepth++;
             try
             {

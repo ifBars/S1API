@@ -49,6 +49,30 @@ public sealed class NPCConversationRegistrationTests
     }
 
     [Fact]
+    public void MatchingIdRestoresMissingRegistration()
+    {
+        var conversation = CreateConversation("messageconversation_42");
+        var registry = new Dictionary<string, MSGConversation>();
+
+        NPCConversationLifecycle.RebindConversation(conversation, registry, conversation.ConversationId);
+
+        Assert.Same(conversation, Assert.Single(registry).Value);
+    }
+
+    [Fact]
+    public void MatchingIdStillRejectsAnotherConversationsRegistration()
+    {
+        var conversation = CreateConversation("messageconversation_42");
+        var other = CreateConversation(conversation.ConversationId);
+        var registry = new Dictionary<string, MSGConversation> { [other.ConversationId] = other };
+
+        Assert.Throws<InvalidOperationException>(() =>
+            NPCConversationLifecycle.RebindConversation(conversation, registry, conversation.ConversationId));
+
+        Assert.Same(other, Assert.Single(registry).Value);
+    }
+
+    [Fact]
     public void ConflictingSpawnRegistrationLeavesBothConversationsUntouched()
     {
         var conversation = CreateConversation("messageconversation_65535");
