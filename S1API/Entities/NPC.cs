@@ -4445,7 +4445,7 @@ namespace S1API.Entities
                         ? "Avatar"
                         : "Avatar(active)");
             }
-            else if (activeAvatar.GetComponentInChildren<S1VoiceOver.VOEmitter>() == null)
+            else if (activeAvatar.GetComponentInChildren<S1VoiceOver.VOEmitter>(true) == null)
             {
                 missing.Add(nameof(S1VoiceOver.VOEmitter));
             }
@@ -4485,6 +4485,14 @@ namespace S1API.Entities
                 S1NPC.SetVisible(ShouldBeVisibleAfterSpawn(), networked: false);
 
                 EnsureMessageConversationReady(resetDefaults: false);
+                try
+                {
+                    NPCConversationLifecycle.RebindAfterSpawn(S1NPC);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"[NPC] Could not rebind conversation after spawning '{GetSafeNpcId()}': {ex.Message}");
+                }
                 var savedConversation = _conversationBeforeNetworkSpawn;
                 _conversationBeforeNetworkSpawn = null;
                 if (savedConversation != null && S1NPC.MSGConversation != null && S1NPC.MSGConversation.MessageHistoryCount == 0)

@@ -1140,8 +1140,9 @@ namespace S1API.Internal.Patches
         [HarmonyPatch(typeof(S1NPCs.NPC), "Awake")]
         [HarmonyPrefix]
         [HarmonyPriority(Priority.First)]
-        private static bool NPC_Awake_Prefix(S1NPCs.NPC __instance)
+        private static bool NPC_Awake_Prefix(S1NPCs.NPC __instance, out NPCNativeAwakeScope? __state)
         {
+            __state = null;
             try
             {
                 var identity = __instance != null ? __instance.GetComponent<NPCPrefabIdentity>() : null;
@@ -1162,6 +1163,8 @@ namespace S1API.Internal.Patches
                 if (isCustomNpc)
                 {
                     FindWrapperForS1Npc(__instance)?.PreserveConversationBeforeNativeAwake();
+                    __state = new NPCNativeAwakeScope(__instance!);
+                    __state.Prepare();
                     NPCDataAccess.PrepareForNativeAwake(__instance!);
                 }
             }
@@ -1171,6 +1174,13 @@ namespace S1API.Internal.Patches
             }
 
             return true;
+        }
+
+        [HarmonyPatch(typeof(S1NPCs.NPC), "Awake")]
+        [HarmonyFinalizer]
+        private static void NPC_Awake_Finalizer(NPCNativeAwakeScope? __state)
+        {
+            __state?.Restore();
         }
 
         [HarmonyPatch(typeof(S1Economy.Dealer), "Awake")]
@@ -1295,6 +1305,7 @@ namespace S1API.Internal.Patches
                     apiNpc.CreateInternal();
                 else
                 {
+                    MelonCoroutines.Start(NPCConversationLifecycle.RebindWhenSpawned(__instance));
                     apiNpc.CreateFromClientNetworkSpawn();
                 }
                 
