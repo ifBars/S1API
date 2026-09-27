@@ -82,6 +82,71 @@ public sealed class ExternalAppCatalogTests : IDisposable
     }
 
     [Fact]
+    public void RefreshTracksOptInAndOptOutAndOnlyNotifiesForChanges()
+    {
+        var host = new SampleHost { AllowExternalHosting = false };
+        ExternalAppCatalog.Register(ExternalAppFamily.Phone, host, "sample", "Sample", () => null);
+        int changes = 0;
+        void OnChanged() => changes++;
+        ExternalAppCatalog.Changed += OnChanged;
+        try
+        {
+            ExternalAppCatalog.Refresh(host);
+            Assert.Empty(ExternalAppCatalog.GetAll());
+            Assert.Equal(0, changes);
+
+            host.AllowExternalHosting = true;
+            ExternalAppCatalog.Refresh(host);
+            Assert.Same(host, Assert.Single(ExternalAppCatalog.GetAll()).Host);
+            Assert.Equal(1, changes);
+            ExternalAppCatalog.Refresh(host);
+            Assert.Equal(1, changes);
+
+            host.AllowExternalHosting = false;
+            ExternalAppCatalog.Refresh(host);
+            Assert.Empty(ExternalAppCatalog.GetAll());
+            Assert.Equal(2, changes);
+        }
+        finally { ExternalAppCatalog.Changed -= OnChanged; }
+    }
+
+    [Fact]
+    public void DisabledReplacementCannotBeResurrectedByRefreshingOldHost()
+    {
+        var first = new SampleHost();
+        var next = new SampleHost { AllowExternalHosting = false };
+        ExternalAppCatalog.Register(ExternalAppFamily.Phone, first, "sample", "Sample", () => null);
+        ExternalAppCatalog.Register(ExternalAppFamily.Phone, next, "sample", "Sample", () => null);
+
+        ExternalAppCatalog.Refresh(first);
+        ExternalAppCatalog.Unregister(first);
+        Assert.Empty(ExternalAppCatalog.GetAll());
+
+        next.AllowExternalHosting = true;
+        ExternalAppCatalog.Refresh(next);
+        Assert.Same(next, Assert.Single(ExternalAppCatalog.GetAll()).Host);
+    }
+
+    [Theory]
+    [InlineData("unregister")]
+    [InlineData("family")]
+    [InlineData("scene")]
+    public void RemovedOptedOutHostsCannotReenterTheCatalog(string removal)
+    {
+        var host = new SampleHost { AllowExternalHosting = false };
+        ExternalAppCatalog.Register(ExternalAppFamily.Phone, host, "sample", "Sample", () => null);
+        if (removal == "unregister") ExternalAppCatalog.Unregister(host);
+        else if (removal == "family") ExternalAppCatalog.Clear(ExternalAppFamily.Phone);
+        else ExternalAppCatalog.ClearForSceneChange();
+
+        host.AllowExternalHosting = true;
+        ExternalAppCatalog.Refresh(host);
+        ExternalAppCatalog.Refresh(null);
+
+        Assert.Empty(ExternalAppCatalog.GetAll());
+    }
+
+    [Fact]
     public void ClearingOneDeviceFamilyPreservesTheOther()
     {
         ExternalAppCatalog.Register(ExternalAppFamily.Phone, new SampleHost(), "phone", "Phone", () => null);

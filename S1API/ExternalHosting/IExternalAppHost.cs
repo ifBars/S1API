@@ -12,6 +12,8 @@ namespace S1API.ExternalHosting
         /// <summary>
         /// Whether this app currently permits an independent display session.
         /// Return false when an equivalent app is already supplied by the display mod.
+        /// After changing this value, call <see cref="ExternalAppCatalog.Refresh"/> on the game thread
+        /// to update catalog membership and notify displays.
         /// </summary>
         bool AllowExternalHosting { get; }
 

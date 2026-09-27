@@ -69,6 +69,8 @@ namespace S1API.ExternalHosting
     {
         private static readonly Dictionary<string, ExternalAppRegistration> Entries =
             new Dictionary<string, ExternalAppRegistration>(StringComparer.Ordinal);
+        private static readonly Dictionary<string, ExternalAppRegistration> RegisteredApps =
+            new Dictionary<string, ExternalAppRegistration>(StringComparer.Ordinal);
         private static readonly List<ExternalAppDiagnostic> Diagnostics = new List<ExternalAppDiagnostic>();
 
         static ExternalAppCatalog()
@@ -86,6 +88,45 @@ namespace S1API.ExternalHosting
         /// <summary>Returns a snapshot of apps that lack an independent host contract.</summary>
         public static IReadOnlyList<ExternalAppDiagnostic> GetDiagnostics() =>
             Diagnostics.ToArray();
+
+        /// <summary>
+        /// Rechecks a registered app after its hosting eligibility changes. Call on the Unity game thread.
+        /// Raises <see cref="Changed"/> only when catalog membership changes. Unknown or removed apps are ignored.
+        /// Existing sessions remain owned by the display mod, which can close them when it handles the change.
+        /// </summary>
+        /// <param name="host">The registered app whose eligibility changed. Null is ignored.</param>
+        public static void Refresh(IExternalAppHost? host)
+        {
+            if (host == null)
+                return;
+
+            bool changed = false;
+            foreach (ExternalAppRegistration entry in RegisteredApps.Values
+                .Where(entry => ReferenceEquals(entry.Host, host)).ToArray())
+            {
+                try
+                {
+                    if (host.AllowExternalHosting)
+                    {
+                        if (!Entries.TryGetValue(entry.Id, out var previous) || !ReferenceEquals(previous, entry))
+                        {
+                            Entries[entry.Id] = entry;
+                            changed = true;
+                        }
+                    }
+                    else
+                    {
+                        changed |= Entries.Remove(entry.Id);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    MelonLogger.Warning($"[S1API] External app eligibility failed for {host.GetType()}: {exception.Message}");
+                }
+            }
+            if (changed)
+                NotifyChanged();
+        }
 
         internal static void Register(ExternalAppFamily family, object app, string name,
             string title, Func<Sprite?> icon) =>
@@ -107,9 +148,6 @@ namespace S1API.ExternalHosting
 
             try
             {
-                if (!host.AllowExternalHosting)
-                    return;
-
                 string nameValue = name();
                 string titleValue = title();
                 Type type = app.GetType();
@@ -123,7 +161,7 @@ namespace S1API.ExternalHosting
                 }
 
                 string id = $"s1api.{family.ToString().ToLowerInvariant()}.{assembly}.{fullName}.{nameValue}";
-                if (Entries.TryGetValue(id, out ExternalAppRegistration? previous) &&
+                if (RegisteredApps.TryGetValue(id, out ExternalAppRegistration? previous) &&
                     !ReferenceEquals(previous.Host, host) && previous.Host.GetType() != type)
                 {
                     MelonLogger.Warning($"[S1API] External app identity collision '{id}' between " +
@@ -132,10 +170,13 @@ namespace S1API.ExternalHosting
                 }
 
                 if (previous != null && ReferenceEquals(previous.Host, host))
+                {
+                    Refresh(host);
                     return;
+                }
 
-                Entries[id] = new ExternalAppRegistration(family, id, titleValue.Trim(), host, icon);
-                NotifyChanged();
+                RegisteredApps[id] = new ExternalAppRegistration(family, id, titleValue.Trim(), host, icon);
+                Refresh(host);
             }
             catch (Exception exception)
             {
@@ -145,6 +186,9 @@ namespace S1API.ExternalHosting
 
         internal static void Unregister(object app)
         {
+            foreach (string id in RegisteredApps.Values.Where(entry => ReferenceEquals(entry.Host, app))
+                .Select(entry => entry.Id).ToArray())
+                RegisteredApps.Remove(id);
             string[] ids = Entries.Values.Where(entry => ReferenceEquals(entry.Host, app))
                 .Select(entry => entry.Id).ToArray();
             foreach (string id in ids)
@@ -156,6 +200,9 @@ namespace S1API.ExternalHosting
 
         internal static void Clear(ExternalAppFamily family)
         {
+            foreach (string id in RegisteredApps.Values.Where(entry => entry.Family == family)
+                .Select(entry => entry.Id).ToArray())
+                RegisteredApps.Remove(id);
             string[] ids = Entries.Values.Where(entry => entry.Family == family)
                 .Select(entry => entry.Id).ToArray();
             foreach (string id in ids)
@@ -167,6 +214,7 @@ namespace S1API.ExternalHosting
 
         internal static void ClearForSceneChange()
         {
+            RegisteredApps.Clear();
             if (Entries.Count == 0 && Diagnostics.Count == 0)
                 return;
             Entries.Clear();
