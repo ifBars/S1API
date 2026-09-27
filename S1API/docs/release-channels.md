@@ -18,10 +18,14 @@ Developers should reference `S1API.Forked` from NuGet unless they need an unrele
 dotnet add package S1API.Forked
 ```
 
-## Experimental builds
+## Beta game pre-releases
 
-Experimental artifacts are produced from GitHub Actions and may include unreleased fixes. Use them only when you need to test a specific change and are ready to replace them with the next stable release.
+When Schedule One updates on its beta game branch, S1API publishes matching beta builds as GitHub pre-releases. Find them on the [GitHub Releases page](https://github.com/ifBars/S1API/releases) by looking for a release marked **Pre-release**, such as `S1API 3.1.0-beta.1`. Download the attached `S1API-Forked-...zip` asset and install it like a stable release.
+
+Beta game pre-releases are published only on GitHub. They are separate from the downloadable files shown under **Artifacts** on a GitHub Actions workflow run. Those workflow artifacts are temporary CI outputs, not the packaged beta release. Beta pre-releases are intended for the matching beta game build and may be unstable; use a stable release for normal play.
+
+These beta releases do not publish to Nexus Mods, Thunderstore, or NuGet.
 
 ## Versioning
 
-Release and maintenance branch behavior is documented in the repository's `VERSIONING.md`. For users and mod developers, the important rule is simple: prefer stable releases unless a maintainer has pointed you at a specific experimental artifact.
+Release and maintenance branch behavior is documented in the repository's `VERSIONING.md`. Prefer stable releases unless you specifically need to test S1API with the beta game build.

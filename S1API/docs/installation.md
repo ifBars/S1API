@@ -13,7 +13,7 @@ S1API can be installed as a runtime dependency for players or referenced as a Nu
 4. Launch Schedule One and check the MelonLoader console for S1API startup messages.
 
 > [!TIP]
-> Stable releases are recommended for most players. Experimental builds are useful for testing unreleased fixes, but they can break between commits.
+> Stable releases are recommended for most players. If you are using Schedule One's beta game build, beta S1API pre-releases are on the [GitHub Releases page](https://github.com/ifBars/S1API/releases) and are marked **Pre-release**. These are packaged GitHub releases, not workflow-run artifacts; see [Release Channels](release-channels.md).
 
 ## For mod developers
 
