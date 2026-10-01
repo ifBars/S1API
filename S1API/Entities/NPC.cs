@@ -211,6 +211,14 @@ namespace S1API.Entities
         
         #region Template Prefab Helpers
 
+        /// <summary>
+        /// Should a new NPC instance lose its <c>NetworkObject</c>? Only on a client-only peer, which the server spawns
+        /// the NPC to. Before the network starts (a mod creating its NPCs at scene load) it must keep it, or its network
+        /// behaviours bind to the parent's NetworkObject and the later spawn fails.
+        /// </summary>
+        internal static bool ShouldRemoveNetworkObject(bool hasNetworkManager, bool isClient, bool isServer) =>
+            hasNetworkManager && isClient && !isServer;
+
         private static GameObject InstantiateTemplateInstance(System.Type npcType, NPC owner)
         {
             GameObject prefab = GetOrCreatePerNpcPrefab(npcType, owner);
@@ -245,17 +253,15 @@ namespace S1API.Entities
             try
             {
                 var nm = InstanceFinder.NetworkManager;
-                bool isServer = nm != null && nm.IsServer;
                 var existingNo = instance.GetComponent<NetworkObject>();
-                if (isServer)
-                {
-                    if (existingNo == null)
-                        existingNo = instance.AddComponent<NetworkObject>();
-                }
-                else
+                if (ShouldRemoveNetworkObject(nm != null, nm != null && nm.IsClient, nm != null && nm.IsServer))
                 {
                     if (existingNo != null)
                         UnityEngine.Object.Destroy(existingNo);
+                }
+                else if (existingNo == null)
+                {
+                    instance.AddComponent<NetworkObject>();
                 }
             }
             catch { }
