@@ -166,14 +166,31 @@ namespace S1API.Rendering
             if (_typedAssets.TryGetValue(typedKey, out var typedAsset))
                 return typedAsset;
 
-            foreach (var kvp in _typedAssets)
-            {
-                if (kvp.Key.StartsWith(resourcePath + "|") && type.IsInstanceOfType(kvp.Value))
-                    return kvp.Value;
-            }
+            var compatible = FindCompatibleTypedAsset(_typedAssets, resourcePath, type.IsInstanceOfType);
+            if (compatible != null)
+                return compatible;
 
             _registeredAssets.TryGetValue(resourcePath, out var asset);
             return asset;
+        }
+
+        /// <summary>
+        /// Finds the first asset registered for a path, under any type, that <paramref name="isCompatible"/>
+        /// accepts. Returns <c>null</c> when none does, so the caller can fall back to another lookup.
+        /// </summary>
+        internal static Object? FindCompatibleTypedAsset(
+            IEnumerable<KeyValuePair<string, Object>> typedAssets,
+            string resourcePath,
+            Func<Object, bool> isCompatible)
+        {
+            string prefix = resourcePath + "|";
+            foreach (var kvp in typedAssets)
+            {
+                if (kvp.Key.StartsWith(prefix) && isCompatible(kvp.Value))
+                    return kvp.Value;
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -355,14 +372,17 @@ namespace S1API.Rendering
                     return false;
                 }
 
-                // Check for compatible types by path prefix
-                foreach (var kvp in _typedAssets)
+                // Check for compatible types by path prefix. Only an asset the requested type accepts can answer
+                // the load: handing back the GameObject registered at the path for a Load<AvatarObject> made
+                // the caller's cast throw InvalidCastException instead of falling through to the component lookup.
+                var compatible = FindCompatibleTypedAsset(
+                    _typedAssets,
+                    path,
+                    candidate => systemTypeInstance!.IsInstanceOfType(candidate));
+                if (compatible != null)
                 {
-                    if (kvp.Key.StartsWith(path + "|"))
-                    {
-                        __result = kvp.Value;
-                        return false;
-                    }
+                    __result = compatible;
+                    return false;
                 }
             }
 
