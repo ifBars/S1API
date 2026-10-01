@@ -169,11 +169,9 @@ namespace S1API.Internal.Patches
             if (customNPCs.Count == 0)
                 yield break;
             
-            yield return new WaitUntil((Func<bool>)(() =>
-            {
-                var allSceneNPCs = Object.FindObjectsOfType<S1NPCs.NPC>(true);
-                return customNPCs.All(npc => allSceneNPCs.Any(sn => sn.ID == npc.ID));
-            }));
+            // A few checks a second, not every frame: this searches the whole scene, inactive objects included.
+            while (!AllPresentInScene(customNPCs))
+                yield return new WaitForSeconds(0.25f);
 
             yield return new WaitUntil((Func<bool>)(() =>
             {
@@ -199,6 +197,30 @@ namespace S1API.Internal.Patches
 
             // Add circles after native Start so they are not processed as serialized native circles.
             AddRelationCircles(contactsApp);
+        }
+
+        private static bool AllPresentInScene(System.Collections.Generic.List<NPC> customNPCs) =>
+            AllIdsPresent(
+                Object.FindObjectsOfType<S1NPCs.NPC>(true).Select(sceneNpc => (System.Func<string>)(() => sceneNpc.ID)),
+                customNPCs.Select(npc => npc.ID));
+
+        /// <summary>
+        /// Are all <paramref name="wanted"/> ids among the scene's NPC ids? Some of the game's own NPCs throw from
+        /// <c>ID</c> (the pooled special customers on IL2CPP); they are never waited for, so they are skipped rather
+        /// than failing the whole check.
+        /// </summary>
+        internal static bool AllIdsPresent(
+            System.Collections.Generic.IEnumerable<System.Func<string>> sceneIds,
+            System.Collections.Generic.IEnumerable<string> wanted)
+        {
+            var present = new System.Collections.Generic.HashSet<string>();
+            foreach (System.Func<string> readId in sceneIds)
+            {
+                try { present.Add(readId()); }
+                catch (System.Exception) { }
+            }
+
+            return wanted.All(present.Contains);
         }
 
         /// <summary>
