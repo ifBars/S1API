@@ -315,6 +315,121 @@ namespace S1API.Internal.Patches
             return ReflectionUtils.TryGetFieldOrProperty(action, "npc") as S1NPCs.NPC;
         }
 
+        /// <summary>
+        /// Names the game members the behaviour-ownership repair relies on that are missing, so a game update
+        /// that renames one is a clear message and not a silent load failure.
+        /// </summary>
+        internal static System.Collections.Generic.IReadOnlyList<string> FindMissingBehaviourOwnershipMembers()
+        {
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            var missing = new System.Collections.Generic.List<string>();
+            if (typeof(S1NPCsBehaviour.ConsumeProductBehaviour).GetMethod("OnStartServer", flags) == null)
+                missing.Add("ConsumeProductBehaviour.OnStartServer");
+            if (typeof(S1NPCsBehaviour.Behaviour).GetProperty("beh", flags) == null)
+                missing.Add("Behaviour.beh");
+            if (typeof(S1NPCsBehaviour.NPCBehaviour).GetProperty("Npc", flags) == null)
+                missing.Add("NPCBehaviour.Npc");
+#if MONOMELON
+            // Mono writes the auto-property backing fields, since the setters are not public.
+            if (ConsumeProductBehaviourOwnershipPatch.BehaviourOwnerField == null)
+                missing.Add("Behaviour.<beh>k__BackingField");
+            if (ConsumeProductBehaviourOwnershipPatch.NpcOwnerField == null)
+                missing.Add("NPCBehaviour.<Npc>k__BackingField");
+#endif
+            return missing;
+        }
+
+        /// <summary>
+        /// A custom NPC's product behaviour must not abort loading because it cannot find its NPC.
+        /// </summary>
+        /// <remarks>
+        /// 0.4.7's <c>OnStartServer</c> is <c>base.OnStartServer(); Npc.OnNPCDeinitialized += ...</c>, where <c>Npc</c> is
+        /// <c>beh.Npc</c>. Both references are set only in <c>Awake</c>, so an instance whose Awake ran before it was
+        /// parented keeps nulls, and the exception aborts FishNet's scene setup: the save never finishes loading.
+        /// The prefix repairs them as Awake would have. If there is still no NPC, the finalizer contains that one
+        /// exception (only the deinitialize subscription is lost). S1API's own NPCs only.
+        /// </remarks>
+        [HarmonyPatch]
+        private static class ConsumeProductBehaviourOwnershipPatch
+        {
+            private const int MaxContainedLogs = 20;
+            private static int _contained;
+#if MONOMELON
+            internal static readonly FieldInfo? BehaviourOwnerField =
+                AccessTools.Field(typeof(S1NPCsBehaviour.Behaviour), "<beh>k__BackingField");
+            internal static readonly FieldInfo? NpcOwnerField =
+                AccessTools.Field(typeof(S1NPCsBehaviour.NPCBehaviour), "<Npc>k__BackingField");
+#endif
+
+            private static MethodBase? TargetMethod() =>
+                AccessTools.Method(typeof(S1NPCsBehaviour.ConsumeProductBehaviour), "OnStartServer");
+
+            [HarmonyPrefix]
+            private static void Prefix(S1NPCsBehaviour.ConsumeProductBehaviour __instance)
+            {
+                try
+                {
+                    if (__instance == null || !IsS1ApiCustomNpcComponent(__instance))
+                        return;
+
+                    S1NPCsBehaviour.NPCBehaviour? owner = __instance.beh;
+                    if (owner == null)
+                    {
+                        owner = __instance.GetComponentInParent<S1NPCsBehaviour.NPCBehaviour>(true);
+                        if (owner == null)
+                            return;
+#if IL2CPPMELON
+                        __instance.beh = owner;
+#else
+                        BehaviourOwnerField?.SetValue(__instance, owner);
+#endif
+                    }
+
+                    if (owner.Npc != null)
+                        return;
+
+                    S1NPCs.NPC? npc = owner.GetComponentInParent<S1NPCs.NPC>(true);
+                    if (npc == null)
+                        return;
+#if IL2CPPMELON
+                    owner.Npc = npc;
+#else
+                    NpcOwnerField?.SetValue(owner, npc);
+#endif
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"[NPC] Could not repair behaviour ownership: {ex.Message}");
+                }
+            }
+
+            [HarmonyFinalizer]
+            private static Exception? Finalizer(Exception? __exception, S1NPCsBehaviour.ConsumeProductBehaviour __instance)
+            {
+                if (__exception == null)
+                    return null;
+
+                try
+                {
+                    // Only the failure the prefix could not repair: an S1API NPC's behaviour still without its NPC.
+                    if (__instance == null || !IsS1ApiCustomNpcComponent(__instance) || __instance.beh?.Npc != null)
+                        return __exception;
+                }
+                catch
+                {
+                    return __exception;
+                }
+
+                if (_contained++ < MaxContainedLogs)
+                {
+                    Logger.Warning(
+                        $"[NPC] Contained an OnStartServer failure on '{__instance.gameObject.name}' (no NPC found); loading continues: {__exception.Message}");
+                }
+
+                return null;
+            }
+        }
+
         [HarmonyPatch]
         private static class NpcBehaviourSummonLogicPatch
         {
