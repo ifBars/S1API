@@ -358,6 +358,13 @@ namespace S1API.Entities
                 ?? FindSpawnablePrefabWithComponent<S1NPCs.NPC>(spawnablePrefabs, count);
         }
 
+        /// <summary>
+        /// The kind of data an NPC component without any gets before <c>ConfigurePrefab</c>: its own. A donor that already
+        /// is a dealer keeps that component, so plain data on it would never be replaced.
+        /// </summary>
+        internal static NpcRootRole DataRoleForComponent(bool isDealer, bool isSupplier) =>
+            isDealer ? NpcRootRole.Dealer : isSupplier ? NpcRootRole.Supplier : NpcRootRole.Plain;
+
         private static S1NPCs.NPC? FindPlainNpcComponent(GameObject prefabRoot)
         {
             if (prefabRoot == null)
@@ -1018,13 +1025,19 @@ namespace S1API.Entities
                 NormalizeBaseEmployeePrefab(prefabNO.gameObject, sourcePrefabName, rootRole);
                 prefabNO.gameObject.name = prefabName;
 
-                // Some native plain NPC prefabs have no framework data object. Attach one
-                // before ConfigurePrefab applies identity and other saved defaults.
-                if (rootRole == NpcRootRole.Plain)
+                // Some native prefabs have no framework data object: the plain NPC prefab, and the donor a dealer or
+                // supplier is built from. Attach one before ConfigurePrefab, whose builder calls write to it
+                // (WithVoice throws without one). It matches the component's own type, so a donor that already is a
+                // dealer or supplier keeps the right kind of data even if no new component replaces it.
+                S1NPCs.NPC? donorNpc = rootRole == NpcRootRole.Plain
+                    ? FindPlainNpcComponent(prefabNO.gameObject)
+                    : GetPreferredNpcComponent(prefabNO.gameObject);
+                if (donorNpc != null && NPCDataAccess.GetDataObject(donorNpc) == null)
                 {
-                    S1NPCs.NPC? plainNpc = FindPlainNpcComponent(prefabNO.gameObject);
-                    if (plainNpc != null && NPCDataAccess.GetDataObject(plainNpc) == null)
-                        NPCDataAccess.AssignNewData(plainNpc, rootRole, plainNpc);
+                    NpcRootRole dataRole = DataRoleForComponent(
+                        CrossType.Is(donorNpc, out S1Economy.Dealer _),
+                        CrossType.Is(donorNpc, out S1Economy.Supplier _));
+                    NPCDataAccess.AssignNewData(donorNpc, dataRole, donorNpc);
                 }
 
                 // Ensure template prefab does not execute runtime logic or remain in NPC registry
