@@ -137,7 +137,7 @@ namespace S1API.Internal.Utils
 
             foreach (AssemblyName referencedAssembly in referencedAssemblies)
             {
-                if (AssemblyIdentityMatches(referencedAssembly, baseAssemblyName))
+                if (ReferenceBindsToDefinition(referencedAssembly, baseAssemblyName))
                     return true;
 
                 string referencedName = referencedAssembly.Name ?? string.Empty;
@@ -147,7 +147,10 @@ namespace S1API.Internal.Utils
 
                 foreach (Assembly loadedReference in loadedReferences)
                 {
-                    if (!AssemblyIdentityMatches(loadedReference.GetName(), referencedAssembly))
+                    if (!ShouldFollowLoadedReference(
+                            loadedReference.GetName(),
+                            referencedAssembly,
+                            loadedReferences.Length))
                         continue;
 
                     if (ReferencesAssemblyTransitively(
@@ -162,6 +165,45 @@ namespace S1API.Internal.Utils
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// INTERNAL: Does this reference bind to that assembly? The simple name and public key token must match; the
+        /// version need not, because the runtime binds a reference to whichever assembly of that name is loaded. A mod
+        /// built against an older S1API still runs against the loaded one, so it must still be scanned for the types
+        /// that derive from it.
+        /// </summary>
+        internal static bool ReferenceBindsToDefinition(
+            AssemblyName referenceAssemblyName,
+            AssemblyName definitionAssemblyName)
+        {
+            if (!string.Equals(
+                    referenceAssemblyName.Name,
+                    definitionAssemblyName.Name,
+                    StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            byte[] referenceToken = referenceAssemblyName.GetPublicKeyToken() ?? Array.Empty<byte>();
+            byte[] definitionToken = definitionAssemblyName.GetPublicKeyToken() ?? Array.Empty<byte>();
+            return referenceToken.SequenceEqual(definitionToken);
+        }
+
+        /// <summary>
+        /// INTERNAL: Should the scan follow a reference into this loaded assembly? An exact identity always; a different
+        /// version only when it is the one assembly of that name loaded, since then the reference can only bind to it.
+        /// With several same-named assemblies loaded it is unknown which one the reference means, so only an exact
+        /// match is followed.
+        /// </summary>
+        internal static bool ShouldFollowLoadedReference(
+            AssemblyName loadedAssemblyName,
+            AssemblyName referenceAssemblyName,
+            int loadedAssembliesWithThatName)
+        {
+            if (AssemblyIdentityMatches(loadedAssemblyName, referenceAssemblyName))
+                return true;
+
+            return loadedAssembliesWithThatName == 1
+                   && ReferenceBindsToDefinition(referenceAssemblyName, loadedAssemblyName);
         }
 
         private static bool AssemblyIdentityMatches(
