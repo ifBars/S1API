@@ -80,6 +80,15 @@ namespace S1API.Internal.Rendering
         }
 
         /// <summary>
+        /// Applies an optional primary colour default to the cloned avatar object's serialized properties.
+        /// </summary>
+        internal static void ApplyColorTint(S1CoreAvatar.AvatarObject avatarObject, Color? colorTint)
+        {
+            if (colorTint.HasValue)
+                avatarObject.PropertyCollection?.GetFirstColorProperty()?.SetValue(colorTint.Value);
+        }
+
+        /// <summary>
         /// Makes the avatar-object library return <paramref name="avatarObject"/> for its id, which is how the game
         /// finds the prefab when it applies a serialized avatar object.
         /// </summary>

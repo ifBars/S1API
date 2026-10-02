@@ -163,7 +163,7 @@ namespace S1API.Rendering
         internal static Object? GetRegisteredAssetForType(string resourcePath, Type type)
         {
             string typedKey = GetTypedKey(resourcePath, type);
-            if (_typedAssets.TryGetValue(typedKey, out var typedAsset))
+            if (_typedAssets.TryGetValue(typedKey, out var typedAsset) && type.IsInstanceOfType(typedAsset))
                 return typedAsset;
 
             var compatible = FindCompatibleTypedAsset(_typedAssets, resourcePath, type.IsInstanceOfType);
@@ -171,7 +171,7 @@ namespace S1API.Rendering
                 return compatible;
 
             _registeredAssets.TryGetValue(resourcePath, out var asset);
-            return asset;
+            return type.IsInstanceOfType(asset) ? asset : null;
         }
 
         /// <summary>
@@ -366,15 +366,12 @@ namespace S1API.Rendering
                 string normalizedTypeName = NormalizeTypeName(typeFullName);
                 string typedKey = $"{path}|{normalizedTypeName}";
 
-                if (_typedAssets.TryGetValue(typedKey, out var typedAsset))
+                if (_typedAssets.TryGetValue(typedKey, out var typedAsset) && systemTypeInstance!.IsInstanceOfType(typedAsset))
                 {
                     __result = typedAsset;
                     return false;
                 }
 
-                // Check for compatible types by path prefix. Only an asset the requested type accepts can answer
-                // the load: handing back the GameObject registered at the path for a Load<AvatarObject> made
-                // the caller's cast throw InvalidCastException instead of falling through to the component lookup.
                 var compatible = FindCompatibleTypedAsset(
                     _typedAssets,
                     path,
@@ -389,7 +386,7 @@ namespace S1API.Rendering
             // Check primary registry
             if (_registeredAssets.TryGetValue(path, out var asset))
             {
-                if (systemTypeInstance == null)
+                if (systemTypeInstance == null || systemTypeInstance.IsInstanceOfType(asset))
                 {
                     __result = asset;
                     return false;
@@ -413,11 +410,6 @@ namespace S1API.Rendering
                     }
 
                     Logger.Warning($"Registered GameObject at '{path}' does not have component of type '{typeName}'");
-                }
-                else
-                {
-                    __result = asset;
-                    return false;
                 }
             }
 

@@ -86,11 +86,8 @@ namespace S1API.Rendering
                     accessory.ApplyColor(colorTint.Value);
                 }
 
-                // From 0.4.7 an avatar is dressed in AvatarObject prefabs, which the legacy accessory only points at
-                // (Accessory.AvatarObjectEquivalent). Give the clone an AvatarObject of its own, with its own id,
-                // textured the same way and registered where the game looks it up.
                 if (accessory != null)
-                    CloneAvatarObjectEquivalent(accessory, sourceResourcePath, targetResourcePath, newName, textureReplacements);
+                    CloneAvatarObjectEquivalent(accessory, sourceResourcePath, targetResourcePath, newName, textureReplacements, colorTint);
 
                 // Set prefab to active so that when Unity instantiates it, the instance will also be active.
                 // This is critical: Unity's Object.Instantiate preserves the prefab's active state.
@@ -117,7 +114,8 @@ namespace S1API.Rendering
             string sourceResourcePath,
             string? targetResourcePath,
             string newName,
-            System.Collections.Generic.Dictionary<string, Texture2D>? textureReplacements)
+            System.Collections.Generic.Dictionary<string, Texture2D>? textureReplacements,
+            Color? colorTint)
         {
             S1CoreAvatar.AvatarObject? equivalent = accessory.AvatarObjectEquivalent;
             if (equivalent == null)
@@ -130,6 +128,8 @@ namespace S1API.Rendering
 
             if (textureReplacements != null && textureReplacements.Count > 0)
                 ApplyTexturesToAccessory(clone.gameObject, textureReplacements);
+
+            CustomAvatarObjects.ApplyColorTint(clone, colorTint);
 
             if (!CustomAvatarObjects.RegisterInLibrary(clone))
             {
@@ -203,9 +203,6 @@ namespace S1API.Rendering
                 RuntimeResourceRegistry.RegisterAssetForType(resourcePath, accessoryComponent, typeof(S1AvatarFramework.Accessory));
             }
 
-            // From 0.4.7 a clothing item loads its AvatarObject (Resources.Load<AvatarObject>(path)), so register it for
-            // that type too. This is the avatar object CloneAccessoryWithCustomTextures made for the clone, or the
-            // original's when the accessory was not cloned.
             S1CoreAvatar.AvatarObject? avatarObject = accessoryComponent != null
                 ? accessoryComponent.AvatarObjectEquivalent
                 : null;

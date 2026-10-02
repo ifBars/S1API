@@ -1,17 +1,51 @@
 using S1API.Rendering;
+using System.Reflection;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
 namespace S1API.Tests.Rendering;
 
+[Collection(RuntimeResourceRegistryCollection.Name)]
 public sealed class RuntimeResourceRegistryTests
 {
     private const string Path = "Example/Accessories/Cap";
 
+#if MONOMELON
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void RegisteredLookupHonorsTheRequestedType(bool typed, bool compatible)
+    {
+        string path = Path + "/" + Guid.NewGuid().ToString("N");
+        Type requestedType = compatible ? typeof(Texture2D) : typeof(GameObject);
+        Object asset = TestObjectFactory.CreateUninitialized<Texture2D>();
+        string key = typed ? path + "|" + requestedType.FullName : path;
+        string fieldName = typed ? "_typedAssets" : "_registeredAssets";
+        var registry = (Dictionary<string, Object>)typeof(RuntimeResourceRegistry)
+            .GetField(fieldName, BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+
+        try
+        {
+            registry.Add(key, asset);
+            Object? result = RuntimeResourceRegistry.GetRegisteredAssetForType(path, requestedType);
+            if (compatible)
+                Assert.Same(asset, result);
+            else
+                Assert.Null(result);
+        }
+        finally
+        {
+            registry.Remove(key);
+        }
+    }
+
+#endif
+
     [Fact]
     public void FindCompatibleTypedAssetSkipsEntriesTheRequestedTypeRejects()
     {
-        // The GameObject is registered first, as RegisterAsset does, ahead of the typed component entry.
         Object gameObject = TestObjectFactory.CreateUninitialized<GameObject>();
         Object texture = TestObjectFactory.CreateUninitialized<Texture2D>();
         var typedAssets = new Dictionary<string, Object>
@@ -31,8 +65,6 @@ public sealed class RuntimeResourceRegistryTests
     [Fact]
     public void FindCompatibleTypedAssetReturnsNullWhenNothingIsCompatible()
     {
-        // A Load<T> for a type nothing registered here satisfies must not be answered with the wrong object,
-        // so the caller can fall through to its component lookup instead of failing a cast.
         var typedAssets = new Dictionary<string, Object>
         {
             [Path + "|UnityEngine.GameObject"] = TestObjectFactory.CreateUninitialized<GameObject>(),
