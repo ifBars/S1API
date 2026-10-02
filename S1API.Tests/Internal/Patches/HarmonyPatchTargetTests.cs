@@ -12,10 +12,6 @@ public sealed class HarmonyPatchTargetTests
     [Fact]
     public void AttributePatchesNameExactlyOneGameMethod()
     {
-        // A patch named only by method name fails to bind when the type has several methods of that name, and
-        // Harmony then skips its whole patch class. Compatibility tools can add overloads to the game assembly
-        // (Polyfill adds GeneratePackagingIcon(string, string)), so name the signature wherever there is a choice.
-        // Covers attribute-declared methods only: classes with TargetMethod(s) and getters/setters/constructors are skipped.
         List<string> problems = FindUnresolvablePatchTargets();
         Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
     }
