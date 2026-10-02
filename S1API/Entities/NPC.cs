@@ -1151,8 +1151,6 @@ namespace S1API.Entities
 
                 TypeToPrefab[npcType] = prefabNO.gameObject;
                 MarkPrefabsConfigured();
-                // Failures are logged; logging success too tells "never found" apart from "found but not spawned".
-                Logger.Msg($"[S1API] Registered NPC prefab '{prefabName}' for {npcType.Name}.");
                 return prefabNO.gameObject;
             }
         }

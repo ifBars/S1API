@@ -128,7 +128,6 @@ public sealed class ReflectionUtilsTests
     [InlineData("s1api, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null")]
     public void AReferenceToAnyVersionOfTheBaseAssemblyBindsToIt(string reference)
     {
-        // A mod built against an older S1API runs against the loaded one: the runtime binds by name and key token.
         var loaded = new AssemblyName("S1API, Version=3.2.1.0, Culture=neutral, PublicKeyToken=null");
 
         Assert.True(ReflectionUtils.ReferenceBindsToDefinition(new AssemblyName(reference), loaded));
