@@ -121,6 +121,57 @@ public sealed class ReflectionUtilsTests
             AppDomain.CurrentDomain.GetAssemblies()));
     }
 
+    [Theory]
+    [InlineData("S1API, Version=3.0.1.0, Culture=neutral, PublicKeyToken=null")]
+    [InlineData("S1API, Version=2.9.2.0, Culture=neutral, PublicKeyToken=null")]
+    [InlineData("S1API, Version=3.2.1.0, Culture=neutral, PublicKeyToken=null")]
+    [InlineData("s1api, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null")]
+    public void AReferenceToAnyVersionOfTheBaseAssemblyBindsToIt(string reference)
+    {
+        var loaded = new AssemblyName("S1API, Version=3.2.1.0, Culture=neutral, PublicKeyToken=null");
+
+        Assert.True(ReflectionUtils.ReferenceBindsToDefinition(new AssemblyName(reference), loaded));
+    }
+
+    [Fact]
+    public void AReferenceToADifferentAssemblyNameDoesNotBind()
+    {
+        var loaded = new AssemblyName("S1API, Version=3.2.1.0, Culture=neutral, PublicKeyToken=null");
+
+        Assert.False(ReflectionUtils.ReferenceBindsToDefinition(
+            new AssemblyName("S1APILoader, Version=3.2.1.0, Culture=neutral, PublicKeyToken=null"),
+            loaded));
+    }
+
+    [Fact]
+    public void AReferenceWithADifferentPublicKeyTokenDoesNotBind()
+    {
+        var signed = new AssemblyName("Example, Version=1.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089");
+        var unsigned = new AssemblyName("Example, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
+
+        Assert.False(ReflectionUtils.ReferenceBindsToDefinition(signed, unsigned));
+        Assert.False(ReflectionUtils.ReferenceBindsToDefinition(unsigned, signed));
+        Assert.True(ReflectionUtils.ReferenceBindsToDefinition(signed, signed));
+    }
+
+    [Fact]
+    public void ALoadedAssemblyOfADifferentVersionIsFollowedOnlyWhenItIsTheOnlyOneOfThatName()
+    {
+        var reference = new AssemblyName("Library, Version=1.5.0.0, Culture=neutral, PublicKeyToken=null");
+        var newer = new AssemblyName("Library, Version=1.6.0.0, Culture=neutral, PublicKeyToken=null");
+
+        Assert.True(ReflectionUtils.ShouldFollowLoadedReference(newer, reference, loadedAssembliesWithThatName: 1));
+        Assert.False(ReflectionUtils.ShouldFollowLoadedReference(newer, reference, loadedAssembliesWithThatName: 2));
+    }
+
+    [Fact]
+    public void ALoadedAssemblyWithTheExactIdentityIsAlwaysFollowed()
+    {
+        var reference = new AssemblyName("Library, Version=1.5.0.0, Culture=neutral, PublicKeyToken=null");
+
+        Assert.True(ReflectionUtils.ShouldFollowLoadedReference(reference, reference, loadedAssembliesWithThatName: 2));
+    }
+
     private static AssemblyBuilder CreateDynamicAssembly(string name, Version version)
     {
         var assemblyName = new AssemblyName(name)
