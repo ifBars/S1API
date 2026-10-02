@@ -1025,10 +1025,7 @@ namespace S1API.Entities
                 NormalizeBaseEmployeePrefab(prefabNO.gameObject, sourcePrefabName, rootRole);
                 prefabNO.gameObject.name = prefabName;
 
-                // Some native prefabs have no framework data object: the plain NPC prefab, and the donor a dealer or
-                // supplier is built from. Attach one before ConfigurePrefab, whose builder calls write to it
-                // (WithVoice throws without one). It matches the component's own type, so a donor that already is a
-                // dealer or supplier keeps the right kind of data even if no new component replaces it.
+                // ConfigurePrefab needs data matching the donor component, before role replacement.
                 S1NPCs.NPC? donorNpc = rootRole == NpcRootRole.Plain
                     ? FindPlainNpcComponent(prefabNO.gameObject)
                     : GetPreferredNpcComponent(prefabNO.gameObject);
