@@ -125,7 +125,9 @@ namespace S1API.Entities
     /// <see cref="Customer"/>, <see cref="Relationship"/>, <see cref="Inventory"/>, and <see cref="Movement"/>.
     /// Customer, relationship, and schedule configuration must be done in <see cref="ConfigurePrefab"/> for proper save/load behavior.
     /// </remarks>
-    public abstract class NPC : Saveable, IEntity, IHealth
+#pragma warning disable CS0618 // Preserve the legacy base type for existing NPC mods.
+    public abstract class NPC : global::S1API.Internal.Abstraction.Saveable, IEntity, IHealth
+#pragma warning restore CS0618
     {
         private static readonly Log Logger = new Log("NPC");
         // Protected members intended to be used by modders.

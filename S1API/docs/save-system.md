@@ -1,11 +1,10 @@
 # Save System
 
-S1API provides a simple, attribute-based persistence model. Inherit from `Internal.Abstraction.Saveable` and annotate fields with `SaveableField`.
+S1API provides a simple, attribute-based persistence model. Inherit from `S1API.Saveables.Saveable` and annotate fields with `SaveableField`.
 
 ## Basics
 
 ```csharp
-using S1API.Internal.Abstraction;
 using S1API.Saveables;
 
 public class NotesSave : Saveable
@@ -25,6 +24,14 @@ public class NotesSave : Saveable
 ```
 
 S1API uses JSON with standard `JsonSerializerSettings` that ignore reference loops and support GUID references.
+
+## Migration from the internal namespace
+
+`S1API.Internal.Abstraction.Saveable` is obsolete with a compiler warning. Existing compiled mods continue to use the compatibility base, which forwards to `S1API.Saveables.Saveable`. Its removal is planned for a future breaking release; no removal version has been set.
+
+When updating a standalone saveable, replace the old namespace import with `using S1API.Saveables;`. If you need both namespaces, qualify the base as `S1API.Saveables.Saveable` or use an alias to avoid an ambiguous `Saveable` reference. Keep your class name, namespace, and `SaveableField` keys unchanged: changing the base alone does not change existing save folders or JSON keys.
+
+NPC and quest subclasses continue to inherit their persistence support from their existing API base classes and need no migration.
 
 ## Load Order Control
 

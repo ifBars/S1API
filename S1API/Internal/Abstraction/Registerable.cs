@@ -1,9 +1,10 @@
 ﻿namespace S1API.Internal.Abstraction
 {
     /// <summary>
-    /// INTERNAL: A registerable base class for use internally.
-    /// Not intended for modder use.
+    /// Infrastructure base class for S1API registration and lifecycle hooks.
+    /// Public so modder-facing API classes can inherit it; not intended for direct modder inheritance.
     /// </summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public abstract class Registerable : IRegisterable
     {
         /// <summary>

@@ -113,7 +113,6 @@ Launch the game. Your app icon should appear on the phone; clicking it opens you
 Annotate fields with `SaveableField` in classes inheriting `Saveable`. S1API will save/load JSON per save slot.
 
 ```csharp
-using S1API.Internal.Abstraction;
 using S1API.Saveables;
 
 public class MySaveData : Saveable
