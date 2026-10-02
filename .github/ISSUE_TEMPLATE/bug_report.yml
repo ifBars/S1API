@@ -7,6 +7,10 @@ body:
     attributes:
       value: |
         ## Before you submit...
+
+        Search existing issues and pull requests first. Reuse an issue that
+        already tracks the same bug. If you plan to contribute a fix, open this
+        issue before your PR and comment with your intended approach.
         
         Please ensure you have:
         - Read the [installation guide](https://ifbars.github.io/S1API/docs/getting-started.html#installation-guide)

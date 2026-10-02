@@ -8,6 +8,35 @@ Please read over the below in full to help you get started and set expectations 
 - Do **NOT** alter my GitHub actions unless you have a good reason. 
   I will close your PR and ban you from the project if malicious intent is found.
 
+## Before Opening a Pull Request
+
+Bug fixes, feature requests, and API improvements must have a GitHub issue
+opened **before** the pull request, even if you already have a fix ready. The
+issue records the problem or request independently of the proposed implementation.
+
+1. Search [existing issues](https://github.com/ifBars/S1API/issues) and open pull
+   requests first. Reuse an issue that already tracks the same problem rather
+   than opening a duplicate.
+2. If there is no matching issue, open a
+   [bug report](https://github.com/ifBars/S1API/issues/new?template=bug_report.yml)
+   or [feature request](https://github.com/ifBars/S1API/issues/new?template=feature_request.yml).
+   For bugs, include reproduction steps, expected and actual behavior, affected
+   versions, and the Mono or IL2CPP runtime. For requests, explain the use case
+   and what is missing today.
+3. Comment on the issue with your intended approach before starting work so
+   contributors can coordinate. Discuss substantial API or behavior changes
+   with a maintainer before implementing them.
+4. Link the issue in the PR description. Use `Fixes #123` when the PR fully
+   resolves it, or `Refs #123` when it only addresses part of the work.
+
+A PR description does not replace an issue. Bug-fix and feature PRs without a
+linked issue will be asked to add one before review proceeds. Keep unrelated
+bugs or requests in separate issues and focused PRs.
+
+Typo corrections, formatting, and documentation-only changes that do not alter
+API behavior may be submitted without an issue; explain that exception in the
+PR's linked issue section. Maintainers may approve other exceptions explicitly.
+
 ## Prerequisites
 S1API is available to mod developers of all experience levels, but contributing
 game-facing changes assumes working familiarity with Schedule I mod development
@@ -60,10 +89,10 @@ Ultimately, this just saves you time and gets your changes into the API faster.
 | MonoMelon     | MelonLoader for Mono (alternate branch) builds |
 
 ## Proper Contributing Channels
-All pull requests **must** go into `bleeding-edge` before `stable`.
-If you make a pull request for `stable`, I **will** be changing it to verify build.
+Target regular-game pull requests at `stable` and game-beta pull requests at
+`beta`. For release and hotfix preparation, follow [VERSIONING.md](VERSIONING.md).
 
 ## Tracking Work & Issues
-We maintain a [Trello board](https://trello.com/b/yuRuBpIg/s1api) where known issues and tasks that need to be done are tracked. 
-While the board is not always perfectly up to date, it should typically show the known issues in the project. 
-GitHub issues opened with us will typically be added to the Trello board and then archived once closed.
+[GitHub issues](https://github.com/ifBars/S1API/issues) are the source of truth
+for bugs and requests. Keep reproduction details, scope decisions, and related
+PR links on the issue so the work remains easy to track across releases.
