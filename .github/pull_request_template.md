@@ -1,3 +1,21 @@
+## Linked issue
+
+<!--
+Bug fixes, features, and API improvements require a GitHub issue opened before
+this PR. Reuse an existing issue when possible.
+Use "Fixes #123" for a complete resolution or "Refs #123" for partial work.
+For an issue-free typo, formatting, or documentation-only change that does not
+alter API behavior, explain the exception here. Otherwise, link the maintainer's
+explicit approval of an exception.
+See CONTRIBUTING.md for the issue-first workflow.
+-->
+
+## Contributor checklist
+
+- [ ] I linked an issue opened before this PR, or explained an allowed exception above.
+- [ ] I checked existing issues and PRs for duplicate or overlapping work.
+- [ ] This PR addresses one focused problem or request.
+
 ## Summary
 
 <!-- Explain the modder-facing outcome and the native/runtime seam used. -->
