@@ -72,4 +72,7 @@ If you want to do custom content specific to Mono or Il2Cpp, S1API can still ass
 ## Want to Contribute?
 This is a massive project with so many different areas to specialize in.
 If you're interested in contributing, please do!
+For bug fixes, features, and API improvements, reuse or open a
+[GitHub issue](https://github.com/ifBars/S1API/issues) before opening a pull
+request, and link that issue in the PR description.
 Look over the [CONTRIBUTING.md](CONTRIBUTING.md) for guidance on code standards and the process.

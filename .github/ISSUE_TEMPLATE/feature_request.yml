@@ -8,6 +8,11 @@ body:
       value: |
         ## Feature Request
 
+        Search existing issues and pull requests first. Reuse an issue that
+        already tracks the same request. If you plan to implement it, open this
+        issue before your PR and comment with your intended approach. Discuss
+        substantial API or behavior changes with a maintainer before implementation.
+
         Keep this short if you want.
 
         You do **not** need to know how the API should be implemented. If you're not technical, just describe:
