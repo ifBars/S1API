@@ -10,8 +10,6 @@ public sealed class ContactsAppWaitTests
     [Fact]
     public void AnNpcWhoseIdThrowsDoesNotHideTheOthers()
     {
-        // On IL2CPP the game's pooled special customers throw from NPC.ID; one of them used to fail the check
-        // every frame, so the wait never ended.
         Assert.True(ContactsAppPatches.AllIdsPresent(
             new[] { Id("big_willy"), Throws(), Id("disco_davey"), Throws() },
             new[] { "big_willy", "disco_davey" }));
