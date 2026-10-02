@@ -53,7 +53,17 @@ and document the migration impact in the PR.
 `S1API.Tests/` is the only test implementation that should be committed to this repository. Keep runtime and in-game smoke mods, launchers, harnesses, disposable saves or installs, logs, screenshots, and generated evidence local and ignored, including everything under `tests/Smoke/`. Do not add `.gitignore` exceptions for smoke-test sources. Record the scenario, commands, runtime matrix, and observed pass/fail evidence in the PR description without committing the smoke implementation or game-derived artifacts.
 
 ## Commit & Pull Request Guidelines
-Write imperative, single-purpose commits; lightweight prefixes such as `fix:` or `feat:` appear in history and are encouraged. Target regular-game PRs at `stable` and beta-game PRs at `beta`. Include a short change narrative, reproduction or validation notes, and link any external issue. Screenshots or logs are helpful for UI or networking work. Never modify CI workflows without prior discussion.
+Write imperative, single-purpose commits; lightweight prefixes such as `fix:` or `feat:` appear in history and are encouraged. Target regular-game PRs at `stable` and beta-game PRs at `beta`. Include a short change narrative, reproduction or validation notes, and link the tracking GitHub issue. Screenshots or logs are helpful for UI or networking work. Never modify CI workflows without prior discussion.
+
+Follow the issue-first workflow in `CONTRIBUTING.md`: search existing issues and
+PRs, reuse or open a GitHub issue before a bug-fix, feature, or API-improvement
+PR, and record the intended approach on the issue before implementation. Discuss
+substantial API or behavior changes with a maintainer first. Use `Fixes #123`
+for complete resolutions and `Refs #123` for partial work. A PR description is
+not a substitute for the issue. Keep unrelated problems in separate issues and
+focused PRs. Typo, formatting, and documentation-only changes that do not alter
+API behavior may omit an issue with an explanation in the PR; other exceptions
+require explicit maintainer approval.
 
 ## Release & Versioning Workflow
 Always follow [`VERSIONING.md`](VERSIONING.md) for any release, hotfix, tagging, branch-planning, or version-bump work. Treat it as the authoritative release policy.
