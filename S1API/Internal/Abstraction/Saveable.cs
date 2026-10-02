@@ -1,47 +1,290 @@
+﻿#if MONOMELON
+using System.Collections.Generic;
+#elif IL2CPPMELON
+using Il2CppSystem.Collections.Generic;
+#endif
+
 using System;
-using System.ComponentModel;
+using System.IO;
+using System.Reflection;
+using Newtonsoft.Json;
+using S1API.Internal.Utils;
 using S1API.Saveables;
+#if (IL2CPPMELON)
+using S1Datas = Il2CppScheduleOne.Persistence.Datas;
+#elif MONOMELON
+using S1Datas = ScheduleOne.Persistence.Datas;
+#endif
+
+#if (IL2CPPMELON)
+using S1Persistence = Il2CppScheduleOne.Persistence;
+#elif MONOMELON
+using S1Persistence = ScheduleOne.Persistence;
+#endif
 
 namespace S1API.Internal.Abstraction
 {
     /// <summary>
-    /// Compatibility base class for existing mods. Use <see cref="global::S1API.Saveables.Saveable"/>
-    /// for new saveable classes.
+    /// Base class for mod data persisted in the game's save slots.
     /// </summary>
     /// <remarks>
-    /// Retained for existing compiled mods and scheduled for removal in a future breaking release.
-    /// No removal version has been set.
+    /// This is a supported modder-facing API despite its <c>S1API.Internal.Abstraction</c> namespace.
+    /// Inherit from this class for standalone mod save data and mark fields with
+    /// <see cref="SaveableField"/>. Override <see cref="OnLoaded"/> and <see cref="OnSaved"/>
+    /// to respond to persistence events, and <see cref="LoadOrder"/> to control load timing.
+    /// API classes such as <c>NPC</c> and <c>Quest</c> already inherit this persistence support.
     /// </remarks>
-    [Obsolete("Use S1API.Saveables.Saveable instead. This compatibility type will be removed in a future breaking release.", false)]
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public abstract class Saveable : global::S1API.Saveables.Saveable
+    public abstract class Saveable : Registerable, ISaveable
     {
-        /// <inheritdoc/>
-        public new virtual SaveableLoadOrder LoadOrder => SaveableLoadOrder.AfterBaseGame;
+        /// <summary>
+        /// Determines when this saveable should load relative to base game saveables.
+        /// </summary>
+        /// <value>
+        /// Default is <see cref="SaveableLoadOrder.AfterBaseGame"/>, which loads after base game entities are loaded.
+        /// Override this property to return <see cref="SaveableLoadOrder.BeforeBaseGame"/> if your mod data needs to be
+        /// available before the base game's ISaveables are loaded.
+        /// </value>
+        /// <remarks>
+        /// <para>
+        /// <strong>AfterBaseGame (default):</strong> Your <see cref="OnLoaded"/> method is called after base game entities 
+        /// (NPCs, buildings, vehicles) have been loaded. This is the recommended setting for most mods.
+        /// </para>
+        /// <para>
+        /// <strong>BeforeBaseGame:</strong> Your <see cref="OnLoaded"/> method is called before base game entities are loaded.
+        /// Use this only if you need to set up hooks or state that the base game loading process depends on.
+        /// </para>
+        /// <para>
+        /// <strong>Note:</strong> All saveables are saved at the same time (after base game save), regardless of load order.
+        /// </para>
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// public class EarlyConfigSaveable : Saveable
+        /// {
+        ///     public override SaveableLoadOrder LoadOrder => SaveableLoadOrder.BeforeBaseGame;
+        ///     
+        ///     [SaveableField("config")]
+        ///     private ModConfig _config = new ModConfig();
+        ///     
+        ///     protected override void OnLoaded()
+        ///     {
+        ///         // Base game entities are NOT loaded yet
+        ///         ApplyGlobalSettings(_config);
+        ///     }
+        /// }
+        /// </code>
+        /// </example>
+        public virtual SaveableLoadOrder LoadOrder => SaveableLoadOrder.AfterBaseGame;
 
         /// <summary>
-        /// Requests a game save. The immediate parameter is retained for compatibility and ignored.
+        /// Requests the game to perform a save operation. If a game is not currently loaded,
+        /// the request is ignored and the method returns false.
         /// </summary>
-        /// <param name="immediate">Ignored, as in the original implementation.</param>
+        /// <param name="immediate">This parameter is ignored in v0.4.3+ (kept for backwards compatibility).</param>
         /// <returns>True if a save was requested; false if the game is not in a savable state.</returns>
-        public new static bool RequestGameSave(bool immediate) =>
-            global::S1API.Saveables.Saveable.RequestGameSave(immediate);
+        public static bool RequestGameSave(bool immediate) => RequestGameSave();
 
         /// <summary>
-        /// Requests a game save when a game is loaded.
+        /// Requests the game to perform a save operation. If a game is not currently loaded,
+        /// the request is ignored and the method returns false.
         /// </summary>
         /// <returns>True if a save was requested; false if the game is not in a savable state.</returns>
-        public new static bool RequestGameSave() => global::S1API.Saveables.Saveable.RequestGameSave();
+        public static bool RequestGameSave()
+        {
+            try
+            {
+                var loadManager = S1Persistence.LoadManager.Instance;
+                if (loadManager == null || !loadManager.IsGameLoaded)
+                    return false;
 
-        /// <inheritdoc/>
-        protected new virtual void OnLoaded() => base.OnLoaded();
+                var saveManager = S1Persistence.SaveManager.Instance;
+                if (saveManager == null)
+                    return false;
 
-        /// <inheritdoc/>
-        protected new virtual void OnSaved() => base.OnSaved();
+                saveManager.Save();
 
-        // Keep the original virtual slots for already compiled mod overrides.
-        internal override SaveableLoadOrder GetLoadOrder() => LoadOrder;
-        internal override void InvokeOnLoaded() => OnLoaded();
-        internal override void InvokeOnSaved() => OnSaved();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// INTERNAL: Explicit interface implementation that delegates to the internal LoadInternal method.
+        /// Loads all fields marked with the <see cref="SaveableField"/> attribute from JSON files in the specified folder.
+        /// </summary>
+        /// <param name="folderPath">The folder path containing the save files to load.</param>
+        void ISaveable.LoadInternal(string folderPath) =>
+            LoadInternal(folderPath);
+
+        /// <summary>
+        /// INTERNAL: Loads all fields marked with the <see cref="SaveableField"/> attribute from JSON files in the specified folder.
+        /// This method uses reflection to find fields with the SaveableField attribute and deserializes their values from JSON files.
+        /// After loading all fields, it calls the <see cref="OnLoaded"/> method to allow derived classes to perform additional initialization.
+        /// </summary>
+        /// <param name="folderPath">The folder path containing the save files to load from.</param>
+        internal virtual void LoadInternal(string folderPath)
+        {
+            FieldInfo[] saveableFields = GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            foreach (FieldInfo saveableField in saveableFields)
+            {
+                SaveableField? saveableFieldAttribute = saveableField.GetCustomAttribute<SaveableField>();
+                if (saveableFieldAttribute == null)
+                    continue;
+
+                string filename = saveableFieldAttribute.SaveName.EndsWith(".json")
+                    ? saveableFieldAttribute.SaveName
+                    : $"{saveableFieldAttribute.SaveName}.json";
+
+                string saveDataPath = Path.Combine(folderPath, filename);
+                if (!File.Exists(saveDataPath))
+                    continue;
+
+                string json = File.ReadAllText(saveDataPath);
+                Type type = saveableField.FieldType;
+                object? value = JsonConvert.DeserializeObject(json, type, ISaveable.SerializerSettings);
+                saveableField.SetValue(this, value);
+            }
+
+            OnLoaded();
+        }
+
+        /// <summary>
+        /// INTERNAL: Explicit interface implementation that delegates to the internal SaveInternal method.
+        /// Saves all fields marked with the <see cref="SaveableField"/> attribute to JSON files in the specified folder.
+        /// </summary>
+        /// <param name="folderPath">The folder path where save files should be written.</param>
+        /// <param name="extraSaveables">Reference to a list of extra saveable files that should not be deleted during cleanup.</param>
+        void ISaveable.SaveInternal(string folderPath, ref List<string> extraSaveables) =>
+            SaveInternal(folderPath, ref extraSaveables);
+
+        /// <summary>
+        /// INTERNAL: Saves all fields marked with the <see cref="SaveableField"/> attribute to JSON files in the specified folder.
+        /// This method uses reflection to find fields with the SaveableField attribute and serializes their values to JSON files.
+        /// Null fields result in their corresponding save files being deleted. Non-null fields are added to the extraSaveables list
+        /// to prevent the base game from deleting them during cleanup. After saving all fields, it calls the <see cref="OnSaved"/> method
+        /// to allow derived classes to perform additional finalization.
+        /// </summary>
+        /// <param name="folderPath">The folder path where save files should be written.</param>
+        /// <param name="extraSaveables">Reference to a list of extra saveable files that should not be deleted during cleanup.</param>
+        internal virtual void SaveInternal(string folderPath, ref List<string> extraSaveables)
+        {
+            FieldInfo[] saveableFields = ReflectionUtils.GetAllFields(GetType(), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            foreach (FieldInfo saveableField in saveableFields)
+            {
+                SaveableField? saveableFieldAttribute = saveableField.GetCustomAttribute<SaveableField>();
+                if (saveableFieldAttribute == null)
+                    continue;
+
+                string saveFileName = saveableFieldAttribute.SaveName.EndsWith(".json")
+                    ? saveableFieldAttribute.SaveName
+                    : $"{saveableFieldAttribute.SaveName}.json";
+
+                string saveDataPath = Path.Combine(folderPath, saveFileName);
+
+                object? value = saveableField.GetValue(this);
+                if (value == null)
+                    // Remove the save if the field is null
+                    File.Delete(saveDataPath);
+                else
+                {
+                    // We add this to the extra saveables to prevent the game from deleting it
+                    // Otherwise, it'll delete it after it finishes saving and does clean up
+                    extraSaveables.Add(saveFileName);
+
+                    // Write our data
+                    string data = JsonConvert.SerializeObject(value, Formatting.Indented, ISaveable.SerializerSettings);
+                    File.WriteAllText(saveDataPath, data);
+                }
+            }
+
+            OnSaved();
+        }
+
+        /// <summary>
+        /// INTERNAL: Writes fields marked with <see cref="SaveableField"/> into a DynamicSaveData blob
+        /// to support the base game's consolidated JSON save format.
+        /// </summary>
+        /// <param name="dynamicSaveData">The dynamic save data record to write into.</param>
+        internal void SaveToDynamic(S1Datas.DynamicSaveData dynamicSaveData)
+        {
+            if (dynamicSaveData == null)
+                return;
+
+            FieldInfo[] saveableFields = ReflectionUtils.GetAllFields(GetType(), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            foreach (FieldInfo saveableField in saveableFields)
+            {
+                SaveableField? saveableFieldAttribute = saveableField.GetCustomAttribute<SaveableField>();
+                if (saveableFieldAttribute == null)
+                    continue;
+
+                object? value = saveableField.GetValue(this);
+                if (value == null)
+                    continue; // Do not write nulls
+
+                string data = JsonConvert.SerializeObject(value, Formatting.None, ISaveable.SerializerSettings);
+                // Use the declared save name as the dynamic key
+                dynamicSaveData.AddData(saveableFieldAttribute.SaveName, data);
+            }
+
+            OnSaved();
+        }
+
+        /// <summary>
+        /// INTERNAL: Reads fields marked with <see cref="SaveableField"/> from a DynamicSaveData blob
+        /// to support the base game's consolidated JSON save format.
+        /// </summary>
+        /// <param name="dynamicSaveData">The dynamic save data record to read from.</param>
+        internal void LoadFromDynamic(S1Datas.DynamicSaveData dynamicSaveData)
+        {
+            if (dynamicSaveData == null)
+                return;
+
+            FieldInfo[] saveableFields = ReflectionUtils.GetAllFields(GetType(), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            foreach (FieldInfo saveableField in saveableFields)
+            {
+                SaveableField? saveableFieldAttribute = saveableField.GetCustomAttribute<SaveableField>();
+                if (saveableFieldAttribute == null)
+                    continue;
+
+                // Read the raw json for this save name and deserialize to the field type
+                if (!dynamicSaveData.TryGetData(saveableFieldAttribute.SaveName, out string json) || string.IsNullOrEmpty(json))
+                    continue;
+
+                Type type = saveableField.FieldType;
+                object? value = JsonConvert.DeserializeObject(json, type, ISaveable.SerializerSettings);
+                saveableField.SetValue(this, value);
+            }
+
+            OnLoaded();
+        }
+
+        /// <summary>
+        /// INTERNAL: Explicit interface implementation that delegates to the virtual OnLoaded method.
+        /// Called after all saveable fields have been loaded from their respective JSON files.
+        /// </summary>
+        void ISaveable.OnLoaded() => OnLoaded();
+
+        /// <summary>
+        /// Called after all saveable fields have been loaded from their respective JSON files.
+        /// This method can be overridden in derived classes to perform additional initialization
+        /// or processing after the save data has been restored.
+        /// </summary>
+        protected virtual void OnLoaded() { }
+
+        /// <summary>
+        /// INTERNAL: Explicit interface implementation that delegates to the virtual OnSaved method.
+        /// Called after all saveable fields have been saved to their respective JSON files.
+        /// </summary>
+        void ISaveable.OnSaved() => OnSaved();
+
+        /// <summary>
+        /// Called after all saveable fields have been saved to their respective JSON files.
+        /// This method can be overridden in derived classes to perform additional finalization
+        /// or processing after the save data has been written to disk.
+        /// </summary>
+        protected virtual void OnSaved() { }
     }
 }

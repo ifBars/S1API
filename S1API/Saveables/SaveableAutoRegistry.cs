@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using S1API.Internal.Abstraction;
 using S1API.Internal.Utils;
 
 namespace S1API.Saveables
@@ -131,10 +132,7 @@ namespace S1API.Saveables
 
             // Check if the base type is exactly Saveable (not a subclass)
             Type? baseType = type.BaseType;
-#pragma warning disable CS0618 // Keep discovery of existing mods using the compatibility base.
-            return baseType == typeof(Saveable)
-                || baseType == typeof(global::S1API.Internal.Abstraction.Saveable);
-#pragma warning restore CS0618
+            return baseType == typeof(Saveable);
         }
 
         /// <summary>

@@ -2,9 +2,12 @@
 {
     /// <summary>
     /// Infrastructure base class for S1API registration and lifecycle hooks.
-    /// Public so modder-facing API classes can inherit it; not intended for direct modder inheritance.
     /// </summary>
-    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    /// <remarks>
+    /// This class is public because public API classes inherit from it.
+    /// Modders should inherit from the appropriate API base class, such as
+    /// <c>NPC</c>, <c>Quest</c>, or <c>Saveable</c>, rather than this infrastructure class directly.
+    /// </remarks>
     public abstract class Registerable : IRegisterable
     {
         /// <summary>

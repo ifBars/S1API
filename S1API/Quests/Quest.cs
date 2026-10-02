@@ -42,10 +42,8 @@ namespace S1API.Quests
     /// <remarks>
     /// To create a quest, you must use <see cref="QuestManager.CreateQuest{T}(string?)"/> to instantiate your quest.
     /// </remarks>
-    /// <seealso cref="global::S1API.Saveables.Saveable.RequestGameSave(bool)"/>
-#pragma warning disable CS0618 // Preserve the legacy base type for existing quest mods.
-    public abstract class Quest : global::S1API.Internal.Abstraction.Saveable
-#pragma warning restore CS0618
+    /// <seealso cref="Saveable.RequestGameSave(bool)"/>
+    public abstract class Quest : Saveable
     {
         /// <summary>
         /// The title of the quest to display for the player.
