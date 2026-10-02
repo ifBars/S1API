@@ -56,7 +56,8 @@ namespace S1API.Internal.Patches
 
         [HarmonyPatch(
             typeof(S1DevUtilities.IconGenerator),
-            nameof(S1DevUtilities.IconGenerator.GeneratePackagingIcon))]
+            nameof(S1DevUtilities.IconGenerator.GeneratePackagingIcon),
+            new Type[] { typeof(string), typeof(string), typeof(int) })]
         [HarmonyPrefix]
         private static bool GeneratePackagingIconPrefix(
             S1DevUtilities.IconGenerator __instance,
@@ -87,7 +88,8 @@ namespace S1API.Internal.Patches
 
         [HarmonyPatch(
             typeof(S1DevUtilities.IconGenerator),
-            nameof(S1DevUtilities.IconGenerator.GeneratePackagingIcon))]
+            nameof(S1DevUtilities.IconGenerator.GeneratePackagingIcon),
+            new Type[] { typeof(string), typeof(string), typeof(int) })]
         [HarmonyFinalizer]
         private static Exception? GeneratePackagingIconFinalizer(
             bool __state,
