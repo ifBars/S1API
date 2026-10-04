@@ -53,19 +53,31 @@ jobs:
       # Determine which assembly branch to use (beta or main) - MUST run before cache
       - name: Determine Assembly Branch
         id: assembly-branch
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          ASSEMBLY_BRANCH: ${{ inputs.assembly_branch }}
+          HAS_BETA_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'beta') }}
         run: |
+          is_beta_branch() {
+            [[ "$1" == "beta" || "$1" =~ ^releases/[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]]
+          }
+
           # Manual workflow dispatch takes precedence
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && [[ -n "${{ inputs.assembly_branch }}" ]]; then
-            echo "branch=${{ inputs.assembly_branch }}" >> $GITHUB_OUTPUT
-            echo "Using ${{ inputs.assembly_branch }} assemblies (manual trigger)"
-          elif [[ "${{ github.ref_name }}" == "beta" ]] || [[ "${{ github.base_ref }}" == "beta" ]]; then
-            echo "branch=beta" >> $GITHUB_OUTPUT
-            echo "Using beta assemblies for beta branch workflow"
-          elif [[ "${{ github.event_name }}" == "pull_request" ]] && [[ "${{ contains(github.event.pull_request.labels.*.name, 'beta') }}" == "true" ]]; then
-            echo "branch=beta" >> $GITHUB_OUTPUT
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]] && [[ -n "$ASSEMBLY_BRANCH" ]]; then
+            echo "branch=$ASSEMBLY_BRANCH" >> "$GITHUB_OUTPUT"
+            echo "Using $ASSEMBLY_BRANCH assemblies (manual trigger)"
+          elif is_beta_branch "$REF_NAME" || is_beta_branch "$HEAD_REF" || is_beta_branch "$BASE_REF"; then
+            echo "branch=beta" >> "$GITHUB_OUTPUT"
+            echo "Using beta assemblies for beta branch or prerelease workflow"
+          elif [[ "$EVENT_NAME" == "pull_request" ]] && [[ "$HAS_BETA_LABEL" == "true" ]]; then
+            echo "branch=beta" >> "$GITHUB_OUTPUT"
             echo "Using beta assemblies for PR with beta label"
           else
-            echo "branch=main" >> $GITHUB_OUTPUT
+            echo "branch=main" >> "$GITHUB_OUTPUT"
             echo "Using main/stable assemblies"
           fi
 
