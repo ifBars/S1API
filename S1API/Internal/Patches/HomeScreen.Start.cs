@@ -46,12 +46,16 @@ namespace S1API.Internal.Patches
             ExternalAppCatalog.Clear(ExternalAppFamily.Phone);
             // Re-register all PhoneApps
             var phoneApps = ReflectionUtils.GetDerivedClasses<PhoneApp.PhoneApp>();
+            Logger.Msg($"Discovered {phoneApps.Count} custom phone app type(s).");
             foreach (var type in phoneApps)
             {
-                Logger.Debug($"Found phone app: {type.FullName}");
-
                 if (type.GetConstructor(Type.EmptyTypes) == null)
+                {
+                    Logger.Warning($"Skipping phone app {type.FullName}: a public parameterless constructor is required.");
                     continue;
+                }
+
+                Logger.Msg($"Initializing phone app: {type.FullName}");
 
                 try
                 {
@@ -62,7 +66,7 @@ namespace S1API.Internal.Patches
                 }
                 catch (Exception e)
                 {
-                    Logger.Warning($"[PhoneApp] Failed to register {type.FullName}: {e.Message}");
+                    Logger.Warning($"Failed to register phone app {type.FullName}: {e}");
                 }
             }
         }
