@@ -12,6 +12,7 @@ using ScheduleOne.AvatarFramework.Customization;
 
 using S1API.Logging;
 using S1API.Internal.Utils;
+using S1API.Internal.Rendering;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -147,6 +148,13 @@ namespace S1API.Rendering
                 return null;
             }
 
+            int iconLayer = RuntimePreviewLayer.Resolve();
+            if (iconLayer < 0)
+            {
+                Logger.Error("Neither RuntimePreviewGeneration nor IconGeneration exists. Cannot generate icon.");
+                return null;
+            }
+
             Transform? originalParent = model.parent;
             Vector3 originalPos = model.localPosition;
             Quaternion originalRot = model.localRotation;
@@ -167,14 +175,9 @@ namespace S1API.Rendering
                 // Now activate and set layers (after parenting)
                 model.gameObject.SetActive(true);
                 
-                int iconLayer = LayerMask.NameToLayer("IconGeneration");
-                if (iconLayer != -1)
-                {
-                    // Set layers recursively on ItemContainer to match game's approach
-                    S1DevUtils.LayerUtility.SetLayerRecursively(
-                        generator.ItemContainer.gameObject,
-                        iconLayer);
-                }
+                S1DevUtils.LayerUtility.SetLayerRecursively(
+                    generator.ItemContainer.gameObject,
+                    iconLayer);
 
                 Logger.Debug(
                     $"Icon generation for '{model.name}': world pos={model.position}, " +
@@ -204,7 +207,7 @@ namespace S1API.Rendering
                 // Temporarily override IconGenerator state
                 generator.ModifyLighting = true;
 
-                texture = generator.GetTexture(model);
+                texture = generator.GetTexture(model, size);
                 Logger.Debug($"Generated texture: {(texture != null ? $"{texture.width}x{texture.height}" : "null")}");
                 if (texture != null && !HasVisibleContent(texture))
                 {
