@@ -59,6 +59,46 @@ public sealed class ReflectionUtilsTests
     }
 
     [Fact]
+    public void GetDerivedClassesReturnsAFreshListEachCall()
+    {
+        List<Type> first = ReflectionUtils.GetDerivedClasses<Log>();
+        first.Clear();
+
+        Assert.Contains(typeof(DerivedLogShape), ReflectionUtils.GetDerivedClasses<Log>());
+        Assert.NotSame(ReflectionUtils.GetDerivedClasses<Log>(), ReflectionUtils.GetDerivedClasses<Log>());
+    }
+
+    [Fact]
+    public void GetDerivedClassesGivesTheSameTypesAfterInvalidation()
+    {
+        var before = ReflectionUtils.GetDerivedClasses<Log>();
+        ReflectionUtils.InvalidateDerivedClassCache();
+        var after = ReflectionUtils.GetDerivedClasses<Log>();
+
+        Assert.Equal(before.OrderBy(t => t.FullName), after.OrderBy(t => t.FullName));
+    }
+
+    [Fact]
+    public void GetDerivedClassesSeesTypesAddedToADynamicAssemblyAfterCaching()
+    {
+        var name = new AssemblyName($"S1API.ReflectionUtilsTests.Late.{Guid.NewGuid():N}");
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(name, AssemblyBuilderAccess.Run);
+        var module = assembly.DefineDynamicModule(name.Name!);
+        ReflectionUtils.GetDerivedClasses<Log>();   // cache built while the dynamic assembly has no types
+
+        TypeBuilder builder = module.DefineType("LateLog", TypeAttributes.Public | TypeAttributes.Class, typeof(Log));
+        var ctor = builder.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
+        var il = ctor.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "late");
+        il.Emit(OpCodes.Call, typeof(Log).GetConstructor(new[] { typeof(string) })!);
+        il.Emit(OpCodes.Ret);
+        Type late = builder.CreateType()!;
+
+        Assert.Contains(late, ReflectionUtils.GetDerivedClasses<Log>());
+    }
+
+    [Fact]
     public void DerivedTypeScanExcludesAssembliesWithoutAReferencePathToTheBaseAssembly()
     {
         Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
