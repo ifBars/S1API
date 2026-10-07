@@ -61,6 +61,7 @@ namespace S1API.Internal.Lifecycle
 
             try
             {
+                Internal.Utils.SceneObjectIndexes.ResetAll();
                 if (afterUnload)
                 {
                     for (int i = 0; i < NPC.All.Count; i++)

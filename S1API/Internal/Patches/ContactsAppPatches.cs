@@ -71,6 +71,13 @@ namespace S1API.Internal.Patches
             _hasCustomNpcTypesCache = null;
         }
 
+        internal static readonly global::S1API.Internal.Utils.SceneObjectIndex<S1Relations.RelationCircle> CirclesByNpcId =
+            new global::S1API.Internal.Utils.SceneObjectIndex<S1Relations.RelationCircle>(
+                () => Object.FindObjectsOfType<S1Relations.RelationCircle>(true),
+                circle => GetAssignedNpcId(circle),
+                circle => circle != null,
+                global::System.StringComparer.OrdinalIgnoreCase);
+
         internal static void RefreshContactIcon(S1NPCs.NPC npc)
         {
             if (npc == null || string.IsNullOrWhiteSpace(npc.ID))
@@ -78,15 +85,8 @@ namespace S1API.Internal.Patches
 
             try
             {
-                foreach (S1Relations.RelationCircle circle in
-                         Object.FindObjectsOfType<S1Relations.RelationCircle>(true))
+                foreach (S1Relations.RelationCircle circle in CirclesByNpcId.Get(npc.ID))
                 {
-                    if (!string.Equals(
-                            GetAssignedNpcId(circle),
-                            npc.ID,
-                            global::System.StringComparison.OrdinalIgnoreCase))
-                        continue;
-
                     SetAssignedNpc(circle, npc);
                     circle.AssignNPC(npc);
                 }
