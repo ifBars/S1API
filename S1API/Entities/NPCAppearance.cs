@@ -1128,7 +1128,7 @@ namespace S1API.Entities
         internal static readonly global::S1API.Internal.Utils.SceneObjectIndex<S1Map.NPCPoI> PoisByNpcId =
             new global::S1API.Internal.Utils.SceneObjectIndex<S1Map.NPCPoI>(
                 () => UnityEngine.Object.FindObjectsOfType<S1Map.NPCPoI>(true),
-                poi => poi.NPC?.ID,
+                poi => poi.NPC?.NPCData?.BasicInfo?.ID,
                 poi => poi != null,
                 include: poi => poi.gameObject.activeInHierarchy);
 

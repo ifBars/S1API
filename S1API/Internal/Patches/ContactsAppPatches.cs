@@ -1,4 +1,4 @@
-﻿#if (IL2CPPMELON)
+#if (IL2CPPMELON)
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1ContactsApp = Il2CppScheduleOne.UI.Phone.ContactsApp;
 using S1Map = Il2CppScheduleOne.Map;
@@ -44,7 +44,7 @@ namespace S1API.Internal.Patches
             if (circle == null)
                 return null;
 
-            return (ReflectionUtils.TryGetFieldOrProperty(circle, "AssignedNPC") as S1NPCs.NPC)?.ID
+            return (ReflectionUtils.TryGetFieldOrProperty(circle, "AssignedNPC") as S1NPCs.NPC)?.NPCData?.BasicInfo?.ID
                    ?? ReflectionUtils.TryGetFieldOrProperty(circle, "AssignedNPC_ID") as string
                    ?? ReflectionUtils.TryGetFieldOrProperty(circle, "NPCId") as string;
         }
