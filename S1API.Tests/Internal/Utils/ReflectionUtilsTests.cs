@@ -99,6 +99,25 @@ public sealed class ReflectionUtilsTests
     }
 
     [Fact]
+    public void GetDerivedClassesSeesAnAssemblyLoadedAfterCaching()
+    {
+        ReflectionUtils.GetDerivedClasses<Log>();
+        var name = new AssemblyName($"S1API.ReflectionUtilsTests.NewAssembly.{Guid.NewGuid():N}");
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(name, AssemblyBuilderAccess.Run);
+        var module = assembly.DefineDynamicModule(name.Name!);
+        TypeBuilder builder = module.DefineType("NewAssemblyLog", TypeAttributes.Public | TypeAttributes.Class, typeof(Log));
+        var ctor = builder.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
+        var il = ctor.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "new-assembly");
+        il.Emit(OpCodes.Call, typeof(Log).GetConstructor(new[] { typeof(string) })!);
+        il.Emit(OpCodes.Ret);
+        Type late = builder.CreateType()!;
+
+        Assert.Contains(late, ReflectionUtils.GetDerivedClasses<Log>());
+    }
+
+    [Fact]
     public void DerivedTypeScanExcludesAssembliesWithoutAReferencePathToTheBaseAssembly()
     {
         Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
