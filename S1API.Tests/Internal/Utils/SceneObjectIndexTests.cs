@@ -8,6 +8,7 @@ public sealed class SceneObjectIndexTests
     {
         public string? Key;
         public bool Alive = true;
+        public bool Active = true;
     }
 
     private static (SceneObjectIndex<Item> index, List<Item> scene) Make()
@@ -97,6 +98,75 @@ public sealed class SceneObjectIndexTests
         var third = new Item();
         scene.AddRange(new[] { first, second, third });
         Assert.Equal(new[] { first, second, third }, index.All());
+    }
+
+    [Fact]
+    public void FindsAnIndexedObjectRekeyedIntoAnExistingKey()
+    {
+        var (index, scene) = Make();
+        var first = new Item { Key = "a" };
+        var second = new Item { Key = "b" };
+        scene.AddRange(new[] { first, second });
+        Assert.Same(first, Assert.Single(index.Get("a")));
+        second.Key = "a";
+        Assert.Equal(new[] { first, second }, index.Get("a"));
+    }
+
+    [Fact]
+    public void FindsAnUnkeyedIndexedObjectAssignedToAnExistingKey()
+    {
+        var (index, scene) = Make();
+        var first = new Item { Key = "a" };
+        var second = new Item();
+        scene.AddRange(new[] { first, second });
+        Assert.Same(first, Assert.Single(index.Get("a")));
+        second.Key = "a";
+        Assert.Equal(new[] { first, second }, index.Get("a"));
+    }
+
+    [Fact]
+    public void NotificationFindsANewObjectUnderAnExistingKey()
+    {
+        var (index, scene) = Make();
+        var first = new Item { Key = "a" };
+        scene.Add(first);
+        Assert.Same(first, Assert.Single(index.Get("a")));
+        var late = new Item { Key = "a" };
+        scene.Add(late);
+        index.NotifyChanged(late);
+        Assert.Equal(new[] { first, late }, index.Get("a"));
+    }
+
+    [Fact]
+    public void NotificationOfAnExistingUnchangedObjectKeepsTheSnapshot()
+    {
+        var (index, scene) = Make();
+        var item = new Item { Key = "a" };
+        scene.Add(item);
+        index.Get("a");
+        index.NotifyChanged(item);
+        Assert.Same(item, Assert.Single(index.Get("a")));
+        Assert.Equal(1, index.Scans);
+    }
+
+    [Fact]
+    public void FiltersCurrentActivationWithoutLosingIndexedObjects()
+    {
+        var first = new Item { Key = "a" };
+        var second = new Item { Key = "a", Active = false };
+        var scene = new[] { first, second };
+        var index = new SceneObjectIndex<Item>(() => scene, i => i.Key, i => i != null && i.Alive,
+            include: i => i.Active);
+        Assert.Same(first, Assert.Single(index.Get("a")));
+        first.Active = false;
+        Assert.Empty(index.Get("a"));
+        Assert.Empty(index.All());
+        second.Active = true;
+        Assert.Same(second, Assert.Single(index.Get("a")));
+        Assert.Same(second, Assert.Single(index.All()));
+        first.Active = true;
+        Assert.Equal(scene, index.Get("a"));
+        Assert.Equal(1, index.Scans);
     }
 
     [Fact]

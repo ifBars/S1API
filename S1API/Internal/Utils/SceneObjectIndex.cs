@@ -38,19 +38,23 @@ namespace S1API.Internal.Utils
         private readonly Func<IEnumerable<TObject>> _scan;
         private readonly Func<TObject, string?> _key;
         private readonly Func<TObject?, bool> _alive;
+        private readonly Func<TObject, bool> _include;
         private readonly StringComparer _comparer;
         private Dictionary<string, List<TObject>>? _byKey;
         private List<TObject> _ordered = new List<TObject>();
+        private List<string?> _orderedKeys = new List<string?>();
 
         internal SceneObjectIndex(
             Func<IEnumerable<TObject>> scan,
             Func<TObject, string?> key,
             Func<TObject?, bool> alive,
-            StringComparer? comparer = null)
+            StringComparer? comparer = null,
+            Func<TObject, bool>? include = null)
         {
             _scan = scan;
             _key = key;
             _alive = alive;
+            _include = include ?? (_ => true);
             _comparer = comparer ?? StringComparer.Ordinal;
             SceneObjectIndexes.Register(Invalidate);
         }
@@ -58,7 +62,30 @@ namespace S1API.Internal.Utils
         /// <summary>Number of scans since creation, for diagnostics and tests.</summary>
         internal int Scans { get; private set; }
 
-        internal void Invalidate() => _byKey = null;
+        internal void Invalidate()
+        {
+            _byKey = null;
+            _ordered.Clear();
+            _orderedKeys.Clear();
+        }
+
+        /// <summary>Invalidates a populated snapshot when the native lifecycle assigns a new object.</summary>
+        internal void NotifyChanged(TObject item)
+        {
+            if (_byKey != null && !_ordered.Contains(item))
+                Invalidate();
+        }
+
+        private bool IsSnapshotValid()
+        {
+            for (int i = 0; i < _ordered.Count; i++)
+            {
+                TObject item = _ordered[i];
+                if (!_alive(item) || !_comparer.Equals(_key(item), _orderedKeys[i]))
+                    return false;
+            }
+            return true;
+        }
 
         /// <summary>The live objects whose key matches; empty only if a fresh scan finds none.</summary>
         internal List<TObject> Get(string? key)
@@ -67,7 +94,7 @@ namespace S1API.Internal.Utils
             if (string.IsNullOrEmpty(key))
                 return result;
 
-            if (_byKey == null || !TryCollect(key!, result))
+            if (_byKey == null || !IsSnapshotValid() || !TryCollect(key!, result))
             {
                 Build();
                 result.Clear();
@@ -97,7 +124,8 @@ namespace S1API.Internal.Utils
             {
                 if (!_alive(item) || !_comparer.Equals(_key(item) ?? string.Empty, key))
                     return false;
-                result.Add(item);
+                if (_include(item))
+                    result.Add(item);
             }
             return true;
         }
@@ -110,7 +138,8 @@ namespace S1API.Internal.Utils
             {
                 if (!_alive(item))
                     return false;
-                result.Add(item);
+                if (_include(item))
+                    result.Add(item);
             }
             return true;
         }
@@ -120,12 +149,14 @@ namespace S1API.Internal.Utils
             Scans++;
             var index = new Dictionary<string, List<TObject>>(_comparer);
             var ordered = new List<TObject>();
+            var orderedKeys = new List<string?>();
             foreach (var item in _scan())
             {
                 if (!_alive(item))
                     continue;
                 ordered.Add(item);
                 string? key = _key(item);
+                orderedKeys.Add(key);
                 if (string.IsNullOrEmpty(key))
                     continue;
                 if (!index.TryGetValue(key!, out var list))
@@ -133,6 +164,7 @@ namespace S1API.Internal.Utils
                 list.Add(item);
             }
             _ordered = ordered;
+            _orderedKeys = orderedKeys;
             _byKey = index;
         }
     }
