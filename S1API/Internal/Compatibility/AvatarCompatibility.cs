@@ -141,6 +141,10 @@ namespace S1API.Internal.Compatibility
                         animator.Update(0f);
                         animator.enabled = false;
                     }
+                    // Awake cached the live source's transient hip; Update must retain the rebound pose.
+                    if (avatar.HipBone != null)
+                        Utils.ReflectionUtils.TrySetFieldOrProperty(
+                            avatar, "_savedHipPosition", avatar.HipBone.localPosition);
                 }
                 if (avatar == null ||
                     !Utils.ReflectionUtils.TrySetFieldOrProperty(generator, "_avatar", avatar) ||

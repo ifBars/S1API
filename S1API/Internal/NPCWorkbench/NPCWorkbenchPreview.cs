@@ -88,6 +88,9 @@ namespace S1API.Internal.NPCWorkbench
                     throw new InvalidOperationException("The cloned native preview rig has no Avatar component.");
 
                 Compatibility.AvatarCompatibility.PrepareDetachedAvatar(avatar);
+                // Portrait rigs are frozen; this clone needs animation for its pose controls.
+                foreach (var animator in avatar.GetComponentsInChildren<Animator>(true))
+                    animator.enabled = true;
 
                 avatar.SetVisible(true);
                 foreach (var renderer in avatarObject.GetComponentsInChildren<SkinnedMeshRenderer>(true))
