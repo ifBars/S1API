@@ -36,25 +36,6 @@ namespace S1API.Internal.Patches
         }
 
         [HarmonyPatch(
-            typeof(S1Product.ProductIconManager),
-            nameof(S1Product.ProductIconManager.GenerateIcons))]
-        [HarmonyPrefix]
-        private static void GenerateIconsPrefix()
-        {
-            ProductPackagingContentRuntime.BeginNativeIconBatch();
-        }
-
-        [HarmonyPatch(
-            typeof(S1Product.ProductIconManager),
-            nameof(S1Product.ProductIconManager.GenerateIcons))]
-        [HarmonyFinalizer]
-        private static Exception? GenerateIconsFinalizer(Exception? __exception)
-        {
-            ProductPackagingContentRuntime.EndNativeIconBatch();
-            return __exception;
-        }
-
-        [HarmonyPatch(
             typeof(S1DevUtilities.IconGenerator),
             nameof(S1DevUtilities.IconGenerator.GeneratePackagingIcon),
             new Type[] { typeof(string), typeof(string), typeof(int) })]
@@ -125,6 +106,40 @@ namespace S1API.Internal.Patches
 
             __result = icon!;
             return false;
+        }
+    }
+
+    /// <summary>
+    /// INTERNAL: Defers custom packaging icons while the game generates every product icon in one batch at load.
+    /// Game builds up to 0.4.7f10 have <c>ProductIconManager.GenerateIcons</c>; 0.4.7f11 replaced the batch with
+    /// on-demand <c>GenerateRuntimeIcons(productID)</c>, where the packaging-icon prefix generates custom icons
+    /// directly. Kept apart from <see cref="ProductPackagingContentPatches"/> so a missing batch method skips only
+    /// these two patches instead of failing that whole class.
+    /// </summary>
+    [HarmonyPatch]
+    internal static class ProductIconBatchPatches
+    {
+        // Plain reflection: AccessTools.Method logs a warning for every missing method.
+        private static System.Reflection.MethodBase? Batch() =>
+            Array.Find(
+                typeof(S1Product.ProductIconManager).GetMethods(AccessTools.all),
+                method => method.Name == "GenerateIcons");
+
+        private static bool Prepare() => Batch() != null;
+
+        private static System.Reflection.MethodBase? TargetMethod() => Batch();
+
+        [HarmonyPrefix]
+        private static void Prefix()
+        {
+            ProductPackagingContentRuntime.BeginNativeIconBatch();
+        }
+
+        [HarmonyFinalizer]
+        private static Exception? Finalizer(Exception? __exception)
+        {
+            ProductPackagingContentRuntime.EndNativeIconBatch();
+            return __exception;
         }
     }
 }
