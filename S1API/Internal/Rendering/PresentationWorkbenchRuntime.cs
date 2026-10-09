@@ -414,6 +414,7 @@ namespace S1API.Internal.Rendering
 
             private object CreateAvatarStage()
             {
+#if false
                 var generator = S1AvatarFramework.MugshotGenerator.Instance;
                 var source = generator != null ? generator.MugshotRig : null;
                 if (source == null)
@@ -462,6 +463,10 @@ namespace S1API.Internal.Rendering
                 RefreshAvatarRenderers();
 
                 return avatar;
+#else
+                throw new InvalidOperationException(
+                    "Avatar presentation previews are unavailable with the Schedule I 0.4.7 avatar pipeline.");
+#endif
             }
 
             private void TickAvatarStage()
@@ -474,11 +479,8 @@ namespace S1API.Internal.Rendering
                     if (_avatarSettleFrames-- > 0)
                         return;
 
-                    _avatarRig.LoadAvatarSettings(_avatarSettings!);
+                    Compatibility.AvatarCompatibility.ApplyLegacySettings(_avatarRig, _avatarSettings!);
                     _avatarRig.SetVisible(true);
-                    _avatarRig.Impostor.DisableImpostor();
-                    if (_avatarRig.Animation != null)
-                        _avatarRig.Animation.AllowCulling = false;
                     _avatarRendererRefreshFrames = 2;
                     _avatarAppearanceApplied = true;
                     _avatarSettleFrames = 2;

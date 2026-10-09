@@ -53,19 +53,31 @@ jobs:
       # Determine which assembly branch to use (beta or main) - MUST run before cache
       - name: Determine Assembly Branch
         id: assembly-branch
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          ASSEMBLY_BRANCH: ${{ inputs.assembly_branch }}
+          HAS_BETA_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'beta') }}
         run: |
+          is_beta_branch() {
+            [[ "$1" == "beta" || "$1" =~ ^releases/[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]]
+          }
+
           # Manual workflow dispatch takes precedence
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && [[ -n "${{ inputs.assembly_branch }}" ]]; then
-            echo "branch=${{ inputs.assembly_branch }}" >> $GITHUB_OUTPUT
-            echo "Using ${{ inputs.assembly_branch }} assemblies (manual trigger)"
-          elif [[ "${{ github.ref_name }}" == "beta" ]] || [[ "${{ github.base_ref }}" == "beta" ]]; then
-            echo "branch=beta" >> $GITHUB_OUTPUT
-            echo "Using beta assemblies for beta branch workflow"
-          elif [[ "${{ github.event_name }}" == "pull_request" ]] && [[ "${{ contains(github.event.pull_request.labels.*.name, 'beta') }}" == "true" ]]; then
-            echo "branch=beta" >> $GITHUB_OUTPUT
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]] && [[ -n "$ASSEMBLY_BRANCH" ]]; then
+            echo "branch=$ASSEMBLY_BRANCH" >> "$GITHUB_OUTPUT"
+            echo "Using $ASSEMBLY_BRANCH assemblies (manual trigger)"
+          elif is_beta_branch "$REF_NAME" || is_beta_branch "$HEAD_REF" || is_beta_branch "$BASE_REF"; then
+            echo "branch=beta" >> "$GITHUB_OUTPUT"
+            echo "Using beta assemblies for beta branch or prerelease workflow"
+          elif [[ "$EVENT_NAME" == "pull_request" ]] && [[ "$HAS_BETA_LABEL" == "true" ]]; then
+            echo "branch=beta" >> "$GITHUB_OUTPUT"
             echo "Using beta assemblies for PR with beta label"
           else
-            echo "branch=main" >> $GITHUB_OUTPUT
+            echo "branch=main" >> "$GITHUB_OUTPUT"
             echo "Using main/stable assemblies"
           fi
 
@@ -85,9 +97,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: S1API/ScheduleOneAssemblies
-          key: game-assemblies-v4-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
+          key: game-assemblies-v5-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
           restore-keys: |
-            game-assemblies-v4-${{ steps.assembly-branch.outputs.branch }}-
+            game-assemblies-v5-${{ steps.assembly-branch.outputs.branch }}-
 
       # Only checkout game assemblies if cache miss AND we have access to secrets
       - name: Checkout Game Assemblies
@@ -212,7 +224,7 @@ jobs:
         if: always() && steps.cache-assemblies.outputs.cache-hit != 'true' && hashFiles('S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll') != '' && hashFiles('S1API/ScheduleOneAssemblies/Managed/Unity.Burst.dll') != '' && hashFiles('S1API/ScheduleOneAssemblies/MelonLoader/0Harmony.dll') != '' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable' || github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/npc-prefabs')))
         with:
           path: S1API/ScheduleOneAssemblies
-          key: game-assemblies-v4-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
+          key: game-assemblies-v5-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
 
       - name: Create CI Build Properties
         run: |
@@ -311,18 +323,39 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
           git checkout --detach --force "$BASE_SHA"
 
-          baseline_tag="$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$BASE_SHA" 2>/dev/null || true)"
-          if [[ -n "$baseline_tag" ]] && git diff --quiet "$baseline_tag" "$BASE_SHA" -- \
-            ':(glob)S1API/**/*.cs' \
-            S1API/S1API.csproj \
-            S1API/Directory.Build.props \
-            Directory.Build.props; then
+          use_release_baseline=false
+          if [[ "$BASE_REF" == "beta" ]]; then
+            baseline_tag="$(gh release list \
+              --repo "$GITHUB_REPOSITORY" \
+              --limit 100 \
+              --json tagName,isPrerelease,publishedAt \
+              --jq '[.[] | select(.isPrerelease and (.tagName | contains("-beta.")))] | sort_by(.publishedAt) | last | .tagName // ""')"
+            if [[ -z "$baseline_tag" ]]; then
+              baseline_tag="$(gh release view \
+                --repo "$GITHUB_REPOSITORY" \
+                --json tagName \
+                --jq '.tagName')"
+            fi
+            use_release_baseline=true
+          else
+            baseline_tag="$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$BASE_SHA" 2>/dev/null || true)"
+            if [[ -n "$baseline_tag" ]] && git diff --quiet "$baseline_tag" "$BASE_SHA" -- \
+              ':(glob)S1API/**/*.cs' \
+              S1API/S1API.csproj \
+              S1API/Directory.Build.props \
+              Directory.Build.props; then
+              use_release_baseline=true
+            fi
+          fi
+
+          if [[ "$use_release_baseline" == "true" ]]; then
             baseline_version="${baseline_tag#v}"
             release_dir="$RUNNER_TEMP/s1api-api-compat/release"
             release_zip="$release_dir/S1API-Forked-${baseline_version}.zip"

@@ -25,8 +25,15 @@ using S1Persistence = ScheduleOne.Persistence;
 namespace S1API.Internal.Abstraction
 {
     /// <summary>
-    /// Generic wrapper for saveable classes.
+    /// Base class for mod data persisted in the game's save slots.
     /// </summary>
+    /// <remarks>
+    /// This is a supported modder-facing API despite its <c>S1API.Internal.Abstraction</c> namespace.
+    /// Inherit from this class for standalone mod save data and mark fields with
+    /// <see cref="SaveableField"/>. Override <see cref="OnLoaded"/> and <see cref="OnSaved"/>
+    /// to respond to persistence events, and <see cref="LoadOrder"/> to control load timing.
+    /// API classes such as <c>NPC</c> and <c>Quest</c> already inherit this persistence support.
+    /// </remarks>
     public abstract class Saveable : Registerable, ISaveable
     {
         /// <summary>

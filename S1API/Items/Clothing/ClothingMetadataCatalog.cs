@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using UnityEngine;
 #if MONOMELON
 using S1Clothing = ScheduleOne.Clothing;
@@ -173,14 +174,15 @@ namespace S1API.Items.Clothing
 
             try
             {
-                if (!S1DevUtilities.Singleton<S1Clothing.ClothingUtility>.InstanceExists)
+                var configuration = Resources
+                    .FindObjectsOfTypeAll<S1Clothing.ClothingConfiguration>()
+                    .FirstOrDefault();
+                if (configuration == null)
                     return false;
 
-                S1Clothing.ClothingUtility.ClothingSlotData? nativeMetadata =
-                    S1DevUtilities.Singleton<S1Clothing.ClothingUtility>
-                        .Instance
-                        .GetSlotData((S1Clothing.EClothingSlot)slot);
-                if (nativeMetadata == null)
+                S1Clothing.ClothingConfiguration.ClothingSlotData nativeMetadata =
+                    configuration.GetSlotData((S1Clothing.EClothingSlot)slot);
+                if (nativeMetadata.IsNull())
                     return false;
 
                 metadata = new ClothingSlotMetadata(
@@ -203,14 +205,15 @@ namespace S1API.Items.Clothing
 
             try
             {
-                if (!S1DevUtilities.Singleton<S1Clothing.ClothingUtility>.InstanceExists)
+                var configuration = Resources
+                    .FindObjectsOfTypeAll<S1Clothing.ClothingConfiguration>()
+                    .FirstOrDefault();
+                if (configuration == null)
                     return false;
 
-                S1Clothing.ClothingUtility.ColorData? nativeMetadata =
-                    S1DevUtilities.Singleton<S1Clothing.ClothingUtility>
-                        .Instance
-                        .GetColorData((S1Clothing.EClothingColor)color);
-                if (nativeMetadata == null)
+                S1Clothing.ClothingConfiguration.ColorData nativeMetadata =
+                    configuration.GetColorData((S1Clothing.EClothingColor)color);
+                if (nativeMetadata.IsNull())
                     return false;
 
                 metadata = new ClothingColorMetadata(

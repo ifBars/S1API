@@ -247,8 +247,10 @@ namespace S1API.Entities
             bool uiCreated =
                 Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(conversation, "uiCreated") is bool created
                 && created;
-            int messageCount = conversation.messageHistory?.Count ?? 0;
-            int messageChainCount = conversation.messageChainHistory?.Count ?? 0;
+            int messageCount =
+                (Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(conversation, "_messageHistory") as System.Collections.ICollection)?.Count ?? 0;
+            int messageChainCount =
+                (Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(conversation, "_messageChainHistory") as System.Collections.ICollection)?.Count ?? 0;
             int responseCount = conversation.currentResponses?.Count ?? 0;
             if (!ShouldHideLockedConversation(
                     NPC.Relationship.IsUnlocked,

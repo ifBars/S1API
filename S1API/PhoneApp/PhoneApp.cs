@@ -6,6 +6,7 @@ using MelonLoader;
 using S1API.Internal.Abstraction;
 using S1API.Internal.Patches;
 using S1API.Internal.Utils;
+using S1API.ExternalHosting;
 using UnityEngine;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;
@@ -72,6 +73,8 @@ namespace S1API.PhoneApp
         /// If set before the icon exists, this sprite will be applied once the icon spawns.
         /// </summary>
         private Sprite? _pendingIconSprite;
+        private Sprite? _fileIconSprite;
+        private string? _fileIconName;
         
         /// <summary>
         /// Reference to the home screen instance for managing app state transitions.
@@ -174,6 +177,18 @@ namespace S1API.PhoneApp
         protected override void OnCreated()
         {
             PhoneAppRegistry.Register(this);
+            ExternalAppCatalog.Register(ExternalAppFamily.Phone, this, () => AppName, () => AppTitle,
+                ResolveExternalIcon);
+        }
+
+        private Sprite? ResolveExternalIcon()
+        {
+            if (_pendingIconSprite != null)
+                return _pendingIconSprite;
+            if (_iconImage != null && _iconImage.sprite != null)
+                return _iconImage.sprite;
+            Sprite? direct = IconSprite;
+            return direct != null ? direct : LoadFileIcon(IconFileName);
         }
 
         /// <summary>
@@ -186,6 +201,7 @@ namespace S1API.PhoneApp
                 return;
 
             _isDestroying = true;
+            ExternalAppCatalog.Unregister(this);
 
             if (_appPanel != null)
             {
@@ -198,6 +214,8 @@ namespace S1API.PhoneApp
             _iconModified = false;
             _iconImage = null;
             _pendingIconSprite = null;
+            _fileIconSprite = null;
+            _fileIconName = null;
             
             // Unsubscribe from phone events if subscribed
             if (Phone.InstanceExists && _closeAppAction != null)
@@ -647,11 +665,23 @@ namespace S1API.PhoneApp
                 return false;
             }
 
+            Sprite? sprite = LoadFileIcon(filename);
+            if (sprite == null)
+                return false;
+            image.sprite = sprite;
+            return true;
+        }
+
+        private Sprite? LoadFileIcon(string filename)
+        {
+            if (_fileIconSprite != null && string.Equals(_fileIconName, filename, StringComparison.Ordinal))
+                return _fileIconSprite;
+
             string path = Path.Combine(MelonEnvironment.ModsDirectory, filename);
             if (!File.Exists(path))
             {
                 Logger.Error("Icon file not found: " + path);
-                return false;
+                return null;
             }
 
             try
@@ -660,8 +690,9 @@ namespace S1API.PhoneApp
                 Texture2D tex = new Texture2D(2, 2);
                 if (tex.LoadImage(bytes))
                 {
-                    image.sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
-                    return true;
+                    _fileIconSprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+                    _fileIconName = filename;
+                    return _fileIconSprite;
                 }
                 Object.Destroy(tex);
             }
@@ -670,7 +701,7 @@ namespace S1API.PhoneApp
                 Logger.Error("Failed to load image: " + e.Message);
             }
 
-            return false;
+            return null;
         }
 
         /// <summary>

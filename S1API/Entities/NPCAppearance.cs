@@ -1,9 +1,11 @@
 #if (IL2CPPMELON)
 using S1AvatarFramework = Il2CppScheduleOne.AvatarFramework;
+using S1AvatarTools = Il2CppScheduleOne.Avatar.Tools;
 using S1Map = Il2CppScheduleOne.Map;
 using S1NPCs = Il2CppScheduleOne.NPCs;
 #elif MONOMELON
 using S1AvatarFramework = ScheduleOne.AvatarFramework;
+using S1AvatarTools = ScheduleOne.Avatar.Tools;
 using S1Map = ScheduleOne.Map;
 using S1NPCs = ScheduleOne.NPCs;
 #endif
@@ -63,14 +65,12 @@ namespace S1API.Entities
 
             if (_runtimeAvatar != null)
             {
-                if (_runtimeAvatar.CurrentSettings != null)
-                    sourceSettings = _runtimeAvatar.CurrentSettings;
-                else
-                    sourceSettings = global::S1API.Internal.Utils.ReflectionUtils.TryGetFieldOrProperty(_runtimeAvatar, "InitialAvatarSettings") as S1AvatarFramework.AvatarSettings;
+                sourceSettings = global::S1API.Internal.Compatibility.AvatarCompatibility
+                    .CaptureLegacySettings(_runtimeAvatar);
             }
 
             if (sourceSettings != null)
-                _customAvatarSettings = ScriptableObject.Instantiate(sourceSettings);
+                _customAvatarSettings = sourceSettings;
             else
             {
                 _customAvatarSettings = ScriptableObject.CreateInstance<S1AvatarFramework.AvatarSettings>();
@@ -154,6 +154,7 @@ namespace S1API.Entities
 
         private static IEnumerator ProcessMugshotQueueCore()
         {
+#if false
             var generator = S1AvatarFramework.MugshotGenerator.Instance;
             var mugshotRig = generator != null ? generator.MugshotRig : null;
             var iconGenerator = generator != null ? generator.Generator : null;
@@ -444,6 +445,118 @@ namespace S1API.Entities
                 // Small delay between jobs to let the mugshot rig fully reset
                 yield return new WaitForSeconds(0.1f);
             }
+#else
+            var renderingEpoch = global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch;
+            while (true)
+            {
+                if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
+                    yield break;
+                NPCAppearance? next;
+                lock (_mugshotQueueLock)
+                {
+                    if (_mugshotQueue.Count == 0)
+                    {
+                        _isProcessingMugshots = false;
+                        yield break;
+                    }
+
+                    next = _mugshotQueue.Dequeue();
+                }
+
+                if (next.NPC.HasExplicitIcon)
+                {
+                    next.MarkMugshotCompleted();
+                    continue;
+                }
+
+                S1AvatarTools.MugshotGenerator? generator = null;
+                while (generator == null)
+                {
+                    if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
+                        yield break;
+                    generator = global::S1API.Internal.Compatibility.AvatarCompatibility
+                        .FindMugshotGenerator(next._runtimeAvatar);
+                    if (generator == null)
+                        yield return null;
+                }
+
+                while (!global::S1API.Internal.Compatibility.AvatarCompatibility
+                           .TryAcquireMugshotGenerator(generator))
+                {
+                    if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
+                        yield break;
+                    yield return null;
+                }
+
+                if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
+                {
+                    global::S1API.Internal.Compatibility.AvatarCompatibility.ReleaseMugshotGenerator();
+                    yield break;
+                }
+
+                _activeMugshot = next;
+                global::S1API.Internal.Compatibility.AvatarCompatibility.CreateRenderInputs(
+                    next._customAvatarSettings,
+                    out var appearance,
+                    out var outfit);
+
+                bool completed = false;
+                Texture2D? generatedMugshot = null;
+                try
+                {
+                    global::S1API.Internal.Compatibility.AvatarCompatibility.StartPortraitCapture(
+                        generator,
+                        appearance,
+                        outfit,
+                        (Action<Texture2D>)(texture =>
+                        {
+                            generatedMugshot = texture;
+                            completed = true;
+                        }));
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"[Mugshot] Native capture failed to start: {ex.Message}");
+                    completed = true;
+                }
+
+                var waitFrames = 0;
+                while (!completed && waitFrames++ < 300)
+                    yield return null;
+
+                if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
+                {
+                    UnityEngine.Object.Destroy(outfit);
+                    yield break;
+                }
+
+                global::S1API.Internal.Compatibility.AvatarCompatibility.ReleaseMugshotGenerator();
+                UnityEngine.Object.Destroy(outfit);
+                generatedMugshot?.Apply();
+                if (generatedMugshot != null)
+                {
+                    var source = generatedMugshot;
+                    generatedMugshot = global::S1API.Internal.Compatibility.AvatarCompatibility
+                        .ResizePortrait(source, 512);
+                    UnityEngine.Object.Destroy(source);
+                }
+                if (generatedMugshot != null && HasPortraitContent(generatedMugshot, 0.01f))
+                {
+                    var cropRect = new Rect(0, 0, generatedMugshot.width, generatedMugshot.height);
+                    var iconSprite = Sprite.Create(generatedMugshot, cropRect, Vector2.zero);
+                    next.NPC.ApplyGeneratedIcon(iconSprite);
+                    UpdatePoiIcons(next.NPC.S1NPC, iconSprite);
+                }
+                else
+                {
+                    _logger.Error(
+                        $"[Mugshot] {next.NPC.FirstName}: capture returned no complete portrait; keeping the existing icon");
+                }
+
+                CompleteActiveMugshot();
+                yield return new WaitForSeconds(0.05f);
+            }
+#endif
         }
 
         private void MarkMugshotCompleted()
@@ -560,9 +673,9 @@ namespace S1API.Entities
             float contentWidth,
             float contentHeight) =>
             totalSamples > 0 &&
-            visibleSamples >= totalSamples * 0.1f &&
-            contentWidth >= 0.4f &&
-            contentHeight >= 0.82f;
+            visibleSamples >= totalSamples * 0.10f &&
+            contentWidth >= 0.35f &&
+            contentHeight >= 0.75f;
 
         /// <summary>
         /// INTERNAL: Applies the currently configured avatar settings to a runtime avatar instance.
@@ -573,7 +686,9 @@ namespace S1API.Entities
             if (avatar == null)
                 return;
 
-            avatar.LoadAvatarSettings(_customAvatarSettings);
+            global::S1API.Internal.Compatibility.AvatarCompatibility.ApplyLegacySettings(
+                avatar,
+                _customAvatarSettings);
         }
 
         #endregion
@@ -1010,6 +1125,13 @@ namespace S1API.Entities
 #endif
         }
 
+        internal static readonly global::S1API.Internal.Utils.SceneObjectIndex<S1Map.NPCPoI> PoisByNpcId =
+            new global::S1API.Internal.Utils.SceneObjectIndex<S1Map.NPCPoI>(
+                () => UnityEngine.Object.FindObjectsOfType<S1Map.NPCPoI>(true),
+                poi => poi.NPC?.NPCData?.BasicInfo?.ID,
+                poi => poi != null,
+                include: poi => poi.gameObject.activeInHierarchy);
+
         /// <summary>
         /// Updates the icon on any map POI components that reference the given NPC.
         /// </summary>
@@ -1020,9 +1142,7 @@ namespace S1API.Entities
 
             try
             {
-                // Find all NPCPoI components in the scene that reference this NPC
-                var allPoIs = UnityEngine.Object.FindObjectsOfType<S1Map.NPCPoI>();
-                foreach (var poi in allPoIs)
+                foreach (var poi in PoisByNpcId.Get(npc.ID))
                 {
                     if (poi.NPC == npc && poi.IconContainer != null)
                     {

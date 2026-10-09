@@ -1,9 +1,13 @@
 ﻿namespace S1API.Internal.Abstraction
 {
     /// <summary>
-    /// INTERNAL: A registerable base class for use internally.
-    /// Not intended for modder use.
+    /// Infrastructure base class for S1API registration and lifecycle hooks.
     /// </summary>
+    /// <remarks>
+    /// This class is public because public API classes inherit from it.
+    /// Modders should inherit from the appropriate API base class, such as
+    /// <c>NPC</c>, <c>Quest</c>, or <c>Saveable</c>, rather than this infrastructure class directly.
+    /// </remarks>
     public abstract class Registerable : IRegisterable
     {
         /// <summary>

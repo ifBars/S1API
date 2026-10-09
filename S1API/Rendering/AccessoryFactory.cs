@@ -1,9 +1,12 @@
 #if (IL2CPPMELON)
 using S1AvatarFramework = Il2CppScheduleOne.AvatarFramework;
+using S1CoreAvatar = Il2CppScheduleOne.Core.Avatar;
 #elif MONOMELON
 using S1AvatarFramework = ScheduleOne.AvatarFramework;
+using S1CoreAvatar = ScheduleOne.Core.Avatar;
 #endif
 
+using S1API.Internal.Rendering;
 using S1API.Logging;
 using System;
 using UnityEngine;
@@ -83,6 +86,9 @@ namespace S1API.Rendering
                     accessory.ApplyColor(colorTint.Value);
                 }
 
+                if (accessory != null)
+                    CloneAvatarObjectEquivalent(accessory, sourceResourcePath, targetResourcePath, newName, textureReplacements, colorTint);
+
                 // Set prefab to active so that when Unity instantiates it, the instance will also be active.
                 // This is critical: Unity's Object.Instantiate preserves the prefab's active state.
                 // If the prefab is inactive, instantiated GameObjects will also be inactive and won't render.
@@ -97,6 +103,41 @@ namespace S1API.Rendering
                 Logger.Error(ex.StackTrace ?? ex.ToString());
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Replaces the clone's <c>AvatarObjectEquivalent</c> with a copy that has its own id, so the game wears the
+        /// custom accessory and not the one it was cloned from.
+        /// </summary>
+        private static void CloneAvatarObjectEquivalent(
+            S1AvatarFramework.Accessory accessory,
+            string sourceResourcePath,
+            string? targetResourcePath,
+            string newName,
+            System.Collections.Generic.Dictionary<string, Texture2D>? textureReplacements,
+            Color? colorTint)
+        {
+            S1CoreAvatar.AvatarObject? equivalent = accessory.AvatarObjectEquivalent;
+            if (equivalent == null)
+                return;
+
+            string id = CustomAvatarObjects.DeriveId(targetResourcePath, sourceResourcePath, newName);
+            S1CoreAvatar.AvatarObject? clone = CustomAvatarObjects.Clone(equivalent, newName, id);
+            if (clone == null)
+                return;
+
+            if (textureReplacements != null && textureReplacements.Count > 0)
+                ApplyTexturesToAccessory(clone.gameObject, textureReplacements);
+
+            CustomAvatarObjects.ApplyColorTint(clone, colorTint);
+
+            if (!CustomAvatarObjects.RegisterInLibrary(clone))
+            {
+                Object.Destroy(clone.gameObject);
+                return;
+            }
+
+            accessory.AvatarObjectEquivalent = clone;
         }
 
         /// <summary>
@@ -160,6 +201,17 @@ namespace S1API.Rendering
             if (accessoryComponent != null)
             {
                 RuntimeResourceRegistry.RegisterAssetForType(resourcePath, accessoryComponent, typeof(S1AvatarFramework.Accessory));
+            }
+
+            S1CoreAvatar.AvatarObject? avatarObject = accessoryComponent != null
+                ? accessoryComponent.AvatarObjectEquivalent
+                : null;
+            if (avatarObject != null)
+            {
+                RuntimeResourceRegistry.RegisterAssetForType(
+                    resourcePath,
+                    avatarObject,
+                    typeof(S1CoreAvatar.AvatarObject));
             }
 
             return gameObjectRegistered;

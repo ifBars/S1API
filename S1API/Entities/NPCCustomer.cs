@@ -300,6 +300,29 @@ namespace S1API.Entities
             }
         }
 
+        internal static S1Economy.CustomerData CreateDefaultCustomerData()
+        {
+            var data = ScriptableObject.CreateInstance<S1Economy.CustomerData>();
+            data.DefaultAffinityData = new S1Economy.CustomerAffinityData();
+            foreach (var drugType in Enum.GetValues(typeof(S1Product.EDrugType)))
+            {
+                data.DefaultAffinityData.ProductAffinities.Add(new S1Economy.ProductTypeAffinity
+                {
+                    DrugType = (S1Product.EDrugType)drugType,
+                    Affinity = 0f
+                });
+            }
+            data.MinWeeklySpend = 100f;
+            data.MaxWeeklySpend = 400f;
+            data.MinOrdersPerWeek = 1;
+            data.MaxOrdersPerWeek = 3;
+            data.OrderTime = 1200;
+            data.CanBeDirectlyApproached = true;
+            data.DependenceMultiplier = 1f;
+            data.BaseAddiction = 0f;
+            return data;
+        }
+
         private void EnsureCustomerData(S1Economy.Customer customer)
         {
             try
@@ -329,28 +352,7 @@ namespace S1API.Entities
                 
                 if (data == null)
                 {
-                    // Create a minimal, safe CustomerData so base game logic has sane defaults
-                    data = ScriptableObject.CreateInstance<S1Economy.CustomerData>();
-                    data.DefaultAffinityData = new S1Economy.CustomerAffinityData();
-                    // Seed affinities for all product types with neutral preference
-                    Array drugTypes = Enum.GetValues(typeof(S1Product.EDrugType));
-                    foreach (var dt in drugTypes)
-                    {
-                        data.DefaultAffinityData.ProductAffinities.Add(new S1Economy.ProductTypeAffinity
-                        {
-                            DrugType = (S1Product.EDrugType)dt,
-                            Affinity = 0f
-                        });
-                    }
-                    // Reasonable defaults
-                    data.MinWeeklySpend = 100f;
-                    data.MaxWeeklySpend = 400f;
-                    data.MinOrdersPerWeek = 1;
-                    data.MaxOrdersPerWeek = 3;
-                    data.OrderTime = 1200;
-                    data.CanBeDirectlyApproached = true;
-                    data.DependenceMultiplier = 1f;
-                    data.BaseAddiction = 0f;
+                    data = CreateDefaultCustomerData();
 
                     
 #if MONOMELON
@@ -1056,7 +1058,7 @@ namespace S1API.Entities
                             dialogueLine = dialogueLine.Replace("<NAME>", dealer.NPC.FullName);
                             
                             // Create dialogue container
-                            var container = ScriptableObject.CreateInstance<S1Dialogue.DialogueContainer>();
+                            var container = ScriptableObject.CreateInstance<S1Dialogue.Conversation>();
                             var nodeData = new S1Dialogue.DialogueNodeData
                             {
                                 DialogueText = dialogueLine,
@@ -1088,7 +1090,7 @@ namespace S1API.Entities
             }
         }
 
-        private System.Collections.IEnumerator WaitAndShowDialogue(S1Dialogue.DialogueContainer container, S1Dialogue.DialogueHandler handler)
+        private System.Collections.IEnumerator WaitAndShowDialogue(S1Dialogue.Conversation container, S1Dialogue.DialogueHandler handler)
         {
             yield return new WaitForSeconds(0.1f);
             if (handler != null && container != null)

@@ -30,6 +30,12 @@ Start from default values or import the current appearance of a native or config
 
 The preview clones the game's dedicated avatar preview rig into a private render layer. It uses a private camera, lighting, and render texture and never registers or spawns an NPC. Drag the preview to orbit, use the mouse wheel to zoom, and switch between standing, sitting, and crouching poses.
 
+On the Schedule I 0.4.7 beta, S1API creates a detached compatibility rig when
+the game has no active mugshot rig. The initial view faces the avatar and includes
+the full body. Copied accessories, look targets, distance impostors, and cached
+body-shape values are reset before the selected appearance is applied. Reset
+returns to the forward-facing standing view.
+
 ## Export
 
 Select **Copy C#** to copy an appearance-only builder block:

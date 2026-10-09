@@ -6,6 +6,7 @@ using Object = UnityEngine.Object;
 using S1API.Internal.Abstraction;
 using S1API.Internal.Patches;
 using S1API.Logging;
+using S1API.ExternalHosting;
 using MelonLoader;
 
 #if IL2CPPMELON
@@ -303,14 +304,19 @@ namespace S1API.TVApp
         /// Called when the TVApp instance is created.
         /// Registers the app with the TVAppRegistry.
         /// </summary>
-        protected override void OnCreated() =>
+        protected override void OnCreated()
+        {
             TVAppRegistry.Register(this);
+            ExternalAppCatalog.Register(ExternalAppFamily.TV, this, () => AppName, () => AppTitle,
+                () => Icon);
+        }
 
         /// <summary>
         /// Cleans up resources when the app is destroyed.
         /// </summary>
         protected override void OnDestroyed()
         {
+            ExternalAppCatalog.Unregister(this);
             // Unregister exit listener
             if (_exitDelegate != null)
             {

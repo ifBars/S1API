@@ -12,7 +12,7 @@ using S1API.Internal.Weather;
 using S1API.Lifecycle;
 using S1API.Map;
 
-[assembly: MelonInfo(typeof(S1API.S1API), "S1API (Forked by Bars)", "3.2.0", "KaBooMa")]
+[assembly: MelonInfo(typeof(S1API.S1API), "S1API (Forked by Bars)", "3.2.1", "KaBooMa")]
 [assembly: MelonPriority(Int32.MinValue)]
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 namespace S1API
@@ -37,6 +37,8 @@ namespace S1API
 
         public override void OnDeinitializeMelon()
         {
+            Internal.Compatibility.AvatarCompatibility.ResetRendering();
+            Rendering.IconFactory.ResetAccessoryIconState();
             WeatherRuntime.ResetBindings();
             NPCWorkbenchRuntime.Close();
             PresentationWorkbenchRuntime.Close();

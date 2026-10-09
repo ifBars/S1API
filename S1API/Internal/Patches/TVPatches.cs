@@ -8,6 +8,7 @@ using UnityEngine.SceneManagement;
 using S1API.Internal.Utils;
 using S1API.Internal.Abstraction;
 using S1API.Logging;
+using S1API.ExternalHosting;
 
 #if IL2CPPMELON
 using Il2CppScheduleOne.TV;
@@ -36,8 +37,11 @@ namespace S1API.Internal.Patches
         /// <summary>
         /// Clears all registered TV apps from the registry.
         /// </summary>
-        public static void Clear() =>
+        public static void Clear()
+        {
+            ExternalAppCatalog.Clear(ExternalAppFamily.TV);
             RegisteredApps.Clear();
+        }
 
         /// <summary>
         /// Closes all open TV apps.

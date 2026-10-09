@@ -289,7 +289,11 @@ namespace S1API.Internal.Patches
                     return;
                 }
 
-                var agent = __instance?.Agent;
+                var agent = __instance == null
+                    ? null
+                    : ReflectionUtils.TryGetFieldOrProperty(
+                        __instance,
+                        "_agent") as UnityEngine.AI.NavMeshAgent;
                 if (agent != null && NavMeshUtility.SamplePosition(
                         desiredDestination,
                         out var hit,
@@ -1136,14 +1140,32 @@ namespace S1API.Internal.Patches
         [HarmonyPatch(typeof(S1NPCs.NPC), "Awake")]
         [HarmonyPrefix]
         [HarmonyPriority(Priority.First)]
-        private static bool NPC_Awake_Prefix(S1NPCs.NPC __instance)
+        private static bool NPC_Awake_Prefix(S1NPCs.NPC __instance, out NPCNativeAwakeScope? __state)
         {
+            __state = null;
             try
             {
                 var identity = __instance != null ? __instance.GetComponent<NPCPrefabIdentity>() : null;
                 if (identity != null)
                 {
                     identity.ApplyCriticalIdentityBeforeAwake(__instance!);
+                }
+
+                bool isCustomNpc = IsS1ApiCustomNpcComponent(__instance!);
+                if (!isCustomNpc)
+                {
+                    // Legacy contacts can be activated without the prefab identity component.
+                    string npcId = NPCDataAccess.GetId(__instance!);
+                    isCustomNpc = !string.IsNullOrWhiteSpace(npcId) && NPC.All.Any(npc =>
+                        npc.IsCustomNPC && string.Equals(npc.ID, npcId, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (isCustomNpc)
+                {
+                    FindWrapperForS1Npc(__instance)?.PreserveConversationBeforeNativeAwake();
+                    __state = new NPCNativeAwakeScope(__instance!);
+                    __state.Prepare();
+                    NPCDataAccess.PrepareForNativeAwake(__instance!);
                 }
             }
             catch (Exception ex)
@@ -1152,6 +1174,13 @@ namespace S1API.Internal.Patches
             }
 
             return true;
+        }
+
+        [HarmonyPatch(typeof(S1NPCs.NPC), "Awake")]
+        [HarmonyFinalizer]
+        private static void NPC_Awake_Finalizer(NPCNativeAwakeScope? __state)
+        {
+            __state?.Restore();
         }
 
         [HarmonyPatch(typeof(S1Economy.Dealer), "Awake")]
@@ -1276,6 +1305,7 @@ namespace S1API.Internal.Patches
                     apiNpc.CreateInternal();
                 else
                 {
+                    MelonCoroutines.Start(NPCConversationLifecycle.RebindWhenSpawned(__instance));
                     apiNpc.CreateFromClientNetworkSpawn();
                 }
                 
@@ -2423,14 +2453,7 @@ namespace S1API.Internal.Patches
         [HarmonyPrefix]
         private static bool NPCMovement_SetGravityMultiplier_Prefix(S1NPCs.NPCMovement __instance, float multiplier)
         {
-#if !IL2CPPMELON
-            var ragdollForceComponentsField = typeof(S1NPCs.NPCMovement).GetField("ragdollForceComponents",
-                BindingFlags.NonPublic | BindingFlags.Instance);
-            var ragdollForceComponents = ragdollForceComponentsField?.GetValue(__instance) as List<ConstantForce>;
-#else
-            var ragdollForceComponents = __instance.ragdollForceComponents;
-#endif
-            return ragdollForceComponents == null || ragdollForceComponents.ToArray().All(comp => comp != null);
+            return true;
         }
 
         /// <summary>
@@ -2449,7 +2472,7 @@ namespace S1API.Internal.Patches
             var npc = __instance.GetComponent<S1NPCs.NPC>();
 #if (!IL2CPPMELON)
             var npcField = typeof(S1NPCs.NPCHealth)
-                .GetField("npc", BindingFlags.NonPublic | BindingFlags.Instance);
+                .GetField("_npc", BindingFlags.NonPublic | BindingFlags.Instance);
             if (npcField != null)
                 npcField.SetValue(__instance, npc);
             
@@ -2476,7 +2499,7 @@ namespace S1API.Internal.Patches
                     (Action)Delegate.Combine(TimeManagerShim.Instance.onHourPass, hourPassDelegate);
             }
 #else
-            __instance.npc = npc;
+            __instance._npc = npc;
 
             TimeManagerShim.Instance.onSleepStart =
                 (Action)Delegate.Combine(TimeManagerShim.Instance.onSleepStart, new Action(__instance.SleepStart));
