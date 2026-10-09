@@ -399,6 +399,12 @@ namespace S1API.Internal.Entities
             EnsureMovementDefaults(data);
         }
 
+        private static readonly SceneObjectIndex<S1NPCFramework.MovementPreset> MovementPresets =
+            new SceneObjectIndex<S1NPCFramework.MovementPreset>(
+                () => Resources.FindObjectsOfTypeAll<S1NPCFramework.MovementPreset>(),
+                _ => null,
+                preset => preset != null);
+
         /// <summary>
         /// A freshly created NPCDataObject has no MovementPreset assigned, so
         /// NPCData.Movement falls back to the hardcoded class default (WalkSpeed 1.8),
@@ -412,14 +418,22 @@ namespace S1API.Internal.Entities
             if (movement == null)
                 return;
 
-            S1NPCFramework.Movement? donor = Resources
-                .FindObjectsOfTypeAll<S1NPCFramework.MovementPreset>()
-                .Select(preset => preset?.GetValue())
-                .FirstOrDefault(value => value != null);
+            S1NPCFramework.Movement? donor = FirstMovementValue();
+            if (donor == null)
+            {
+                // A preset may have loaded or initialised since the presets were indexed.
+                MovementPresets.Invalidate();
+                donor = FirstMovementValue();
+            }
 
             movement.WalkSpeed = donor?.WalkSpeed ?? 1.2f;
             movement.MaxSpeed = donor?.MaxSpeed ?? movement.MaxSpeed;
         }
+
+        private static S1NPCFramework.Movement? FirstMovementValue() =>
+            MovementPresets.All()
+                .Select(preset => preset?.GetValue())
+                .FirstOrDefault(value => value != null);
 
         private static void EnsureDialogueDatabase(
             S1NPCFramework.NPCData data,

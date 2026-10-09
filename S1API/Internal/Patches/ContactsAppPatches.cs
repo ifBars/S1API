@@ -1,4 +1,4 @@
-﻿#if (IL2CPPMELON)
+#if (IL2CPPMELON)
 using S1NPCs = Il2CppScheduleOne.NPCs;
 using S1ContactsApp = Il2CppScheduleOne.UI.Phone.ContactsApp;
 using S1Map = Il2CppScheduleOne.Map;
@@ -44,7 +44,7 @@ namespace S1API.Internal.Patches
             if (circle == null)
                 return null;
 
-            return (ReflectionUtils.TryGetFieldOrProperty(circle, "AssignedNPC") as S1NPCs.NPC)?.ID
+            return (ReflectionUtils.TryGetFieldOrProperty(circle, "AssignedNPC") as S1NPCs.NPC)?.NPCData?.BasicInfo?.ID
                    ?? ReflectionUtils.TryGetFieldOrProperty(circle, "AssignedNPC_ID") as string
                    ?? ReflectionUtils.TryGetFieldOrProperty(circle, "NPCId") as string;
         }
@@ -71,6 +71,13 @@ namespace S1API.Internal.Patches
             _hasCustomNpcTypesCache = null;
         }
 
+        internal static readonly global::S1API.Internal.Utils.SceneObjectIndex<S1Relations.RelationCircle> CirclesByNpcId =
+            new global::S1API.Internal.Utils.SceneObjectIndex<S1Relations.RelationCircle>(
+                () => Object.FindObjectsOfType<S1Relations.RelationCircle>(true),
+                circle => GetAssignedNpcId(circle),
+                circle => circle != null,
+                global::System.StringComparer.OrdinalIgnoreCase);
+
         internal static void RefreshContactIcon(S1NPCs.NPC npc)
         {
             if (npc == null || string.IsNullOrWhiteSpace(npc.ID))
@@ -78,15 +85,8 @@ namespace S1API.Internal.Patches
 
             try
             {
-                foreach (S1Relations.RelationCircle circle in
-                         Object.FindObjectsOfType<S1Relations.RelationCircle>(true))
+                foreach (S1Relations.RelationCircle circle in CirclesByNpcId.Get(npc.ID))
                 {
-                    if (!string.Equals(
-                            GetAssignedNpcId(circle),
-                            npc.ID,
-                            global::System.StringComparison.OrdinalIgnoreCase))
-                        continue;
-
                     SetAssignedNpc(circle, npc);
                     circle.AssignNPC(npc);
                 }
