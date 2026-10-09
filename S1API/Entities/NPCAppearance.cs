@@ -1125,6 +1125,13 @@ namespace S1API.Entities
 #endif
         }
 
+        internal static readonly global::S1API.Internal.Utils.SceneObjectIndex<S1Map.NPCPoI> PoisByNpcId =
+            new global::S1API.Internal.Utils.SceneObjectIndex<S1Map.NPCPoI>(
+                () => UnityEngine.Object.FindObjectsOfType<S1Map.NPCPoI>(true),
+                poi => poi.NPC?.NPCData?.BasicInfo?.ID,
+                poi => poi != null,
+                include: poi => poi.gameObject.activeInHierarchy);
+
         /// <summary>
         /// Updates the icon on any map POI components that reference the given NPC.
         /// </summary>
@@ -1135,9 +1142,7 @@ namespace S1API.Entities
 
             try
             {
-                // Find all NPCPoI components in the scene that reference this NPC
-                var allPoIs = UnityEngine.Object.FindObjectsOfType<S1Map.NPCPoI>();
-                foreach (var poi in allPoIs)
+                foreach (var poi in PoisByNpcId.Get(npc.ID))
                 {
                     if (poi.NPC == npc && poi.IconContainer != null)
                     {
