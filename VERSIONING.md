@@ -119,6 +119,7 @@ The GitHub release workflow packages public mod archives and can publish the sam
 - `publish-github-release.yml` runs from release tags and can also be rerun with `workflow_dispatch`.
 - When `.github/release-notes/X.Y.Z.md` exists at the tagged commit, its curated Markdown is used as the GitHub release body. Historical tags and manual reruns without that file fall back to GitHub-generated notes.
 - Curated notes should use concise domain-specific change sections, a compatibility and validation section, PR-linked contributor credits, and release links, matching the structure of recent stable releases.
+- Use GitHub `@username` mentions for contributor credits, rather than Markdown links to profile pages. Keep the corresponding pull request links.
 - The GitHub/Nexus archive is `S1API-Forked-x.y.z.zip` and contains `Mods/` and `Plugins/` at the archive root.
 - GitHub Releases should only publish `S1API-Forked-x.y.z.zip` as a release asset.
 - The Thunderstore archive is `S1API-TS-x.y.z.zip` and contains `icon.png`, `README.md`, `manifest.json`, `Mods/`, and `Plugins/` at the archive root, but it is only used for Thunderstore publishing.
