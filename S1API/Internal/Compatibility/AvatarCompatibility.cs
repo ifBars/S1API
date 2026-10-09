@@ -129,7 +129,23 @@ namespace S1API.Internal.Compatibility
                 var generator = root.AddComponent<S1AvatarTools.MugshotGenerator>();
                 var avatar = avatarObject.GetComponent<S1AvatarFramework.Avatar>();
                 if (avatar != null)
+                {
                     PrepareDetachedAvatar(avatar);
+                    // This owned render clone must not run gameplay animation initialization:
+                    // its Start samples stand-up clips after the initial pose reset.
+                    if (avatar.Animation != null)
+                        avatar.Animation.enabled = false;
+                    foreach (var animator in avatar.GetComponentsInChildren<Animator>(true))
+                    {
+                        animator.Rebind();
+                        animator.Update(0f);
+                        animator.enabled = false;
+                    }
+                    // Awake cached the live source's transient hip; Update must retain the rebound pose.
+                    if (avatar.HipBone != null)
+                        Utils.ReflectionUtils.TrySetFieldOrProperty(
+                            avatar, "_savedHipPosition", avatar.HipBone.localPosition);
+                }
                 if (avatar == null ||
                     !Utils.ReflectionUtils.TrySetFieldOrProperty(generator, "_avatar", avatar) ||
                     !Utils.ReflectionUtils.TrySetFieldOrProperty(
