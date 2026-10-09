@@ -30,48 +30,131 @@ namespace S1API.Internal.Utils
         /// <returns>A list of all types derived from the base class.</returns>
         internal static List<Type> GetDerivedClasses<TBaseClass>()
         {
-            List<Type> derivedClasses = new List<Type>();
             Type baseType = typeof(TBaseClass);
+            ScanPlan? plan;
+            long generation;
+            lock (DerivedClassCacheLock)
+            {
+                DerivedClassCache.TryGetValue(baseType, out plan);
+                generation = _assemblyGeneration;
+            }
+
+            if (plan == null)
+            {
+                plan = BuildScanPlan(baseType);
+                lock (DerivedClassCacheLock)
+                {
+                    // Not stored if an assembly loaded while scanning.
+                    if (generation == _assemblyGeneration)
+                        DerivedClassCache[baseType] = plan;
+                }
+            }
+
+            // A fresh list every call: some callers sort or modify the result.
+            var derivedClasses = new List<Type>();
+            IReadOnlyDictionary<string, Assembly[]>? index = null;
+            foreach (ScanPlanEntry entry in plan.Entries)
+            {
+                if (entry.Types != null)
+                {
+                    derivedClasses.AddRange(entry.Types);
+                }
+                else if (CanContainTypesDerivedFrom(entry.Assembly, baseType.Assembly.GetName(),
+                             index ??= IndexAssembliesBySimpleName(AppDomain.CurrentDomain.GetAssemblies())))
+                {
+                    AddDerivedTypes(baseType, entry.Assembly, derivedClasses);
+                }
+            }
+            return derivedClasses;
+        }
+
+        // Ordinary assemblies' results are kept until another assembly loads. Dynamic assemblies (every modded game
+        // has some) can gain types without an AssemblyLoad event, so they are re-scanned on every call.
+        private sealed class ScanPlanEntry
+        {
+            internal Assembly Assembly = null!;
+            internal Type[]? Types;   // null: dynamic, scanned per call
+        }
+
+        private sealed class ScanPlan
+        {
+            internal ScanPlanEntry[] Entries = Array.Empty<ScanPlanEntry>();
+        }
+
+        private static readonly object DerivedClassCacheLock = new object();
+        private static readonly Dictionary<Type, ScanPlan> DerivedClassCache = new Dictionary<Type, ScanPlan>();
+        private static long _assemblyGeneration;
+
+        static ReflectionUtils()
+        {
+            AppDomain.CurrentDomain.AssemblyLoad += (_, _) => InvalidateDerivedClassCache();
+        }
+
+        internal static void InvalidateDerivedClassCache()
+        {
+            lock (DerivedClassCacheLock)
+            {
+                _assemblyGeneration++;
+                DerivedClassCache.Clear();
+            }
+        }
+
+        private static ScanPlan BuildScanPlan(Type baseType)
+        {
             Assembly baseAssembly = baseType.Assembly;
             Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
             IReadOnlyDictionary<string, Assembly[]> assembliesBySimpleName =
                 IndexAssembliesBySimpleName(loadedAssemblies);
-            Assembly[] applicableAssemblies = loadedAssemblies
-                .Where(assembly => assembly == baseAssembly || !ShouldSkipAssembly(assembly))
-                .Where(assembly => CanContainTypesDerivedFrom(
-                    assembly,
-                    baseAssembly.GetName(),
-                    assembliesBySimpleName))
-                .ToArray();
+            var entries = new List<ScanPlanEntry>();
+            int scanned = 0;
+            foreach (Assembly assembly in loadedAssemblies)
+            {
+                if (assembly != baseAssembly && ShouldSkipAssembly(assembly))
+                    continue;
+                if (assembly.IsDynamic)
+                {
+                    // Kept even if it can't contain derived types yet; eligibility is re-checked per call.
+                    entries.Add(new ScanPlanEntry { Assembly = assembly });
+                    continue;
+                }
+                if (!CanContainTypesDerivedFrom(assembly, baseAssembly.GetName(), assembliesBySimpleName))
+                    continue;
+                var types = new List<Type>();
+                AddDerivedTypes(baseType, assembly, types);
+                entries.Add(new ScanPlanEntry { Assembly = assembly, Types = types.ToArray() });
+                scanned++;
+            }
 
             Logger.Debug(
-                $"[S1API][Reflection] Scanning {applicableAssemblies.Length} of {loadedAssemblies.Length} " +
-                $"loaded assemblies for types derived from '{baseType.FullName}'.");
+                $"[S1API][Reflection] Scanned {scanned} of {loadedAssemblies.Length} loaded assemblies for types " +
+                $"derived from '{baseType.FullName}'.");
+            return new ScanPlan { Entries = entries.ToArray() };
+        }
 
-            foreach (Assembly assembly in applicableAssemblies)
-                foreach (Type type in SafeGetTypes(assembly))
+        private static void AddDerivedTypes(Type baseType, Assembly assembly, List<Type> derivedClasses)
+        {
+            foreach (Type type in SafeGetTypes(assembly))
+            {
+                try
                 {
-                    try
+                    if (type == null)
+                        continue;
+                    if (baseType.IsAssignableFrom(type)
+                        && type != baseType
+                        && !type.IsAbstract)
                     {
-                        if (type == null)
-                            continue;
-                        if (baseType.IsAssignableFrom(type)
-                            && type != baseType
-                            && !type.IsAbstract)
-                        {
-                            derivedClasses.Add(type);
-                        }
-                    }
-                    catch (TypeLoadException)
-                    {
-                        // Ideally, we'd log this, but can be noisy and we've got no logger elsewhere
-                    }
-                    catch (Exception)
-                    {
-                        // Catch-all for anything else (e.g., MissingMethodException)
+                        derivedClasses.Add(type);
                     }
                 }
-            return derivedClasses;
+                catch (TypeLoadException)
+                {
+                    // Ideally, we'd log this, but can be noisy and we've got no logger elsewhere
+                }
+                catch (Exception)
+                {
+                    // Catch-all for anything else (e.g., MissingMethodException)
+                }
+            }
         }
 
         internal static bool CanContainTypesDerivedFrom(
