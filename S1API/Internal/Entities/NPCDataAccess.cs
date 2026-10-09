@@ -37,9 +37,6 @@ namespace S1API.Internal.Entities
     {
         private static readonly Logging.Log Logger = new Logging.Log("NPCDataAccess");
 #if !IL2CPPMELON
-        private static readonly FieldInfo NpcDataObjectField =
-            typeof(S1NPCs.NPC).GetField("_npcData", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingFieldException(typeof(S1NPCs.NPC).FullName, "_npcData");
         private static readonly FieldInfo CurrentNpcDataField =
             typeof(S1NPCs.NPC).GetField("<NPCData>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new MissingFieldException(typeof(S1NPCs.NPC).FullName, "<NPCData>k__BackingField");
@@ -91,6 +88,14 @@ namespace S1API.Internal.Entities
                 ?? throw new InvalidOperationException("The custom NPC data object returned no runtime data.");
             PrepareData(data);
             SetCurrentData(npc, data);
+        }
+
+        internal static void PrepareForNativeAwake(S1NPCs.NPC npc)
+        {
+            // Construction reads NPCData while the object is inactive. Native Awake must
+            // initialize it from the configured data object without deinitializing first.
+            if (GetDataObject(npc) != null)
+                SetCurrentData(npc, null!);
         }
 
         internal static bool ApplyIdentity(
@@ -207,7 +212,8 @@ namespace S1API.Internal.Entities
             if (appearance == null)
                 return false;
 
-            appearance.AvatarSettings = settings;
+            appearance.DefaultAppearance = settings.EquivalentNakedAppearance;
+            appearance.DefaultOutfit = settings.EquivalentOutfit;
             return true;
         }
 
@@ -344,22 +350,16 @@ namespace S1API.Internal.Entities
 
         internal static S1NPCFramework.BaseNPCDataObject? GetDataObject(S1NPCs.NPC npc)
         {
-#if IL2CPPMELON
-            return npc._npcData;
-#else
-            return NpcDataObjectField.GetValue(npc) as S1NPCFramework.BaseNPCDataObject;
-#endif
+            return ReflectionUtils.TryGetFieldOrProperty(
+                npc,
+                "_defaultNPCData") as S1NPCFramework.BaseNPCDataObject;
         }
 
         private static void SetDataObject(
             S1NPCs.NPC npc,
             S1NPCFramework.BaseNPCDataObject dataObject)
         {
-#if IL2CPPMELON
-            npc._npcData = dataObject;
-#else
-            NpcDataObjectField.SetValue(npc, dataObject);
-#endif
+            ReflectionUtils.TrySetFieldOrProperty(npc, "_defaultNPCData", dataObject);
         }
 
         private static void SetCurrentData(S1NPCs.NPC npc, S1NPCFramework.NPCData data)
@@ -399,6 +399,12 @@ namespace S1API.Internal.Entities
             EnsureMovementDefaults(data);
         }
 
+        private static readonly SceneObjectIndex<S1NPCFramework.MovementPreset> MovementPresets =
+            new SceneObjectIndex<S1NPCFramework.MovementPreset>(
+                () => Resources.FindObjectsOfTypeAll<S1NPCFramework.MovementPreset>(),
+                _ => null,
+                preset => preset != null);
+
         /// <summary>
         /// A freshly created NPCDataObject has no MovementPreset assigned, so
         /// NPCData.Movement falls back to the hardcoded class default (WalkSpeed 1.8),
@@ -412,14 +418,22 @@ namespace S1API.Internal.Entities
             if (movement == null)
                 return;
 
-            S1NPCFramework.Movement? donor = Resources
-                .FindObjectsOfTypeAll<S1NPCFramework.MovementPreset>()
-                .Select(preset => preset?.GetValue())
-                .FirstOrDefault(value => value != null);
+            S1NPCFramework.Movement? donor = FirstMovementValue();
+            if (donor == null)
+            {
+                // A preset may have loaded or initialised since the presets were indexed.
+                MovementPresets.Invalidate();
+                donor = FirstMovementValue();
+            }
 
             movement.WalkSpeed = donor?.WalkSpeed ?? 1.2f;
-            movement.SprintSpeed = donor?.SprintSpeed ?? movement.SprintSpeed;
+            movement.MaxSpeed = donor?.MaxSpeed ?? movement.MaxSpeed;
         }
+
+        private static S1NPCFramework.Movement? FirstMovementValue() =>
+            MovementPresets.All()
+                .Select(preset => preset?.GetValue())
+                .FirstOrDefault(value => value != null);
 
         private static void EnsureDialogueDatabase(
             S1NPCFramework.NPCData data,
@@ -444,7 +458,7 @@ namespace S1API.Internal.Entities
                 S1Dialogue.DialogueManager manager =
                     S1DevUtilities.Singleton<S1Dialogue.DialogueManager>.Instance;
                 if (manager != null)
-                    data.Dialogue.DialogueDatabase = manager.DefaultDatabase;
+                    data.Dialogue.DialogueDatabase = manager.DefaultDialogueDatabase;
             }
 
             if (data.Dialogue.DialogueDatabase == null)
@@ -456,7 +470,7 @@ namespace S1API.Internal.Entities
             }
 
             if (data.Dialogue.DialogueDatabase == null)
-                throw new InvalidOperationException("No 0.4.6 dialogue database is loaded for the custom NPC.");
+                throw new InvalidOperationException("No dialogue database is loaded for the custom NPC.");
 
             if (sourceIsEmployee)
             {
@@ -654,12 +668,12 @@ namespace S1API.Internal.Entities
         internal const string DealerCollectCashDialogueName = "Dealer_CollectCash";
         internal const string DealerAssignCustomersDialogueName = "Dealer_AssignCustomers";
 
-        private static S1Dialogue.DialogueContainer? _fallbackRecruitDialogue;
-        private static S1Dialogue.DialogueContainer? _fallbackCollectCashDialogue;
-        private static S1Dialogue.DialogueContainer? _fallbackAssignCustomersDialogue;
-        private static S1Dialogue.DialogueContainer? _cachedRecruitDialogue;
-        private static S1Dialogue.DialogueContainer? _cachedCollectCashDialogue;
-        private static S1Dialogue.DialogueContainer? _cachedAssignCustomersDialogue;
+        private static S1Dialogue.Conversation? _fallbackRecruitDialogue;
+        private static S1Dialogue.Conversation? _fallbackCollectCashDialogue;
+        private static S1Dialogue.Conversation? _fallbackAssignCustomersDialogue;
+        private static S1Dialogue.Conversation? _cachedRecruitDialogue;
+        private static S1Dialogue.Conversation? _cachedCollectCashDialogue;
+        private static S1Dialogue.Conversation? _cachedAssignCustomersDialogue;
 
         private static bool PopulateDealerDialogueDefaults(S1NPCFramework.DealerNPCData dealerData)
         {
@@ -713,8 +727,8 @@ namespace S1API.Internal.Entities
             // 0.4.6 no longer guarantees that native DealerNPCDataObject assets are surfaced by
             // FindObjectsOfTypeAll. Their referenced DialogueContainer assets are still loaded for
             // base-game dealers, so resolve the same three vanilla assets by stable asset name.
-            S1Dialogue.DialogueContainer[] dialogues =
-                Resources.FindObjectsOfTypeAll<S1Dialogue.DialogueContainer>();
+            S1Dialogue.Conversation[] dialogues =
+                Resources.FindObjectsOfTypeAll<S1Dialogue.Conversation>();
             if (dealerData.RecruitDialogue == null)
                 dealerData.RecruitDialogue =
                     FindDialogueContainer(dialogues, DealerRecruitDialogueName);
@@ -838,14 +852,14 @@ namespace S1API.Internal.Entities
                 target.AssignCustomersDialogue != null);
         }
 
-        private static S1Dialogue.DialogueContainer? FindDialogueContainer(
-            IEnumerable<S1Dialogue.DialogueContainer> dialogues,
+        private static S1Dialogue.Conversation? FindDialogueContainer(
+            IEnumerable<S1Dialogue.Conversation> dialogues,
             string name) =>
             dialogues.FirstOrDefault(dialogue =>
                 dialogue != null
                 && string.Equals(dialogue.name, name, StringComparison.Ordinal));
 
-        private static S1Dialogue.DialogueContainer GetFallbackRecruitDialogue()
+        private static S1Dialogue.Conversation GetFallbackRecruitDialogue()
         {
             if (_fallbackRecruitDialogue != null)
                 return _fallbackRecruitDialogue;
@@ -855,7 +869,7 @@ namespace S1API.Internal.Entities
             const string exitGuid = "1575094b-13a3-4d54-9c06-136b571f8c51";
             const string acceptedGuid = "dbffb23a-034f-4d0f-9815-36cc247335b6";
 
-            S1Dialogue.DialogueContainer dialogue = CreateDialogueContainer(
+            S1Dialogue.Conversation dialogue = CreateDialogueContainer(
                 DealerRecruitDialogueName);
             AddDialogueNode(
                 dialogue,
@@ -882,12 +896,12 @@ namespace S1API.Internal.Entities
             return dialogue;
         }
 
-        private static S1Dialogue.DialogueContainer GetFallbackCollectCashDialogue()
+        private static S1Dialogue.Conversation GetFallbackCollectCashDialogue()
         {
             if (_fallbackCollectCashDialogue != null)
                 return _fallbackCollectCashDialogue;
 
-            S1Dialogue.DialogueContainer dialogue = CreateDialogueContainer(
+            S1Dialogue.Conversation dialogue = CreateDialogueContainer(
                 DealerCollectCashDialogueName);
             AddDialogueNode(
                 dialogue,
@@ -902,12 +916,12 @@ namespace S1API.Internal.Entities
             return dialogue;
         }
 
-        private static S1Dialogue.DialogueContainer GetFallbackAssignCustomersDialogue()
+        private static S1Dialogue.Conversation GetFallbackAssignCustomersDialogue()
         {
             if (_fallbackAssignCustomersDialogue != null)
                 return _fallbackAssignCustomersDialogue;
 
-            S1Dialogue.DialogueContainer dialogue = CreateDialogueContainer(
+            S1Dialogue.Conversation dialogue = CreateDialogueContainer(
                 DealerAssignCustomersDialogueName);
             AddDialogueNode(
                 dialogue,
@@ -922,10 +936,10 @@ namespace S1API.Internal.Entities
             return dialogue;
         }
 
-        private static S1Dialogue.DialogueContainer CreateDialogueContainer(string name)
+        private static S1Dialogue.Conversation CreateDialogueContainer(string name)
         {
-            S1Dialogue.DialogueContainer dialogue =
-                ScriptableObject.CreateInstance<S1Dialogue.DialogueContainer>();
+            S1Dialogue.Conversation dialogue =
+                ScriptableObject.CreateInstance<S1Dialogue.Conversation>();
             if (dialogue == null)
                 throw new InvalidOperationException($"Failed to create dealer dialogue '{name}'.");
 
@@ -983,7 +997,7 @@ namespace S1API.Internal.Entities
 #endif
 
         private static void AddDialogueNode(
-            S1Dialogue.DialogueContainer dialogue,
+            S1Dialogue.Conversation dialogue,
             S1Dialogue.DialogueNodeData node)
         {
             if (dialogue.DialogueNodeData == null)
@@ -1000,7 +1014,7 @@ namespace S1API.Internal.Entities
         }
 
         private static void AddNodeLink(
-            S1Dialogue.DialogueContainer dialogue,
+            S1Dialogue.Conversation dialogue,
             string baseNodeGuid,
             string baseChoiceGuid,
             string targetNodeGuid)

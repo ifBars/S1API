@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using S1API.Lifecycle;
 using S1API.Logging;
+using S1API.Internal.Utils;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -129,7 +130,7 @@ namespace S1API.Trash
                 var root = GetOrCreatePrefabRoot();
                 cached = Object.Instantiate(source, root.transform, false);
                 cached.name = $"S1API_Trash_{id}";
-                cached.ID = id;
+                ReflectionUtils.TrySetFieldOrProperty(cached, "Id", id);
                 cached.gameObject.hideFlags = HideFlags.HideAndDontSave;
                 cached.gameObject.SetActive(true);
                 RegisteredPrefabs[id] = cached;

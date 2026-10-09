@@ -83,6 +83,20 @@ public sealed class LoadingDockApiTests
     }
 
     [Fact]
+    public void StaticOccupantSubscribersAreTracked()
+    {
+        var nativeDock = TestObjectFactory.CreateUninitialized<S1Delivery.LoadingDock>();
+        var dock = new LoadingDock(nativeDock);
+        Action<LandVehicle?, LandVehicle?> handler = (_, _) => { };
+
+        Assert.False(dock.HasStaticOccupantChangedSubscribers);
+        dock.StaticOccupantChanged += handler;
+        Assert.True(dock.HasStaticOccupantChangedSubscribers);
+        dock.StaticOccupantChanged -= handler;
+        Assert.False(dock.HasStaticOccupantChangedSubscribers);
+    }
+
+    [Fact]
     public void ManagedNotificationsSuppressNoOpsAndIsolateSubscribers()
     {
         var nativeDock = TestObjectFactory.CreateUninitialized<S1Delivery.LoadingDock>();

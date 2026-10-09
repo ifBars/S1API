@@ -1,8 +1,10 @@
 #if (IL2CPPMELON)
 using S1Customization = Il2CppScheduleOne.AvatarFramework.Customization;
+using S1PlayerAppearance = Il2CppScheduleOne.Avatar.Player.PlayerAppearance;
 using Il2CppCollectionsGeneric = Il2CppSystem.Collections.Generic;
 #elif MONOMELON
 using S1Customization = ScheduleOne.AvatarFramework.Customization;
+using S1PlayerAppearance = ScheduleOne.Avatar.Player.PlayerAppearance;
 #endif
 
 using System.Collections.Generic;
@@ -38,6 +40,29 @@ namespace S1API.Avatar
             var settings = ScriptableObject.CreateInstance<S1Customization.BasicAvatarSettings>();
             settings.hideFlags = HideFlags.DontUnloadUnusedAsset;
             return new BasicAvatarSettings(settings);
+        }
+
+        internal static BasicAvatarSettings FromPlayerAppearance(S1PlayerAppearance appearance)
+        {
+            var settings = Create();
+            settings.Gender = (int)appearance.Gender;
+            settings.Weight = appearance.Weight;
+            settings.SkinColor = appearance.SkinColor;
+            settings.HairStyle = appearance.HairStyleId ?? string.Empty;
+            settings.HairColor = appearance.HairColor;
+            settings.Mouth = appearance.FaceId ?? string.Empty;
+            settings.FacialHair = appearance.FacialHairId ?? string.Empty;
+            settings.FacialDetails = appearance.FacialDetailId ?? string.Empty;
+            settings.FacialDetailsIntensity = appearance.FacialDetailIntensity;
+            settings.EyeballColor = appearance.EyeballColor;
+            settings.PupilDilation = appearance.PupilDilation;
+            settings.UpperEyeLidRestingPosition = appearance.UpperEyelidPosition;
+            settings.LowerEyeLidRestingPosition = appearance.LowerEyelidPosition;
+            settings.EyebrowScale = appearance.EyebrowScale;
+            settings.EyebrowThickness = appearance.EyebrowThickness;
+            settings.EyebrowRestingHeight = appearance.EyebrowHeight;
+            settings.EyebrowRestingAngle = appearance.EyebrowAngle;
+            return settings;
         }
 
         /// <summary>

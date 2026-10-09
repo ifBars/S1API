@@ -658,7 +658,7 @@ namespace S1API.Internal.Entities
                 if (avatar != null && AppearanceDefaults != null)
                 {
                     EnsureAppearanceImpostorTexture(npc.ID ?? PrefabName ?? gameObject.name);
-                    avatar.LoadAvatarSettings(AppearanceDefaults);
+                    Compatibility.AvatarCompatibility.ApplyLegacySettings(avatar, AppearanceDefaults);
                 }
             }
             catch { }
@@ -980,7 +980,7 @@ namespace S1API.Internal.Entities
 
             EnsureAppearanceImpostorTexture(npc.ID ?? PrefabName ?? gameObject.name);
             NPCDataAccess.ApplyAppearance(npc, AppearanceDefaults);
-            avatar.LoadAvatarSettings(AppearanceDefaults);
+            Compatibility.AvatarCompatibility.ApplyLegacySettings(avatar, AppearanceDefaults);
             return true;
         }
 

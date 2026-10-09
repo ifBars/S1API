@@ -128,7 +128,7 @@ namespace S1API.Dialogues
             if (handler == null)
                 return;
 
-            DialogueContainer? container = ResolveContainer(handler, injection.ContainerName);
+            Conversation? container = ResolveContainer(handler, injection.ContainerName);
             if (container == null)
                 return;
 
@@ -184,7 +184,7 @@ namespace S1API.Dialogues
             // MelonLogger.Msg($"[DialogueInjector] Injected '{injection.ChoiceLabel}' into NPC '{npc.name}'");
         }
 
-        private static DialogueContainer? ResolveContainer(DialogueHandler handler, string containerName)
+        private static Conversation? ResolveContainer(DialogueHandler handler, string containerName)
         {
             if (handler == null || string.IsNullOrEmpty(containerName))
                 return null;
@@ -192,8 +192,9 @@ namespace S1API.Dialogues
             DialogueController controller = handler.GetComponent<DialogueController>();
             if (controller != null)
             {
-                if (controller.GenericDialogue != null && controller.GenericDialogue.name == containerName)
-                    return controller.GenericDialogue;
+                Conversation? genericConversation = DialogueManager.Instance?.GenericConversation;
+                if (genericConversation != null && genericConversation.name == containerName)
+                    return genericConversation;
 
                 if (controller.OverrideContainer != null && controller.OverrideContainer.name == containerName)
                     return controller.OverrideContainer;
@@ -207,14 +208,14 @@ namespace S1API.Dialogues
             var containers = handler.dialogueContainers;
 #else
             var field = typeof(DialogueHandler).GetField("dialogueContainers", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var containers = field?.GetValue(handler) as List<DialogueContainer>;
+            var containers = field?.GetValue(handler) as List<Conversation>;
 #endif
             if (containers == null)
                 return null;
 
             for (int i = 0; i < containers.Count; i++)
             {
-                DialogueContainer candidate = containers.ToArray()[i];
+                Conversation candidate = containers.ToArray()[i];
                 if (candidate != null && candidate.name == containerName)
                     return candidate;
             }

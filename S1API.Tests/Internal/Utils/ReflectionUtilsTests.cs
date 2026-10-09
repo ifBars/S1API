@@ -59,6 +59,65 @@ public sealed class ReflectionUtilsTests
     }
 
     [Fact]
+    public void GetDerivedClassesReturnsAFreshListEachCall()
+    {
+        List<Type> first = ReflectionUtils.GetDerivedClasses<Log>();
+        first.Clear();
+
+        Assert.Contains(typeof(DerivedLogShape), ReflectionUtils.GetDerivedClasses<Log>());
+        Assert.NotSame(ReflectionUtils.GetDerivedClasses<Log>(), ReflectionUtils.GetDerivedClasses<Log>());
+    }
+
+    [Fact]
+    public void GetDerivedClassesGivesTheSameTypesAfterInvalidation()
+    {
+        var before = ReflectionUtils.GetDerivedClasses<Log>();
+        ReflectionUtils.InvalidateDerivedClassCache();
+        var after = ReflectionUtils.GetDerivedClasses<Log>();
+
+        Assert.Equal(before.OrderBy(t => t.FullName), after.OrderBy(t => t.FullName));
+    }
+
+    [Fact]
+    public void GetDerivedClassesSeesTypesAddedToADynamicAssemblyAfterCaching()
+    {
+        var name = new AssemblyName($"S1API.ReflectionUtilsTests.Late.{Guid.NewGuid():N}");
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(name, AssemblyBuilderAccess.Run);
+        var module = assembly.DefineDynamicModule(name.Name!);
+        ReflectionUtils.GetDerivedClasses<Log>();   // cache built while the dynamic assembly has no types
+
+        TypeBuilder builder = module.DefineType("LateLog", TypeAttributes.Public | TypeAttributes.Class, typeof(Log));
+        var ctor = builder.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
+        var il = ctor.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "late");
+        il.Emit(OpCodes.Call, typeof(Log).GetConstructor(new[] { typeof(string) })!);
+        il.Emit(OpCodes.Ret);
+        Type late = builder.CreateType()!;
+
+        Assert.Contains(late, ReflectionUtils.GetDerivedClasses<Log>());
+    }
+
+    [Fact]
+    public void GetDerivedClassesSeesAnAssemblyLoadedAfterCaching()
+    {
+        ReflectionUtils.GetDerivedClasses<Log>();
+        var name = new AssemblyName($"S1API.ReflectionUtilsTests.NewAssembly.{Guid.NewGuid():N}");
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(name, AssemblyBuilderAccess.Run);
+        var module = assembly.DefineDynamicModule(name.Name!);
+        TypeBuilder builder = module.DefineType("NewAssemblyLog", TypeAttributes.Public | TypeAttributes.Class, typeof(Log));
+        var ctor = builder.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
+        var il = ctor.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "new-assembly");
+        il.Emit(OpCodes.Call, typeof(Log).GetConstructor(new[] { typeof(string) })!);
+        il.Emit(OpCodes.Ret);
+        Type late = builder.CreateType()!;
+
+        Assert.Contains(late, ReflectionUtils.GetDerivedClasses<Log>());
+    }
+
+    [Fact]
     public void DerivedTypeScanExcludesAssembliesWithoutAReferencePathToTheBaseAssembly()
     {
         Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
@@ -119,6 +178,57 @@ public sealed class ReflectionUtilsTests
             candidateAssembly,
             typeof(ReflectionUtils).Assembly,
             AppDomain.CurrentDomain.GetAssemblies()));
+    }
+
+    [Theory]
+    [InlineData("S1API, Version=3.0.1.0, Culture=neutral, PublicKeyToken=null")]
+    [InlineData("S1API, Version=2.9.2.0, Culture=neutral, PublicKeyToken=null")]
+    [InlineData("S1API, Version=3.2.1.0, Culture=neutral, PublicKeyToken=null")]
+    [InlineData("s1api, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null")]
+    public void AReferenceToAnyVersionOfTheBaseAssemblyBindsToIt(string reference)
+    {
+        var loaded = new AssemblyName("S1API, Version=3.2.1.0, Culture=neutral, PublicKeyToken=null");
+
+        Assert.True(ReflectionUtils.ReferenceBindsToDefinition(new AssemblyName(reference), loaded));
+    }
+
+    [Fact]
+    public void AReferenceToADifferentAssemblyNameDoesNotBind()
+    {
+        var loaded = new AssemblyName("S1API, Version=3.2.1.0, Culture=neutral, PublicKeyToken=null");
+
+        Assert.False(ReflectionUtils.ReferenceBindsToDefinition(
+            new AssemblyName("S1APILoader, Version=3.2.1.0, Culture=neutral, PublicKeyToken=null"),
+            loaded));
+    }
+
+    [Fact]
+    public void AReferenceWithADifferentPublicKeyTokenDoesNotBind()
+    {
+        var signed = new AssemblyName("Example, Version=1.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089");
+        var unsigned = new AssemblyName("Example, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
+
+        Assert.False(ReflectionUtils.ReferenceBindsToDefinition(signed, unsigned));
+        Assert.False(ReflectionUtils.ReferenceBindsToDefinition(unsigned, signed));
+        Assert.True(ReflectionUtils.ReferenceBindsToDefinition(signed, signed));
+    }
+
+    [Fact]
+    public void ALoadedAssemblyOfADifferentVersionIsFollowedOnlyWhenItIsTheOnlyOneOfThatName()
+    {
+        var reference = new AssemblyName("Library, Version=1.5.0.0, Culture=neutral, PublicKeyToken=null");
+        var newer = new AssemblyName("Library, Version=1.6.0.0, Culture=neutral, PublicKeyToken=null");
+
+        Assert.True(ReflectionUtils.ShouldFollowLoadedReference(newer, reference, loadedAssembliesWithThatName: 1));
+        Assert.False(ReflectionUtils.ShouldFollowLoadedReference(newer, reference, loadedAssembliesWithThatName: 2));
+    }
+
+    [Fact]
+    public void ALoadedAssemblyWithTheExactIdentityIsAlwaysFollowed()
+    {
+        var reference = new AssemblyName("Library, Version=1.5.0.0, Culture=neutral, PublicKeyToken=null");
+
+        Assert.True(ReflectionUtils.ShouldFollowLoadedReference(reference, reference, loadedAssembliesWithThatName: 2));
     }
 
     private static AssemblyBuilder CreateDynamicAssembly(string name, Version version)

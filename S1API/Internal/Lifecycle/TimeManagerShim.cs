@@ -51,7 +51,8 @@ namespace S1API.Internal.Lifecycle
             try
             {
                 var real = S1GameTime.TimeManager.Instance;
-                if (real == null)
+                var sleepController = S1GameTime.SleepController.Instance;
+                if (real == null || sleepController == null)
                 {
                     Debug.LogWarning(
                         "TimeManagerShim: Real TimeManager instance not available yet; cannot migrate delegates.");
@@ -66,8 +67,7 @@ namespace S1API.Internal.Lifecycle
 
                 if (!_addedSleepStart.Contains(sleepStart))
                 {
-                    real.onSleepStart = Il2CppSystem.Delegate.Combine(real.onSleepStart, sleepStart)
-                        .Cast<Il2CppSystem.Action>();
+                    sleepController.add_OnSleepStart(sleepStart);
                     _addedSleepStart.Add(sleepStart);
                 }
 
@@ -78,7 +78,7 @@ namespace S1API.Internal.Lifecycle
                     _addedHourPass.Add(hourPass);
                 }
 #else
-            real.onSleepStart = (Action)Delegate.Combine(real.onSleepStart, onSleepStart);
+            sleepController.OnSleepStart += onSleepStart;
             real.onHourPass = (Action)Delegate.Combine(real.onHourPass, onHourPass);
 #endif
             }
@@ -92,7 +92,8 @@ namespace S1API.Internal.Lifecycle
             try
             {
                 var real = S1GameTime.TimeManager.Instance;
-                if (real == null)
+                var sleepController = S1GameTime.SleepController.Instance;
+                if (real == null || sleepController == null)
                 {
                     Debug.LogWarning(
                         "TimeManagerShim: Real TimeManager instance no longer available; cannot delete delegates.");
@@ -101,14 +102,14 @@ namespace S1API.Internal.Lifecycle
 
 #if IL2CPPMELON
                 foreach (var d in _addedSleepStart)
-                    real.onSleepStart = RemoveAll(real.onSleepStart, d);
+                    sleepController.remove_OnSleepStart(d);
                 _addedSleepStart.Clear();
 
                 foreach (var d in _addedHourPass)
                     real.onHourPass = RemoveAll(real.onHourPass, d);
                 _addedHourPass.Clear();
 #else
-            real.onSleepStart = (Action)Delegate.RemoveAll(real.onSleepStart, onSleepStart);
+            sleepController.OnSleepStart -= onSleepStart;
             real.onHourPass = (Action)Delegate.RemoveAll(real.onHourPass, onHourPass);
 #endif
             }

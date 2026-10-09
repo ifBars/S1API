@@ -8,6 +8,7 @@ using S1Persistence = ScheduleOne.Persistence;
 using S1Player = ScheduleOne.PlayerScripts.Player;
 #endif
 
+using System;
 using System.Reflection;
 using HarmonyLib;
 using S1API.Internal.Products;
@@ -52,29 +53,55 @@ namespace S1API.Internal.Patches
     [HarmonyPatch]
     internal static class CustomProductManifestPlayerPatches
     {
-        [HarmonyPatch(typeof(S1Player), nameof(S1Player.RequestPlayerData))]
-        [HarmonyPrefix]
-        private static bool RequestPlayerDataPrefix(S1Player __instance, string playerCode)
+        [HarmonyPatch]
+        private static class RequestPlayerDataPatch
         {
-            return CustomProductManifestRuntime.AuthorizeClientPlayerDataRequest(
-                () => __instance.RequestPlayerData(playerCode));
+            private static MethodBase TargetMethod() =>
+                AccessTools.DeclaredMethod(
+                    typeof(S1Player),
+                    "RequestPlayerData_Server") ??
+                throw new MissingMethodException(
+                    typeof(S1Player).FullName,
+                    "RequestPlayerData_Server");
+
+            private static bool Prefix(
+                S1Player __instance,
+                string playerCode,
+                bool isHost,
+                MethodBase __originalMethod)
+            {
+                return CustomProductManifestRuntime.AuthorizeClientPlayerDataRequest(
+                    () => __originalMethod.Invoke(
+                        __instance,
+                        new object[] { playerCode, isHost }));
+            }
         }
 
-        [HarmonyPatch(typeof(S1Player), nameof(S1Player.ReceivePlayerData))]
-        [HarmonyPrefix]
-        private static bool ReceivePlayerDataPrefix(
-            object __instance,
-            object[] __args,
-            MethodBase __originalMethod)
+        [HarmonyPatch]
+        private static class SetPlayerDataPatch
         {
-            if (__args.Length == 0 || !(__args[0] is S1Connection connection))
-                return true;
+            private static MethodBase TargetMethod() =>
+                AccessTools.DeclaredMethod(
+                    typeof(S1Player),
+                    "SetPlayerData_Client") ??
+                throw new MissingMethodException(
+                    typeof(S1Player).FullName,
+                    "SetPlayerData_Client");
 
-            return CustomProductManifestRuntime.AuthorizeHostPlayerData(
-                __instance,
-                connection,
-                __args,
-                __originalMethod);
+            private static bool Prefix(
+                object __instance,
+                object[] __args,
+                MethodBase __originalMethod)
+            {
+                if (__args.Length == 0 || !(__args[0] is S1Connection connection))
+                    return true;
+
+                return CustomProductManifestRuntime.AuthorizeHostPlayerData(
+                    __instance,
+                    connection,
+                    __args,
+                    __originalMethod);
+            }
         }
     }
 }

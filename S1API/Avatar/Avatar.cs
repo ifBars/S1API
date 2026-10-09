@@ -51,7 +51,9 @@ namespace S1API.Avatar
             if (S1Avatar == null || settings?.S1AvatarSettings == null)
                 return;
 
-            S1Avatar.LoadAvatarSettings(settings.S1AvatarSettings);
+            Internal.Compatibility.AvatarCompatibility.ApplyLegacySettings(
+                S1Avatar,
+                settings.S1AvatarSettings);
         }
 
         /// <summary>

@@ -163,17 +163,34 @@ namespace S1API.Rendering
         internal static Object? GetRegisteredAssetForType(string resourcePath, Type type)
         {
             string typedKey = GetTypedKey(resourcePath, type);
-            if (_typedAssets.TryGetValue(typedKey, out var typedAsset))
+            if (_typedAssets.TryGetValue(typedKey, out var typedAsset) && type.IsInstanceOfType(typedAsset))
                 return typedAsset;
 
-            foreach (var kvp in _typedAssets)
+            var compatible = FindCompatibleTypedAsset(_typedAssets, resourcePath, type.IsInstanceOfType);
+            if (compatible != null)
+                return compatible;
+
+            _registeredAssets.TryGetValue(resourcePath, out var asset);
+            return type.IsInstanceOfType(asset) ? asset : null;
+        }
+
+        /// <summary>
+        /// Finds the first asset registered for a path, under any type, that <paramref name="isCompatible"/>
+        /// accepts. Returns <c>null</c> when none does, so the caller can fall back to another lookup.
+        /// </summary>
+        internal static Object? FindCompatibleTypedAsset(
+            IEnumerable<KeyValuePair<string, Object>> typedAssets,
+            string resourcePath,
+            Func<Object, bool> isCompatible)
+        {
+            string prefix = resourcePath + "|";
+            foreach (var kvp in typedAssets)
             {
-                if (kvp.Key.StartsWith(resourcePath + "|") && type.IsInstanceOfType(kvp.Value))
+                if (kvp.Key.StartsWith(prefix) && isCompatible(kvp.Value))
                     return kvp.Value;
             }
 
-            _registeredAssets.TryGetValue(resourcePath, out var asset);
-            return asset;
+            return null;
         }
 
         /// <summary>
@@ -349,27 +366,27 @@ namespace S1API.Rendering
                 string normalizedTypeName = NormalizeTypeName(typeFullName);
                 string typedKey = $"{path}|{normalizedTypeName}";
 
-                if (_typedAssets.TryGetValue(typedKey, out var typedAsset))
+                if (_typedAssets.TryGetValue(typedKey, out var typedAsset) && systemTypeInstance!.IsInstanceOfType(typedAsset))
                 {
                     __result = typedAsset;
                     return false;
                 }
 
-                // Check for compatible types by path prefix
-                foreach (var kvp in _typedAssets)
+                var compatible = FindCompatibleTypedAsset(
+                    _typedAssets,
+                    path,
+                    candidate => systemTypeInstance!.IsInstanceOfType(candidate));
+                if (compatible != null)
                 {
-                    if (kvp.Key.StartsWith(path + "|"))
-                    {
-                        __result = kvp.Value;
-                        return false;
-                    }
+                    __result = compatible;
+                    return false;
                 }
             }
 
             // Check primary registry
             if (_registeredAssets.TryGetValue(path, out var asset))
             {
-                if (systemTypeInstance == null)
+                if (systemTypeInstance == null || systemTypeInstance.IsInstanceOfType(asset))
                 {
                     __result = asset;
                     return false;
@@ -393,11 +410,6 @@ namespace S1API.Rendering
                     }
 
                     Logger.Warning($"Registered GameObject at '{path}' does not have component of type '{typeName}'");
-                }
-                else
-                {
-                    __result = asset;
-                    return false;
                 }
             }
 

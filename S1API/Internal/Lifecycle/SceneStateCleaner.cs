@@ -61,6 +61,7 @@ namespace S1API.Internal.Lifecycle
 
             try
             {
+                Internal.Utils.SceneObjectIndexes.ResetAll();
                 if (afterUnload)
                 {
                     for (int i = 0; i < NPC.All.Count; i++)
@@ -91,6 +92,8 @@ namespace S1API.Internal.Lifecycle
                     WeatherRuntime.ResetBindings();
                     HomeScreenScrollPatch.ResetInitializationState();
                     NPCAppearance.ResetMugshotState();
+                    Compatibility.AvatarCompatibility.ResetRendering();
+                    global::S1API.Rendering.IconFactory.ResetAccessoryIconState();
                     LoadingScreenPatches.ResetState();
                     DialogueInjector.ResetState();
                     DialogueChoiceListener.ResetState();

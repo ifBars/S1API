@@ -5,6 +5,7 @@ using S1API.Internal.Utils;
 using S1API.Internal.Abstraction;
 using S1API.PhoneApp;
 using S1API.Logging;
+using S1API.ExternalHosting;
 
 #if (IL2CPPMELON)
 using Il2CppScheduleOne.UI.Phone;
@@ -41,14 +42,20 @@ namespace S1API.Internal.Patches
             if (!string.Equals(SceneManager.GetActiveScene().name, "Main", StringComparison.OrdinalIgnoreCase))
                 return;
 
+            // The phone registry retains old instances across scene loads; external hosts must not.
+            ExternalAppCatalog.Clear(ExternalAppFamily.Phone);
             // Re-register all PhoneApps
             var phoneApps = ReflectionUtils.GetDerivedClasses<PhoneApp.PhoneApp>();
+            Logger.Msg($"Discovered {phoneApps.Count} custom phone app type(s).");
             foreach (var type in phoneApps)
             {
-                Logger.Debug($"Found phone app: {type.FullName}");
-
                 if (type.GetConstructor(Type.EmptyTypes) == null)
+                {
+                    Logger.Warning($"Skipping phone app {type.FullName}: a public parameterless constructor is required.");
                     continue;
+                }
+
+                Logger.Msg($"Initializing phone app: {type.FullName}");
 
                 try
                 {
@@ -59,7 +66,7 @@ namespace S1API.Internal.Patches
                 }
                 catch (Exception e)
                 {
-                    Logger.Warning($"[PhoneApp] Failed to register {type.FullName}: {e.Message}");
+                    Logger.Warning($"Failed to register phone app {type.FullName}: {e}");
                 }
             }
         }

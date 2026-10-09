@@ -32,6 +32,9 @@
     </ItemGroup>
 
     <ItemGroup Condition="'$(Configuration)' == 'MonoMelon'">
+        <Reference Include="0Harmony">
+            <HintPath>$(MelonLoaderMonoAssembliesPath)/0Harmony.dll</HintPath>
+        </Reference>
         <Reference Include="Assembly-CSharp">
             <HintPath>$(MonoAssembliesPath)/Assembly-CSharp.dll</HintPath>
         </Reference>
@@ -50,6 +53,9 @@
     </ItemGroup>
 
     <ItemGroup Condition="'$(Configuration)' == 'Il2CppMelon'">
+        <Reference Include="0Harmony">
+            <HintPath>$(MelonLoaderAssembliesPath)/0Harmony.dll</HintPath>
+        </Reference>
         <Reference Include="$(MelonLoaderAssembliesPath)\Il2CppInterop.Common.dll" />
         <Reference Include="$(MelonLoaderAssembliesPath)\Il2CppInterop.Runtime.dll" />
         <Reference Include="$(Il2CppAssembliesPath)\Assembly-CSharp.dll" />

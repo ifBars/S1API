@@ -92,12 +92,10 @@ namespace S1API.Internal.NPCWorkbench
                 throw new InvalidOperationException($"Native NPC '{id}' is not available in the current scene.");
 
             var avatar = npc.Avatar ?? npc.gameObject.GetComponentInChildren<S1AvatarFramework.Avatar>(true);
-            var sourceSettings = avatar?.CurrentSettings;
+            S1AvatarFramework.AvatarSettings? sourceSettings = null;
             if (sourceSettings == null && avatar != null)
             {
-                sourceSettings = ReflectionUtils.TryGetFieldOrProperty(
-                    avatar,
-                    "InitialAvatarSettings") as S1AvatarFramework.AvatarSettings;
+                sourceSettings = Compatibility.AvatarCompatibility.CaptureLegacySettings(avatar);
             }
             if (sourceSettings == null)
                 throw new InvalidOperationException($"Native NPC '{id}' has no available appearance settings.");
@@ -109,7 +107,7 @@ namespace S1API.Internal.NPCWorkbench
                 SourceDisplayName = $"{GetDisplayName(npc)} ({id})"
             };
 
-            using (var settings = new AvatarSettingsScope(ScriptableObject.Instantiate(sourceSettings)))
+            using (var settings = new AvatarSettingsScope(sourceSettings))
                 CopyAppearance(settings.Value, draft.Appearance);
 
             return draft;

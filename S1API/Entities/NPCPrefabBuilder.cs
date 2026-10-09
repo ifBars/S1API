@@ -111,6 +111,19 @@ namespace S1API.Entities
                 customer = prefabRoot.AddComponent<S1Economy.Customer>();
                 customer.enabled = true;
             }
+            // A joining client's native Awake runs before its managed NPC wrapper can
+            // create fallback data. Configure the inactive prefab before network spawn.
+            if (customer.CustomerData == null)
+            {
+                var data = NPCCustomer.CreateDefaultCustomerData();
+#if MONOMELON
+                var field = typeof(S1Economy.Customer).GetField("customerData",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                field?.SetValue(customer, data);
+#else
+                customer.customerData = data;
+#endif
+            }
             return this;
         }
 

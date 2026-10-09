@@ -4,6 +4,7 @@ using S1ItemFramework = Il2CppScheduleOne.ItemFramework;
 using S1CoreItemFramework = Il2CppScheduleOne.Core.Items.Framework;
 using S1Registry = Il2CppScheduleOne.Registry;
 using S1UiItems = Il2CppScheduleOne.UI.Items;
+using S1CoreAvatar = Il2CppScheduleOne.Core.Avatar;
 using Il2CppCollections = Il2CppSystem.Collections.Generic;
 #elif MONOMELON
 using S1Clothing = ScheduleOne.Clothing;
@@ -11,6 +12,7 @@ using S1ItemFramework = ScheduleOne.ItemFramework;
 using S1CoreItemFramework = ScheduleOne.Core.Items.Framework;
 using S1Registry = ScheduleOne.Registry;
 using S1UiItems = ScheduleOne.UI.Items;
+using S1CoreAvatar = ScheduleOne.Core.Avatar;
 #endif
 using System.Collections.Generic;
 using S1API.Internal.Utils;
@@ -45,8 +47,6 @@ namespace S1API.Items.Clothing
 
             // Clothing-specific defaults
             ClothingDefinition.Slot = S1Clothing.EClothingSlot.Head;
-            ClothingDefinition.ApplicationType = S1Clothing.EClothingApplicationType.Accessory;
-            ClothingDefinition.ClothingAssetPath = "Path/To/Clothing/Asset";
             ClothingDefinition.Colorable = true;
             ClothingDefinition.DefaultColor = S1Clothing.EClothingColor.White;
 #if (IL2CPPMELON)
@@ -73,8 +73,7 @@ namespace S1API.Items.Clothing
             var clothingSource = CrossType.As<S1Clothing.ClothingDefinition>(source);
 
             ClothingDefinition.Slot = clothingSource.Slot;
-            ClothingDefinition.ApplicationType = clothingSource.ApplicationType;
-            ClothingDefinition.ClothingAssetPath = clothingSource.ClothingAssetPath;
+            ClothingDefinition.ClothingAvatarObject = clothingSource.ClothingAvatarObject;
             ClothingDefinition.Colorable = clothingSource.Colorable;
             ClothingDefinition.DefaultColor = clothingSource.DefaultColor;
 #if (IL2CPPMELON)
@@ -111,7 +110,6 @@ namespace S1API.Items.Clothing
         /// <returns>The builder instance for fluent chaining.</returns>
         public ClothingItemDefinitionBuilder WithApplicationType(Clothing.ClothingApplicationType applicationType)
         {
-            ClothingDefinition.ApplicationType = (S1Clothing.EClothingApplicationType)applicationType;
             return this;
         }
 
@@ -122,7 +120,8 @@ namespace S1API.Items.Clothing
         /// <returns>The builder instance for fluent chaining.</returns>
         public ClothingItemDefinitionBuilder WithClothingAsset(string assetPath)
         {
-            ClothingDefinition.ClothingAssetPath = assetPath;
+            ClothingDefinition.ClothingAvatarObject =
+                Resources.Load<S1CoreAvatar.AvatarObject>(assetPath);
             return this;
         }
 

@@ -2,6 +2,21 @@
 
 The `NPCAppearance` system allows you to customize your NPC's visual appearance, including physical features, clothing, and accessories.
 
+### Schedule I 0.4.7 beta
+
+The beta uses the game's new naked-appearance and outfit system. Existing
+appearance builders and S1API resource-path constants remain the entry points.
+S1API translates those settings before applying them to an avatar.
+
+`Build()` queues portrait generation until a render rig is available. Portraits
+use a detached avatar with a forward-facing pose; player look targets, blinking,
+and distance impostors do not control the capture. An explicitly assigned NPC
+icon still takes precedence. A failed capture leaves the existing icon intact.
+
+The NPC workbench can import a native NPC's current beta appearance. Imported
+layers may use native avatar-object IDs where no legacy resource path is available.
+These IDs can also be passed to the appearance layer helpers.
+
 ## Table of Contents
 
 1. [Overview](#overview)

@@ -1,15 +1,18 @@
 #if (IL2CPPMELON)
 using S1DevUtils = Il2CppScheduleOne.DevUtilities;
 using S1AvatarFramework = Il2CppScheduleOne.AvatarFramework;
+using S1AvatarTools = Il2CppScheduleOne.Avatar.Tools;
 using Il2CppScheduleOne.AvatarFramework.Customization;
 #elif MONOMELON
 using S1DevUtils = ScheduleOne.DevUtilities;
 using S1AvatarFramework = ScheduleOne.AvatarFramework;
+using S1AvatarTools = ScheduleOne.Avatar.Tools;
 using ScheduleOne.AvatarFramework.Customization;
 #endif
 
 using S1API.Logging;
 using S1API.Internal.Utils;
+using S1API.Internal.Rendering;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -66,8 +69,8 @@ namespace S1API.Rendering
         /// <summary>
         /// INTERNAL: Reference to the game's MugshotGenerator instance.
         /// </summary>
-        internal static S1AvatarFramework.MugshotGenerator S1MugshotGenerator =>
-            S1AvatarFramework.MugshotGenerator.Instance;
+        internal static S1AvatarTools.MugshotGenerator? S1MugshotGenerator =>
+            global::S1API.Internal.Compatibility.AvatarCompatibility.FindMugshotGenerator();
 
         /// <summary>
         /// Generates a preview texture for the specified model.
@@ -145,12 +148,18 @@ namespace S1API.Rendering
                 return null;
             }
 
+            int iconLayer = RuntimePreviewLayer.Resolve();
+            if (iconLayer < 0)
+            {
+                Logger.Error("Neither RuntimePreviewGeneration nor IconGeneration exists. Cannot generate icon.");
+                return null;
+            }
+
             Transform? originalParent = model.parent;
             Vector3 originalPos = model.localPosition;
             Quaternion originalRot = model.localRotation;
             Vector3 originalScale = model.localScale;
             bool wasActive = model.gameObject.activeSelf;
-            int originalSize = generator.IconSize;
             bool originalModifyLighting = generator.ModifyLighting;
             List<SkinnedMeshRendererState>? bakedRenderers = null;
             Texture2D? texture = null;
@@ -166,14 +175,9 @@ namespace S1API.Rendering
                 // Now activate and set layers (after parenting)
                 model.gameObject.SetActive(true);
                 
-                int iconLayer = LayerMask.NameToLayer("IconGeneration");
-                if (iconLayer != -1)
-                {
-                    // Set layers recursively on ItemContainer to match game's approach
-                    S1DevUtils.LayerUtility.SetLayerRecursively(
-                        generator.ItemContainer.gameObject,
-                        iconLayer);
-                }
+                S1DevUtils.LayerUtility.SetLayerRecursively(
+                    generator.ItemContainer.gameObject,
+                    iconLayer);
 
                 Logger.Debug(
                     $"Icon generation for '{model.name}': world pos={model.position}, " +
@@ -201,10 +205,9 @@ namespace S1API.Rendering
                 }
 
                 // Temporarily override IconGenerator state
-                generator.IconSize = size;
                 generator.ModifyLighting = true;
 
-                texture = generator.GetTexture(model);
+                texture = generator.GetTexture(model, size);
                 Logger.Debug($"Generated texture: {(texture != null ? $"{texture.width}x{texture.height}" : "null")}");
                 if (texture != null && !HasVisibleContent(texture))
                 {
@@ -226,7 +229,6 @@ namespace S1API.Rendering
             }
             finally
             {
-                generator.IconSize = originalSize;
                 generator.ModifyLighting = originalModifyLighting;
 
                 if (bakedRenderers != null)
@@ -683,6 +685,7 @@ namespace S1API.Rendering
         /// </summary>
         private static IEnumerator ProcessAccessoryIconQueue()
         {
+#if false
             while (true)
             {
                 AccessoryIconRequest? next = null;
@@ -794,6 +797,106 @@ namespace S1API.Rendering
                 // Small delay between jobs to let the mugshot rig fully reset
                 yield return new WaitForSeconds(0.05f);
             }
+#else
+            var renderingEpoch = global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch;
+            while (true)
+            {
+                if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
+                    yield break;
+                AccessoryIconRequest? next;
+                lock (_accessoryIconQueueLock)
+                {
+                    if (_accessoryIconQueue.Count == 0)
+                    {
+                        _isProcessingAccessoryIcons = false;
+                        yield break;
+                    }
+
+                    next = _accessoryIconQueue.Dequeue();
+                }
+
+                var generator = S1MugshotGenerator;
+                while (generator == null)
+                {
+                    if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
+                        yield break;
+                    yield return null;
+                    generator = S1MugshotGenerator;
+                }
+
+                while (!global::S1API.Internal.Compatibility.AvatarCompatibility
+                           .TryAcquireMugshotGenerator(generator))
+                {
+                    if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
+                        yield break;
+                    yield return null;
+                }
+
+                if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
+                {
+                    global::S1API.Internal.Compatibility.AvatarCompatibility.ReleaseMugshotGenerator();
+                    yield break;
+                }
+
+                var settings = CreateMinimalAvatarSettings(next.AccessoryPath, next.AccessoryColor);
+                global::S1API.Internal.Compatibility.AvatarCompatibility.CreateRenderInputs(
+                    settings,
+                    out var appearance,
+                    out var outfit);
+
+                bool completed = false;
+                Texture2D? capturedTexture = null;
+                try
+                {
+                    global::S1API.Internal.Compatibility.AvatarCompatibility.StartPortraitCapture(
+                        generator,
+                        appearance,
+                        outfit,
+                        (Action<Texture2D>)(texture =>
+                        {
+                            capturedTexture = texture;
+                            completed = true;
+                        }));
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Failed to start accessory icon capture: {ex.Message}");
+                    completed = true;
+                }
+
+                var waitFrames = 0;
+                while (!completed && waitFrames++ < 300)
+                    yield return null;
+
+                if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
+                {
+                    UnityEngine.Object.Destroy(outfit);
+                    UnityEngine.Object.Destroy(settings);
+                    yield break;
+                }
+
+                global::S1API.Internal.Compatibility.AvatarCompatibility.ReleaseMugshotGenerator();
+                UnityEngine.Object.Destroy(outfit);
+                UnityEngine.Object.Destroy(settings);
+                capturedTexture?.Apply();
+                if (capturedTexture != null)
+                {
+                    var source = capturedTexture;
+                    capturedTexture = global::S1API.Internal.Compatibility.AvatarCompatibility
+                        .ResizePortrait(source, next.IconSize);
+                    UnityEngine.Object.Destroy(source);
+                }
+                if (capturedTexture == null || !HasVisibleContent(capturedTexture))
+                {
+                    Logger.Error($"Failed to generate accessory icon for '{next.AccessoryPath}'.");
+                    next.Callback?.Invoke(null);
+                    continue;
+                }
+
+                next.Callback?.Invoke(capturedTexture);
+                yield return new WaitForSeconds(0.05f);
+            }
+#endif
         }
 
         /// <summary>
@@ -825,6 +928,15 @@ namespace S1API.Rendering
             });
 
             return settings;
+        }
+
+        internal static void ResetAccessoryIconState()
+        {
+            lock (_accessoryIconQueueLock)
+            {
+                _accessoryIconQueue.Clear();
+                _isProcessingAccessoryIcons = false;
+            }
         }
 
         /// <summary>
