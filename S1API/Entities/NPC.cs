@@ -692,6 +692,8 @@ namespace S1API.Entities
             RewireChildNpcReferences(prefabRoot, dealer);
             RepairDealerPrefabReferences(prefabRoot, dealer);
             RepairNpcPrefabReferences(prefabRoot, dealer);
+            if (sourceNpc != dealer)
+                RemoveComponentImmediate(sourceNpc);
             return dealer;
         }
 
