@@ -17,6 +17,7 @@ using System.Reflection;
 using HarmonyLib;
 using S1API.Entities;
 using S1API.Internal.Products;
+using S1API.Internal.Utils;
 using S1API.Logging;
 using S1API.Properties;
 using S1API.Products;
@@ -293,42 +294,34 @@ namespace S1API.Internal.Patches
             }
         }
 
+        /// <summary>
+        /// Maps each NPC ID to the concrete S1API NPC wrapper type that declares it through a public static
+        /// <c>NPCId</c> string property. The first wrapper found for an ID wins; the map is built once and cached.
+        /// </summary>
         private static Dictionary<string, Type> GetNpcWrapperTypeById()
         {
             if (_npcWrapperTypeById != null)
                 return _npcWrapperTypeById;
 
             var map = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
-            var npcBaseType = typeof(NPC);
 
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            // Only assemblies that reference S1API can hold an NPC wrapper. Enumerating every assembly reaches the
+            // IL2CPP interop assemblies, where GetTypes() can end the process without an exception to catch.
+            foreach (var type in ReflectionUtils.GetDerivedClasses<NPC>())
             {
-                Type[] types;
-                try
-                {
-                    types = assembly.GetTypes();
-                }
-                catch
-                {
+                if (type == null || type.IsAbstract)
                     continue;
-                }
 
-                foreach (var type in types)
-                {
-                    if (type == null || type.IsAbstract || !npcBaseType.IsAssignableFrom(type))
-                        continue;
+                var npcIdProperty = type.GetProperty("NPCId", BindingFlags.Public | BindingFlags.Static);
+                if (npcIdProperty == null || npcIdProperty.PropertyType != typeof(string))
+                    continue;
 
-                    var npcIdProperty = type.GetProperty("NPCId", BindingFlags.Public | BindingFlags.Static);
-                    if (npcIdProperty == null || npcIdProperty.PropertyType != typeof(string))
-                        continue;
+                var npcId = npcIdProperty.GetValue(null) as string;
+                if (string.IsNullOrWhiteSpace(npcId))
+                    continue;
 
-                    var npcId = npcIdProperty.GetValue(null) as string;
-                    if (string.IsNullOrWhiteSpace(npcId))
-                        continue;
-
-                    if (!map.ContainsKey(npcId))
-                        map[npcId] = type;
-                }
+                if (!map.ContainsKey(npcId))
+                    map[npcId] = type;
             }
 
             _npcWrapperTypeById = map;
