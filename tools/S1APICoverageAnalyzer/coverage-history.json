@@ -465,27 +465,36 @@
         }
       ],
       "note": null
+    },
+    {
+      "timestamp": "2026-10-19T03:25:06.2429264Z",
+      "classCoveragePercentage": 34.30769230769231,
+      "memberCoveragePercentage": 0,
+      "totalClasses": 1300,
+      "coveredClasses": 446,
+      "totalMembers": 29639,
+      "coveredMembers": 0,
+      "excludedClasses": 1265,
+      "gameAssemblyVersion": "Assembly-CSharp.dll:0.0.0.0, ScheduleOne.Core.dll:0.0.0.0",
+      "gameAssemblyHash": "3633BBB8D59979A2A39AA8E73C1126E1D12C7C80A6E231458FF20ECDBA494A5F",
+      "analyzerVersion": "1.0.0.0",
+      "events": [],
+      "note": null
     }
   ],
   "latestEntry": {
-    "timestamp": "2026-10-09T12:03:28.5736253Z",
-    "classCoveragePercentage": 34,
+    "timestamp": "2026-10-19T03:25:06.2429264Z",
+    "classCoveragePercentage": 34.30769230769231,
     "memberCoveragePercentage": 0,
     "totalClasses": 1300,
-    "coveredClasses": 442,
+    "coveredClasses": 446,
     "totalMembers": 29639,
     "coveredMembers": 0,
     "excludedClasses": 1265,
     "gameAssemblyVersion": "Assembly-CSharp.dll:0.0.0.0, ScheduleOne.Core.dll:0.0.0.0",
     "gameAssemblyHash": "3633BBB8D59979A2A39AA8E73C1126E1D12C7C80A6E231458FF20ECDBA494A5F",
     "analyzerVersion": "1.0.0.0",
-    "events": [
-      {
-        "type": 1,
-        "description": "Game updated: \u002B204 types (\u002B18.6%)",
-        "details": "Hash: 1823E93D \u2192 3633BBB8"
-      }
-    ],
+    "events": [],
     "note": null
   }
 }
