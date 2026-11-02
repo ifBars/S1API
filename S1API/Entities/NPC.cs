@@ -1134,6 +1134,14 @@ namespace S1API.Entities
 
                 RepairBehaviourOwnership(prefabRoot, GetPreferredNpcComponent(prefabRoot));
 
+                // Clients never run the instance constructor, so their behaviour stack comes from this template.
+                // The host's RPCs address behaviours by stack index, which only works when both sides build the same stack.
+                S1NPCs.NPC? templateNpc = GetPreferredNpcComponent(prefabRoot);
+                if (templateNpc != null)
+                    InitializeBehaviourComponents(prefabRoot, templateNpc);
+                else
+                    Logger.Error($"[S1API] {prefabName} has no NPC component, its behaviour stack stays as the donor prefab left it.");
+
                 // Register as spawnable so FishNet assigns stable behaviour indices and can network-spawn
                 try
                 {
@@ -1374,33 +1382,7 @@ namespace S1API.Entities
 
             try
             {
-                // Check if this is a custom S1API NPC by looking for NPCPrefabIdentity or prefab name
-                var identity = baseNpc.GetComponent<NPCPrefabIdentity>();
-                string prefabName = baseNpc.gameObject.name;
-                
-                // Remove "(Clone)" suffix if present
-                if (prefabName.EndsWith("(Clone)"))
-                    prefabName = prefabName.Substring(0, prefabName.Length - 7);
-
-                // Check if it's an S1API prefab
-                if (!prefabName.StartsWith("S1API_", StringComparison.Ordinal) && identity == null)
-                    return null;
-
-                // Extract type name from prefab name
-                string? typeName = prefabName.StartsWith("S1API_", StringComparison.Ordinal)
-                    ? prefabName.Substring(6) // Remove "S1API_" prefix
-                    : null;
-
-                if (string.IsNullOrEmpty(typeName))
-                    return null;
-
-                // Find the NPC type in loaded assemblies
-                var baseAssembly = typeof(NPC).Assembly;
-                System.Type? npcType = ReflectionUtils.GetDerivedClasses<NPC>()
-                    .FirstOrDefault(type =>
-                        type.Assembly != baseAssembly &&
-                        type.Name == typeName);
-
+                System.Type? npcType = ResolveNetworkSpawnNpcType(baseNpc);
                 if (npcType == null)
                     return null;
 
@@ -1412,64 +1394,9 @@ namespace S1API.Entities
                         return existing;
                 }
 
-                // Create uninitialized instance (avoids constructor which creates new GameObject)
-                NPC wrapper = (NPC)FormatterServices.GetUninitializedObject(npcType);
-                
-                // Use reflection to set readonly fields/properties
-                bool s1NpcSet = Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(wrapper, "S1NPC", baseNpc);
-                bool isCustomNpcSet = Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(wrapper, "IsCustomNPC", true);
-                
-                // gameObject is a readonly auto-property, need to find and set its backing field
-                bool gameObjectSet = false;
-                var allFields = Internal.Utils.ReflectionUtils.GetAllFields(npcType, BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-                
-                for (int fi = 0; fi < allFields.Length; fi++)
-                {
-                    var field = allFields[fi];
-                    // Try compiler-generated backing field name or direct field name
-                    if ((field.Name == "<gameObject>k__BackingField" || field.Name == "gameObject") && 
-                        field.FieldType == typeof(GameObject))
-                    {
-                        try
-                        {
-                            field.SetValue(wrapper, baseNpc.gameObject);
-                            gameObjectSet = true;
-                            break;
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: Exception setting gameObject backing field '{field.Name}': {ex.Message}");
-                        }
-                    }
-                }
-                
-                // Fallback: try the property setter if field wasn't found
-                if (!gameObjectSet)
-                    gameObjectSet = Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(wrapper, "gameObject", baseNpc.gameObject);
-
-                // Validate that critical fields were set
-                if (!s1NpcSet)
-                {
-                    Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: Could not set S1NPC field/property for '{baseNpc.ID}'.");
+                NPC? wrapper = AllocateNetworkSpawnWrapper(baseNpc, npcType);
+                if (wrapper == null)
                     return null;
-                }
-                if (!gameObjectSet)
-                {
-                    Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: Could not set gameObject field/property for '{baseNpc.ID}'. Tried backing field and property setter.");
-                    return null;
-                }
-
-                // Verify the wrapper has the correct references
-                if (wrapper.S1NPC != baseNpc)
-                {
-                    Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: S1NPC field not set correctly for '{baseNpc.ID}'.");
-                    return null;
-                }
-                if (wrapper.gameObject != baseNpc.gameObject)
-                {
-                    Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: gameObject field not set correctly for '{baseNpc.ID}'.");
-                    return null;
-                }
 
                 InitializeWrapperStateFromNetworkSpawn(wrapper, baseNpc);
 
@@ -1485,6 +1412,126 @@ namespace S1API.Entities
                 Logger.Warning($"Stack trace: {ex.StackTrace}");
                 return null;
             }
+        }
+
+        /// <summary>
+        /// INTERNAL: Applies the planned schedule of a network-spawned custom NPC on a client, right after its native Awake.
+        /// The host's first schedule RPCs can share a packet with the spawn and arrive before Start, and an action
+        /// without its seat set throws on them, which makes FishNet drop the rest of that packet.
+        /// </summary>
+        internal static void ApplySchedulePlanOnClientSpawn(S1NPCs.NPC baseNpc)
+        {
+            if (baseNpc == null || InstanceFinder.IsServer)
+                return;
+
+            try
+            {
+                System.Type? npcType = ResolveNetworkSpawnNpcType(baseNpc);
+                if (npcType == null)
+                    return;
+
+                // The full wrapper needs state that only exists from Start on. The specs only read the NPC's
+                // GameObject and game component, so a bare wrapper is enough here and Start creates the lasting one.
+                AllocateNetworkSpawnWrapper(baseNpc, npcType)?.ApplyPlannedSchedule(enforceState: false);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"ApplySchedulePlanOnClientSpawn failed for '{baseNpc.gameObject.name}': {ex}");
+            }
+        }
+
+        private static System.Type? ResolveNetworkSpawnNpcType(S1NPCs.NPC baseNpc)
+        {
+            // Check if this is a custom S1API NPC by looking for NPCPrefabIdentity or prefab name
+            var identity = baseNpc.GetComponent<NPCPrefabIdentity>();
+            string prefabName = baseNpc.gameObject.name;
+
+            // Remove "(Clone)" suffix if present
+            if (prefabName.EndsWith("(Clone)"))
+                prefabName = prefabName.Substring(0, prefabName.Length - 7);
+
+            // Check if it's an S1API prefab
+            if (!prefabName.StartsWith("S1API_", StringComparison.Ordinal) && identity == null)
+                return null;
+
+            // Extract type name from prefab name
+            string? typeName = prefabName.StartsWith("S1API_", StringComparison.Ordinal)
+                ? prefabName.Substring(6) // Remove "S1API_" prefix
+                : null;
+
+            if (string.IsNullOrEmpty(typeName))
+                return null;
+
+            // Find the NPC type in loaded assemblies
+            var baseAssembly = typeof(NPC).Assembly;
+            return ReflectionUtils.GetDerivedClasses<NPC>()
+                .FirstOrDefault(type =>
+                    type.Assembly != baseAssembly &&
+                    type.Name == typeName);
+        }
+
+        private static NPC? AllocateNetworkSpawnWrapper(S1NPCs.NPC baseNpc, System.Type npcType)
+        {
+            // Create uninitialized instance (avoids constructor which creates new GameObject)
+            NPC wrapper = (NPC)FormatterServices.GetUninitializedObject(npcType);
+
+            // Use reflection to set readonly fields/properties
+            bool s1NpcSet = Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(wrapper, "S1NPC", baseNpc);
+            bool isCustomNpcSet = Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(wrapper, "IsCustomNPC", true);
+
+            // gameObject is a readonly auto-property, need to find and set its backing field
+            bool gameObjectSet = false;
+            var allFields = Internal.Utils.ReflectionUtils.GetAllFields(npcType, BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+
+            for (int fi = 0; fi < allFields.Length; fi++)
+            {
+                var field = allFields[fi];
+                // Try compiler-generated backing field name or direct field name
+                if ((field.Name == "<gameObject>k__BackingField" || field.Name == "gameObject") && 
+                    field.FieldType == typeof(GameObject))
+                {
+                    try
+                    {
+                        field.SetValue(wrapper, baseNpc.gameObject);
+                        gameObjectSet = true;
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: Exception setting gameObject backing field '{field.Name}': {ex.Message}");
+                    }
+                }
+            }
+
+            // Fallback: try the property setter if field wasn't found
+            if (!gameObjectSet)
+                gameObjectSet = Internal.Utils.ReflectionUtils.TrySetFieldOrProperty(wrapper, "gameObject", baseNpc.gameObject);
+
+            // Validate that critical fields were set
+            if (!s1NpcSet)
+            {
+                Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: Could not set S1NPC field/property for '{baseNpc.ID}'.");
+                return null;
+            }
+            if (!gameObjectSet)
+            {
+                Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: Could not set gameObject field/property for '{baseNpc.ID}'. Tried backing field and property setter.");
+                return null;
+            }
+
+            // Verify the wrapper has the correct references
+            if (wrapper.S1NPC != baseNpc)
+            {
+                Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: S1NPC field not set correctly for '{baseNpc.ID}'.");
+                return null;
+            }
+            if (wrapper.gameObject != baseNpc.gameObject)
+            {
+                Logger.Warning($"CreateWrapperForNetworkSpawnedNPC: gameObject field not set correctly for '{baseNpc.ID}'.");
+                return null;
+            }
+
+            return wrapper;
         }
 
         private static void InitializeWrapperStateFromNetworkSpawn(NPC wrapper, S1NPCs.NPC baseNpc)
@@ -2229,7 +2276,7 @@ namespace S1API.Entities
                 EnsureMessageConversationReady(resetDefaults: true);
             InitializeHealthComponent();
             InitializeAwarenessComponent();
-            InitializeBehaviourComponents();
+            InitializeBehaviourComponents(gameObject, S1NPC);
             InitializeVisionComponents();
             InitializeInteractables();
             InitializeInventoryComponent();
@@ -3713,36 +3760,36 @@ namespace S1API.Entities
 
         }
 
-        private void InitializeBehaviourComponents()
+        private static void InitializeBehaviourComponents(GameObject root, S1NPCs.NPC npc)
         {
-            if (S1NPC.Behaviour == null)
+            if (npc.Behaviour == null)
             {
                 S1Behaviour.NPCBehaviour existing =
-                    gameObject.GetComponentInChildren<S1Behaviour.NPCBehaviour>(true);
+                    root.GetComponentInChildren<S1Behaviour.NPCBehaviour>(true);
                 if (existing == null)
                 {
                     GameObject behaviourObject = new GameObject("NPCBehaviour");
-                    behaviourObject.transform.SetParent(gameObject.transform, false);
+                    behaviourObject.transform.SetParent(root.transform, false);
                     existing = behaviourObject.AddComponent<S1Behaviour.NPCBehaviour>();
                 }
 
-                SetGameMember(S1NPC, "Behaviour", existing);
+                SetGameMember(npc, "Behaviour", existing);
             }
 
             // Ensure NPCActions exists so Responses can trigger behaviours like CallPolice/Face/Combat
-            if (S1NPC.Actions == null)
+            if (npc.Actions == null)
             {
-                var existing = S1NPC.GetComponentInChildren<S1NPCs.Actions.NPCActions>(true);
+                var existing = npc.GetComponentInChildren<S1NPCs.Actions.NPCActions>(true);
                 if (existing == null)
                 {
                     GameObject actionsObject = new GameObject("NPCActions");
-                    actionsObject.transform.SetParent(gameObject.transform, false);
+                    actionsObject.transform.SetParent(root.transform, false);
                     existing = actionsObject.AddComponent<S1NPCs.Actions.NPCActions>();
                 }
-                SetGameMember(S1NPC, "Actions", existing);
+                SetGameMember(npc, "Actions", existing);
             }
 
-            var npcBehaviour = S1NPC.Behaviour;
+            var npcBehaviour = npc.Behaviour;
             if (npcBehaviour == null)
                 return;
 
@@ -3827,9 +3874,9 @@ namespace S1API.Entities
             if (npcBehaviour.CombatBehaviour != null)
             {
                 npcBehaviour.CombatBehaviour.TargetVelocityTracker ??=
-                    gameObject.GetComponentInChildren<S1Tools.SmoothedVelocityCalculator>(true);
+                    root.GetComponentInChildren<S1Tools.SmoothedVelocityCalculator>(true);
                 npcBehaviour.CombatBehaviour.VirtualPunchWeapon ??=
-                    gameObject.GetComponentInChildren<S1AvatarEquipping.AvatarMeleeWeapon>(true);
+                    root.GetComponentInChildren<S1AvatarEquipping.AvatarMeleeWeapon>(true);
             }
 
             if (npcBehaviour.StationaryBehaviour == null)
@@ -3908,7 +3955,7 @@ namespace S1API.Entities
             // conversation is in progress. ScheduleBehaviour.Priority is left at the lowest
             // value so every other behaviour preempts it, matching vanilla NPC prefabs where
             // the schedule is the baseline/fallback activity.
-            var scheduleManager = gameObject.GetComponentInChildren<S1NPCs.NPCScheduleManager>(true);
+            var scheduleManager = root.GetComponentInChildren<S1NPCs.NPCScheduleManager>(true);
             if (scheduleManager != null)
             {
                 var scheduleBehaviour = npcBehaviour.GetComponentInChildren<S1Behaviour.ScheduleBehaviour>(true);
@@ -3922,7 +3969,7 @@ namespace S1API.Entities
                 scheduleBehaviour.Priority = -1;
             }
 
-            RepairBehaviourOwnership(gameObject, S1NPC);
+            RepairBehaviourOwnership(root, npc);
 
             foreach (S1Behaviour.Behaviour behaviour in
                      npcBehaviour.GetComponentsInChildren<S1Behaviour.Behaviour>(true))
@@ -3936,7 +3983,7 @@ namespace S1API.Entities
                 behaviour.onEnd ??= new UnityEvent();
             }
 
-            RefreshBehaviourStack();
+            RefreshBehaviourStack(npcBehaviour);
         }
 
         private static void RepairBehaviourOwnership(GameObject prefabRoot, S1NPCs.NPC? npc)
@@ -3971,9 +4018,9 @@ namespace S1API.Entities
             }
         }
 
-        private void RefreshBehaviourStack()
+        private static void RefreshBehaviourStack(S1Behaviour.NPCBehaviour manager)
         {
-            var behaviours = S1NPC.Behaviour.GetComponentsInChildren<S1Behaviour.Behaviour>(true);
+            var behaviours = manager.GetComponentsInChildren<S1Behaviour.Behaviour>(true);
 #if IL2CPPMELON
             var ordered = new System.Collections.Generic.List<S1Behaviour.Behaviour>();
             foreach (S1Behaviour.Behaviour behaviour in behaviours)
@@ -3986,14 +4033,14 @@ namespace S1API.Entities
             var stack = new Il2CppSystem.Collections.Generic.List<S1Behaviour.Behaviour>();
             foreach (S1Behaviour.Behaviour behaviour in ordered)
                 stack.Add(behaviour);
-            S1NPC.Behaviour.behaviourStack = stack;
+            manager.behaviourStack = stack;
 #else
             var stack = new System.Collections.Generic.List<S1Behaviour.Behaviour>(
                 behaviours.Where(behaviour => behaviour != null).OrderByDescending(behaviour => behaviour.Priority));
 
             FieldInfo stackField = AccessTools.Field(typeof(S1Behaviour.NPCBehaviour), "behaviourStack")
                 ?? throw new MissingFieldException(typeof(S1Behaviour.NPCBehaviour).FullName, "behaviourStack");
-            stackField.SetValue(S1NPC.Behaviour, stack);
+            stackField.SetValue(manager, stack);
 #endif
         }
 
@@ -4583,6 +4630,41 @@ namespace S1API.Entities
             return missing.Count == 0;
         }
 
+        private void ApplyPlannedSchedule(bool enforceState)
+        {
+            try
+            {
+                var t = GetType();
+                if (TypeToSchedulePlan.TryGetValue(t, out var planned) && planned is { Count: > 0 })
+                {
+                    for (int i = 0; i < planned.Count; i++)
+                    {
+                        var spec = planned[i];
+                        if (spec != null)
+                        {
+                            try
+                            {
+                                spec.ApplyTo(Schedule);
+                            }
+                            catch (Exception specEx)
+                            {
+                                Logger.Error($"Failed to apply schedule spec {i} ({spec.GetType().Name}) for NPC type {t.Name}: {specEx.Message}");
+                                Logger.Error($"Stack trace: {specEx.StackTrace}");
+                            }
+                        }
+                    }
+                    Schedule.InitializeActions();
+                    if (enforceState)
+                        Schedule.EnforceState();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Failed to apply planned schedule for NPC type {GetType().Name}: {ex.Message}");
+                Logger.Error($"Stack trace: {ex.StackTrace}");
+            }
+        }
+
         internal void FinalizeNetworkSpawn()
         {
             try
@@ -4673,36 +4755,7 @@ namespace S1API.Entities
                 }
 
                 // Apply any planned schedule specs for this NPC type now that the instance exists
-                try
-                {
-                    var t = GetType();
-                    if (TypeToSchedulePlan.TryGetValue(t, out var planned) && planned is { Count: > 0 })
-                    {
-                        for (int i = 0; i < planned.Count; i++)
-                        {
-                            var spec = planned[i];
-                            if (spec != null)
-                            {
-                                try
-                                {
-                                    spec.ApplyTo(Schedule);
-                                }
-                                catch (Exception specEx)
-                                {
-                                    Logger.Error($"Failed to apply schedule spec {i} ({spec.GetType().Name}) for NPC type {t.Name}: {specEx.Message}");
-                                    Logger.Error($"Stack trace: {specEx.StackTrace}");
-                                }
-                            }
-                        }
-                        Schedule.InitializeActions();
-                        Schedule.EnforceState();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error($"Failed to apply planned schedule for NPC type {GetType().Name}: {ex.Message}");
-                    Logger.Error($"Stack trace: {ex.StackTrace}");
-                }
+                ApplyPlannedSchedule(enforceState: true);
 
                 // Apply per-type relationship defaults after base fields are present, unless
                 // the native relationship payload has already been hydrated from save data.

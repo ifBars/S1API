@@ -1178,9 +1178,11 @@ namespace S1API.Internal.Patches
 
         [HarmonyPatch(typeof(S1NPCs.NPC), "Awake")]
         [HarmonyFinalizer]
-        private static void NPC_Awake_Finalizer(NPCNativeAwakeScope? __state)
+        private static void NPC_Awake_Finalizer(S1NPCs.NPC __instance, NPCNativeAwakeScope? __state)
         {
             __state?.Restore();
+            if (__state != null)
+                NPC.ApplySchedulePlanOnClientSpawn(__instance);
         }
 
         [HarmonyPatch(typeof(S1Economy.Dealer), "Awake")]
