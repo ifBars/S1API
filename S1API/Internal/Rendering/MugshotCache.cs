@@ -26,8 +26,8 @@ namespace S1API.Internal.Rendering
     /// </summary>
     /// <remarks>
     /// A portrait is stored under a hash of everything the capture reads: the render inputs built from the NPC's
-    /// avatar settings, the content of runtime-created textures those inputs reference (custom tattoos loaded from
-    /// PNG files), the generator kind, the game version, the S1API build and the bytes of every loaded mod assembly.
+    /// avatar settings, the pixels of every readable texture those inputs reference (custom tattoos loaded from PNG
+    /// files), the generator kind, the game version, the S1API build and the bytes of every loaded mod assembly.
     /// A change to any of them is a different key, so a stale portrait is never found. Files that do not decode to a
     /// complete portrait are deleted and rendered again. Files unused for <see cref="MaxUnusedAge"/> are pruned once
     /// per game start.
@@ -43,7 +43,12 @@ namespace S1API.Internal.Rendering
         internal static readonly TimeSpan MaxUnusedAge = TimeSpan.FromDays(30);
 
         private static readonly Log Logger = new Log("MugshotCache");
-        private static readonly Dictionary<int, string> RuntimeTextureHashes = new Dictionary<int, string>();
+        private const string GameAvatarObjectsPath = "Avatar Objects";
+
+        private static readonly Dictionary<int, (uint UpdateCount, string Hash)> ContentHashes =
+            new Dictionary<int, (uint UpdateCount, string Hash)>();
+        private static readonly HashSet<int> UnfingerprintableTextures = new HashSet<int>();
+        private static HashSet<int>? _gameTextureIds;
         private static string? _environment;
         private static bool _pruneStarted;
 
@@ -62,7 +67,7 @@ namespace S1API.Internal.Rendering
 
         /// <summary>
         /// Builds the cache key for one capture, or returns null when the portrait must not be cached: the cache is
-        /// off, or the inputs reference a runtime texture whose content cannot be read.
+        /// off, or the inputs reference a texture that is neither readable nor one of the game's own.
         /// </summary>
         internal static string? TryBuildKey(
             S1CoreAvatar.NakedAppearance appearance,
@@ -322,9 +327,11 @@ namespace S1API.Internal.Rendering
         }
 
         /// <summary>
-        /// Game textures are identified by name and size; the game version in the key covers their content. Textures
-        /// created at runtime (negative instance id), such as a mod's tattoo loaded from a PNG, can change under the
-        /// same id, so their pixels are hashed. One that cannot be read makes the portrait uncacheable.
+        /// Readable textures are identified by a hash of their pixels, whoever made them: a mod's tattoo loaded from a
+        /// PNG, a texture created at runtime, or one whose pixels a mod replaced in place. The game's own avatar
+        /// textures are not readable; they are identified by name and size, and the game version in the key covers
+        /// their content. Any other texture that cannot be read, such as one from a mod's asset bundle, has no
+        /// fingerprint, so the portrait is not cached.
         /// </summary>
         private static bool AppendTexture(Texture2D? texture, StringBuilder target, string objectId, string npcName)
         {
@@ -334,31 +341,90 @@ namespace S1API.Internal.Rendering
                 return true;
             }
 
+            if (texture.isReadable)
+            {
+                target.Append("px:").Append(GetContentHash(texture)).Append(',');
+                return true;
+            }
+
             var instanceId = texture.GetInstanceID();
-            if (instanceId >= 0)
+            if (GetGameTextureIds().Contains(instanceId))
             {
                 target.Append(texture.name).Append('@').Append(texture.width).Append('x').Append(texture.height).Append(',');
                 return true;
             }
 
-            if (!RuntimeTextureHashes.TryGetValue(instanceId, out var hash))
+            if (UnfingerprintableTextures.Add(instanceId))
             {
-                if (!texture.isReadable)
-                {
-                    Logger.Msg(
-                        $"{npcName}: '{objectId}' uses runtime texture '{texture.name}' that cannot be read; " +
-                        "this portrait is rendered on every load.");
-                    return false;
-                }
-
-                byte[] data = texture.GetRawTextureData();
-                using (var sha = SHA256.Create())
-                    hash = ToHex(sha.ComputeHash(data));
-                RuntimeTextureHashes[instanceId] = hash;
+                Logger.Msg(
+                    $"{npcName}: '{objectId}' uses texture '{texture.name}' that is neither readable nor part of the " +
+                    "game; portraits with it are rendered on every load.");
             }
 
-            target.Append("rt:").Append(hash).Append(',');
-            return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Hashes the texture's pixels. The hash is reused while <c>Texture.updateCount</c> stays the same; loading an
+        /// image into the texture or applying new pixels raises the count, so the next key sees the new content.
+        /// </summary>
+        private static string GetContentHash(Texture2D texture)
+        {
+            var instanceId = texture.GetInstanceID();
+            var updateCount = texture.updateCount;
+            if (ContentHashes.TryGetValue(instanceId, out var known) && known.UpdateCount == updateCount)
+                return known.Hash;
+
+            byte[] data = texture.GetRawTextureData();
+            string hash;
+            using (var sha = SHA256.Create())
+                hash = ToHex(sha.ComputeHash(data));
+            ContentHashes[instanceId] = (updateCount, hash);
+            return hash;
+        }
+
+        /// <summary>
+        /// Instance ids of the textures on the game's own avatar objects, the ones the game loads from
+        /// <c>Resources/Avatar Objects</c>. S1API's custom accessories are clones of these and share their textures.
+        /// </summary>
+        private static HashSet<int> GetGameTextureIds()
+        {
+            if (_gameTextureIds != null)
+                return _gameTextureIds;
+
+            var watch = Stopwatch.StartNew();
+            var ids = new HashSet<int>();
+            var objects = Resources.LoadAll<S1CoreAvatar.AvatarObject>(GameAvatarObjectsPath);
+            if (objects == null || objects.Length == 0)
+            {
+                Logger.Warning(
+                    $"Found no game avatar objects under Resources/{GameAvatarObjectsPath}; portraits that use " +
+                    "unreadable textures are rendered on every load.");
+            }
+            else
+            {
+                foreach (var avatarObject in objects)
+                {
+                    var layers = avatarObject?.Layers;
+                    if (layers == null)
+                        continue;
+                    foreach (var layer in layers)
+                    {
+                        if (layer == null)
+                            continue;
+                        var texture = layer.GetTextureToApply();
+                        if (texture != null)
+                            ids.Add(texture.GetInstanceID());
+                        var normal = layer.GetNormalTextureToApply();
+                        if (normal != null)
+                            ids.Add(normal.GetInstanceID());
+                    }
+                }
+            }
+
+            _gameTextureIds = ids;
+            Logger.Msg($"{ids.Count} game avatar textures from {objects?.Length ?? 0} avatar objects in {watch.ElapsedMilliseconds} ms");
+            return ids;
         }
 
         private static string GetEnvironment()
