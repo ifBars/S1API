@@ -26,6 +26,7 @@ using S1API.Entities.Appearances.CustomizationFields;
 using S1API.Entities.Appearances.FaceLayerFields;
 using S1API.Utils;
 using S1API.Logging;
+using S1API.Internal.Rendering;
 using MelonLoader;
 
 namespace S1API.Entities
@@ -447,6 +448,9 @@ namespace S1API.Entities
             }
 #else
             var renderingEpoch = global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch;
+            var queueWatch = System.Diagnostics.Stopwatch.StartNew();
+            var frameWatch = System.Diagnostics.Stopwatch.StartNew();
+            S1AvatarTools.MugshotGenerator? generator = null;
             while (true)
             {
                 if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
@@ -457,6 +461,7 @@ namespace S1API.Entities
                     if (_mugshotQueue.Count == 0)
                     {
                         _isProcessingMugshots = false;
+                        MugshotCache.ReportAndReset(queueWatch.Elapsed.TotalSeconds);
                         yield break;
                     }
 
@@ -469,7 +474,7 @@ namespace S1API.Entities
                     continue;
                 }
 
-                S1AvatarTools.MugshotGenerator? generator = null;
+                // The generator is a scene object; one lookup serves the whole queue run.
                 while (generator == null)
                 {
                     if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
@@ -480,25 +485,72 @@ namespace S1API.Entities
                         yield return null;
                 }
 
+                global::S1API.Internal.Compatibility.AvatarCompatibility.CreateRenderInputs(
+                    next._customAvatarSettings,
+                    out var appearance,
+                    out var outfit);
+
+                string npcName = next.NPC.FirstName;
+                string? cacheKey = MugshotCache.TryBuildKey(
+                    appearance,
+                    outfit,
+                    global::S1API.Internal.Compatibility.AvatarCompatibility.IsFallbackGenerator(generator)
+                        ? "fallback"
+                        : "scene",
+                    npcName);
+                if (cacheKey != null && MugshotCache.TryLoad(cacheKey, npcName, out var cachedMugshot) &&
+                    cachedMugshot != null)
+                {
+                    UnityEngine.Object.Destroy(outfit);
+                    _activeMugshot = next;
+                    var cachedSprite = Sprite.Create(
+                        cachedMugshot,
+                        new Rect(0, 0, cachedMugshot.width, cachedMugshot.height),
+                        Vector2.zero);
+                    next.NPC.ApplyGeneratedIcon(cachedSprite);
+                    UpdatePoiIcons(next.NPC.S1NPC, cachedSprite);
+                    CompleteActiveMugshot();
+
+                    // A cache hit renders nothing, so several fit into one frame. Yield once the frame budget is
+                    // spent so the loading screen keeps drawing.
+                    if (frameWatch.ElapsedMilliseconds >= CacheHitFrameBudgetMs)
+                    {
+                        yield return null;
+                        frameWatch.Restart();
+                    }
+
+                    continue;
+                }
+
+                if (generator == null)
+                {
+                    // Destroyed since the lookup; find it again on the next pass.
+                    UnityEngine.Object.Destroy(outfit);
+                    lock (_mugshotQueueLock)
+                        _mugshotQueue.Enqueue(next);
+                    yield return null;
+                    continue;
+                }
+
                 while (!global::S1API.Internal.Compatibility.AvatarCompatibility
                            .TryAcquireMugshotGenerator(generator))
                 {
                     if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
+                    {
+                        UnityEngine.Object.Destroy(outfit);
                         yield break;
+                    }
                     yield return null;
                 }
 
                 if (renderingEpoch != global::S1API.Internal.Compatibility.AvatarCompatibility.RenderingEpoch)
                 {
                     global::S1API.Internal.Compatibility.AvatarCompatibility.ReleaseMugshotGenerator();
+                    UnityEngine.Object.Destroy(outfit);
                     yield break;
                 }
 
                 _activeMugshot = next;
-                global::S1API.Internal.Compatibility.AvatarCompatibility.CreateRenderInputs(
-                    next._customAvatarSettings,
-                    out var appearance,
-                    out var outfit);
 
                 bool completed = false;
                 Texture2D? generatedMugshot = null;
@@ -537,7 +589,7 @@ namespace S1API.Entities
                 {
                     var source = generatedMugshot;
                     generatedMugshot = global::S1API.Internal.Compatibility.AvatarCompatibility
-                        .ResizePortrait(source, 512);
+                        .ResizePortrait(source, MugshotCache.PortraitSize);
                     UnityEngine.Object.Destroy(source);
                 }
                 if (generatedMugshot != null && HasPortraitContent(generatedMugshot, 0.01f))
@@ -546,6 +598,8 @@ namespace S1API.Entities
                     var iconSprite = Sprite.Create(generatedMugshot, cropRect, Vector2.zero);
                     next.NPC.ApplyGeneratedIcon(iconSprite);
                     UpdatePoiIcons(next.NPC.S1NPC, iconSprite);
+                    if (cacheKey != null)
+                        MugshotCache.Store(cacheKey, generatedMugshot, npcName);
                 }
                 else
                 {
@@ -555,6 +609,7 @@ namespace S1API.Entities
 
                 CompleteActiveMugshot();
                 yield return new WaitForSeconds(0.05f);
+                frameWatch.Restart();
             }
 #endif
         }
@@ -628,7 +683,7 @@ namespace S1API.Entities
         internal static bool IsMugshotReady(bool hasExplicitIcon, bool generationCompleted) =>
             hasExplicitIcon || generationCompleted;
 
-        private static bool HasPortraitContent(Texture2D? texture, float brightnessFloor)
+        internal static bool HasPortraitContent(Texture2D? texture, float brightnessFloor)
         {
             if (texture == null || texture.width <= 0 || texture.height <= 0)
                 return false;
@@ -1063,6 +1118,11 @@ namespace S1API.Entities
         #region Static Mugshot Queue
 
         private static readonly object _mugshotQueueLock = new object();
+
+        /// <summary>
+        /// Main-thread time per frame spent applying cached mugshots before the queue yields.
+        /// </summary>
+        private const long CacheHitFrameBudgetMs = 12;
         private static readonly Queue<NPCAppearance> _mugshotQueue = new Queue<NPCAppearance>();
         private static bool _isProcessingMugshots = false;
         private static bool _hasQueuedMugshots = false;
