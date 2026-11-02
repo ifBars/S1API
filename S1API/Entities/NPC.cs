@@ -4923,7 +4923,31 @@ namespace S1API.Entities
             Internal.Entities.CustomNpcReadinessPolicy.MarkFinalized(
                 GetType(),
                 FinalizedCustomNpcTypes);
-            ReconcileAllCustomNpcRelationshipConnections();
+            FinalizationPass.Request();
+        }
+
+        // The pending spawn queue finalizes every custom NPC in one frame. The reconcile walks all connections of all
+        // custom NPCs, and only its last run decides the result, so inside a batch the pass runs once at the end.
+        private static readonly Internal.Utils.BatchedPass FinalizationPass =
+            new Internal.Utils.BatchedPass(RunFinalizationPass);
+
+        internal static void BeginFinalizationBatch() =>
+            FinalizationPass.Begin();
+
+        internal static void EndFinalizationBatch() =>
+            FinalizationPass.End();
+
+        private static void RunFinalizationPass()
+        {
+            try
+            {
+                ReconcileAllCustomNpcRelationshipConnections();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[Relationship Data] Could not reconcile custom NPC connections: {ex.Message}");
+            }
+
             CheckAndSetCustomNpcsReady();
         }
 

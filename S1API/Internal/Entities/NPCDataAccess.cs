@@ -42,10 +42,11 @@ namespace S1API.Internal.Entities
             ?? throw new MissingFieldException(typeof(S1NPCs.NPC).FullName, "<NPCData>k__BackingField");
 #endif
 
-        // A pre-registration pass builds every custom NPC prefab in one frame. The movement preset and fallback
-        // dialogue database lookups scan all loaded objects, a set each new clone adds to, and on the main menu they
-        // find nothing to cache, so every NPC paid for full scans that grew with the NPCs built before it. Inside a
-        // lookup batch the first result, "none found" included, is reused until the batch ends.
+        // A pre-registration pass, the contract-load preparation and the pending spawn queue each touch every custom
+        // NPC in one frame. The movement preset and fallback dialogue database lookups scan all loaded objects, a set
+        // each new clone adds to, and a scan that finds nothing has nothing to cache, so every NPC paid for full scans
+        // that grew with the NPCs before it. Inside a lookup batch the first result, "none found" included, is reused
+        // until the batch ends.
         private static int _lookupBatchDepth;
         private static bool _batchMovementResolved;
         private static S1NPCFramework.Movement? _batchMovement;

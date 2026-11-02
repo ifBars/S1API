@@ -71,12 +71,16 @@ namespace S1API.Internal.Patches
             _hasCustomNpcTypesCache = null;
         }
 
+        // Every generated mugshot refreshes its contact, and WaitForNPCs adds custom circles only after all mugshots
+        // are ready, so during a load each refresh misses. SceneObjectIndexPatches reports every assigned circle, which
+        // makes a miss safe to trust instead of scanning the scene once per NPC.
         internal static readonly global::S1API.Internal.Utils.SceneObjectIndex<S1Relations.RelationCircle> CirclesByNpcId =
             new global::S1API.Internal.Utils.SceneObjectIndex<S1Relations.RelationCircle>(
                 () => Object.FindObjectsOfType<S1Relations.RelationCircle>(true),
                 circle => GetAssignedNpcId(circle),
                 circle => circle != null,
-                global::System.StringComparer.OrdinalIgnoreCase);
+                global::System.StringComparer.OrdinalIgnoreCase,
+                trustMisses: true);
 
         internal static void RefreshContactIcon(S1NPCs.NPC npc)
         {
