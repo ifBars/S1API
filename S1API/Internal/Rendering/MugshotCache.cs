@@ -26,8 +26,8 @@ namespace S1API.Internal.Rendering
     /// </summary>
     /// <remarks>
     /// A portrait is stored under a hash of everything the capture reads: the render inputs built from the NPC's
-    /// avatar settings, the pixels of every readable texture those inputs reference (custom tattoos loaded from PNG
-    /// files), the generator kind, the game version, the S1API build and the bytes of every loaded mod assembly.
+    /// avatar settings, every texture those inputs reference on layers and on attachment materials (pixels and format
+    /// for readable ones such as custom tattoos loaded from PNG files), the generator kind, the game version, the S1API build and the bytes of every loaded mod assembly.
     /// A change to any of them is a different key, so a stale portrait is never found. Files that do not decode to a
     /// complete portrait are deleted and rendered again. Files unused for <see cref="MaxUnusedAge"/> are pruned once
     /// per game start.
@@ -45,8 +45,9 @@ namespace S1API.Internal.Rendering
         private static readonly Log Logger = new Log("MugshotCache");
         private const string GameAvatarObjectsPath = "Avatar Objects";
 
-        private static readonly Dictionary<int, (uint UpdateCount, string Hash)> ContentHashes =
-            new Dictionary<int, (uint UpdateCount, string Hash)>();
+        private static readonly Dictionary<int, (uint UpdateCount, string Metadata, string Hash)> ContentHashes =
+            new Dictionary<int, (uint UpdateCount, string Metadata, string Hash)>();
+        private static readonly Dictionary<int, string[]> ShaderTextureProperties = new Dictionary<int, string[]>();
         private static readonly HashSet<int> UnfingerprintableTextures = new HashSet<int>();
         private static HashSet<int>? _gameTextureIds;
         private static string? _environment;
@@ -307,16 +308,10 @@ namespace S1API.Internal.Rendering
                     continue;
                 }
 
-                var layers = avatarObject.Layers;
-                if (layers == null)
-                    continue;
-
-                foreach (var layer in layers)
+                foreach (var (slot, texture) in EnumerateTextures(avatarObject))
                 {
-                    if (layer == null)
-                        continue;
-                    if (!AppendTexture(layer.GetTextureToApply(), target, id, npcName) ||
-                        !AppendTexture(layer.GetNormalTextureToApply(), target, id, npcName))
+                    target.Append(slot).Append('=');
+                    if (!AppendTexture(texture, target, id, npcName))
                         return false;
                 }
 
@@ -327,13 +322,84 @@ namespace S1API.Internal.Rendering
         }
 
         /// <summary>
-        /// Readable textures are identified by a hash of their pixels, whoever made them: a mod's tattoo loaded from a
-        /// PNG, a texture created at runtime, or one whose pixels a mod replaced in place. The game's own avatar
-        /// textures are not readable; they are identified by name and size, and the game version in the key covers
-        /// their content. Any other texture that cannot be read, such as one from a mod's asset bundle, has no
-        /// fingerprint, so the portrait is not cached.
+        /// Every texture the avatar object contributes to the portrait: the layer textures painted onto the body and
+        /// the textures of the materials on its attachment renderers (caps, glasses, hair meshes). Each comes with a
+        /// slot label naming where it is used, so a texture moved to another slot or a changed shader gives a new key.
         /// </summary>
-        private static bool AppendTexture(Texture2D? texture, StringBuilder target, string objectId, string npcName)
+        private static IEnumerable<(string Slot, Texture? Texture)> EnumerateTextures(S1CoreAvatar.AvatarObject avatarObject)
+        {
+            var layers = avatarObject.Layers;
+            if (layers != null)
+            {
+                var layerIndex = 0;
+                foreach (var layer in layers)
+                {
+                    if (layer == null)
+                        continue;
+                    yield return ($"L{layerIndex}", layer.GetTextureToApply());
+                    yield return ($"N{layerIndex}", layer.GetNormalTextureToApply());
+                    layerIndex++;
+                }
+            }
+
+            var renderers = avatarObject.GetComponentsInChildren<Renderer>(true);
+            if (renderers == null)
+                yield break;
+
+            foreach (var renderer in renderers)
+            {
+                if (renderer == null)
+                    continue;
+                var materials = renderer.sharedMaterials;
+                if (materials == null)
+                    continue;
+
+                var materialIndex = 0;
+                foreach (var material in materials)
+                {
+                    var prefix = $"{renderer.name}/{materialIndex++}";
+                    if (material == null)
+                    {
+                        yield return (prefix, null);
+                        continue;
+                    }
+
+                    var shader = material.shader;
+                    prefix += $"/{(shader != null ? shader.name : "-")}";
+                    foreach (var property in GetTexturePropertyNames(material))
+                        yield return ($"{prefix}/{property}", material.GetTexture(property));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Texture property names of the material's shader. A shader's property list does not change at runtime, so
+        /// it is looked up once per shader.
+        /// </summary>
+        private static string[] GetTexturePropertyNames(Material material)
+        {
+            var shader = material.shader;
+            var shaderId = shader != null ? shader.GetInstanceID() : 0;
+            if (shaderId != 0 && ShaderTextureProperties.TryGetValue(shaderId, out var known))
+                return known;
+
+            var names = material.GetTexturePropertyNames();
+            var result = new string[names?.Length ?? 0];
+            for (var index = 0; index < result.Length; index++)
+                result[index] = names![index];
+            if (shaderId != 0)
+                ShaderTextureProperties[shaderId] = result;
+            return result;
+        }
+
+        /// <summary>
+        /// Readable 2D textures are identified by a hash of their pixels plus the settings that change how those
+        /// pixels render, whoever made them: a mod's tattoo loaded from a PNG, a texture created at runtime, or one
+        /// whose pixels a mod replaced in place. The game's own avatar textures are not readable; they are identified
+        /// by name and size, and the game version in the key covers their content. Any other texture that cannot be
+        /// read, such as one from a mod's asset bundle, has no fingerprint, so the portrait is not cached.
+        /// </summary>
+        private static bool AppendTexture(Texture? texture, StringBuilder target, string objectId, string npcName)
         {
             if (texture == null)
             {
@@ -341,9 +407,14 @@ namespace S1API.Internal.Rendering
                 return true;
             }
 
-            if (texture.isReadable)
+#if IL2CPPMELON
+            var texture2D = texture.TryCast<Texture2D>();
+#else
+            var texture2D = texture as Texture2D;
+#endif
+            if (texture2D != null && texture2D.isReadable)
             {
-                target.Append("px:").Append(GetContentHash(texture)).Append(',');
+                target.Append("px:").Append(GetContentHash(texture2D)).Append(',');
                 return true;
             }
 
@@ -365,23 +436,38 @@ namespace S1API.Internal.Rendering
         }
 
         /// <summary>
-        /// Hashes the texture's pixels. The hash is reused while <c>Texture.updateCount</c> stays the same; loading an
-        /// image into the texture or applying new pixels raises the count, so the next key sees the new content.
+        /// Hashes the texture's pixels together with its size, format, color space, mip count, filter and wrap modes,
+        /// so the same bytes in a different shape or color space give a different hash. The hash is reused while
+        /// <c>Texture.updateCount</c> and those settings stay the same; loading an image into the texture or applying
+        /// new pixels raises the count, so the next key sees the new content.
         /// </summary>
         private static string GetContentHash(Texture2D texture)
         {
             var instanceId = texture.GetInstanceID();
             var updateCount = texture.updateCount;
-            if (ContentHashes.TryGetValue(instanceId, out var known) && known.UpdateCount == updateCount)
+            var metadata = DescribeTexture(texture);
+            if (ContentHashes.TryGetValue(instanceId, out var known) &&
+                known.UpdateCount == updateCount &&
+                known.Metadata == metadata)
                 return known.Hash;
 
             byte[] data = texture.GetRawTextureData();
             string hash;
             using (var sha = SHA256.Create())
-                hash = ToHex(sha.ComputeHash(data));
-            ContentHashes[instanceId] = (updateCount, hash);
+            {
+                var header = Encoding.UTF8.GetBytes(metadata + "\n");
+                sha.TransformBlock(header, 0, header.Length, null, 0);
+                sha.TransformFinalBlock(data, 0, data.Length);
+                hash = ToHex(sha.Hash!);
+            }
+
+            ContentHashes[instanceId] = (updateCount, metadata, hash);
             return hash;
         }
+
+        internal static string DescribeTexture(Texture2D texture) =>
+            $"{texture.width}x{texture.height} {texture.format} {texture.graphicsFormat} srgb={texture.isDataSRGB} " +
+            $"mips={texture.mipmapCount} filter={texture.filterMode} wrap={texture.wrapModeU}/{texture.wrapModeV}";
 
         /// <summary>
         /// Instance ids of the textures on the game's own avatar objects, the ones the game loads from
@@ -405,19 +491,12 @@ namespace S1API.Internal.Rendering
             {
                 foreach (var avatarObject in objects)
                 {
-                    var layers = avatarObject?.Layers;
-                    if (layers == null)
+                    if (avatarObject == null)
                         continue;
-                    foreach (var layer in layers)
+                    foreach (var (_, texture) in EnumerateTextures(avatarObject))
                     {
-                        if (layer == null)
-                            continue;
-                        var texture = layer.GetTextureToApply();
                         if (texture != null)
                             ids.Add(texture.GetInstanceID());
-                        var normal = layer.GetNormalTextureToApply();
-                        if (normal != null)
-                            ids.Add(normal.GetInstanceID());
                     }
                 }
             }
