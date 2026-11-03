@@ -634,6 +634,88 @@ namespace S1API.Entities
         }
 
         /// <summary>
+        /// INTERNAL: Points a live customer's "Customer attend deal" behaviour at the NPC's own <c>NPCBehaviour</c>
+        /// and <c>Customer</c>. Co-op clients get custom NPCs as clones of the S1API template, where the behaviour's
+        /// owner (<c>Behaviour.beh</c>) and its cached <c>_customer</c> stay null. The host's Enable/Activate RPCs then
+        /// throw inside the behaviour, FishNet drops the exception, and the customer never waits at the drop.
+        /// </summary>
+        internal static void BindDealAttendance(GameObject? npcRoot, string? npcId)
+        {
+            string id = npcId ?? "<unknown>";
+            if (npcRoot == null)
+            {
+                Logger.Warning($"Cannot bind deal attendance for '{id}': NPC object is missing.");
+                return;
+            }
+
+            var customer = npcRoot.GetComponent<S1Economy.Customer>();
+            if (customer == null)
+                return;
+
+            var behaviourManager = npcRoot.GetComponentInChildren<S1NPCs.Behaviour.NPCBehaviour>(true);
+            if (behaviourManager == null)
+            {
+                Logger.Warning($"Cannot bind deal attendance for '{id}': NPCBehaviour is missing.");
+                return;
+            }
+
+            var attendance = npcRoot.GetComponentInChildren<S1NPCs.Behaviour.CustomerAttendDealBehaviour>(true);
+            if (attendance == null)
+            {
+                Logger.Warning($"Cannot bind deal attendance for '{id}': CustomerAttendDealBehaviour is missing.");
+                return;
+            }
+
+            var repaired = new List<string>();
+#if IL2CPPMELON
+            if (attendance.beh == null || attendance.beh.Pointer != behaviourManager.Pointer)
+            {
+                attendance.beh = behaviourManager;
+                repaired.Add("owner");
+            }
+
+            if (attendance._customer == null)
+            {
+                attendance._customer = customer;
+                repaired.Add("customer");
+            }
+
+            if (customer._attendDealBehaviour == null)
+            {
+                customer._attendDealBehaviour = attendance;
+                repaired.Add("customer link");
+            }
+#else
+            if (!ReferenceEquals(attendance.beh, behaviourManager))
+            {
+                if (ReflectionUtils.TrySetFieldOrProperty(attendance, "beh", behaviourManager))
+                    repaired.Add("owner");
+                else
+                    Logger.Error($"Cannot set the deal attendance owner for '{id}'.");
+            }
+
+            if (ReflectionUtils.TryGetFieldOrProperty(attendance, "_customer") == null)
+            {
+                if (ReflectionUtils.TrySetFieldOrProperty(attendance, "_customer", customer))
+                    repaired.Add("customer");
+                else
+                    Logger.Error($"Cannot set the deal attendance customer for '{id}'.");
+            }
+
+            if (ReflectionUtils.TryGetFieldOrProperty(customer, "_attendDealBehaviour") == null)
+            {
+                if (ReflectionUtils.TrySetFieldOrProperty(customer, "_attendDealBehaviour", attendance))
+                    repaired.Add("customer link");
+                else
+                    Logger.Error($"Cannot set the customer's deal attendance for '{id}'.");
+            }
+#endif
+
+            if (repaired.Count > 0)
+                Logger.Msg($"Bound deal attendance for '{id}': set {string.Join(", ", repaired)}.");
+        }
+
+        /// <summary>
         /// INTERNAL: Ensure UnityEvents are allocated so runtime wiring does not NRE.
         /// </summary>
         private void EnsureUnityEvents(S1Economy.Customer customer)
