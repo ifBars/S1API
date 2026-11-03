@@ -8,6 +8,7 @@ namespace S1API.Internal
     internal static class S1APIPreferences
     {
         internal static MelonPreferences_Entry<bool>? EnableMugshotLoadingScreen { get; private set; }
+        internal static MelonPreferences_Entry<bool>? EnableMugshotCache { get; private set; }
         internal static MelonPreferences_Entry<bool>? EnableUnityNullReferenceTraceLogging { get; private set; }
         internal static MelonPreferences_Entry<bool>? EnableVerboseLogging { get; private set; }
 
@@ -21,6 +22,11 @@ namespace S1API.Internal
                 "EnableMugshotLoadingScreen",
                 true,
                 "When true, the loading screen stays open until custom NPC mugshots finish generating. Set to false to let the base game close the loading screen immediately.");
+
+            EnableMugshotCache = category.CreateEntry<bool>(
+                "EnableMugshotCache",
+                true,
+                "When true, generated custom NPC mugshots are kept in UserData/S1API/MugshotCache and reused while the NPC's appearance, the game version and the installed mods stay the same. Set to false to render every mugshot on every load.");
 
             EnableUnityNullReferenceTraceLogging = category.CreateEntry<bool>(
                 "EnableUnityNullReferenceTraceLogging",
