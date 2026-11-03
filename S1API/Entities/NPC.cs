@@ -3652,6 +3652,25 @@ namespace S1API.Entities
                 _clientNetworkSpawnHydrationDepth--;
             }
 
+            // Clients never run the instance constructor, so the behaviour owners the host sets there are missing on
+            // this clone of the template. Without them the host's behaviour RPCs throw here and are dropped.
+            if (gameObject is null)
+            {
+                Logger.Debug("[NPC] Client wrapper has no GameObject; behaviour owners not bound.");
+            }
+            else
+            {
+                try
+                {
+                    RepairBehaviourOwnership(gameObject, GetPreferredNpcComponent(gameObject));
+                    NPCCustomer.BindDealAttendance(gameObject, GetSafeNpcId());
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"[NPC] Binding behaviour owners on client for '{GetSafeNpcId()}' failed: {ex.Message}");
+                }
+            }
+
             MarkCustomNpcFinalized();
         }
 
