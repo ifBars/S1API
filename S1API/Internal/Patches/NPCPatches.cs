@@ -592,29 +592,37 @@ namespace S1API.Internal.Patches
             if (!IsInMainScene() || !InstanceFinder.IsServer)
                 return;
 
-            foreach (Type type in ReflectionUtils.GetDerivedClasses<NPC>())
+            NPCDataAccess.BeginLookupBatch();
+            try
             {
-                if (type == null || type.IsAbstract || type.Assembly == Assembly.GetExecutingAssembly())
-                    continue;
-
-                NPC? customNpc = CustomNpcPreparationPolicy.FindExactType(NPC.All, type);
-                if (customNpc == null)
+                foreach (Type type in ReflectionUtils.GetDerivedClasses<NPC>())
                 {
-                    try
-                    {
-                        customNpc = (NPC)Activator.CreateInstance(type, true)!;
-                    }
-                    catch (Exception ex)
-                    {
-                        LogCustomNpcInstantiationException(type, "before contract loading", ex);
+                    if (type == null || type.IsAbstract || type.Assembly == Assembly.GetExecutingAssembly())
                         continue;
+
+                    NPC? customNpc = CustomNpcPreparationPolicy.FindExactType(NPC.All, type);
+                    if (customNpc == null)
+                    {
+                        try
+                        {
+                            customNpc = (NPC)Activator.CreateInstance(type, true)!;
+                        }
+                        catch (Exception ex)
+                        {
+                            LogCustomNpcInstantiationException(type, "before contract loading", ex);
+                            continue;
+                        }
                     }
+
+                    if (customNpc.gameObject.GetComponent<S1Economy.Customer>() != null)
+                        customNpc.Customer.EnsureCustomer();
+
+                    customNpc.RegisterPersistentGuidForContractLoad();
                 }
-
-                if (customNpc.gameObject.GetComponent<S1Economy.Customer>() != null)
-                    customNpc.Customer.EnsureCustomer();
-
-                customNpc.RegisterPersistentGuidForContractLoad();
+            }
+            finally
+            {
+                NPCDataAccess.EndLookupBatch();
             }
         }
 
@@ -1178,9 +1186,11 @@ namespace S1API.Internal.Patches
 
         [HarmonyPatch(typeof(S1NPCs.NPC), "Awake")]
         [HarmonyFinalizer]
-        private static void NPC_Awake_Finalizer(NPCNativeAwakeScope? __state)
+        private static void NPC_Awake_Finalizer(S1NPCs.NPC __instance, NPCNativeAwakeScope? __state)
         {
             __state?.Restore();
+            if (__state != null)
+                NPC.ApplySchedulePlanOnClientSpawn(__instance);
         }
 
         [HarmonyPatch(typeof(S1Economy.Dealer), "Awake")]

@@ -11,6 +11,7 @@ using FishNet.Connection;
 using Guid = System.Guid;
 #endif
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using S1API.Internal.Utils;
@@ -24,6 +25,16 @@ namespace S1API.Vehicles
     /// </summary>
     public class LandVehicle
     {
+        /// <summary>
+        /// Gets read-only player seats in native array order, sharing seat objects across vehicle lookups.
+        /// </summary>
+        /// <remarks>
+        /// Resolve again after a scene change. Seat indices are native indices, including empty slots.
+        /// This API does not include NPC occupants or control entry, exit, or reservation.
+        /// </remarks>
+        public IReadOnlyList<VehicleSeatInfo> Seats =>
+            Internal.Vehicles.VehicleSeats.Get(S1LandVehicle);
+
         // Public members intended to be used by modders
         #region Public Members
         /// <summary>

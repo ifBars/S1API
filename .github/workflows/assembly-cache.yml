@@ -1,0 +1,114 @@
+name: Refresh Game Assembly Caches
+
+on:
+  push:
+    branches: [stable, 'ci/**']
+    paths:
+      - .github/workflows/assembly-cache.yml
+  schedule:
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+
+# Never run PR code with assembly-repository credentials. All
+# scheduled entries are published in the default branch's scope so fork PRs
+# can restore them. Manual branch runs allow testing before merge.
+permissions:
+  contents: read
+
+concurrency:
+  group: assembly-cache-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: github.repository == 'ifBars/S1API'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        assembly_branch: [main, beta]
+        runtime: [mono, il2cpp]
+    steps:
+      - name: Checkout trusted S1API source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout private assembly source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.runtime == 'mono' && secrets.GAME_ASSEMBLIES_REPO || secrets.IL2CPP_ASSEMBLIES_REPO }}
+          token: ${{ matrix.runtime == 'mono' && secrets.GAME_ASSEMBLIES_TOKEN || secrets.IL2CPP_ASSEMBLIES_TOKEN }}
+          ref: ${{ matrix.assembly_branch }}
+          path: assembly-source
+          persist-credentials: false
+
+      - name: Prepare and verify assembly bundle
+        id: bundle
+        env:
+          RUNTIME: ${{ matrix.runtime }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle=S1API/ScheduleOneAssemblies
+          mkdir -p "$bundle/MelonLoader"
+          if [[ "$RUNTIME" == mono ]]; then
+            prefix=game-assemblies-v6
+            target=Managed
+            mkdir -p "$bundle/$target"
+            if [[ -d assembly-source/Managed ]]; then
+              cp -a assembly-source/Managed/. "$bundle/$target/"
+            fi
+            if [[ -d assembly-source/MelonLoader ]]; then
+              cp -a assembly-source/MelonLoader/. "$bundle/MelonLoader/"
+            fi
+            required=(Assembly-CSharp.dll ScheduleOne.Core.dll Unity.TextMeshPro.dll Unity.Burst.dll)
+            loader_required=(0Harmony.dll MelonLoader.dll)
+          else
+            prefix=il2cpp-game-assemblies-v7
+            target=Il2CppAssemblies
+            mkdir -p "$bundle/$target"
+            if [[ -d assembly-source/MelonLoader/Il2CppAssemblies ]]; then
+              cp -a assembly-source/MelonLoader/Il2CppAssemblies/. "$bundle/$target/"
+            fi
+            if [[ -d assembly-source/MelonLoader/net6 ]]; then
+              cp -a assembly-source/MelonLoader/net6/. "$bundle/MelonLoader/"
+            fi
+            required=(Assembly-CSharp.dll Il2Cppmscorlib.dll UnityEngine.dll
+              UnityEngine.CoreModule.dll UnityEngine.UI.dll UnityEngine.InputLegacyModule.dll
+              UnityEngine.UIModule.dll UnityEngine.JSONSerializeModule.dll
+              UnityEngine.TextRenderingModule.dll UnityEngine.ImageConversionModule.dll
+              UnityEngine.PhysicsModule.dll Unity.TextMeshPro.dll Il2CppFishNet.Runtime.dll)
+            loader_required=(0Harmony.dll MelonLoader.dll Il2CppInterop.Runtime.dll
+              Il2CppInterop.Common.dll Il2CppInterop.HarmonySupport.dll
+              Il2CppInterop.Generator.dll UnityEngine.Il2CppAssetBundleManager.dll)
+          fi
+
+          # Match the build workflows' fallback discovery without caching .git
+          # or the private checkout's authentication/configuration files.
+          copy_required() {
+            local destination="$1"
+            shift
+            for assembly in "$@"; do
+              if [[ ! -s "$destination/$assembly" ]]; then
+                source_path="$(find assembly-source -type f -name "$assembly" -print -quit)"
+                if [[ -n "$source_path" ]]; then
+                  cp "$source_path" "$destination/$assembly"
+                fi
+              fi
+              if [[ ! -s "$destination/$assembly" ]]; then
+                echo "::error::Missing required $RUNTIME assembly: $assembly"
+                exit 1
+              fi
+            done
+          }
+          copy_required "$bundle/$target" "${required[@]}"
+          copy_required "$bundle/MelonLoader" "${loader_required[@]}"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+
+      - name: Publish verified assembly cache
+        uses: actions/cache/save@v4
+        with:
+          path: S1API/ScheduleOneAssemblies
+          key: ${{ steps.bundle.outputs.prefix }}-${{ matrix.assembly_branch }}-${{ hashFiles('S1API/S1API.csproj') }}-${{ github.run_id }}-${{ github.run_attempt }}

@@ -12,7 +12,7 @@ using S1API.Internal.Weather;
 using S1API.Lifecycle;
 using S1API.Map;
 
-[assembly: MelonInfo(typeof(S1API.S1API), "S1API (Forked by Bars)", "3.2.1", "KaBooMa")]
+[assembly: MelonInfo(typeof(S1API.S1API), "S1API (Forked by Bars)", "3.2.3", "KaBooMa")]
 [assembly: MelonPriority(Int32.MinValue)]
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 namespace S1API
@@ -35,8 +35,10 @@ namespace S1API
             }
         }
 
+        /// <summary>Releases tracked seats and resets internal runtime systems when the mod shuts down.</summary>
         public override void OnDeinitializeMelon()
         {
+            Internal.Vehicles.VehicleSeats.Clear();
             Internal.Compatibility.AvatarCompatibility.ResetRendering();
             Rendering.IconFactory.ResetAccessoryIconState();
             WeatherRuntime.ResetBindings();
@@ -48,8 +50,10 @@ namespace S1API
             UnityExceptionTraceHook.Remove();
         }
 
+        /// <summary>Refreshes tracked seat occupancy and advances the API's runtime systems each frame.</summary>
         public override void OnUpdate()
         {
+            Internal.Vehicles.VehicleSeats.Tick();
             WeatherRuntime.Tick();
             PresentationWorkbenchRuntime.Tick();
             CutsceneManager.Tick(UnityEngine.Time.unscaledDeltaTime);
@@ -69,8 +73,12 @@ namespace S1API
             }
         }
 
+        /// <summary>Clears tracked seats and scene state, resetting the game lifecycle when Main unloads.</summary>
+        /// <param name="buildIndex">The unloaded scene's build index; unused by this callback.</param>
+        /// <param name="sceneName">The unloaded scene's name; Main and Tutorial receive additional cleanup.</param>
         public override void OnSceneWasUnloaded(int buildIndex, string sceneName)
         {
+            Internal.Vehicles.VehicleSeats.Clear();
             NPCWorkbenchRuntime.Close();
             PresentationWorkbenchRuntime.Close();
             CutsceneManager.CleanupForSceneChange();

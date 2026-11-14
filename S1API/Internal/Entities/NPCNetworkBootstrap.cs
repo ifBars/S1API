@@ -332,6 +332,21 @@ namespace S1API.Internal.Entities
 
         private static void TryProcessPendingSpawns()
         {
+            NPCDataAccess.BeginLookupBatch();
+            NPC.BeginFinalizationBatch();
+            try
+            {
+                ProcessPendingSpawns();
+            }
+            finally
+            {
+                NPC.EndFinalizationBatch();
+                NPCDataAccess.EndLookupBatch();
+            }
+        }
+
+        private static void ProcessPendingSpawns()
+        {
             if (PendingSpawns.Count == 0)
             {
                 pendingSpawnBlockedLogged = false;

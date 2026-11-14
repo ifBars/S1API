@@ -39,4 +39,33 @@ public sealed class NPCRelationshipPersistencePolicyTests
             NPCRelationshipPersistencePolicy.ShouldApplyDefaults(
                 relationshipLoadedFromSave));
     }
+
+    [Theory]
+    [InlineData(0f, 0f)]
+    [InlineData(1f, 0.2f)]
+    [InlineData(2f, 0.4f)]
+    [InlineData(2.5f, 0.5f)]
+    [InlineData(5f, 1f)]
+    public void ConfiguredDeltaMapsToNativeDefaultRelationshipValue(
+        float relationDelta,
+        float expected)
+    {
+        Assert.Equal(
+            expected,
+            NPCRelationshipPersistencePolicy.ToNativeDefaultRelationshipValue(relationDelta),
+            precision: 5);
+    }
+
+    [Theory]
+    [InlineData(-1f, 0f)]
+    [InlineData(7f, 1f)]
+    public void OutOfRangeDeltaIsClampedLikeTheBuilder(
+        float relationDelta,
+        float expected)
+    {
+        Assert.Equal(
+            expected,
+            NPCRelationshipPersistencePolicy.ToNativeDefaultRelationshipValue(relationDelta),
+            precision: 5);
+    }
 }

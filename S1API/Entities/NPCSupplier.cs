@@ -150,12 +150,12 @@ namespace S1API.Entities
                 return;
             }
 
-            // Native suppliers keep a conversation object for persistence and
-            // networking, but do not add it to Messages until SupplierUnlocked.
+            npc.EnsureMessageConversationReady(resetDefaults: false);
+            // Saved unlocks can be restored before Supplier.Start subscribes to OnUnlocked.
+            // Reconcile the phone entry from that state even when no message history was saved.
             npc.SetConversationCategory(
                 S1Messaging.EConversationCategory.Supplier,
-                ensureUi: false);
-            npc.EnsureMessageConversationReady(resetDefaults: false);
+                ensureUi: npc.Relationship.IsUnlocked);
             EnsureDeadDropReadyDispatcher();
         }
 

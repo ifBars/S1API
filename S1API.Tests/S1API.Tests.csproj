@@ -41,6 +41,9 @@
         <Reference Include="ScheduleOne.Core">
             <HintPath>$(MonoAssembliesPath)/ScheduleOne.Core.dll</HintPath>
         </Reference>
+        <Reference Include="FishNet.Runtime">
+            <HintPath>$(MonoAssembliesPath)/FishNet.Runtime.dll</HintPath>
+        </Reference>
         <Reference Include="UnityEngine">
             <HintPath>$(MonoAssembliesPath)/UnityEngine.dll</HintPath>
         </Reference>

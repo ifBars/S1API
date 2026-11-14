@@ -756,6 +756,34 @@ namespace S1API.Internal.Entities
 
             EnsureFrameworkNpcDataIdentity(npc);
             ApplyConfiguredVoice(npc, updateEmitter: false);
+            ApplyDefaultRelationshipValue(npc);
+        }
+
+        /// <summary>
+        /// <c>NPCRelationData.Init</c> (native Awake and the S1API constructor) starts the NPC at the
+        /// data's default relationship value. Writing the configured delta there makes the NPC start
+        /// at it instead of the vanilla 2.0 until FinalizeNetworkSpawn applies the remaining defaults.
+        /// Saved relationship state still replaces it during load.
+        /// </summary>
+#if IL2CPPMELON
+        [HideFromIl2Cpp]
+#endif
+        internal void ApplyDefaultRelationshipValue(S1NPCs.NPC npc)
+        {
+            EnsureRelationshipDataFromRegistry();
+            if (!RelationDelta.HasValue)
+                return;
+
+            try
+            {
+                float value = NPCRelationshipPersistencePolicy.ToNativeDefaultRelationshipValue(RelationDelta.Value);
+                if (!NPCDataAccess.ApplyDefaultRelationshipValue(npc, value))
+                    Logger.Warning($"[Relationship Data] NPC '{Id ?? gameObject.name}' has no NPC data before relationship init; it starts at the native default relationship until spawn.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[Relationship Data] Could not set the starting relationship of NPC '{Id ?? gameObject.name}': {ex.Message}");
+            }
         }
 
 #if IL2CPPMELON

@@ -264,7 +264,7 @@ namespace S1API.Internal.Deliveries
             if (IsRegistered(networkObject))
                 return true;
 
-            spawnables.AddObject(networkObject);
+            global::S1API.Entities.NPC.RegisterSpawnablePrefabInOrder(spawnables, networkObject);
             return true;
         }
 

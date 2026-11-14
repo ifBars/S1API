@@ -32,6 +32,8 @@ namespace S1API.Internal.Utils
     /// INTERNAL: Index of loaded Unity objects built from one scan, so repeated lookups do not each scan the scene.
     /// Only found objects are reused, and only while they are alive and still have the key they were indexed under;
     /// a lookup that finds nothing scans again, so an object created after the index was built is still found.
+    /// With trustMisses that last scan is skipped: the owner promises to report every new object through
+    /// <see cref="NotifyChanged"/>, so a key missing from a valid snapshot has no object yet.
     /// </summary>
     internal sealed class SceneObjectIndex<TObject> where TObject : class
     {
@@ -40,6 +42,7 @@ namespace S1API.Internal.Utils
         private readonly Func<TObject?, bool> _alive;
         private readonly Func<TObject, bool> _include;
         private readonly StringComparer _comparer;
+        private readonly bool _trustMisses;
         private Dictionary<string, List<TObject>>? _byKey;
         private List<TObject> _ordered = new List<TObject>();
         private List<string?> _orderedKeys = new List<string?>();
@@ -49,13 +52,15 @@ namespace S1API.Internal.Utils
             Func<TObject, string?> key,
             Func<TObject?, bool> alive,
             StringComparer? comparer = null,
-            Func<TObject, bool>? include = null)
+            Func<TObject, bool>? include = null,
+            bool trustMisses = false)
         {
             _scan = scan;
             _key = key;
             _alive = alive;
             _include = include ?? (_ => true);
             _comparer = comparer ?? StringComparer.Ordinal;
+            _trustMisses = trustMisses;
             SceneObjectIndexes.Register(Invalidate);
         }
 
@@ -94,12 +99,15 @@ namespace S1API.Internal.Utils
             if (string.IsNullOrEmpty(key))
                 return result;
 
-            if (_byKey == null || !IsSnapshotValid() || !TryCollect(key!, result))
+            if (_byKey != null && IsSnapshotValid())
             {
-                Build();
-                result.Clear();
-                TryCollect(key!, result);
+                if (TryCollect(key!, result) || (_trustMisses && !_byKey.ContainsKey(key!)))
+                    return result;
             }
+
+            Build();
+            result.Clear();
+            TryCollect(key!, result);
             return result;
         }
 

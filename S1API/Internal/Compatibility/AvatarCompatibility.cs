@@ -164,6 +164,12 @@ namespace S1API.Internal.Compatibility
             return null;
         }
 
+        /// <summary>
+        /// True for the rig S1API builds when the scene has no MugshotGenerator; it renders with its own lights.
+        /// </summary>
+        internal static bool IsFallbackGenerator(S1AvatarTools.MugshotGenerator generator) =>
+            _fallbackMugshotGenerator != null && generator == _fallbackMugshotGenerator;
+
         private static S1AvatarFramework.Avatar? FindRuntimeAvatar()
         {
             foreach (var avatar in Object.FindObjectsOfType<S1AvatarFramework.Avatar>())

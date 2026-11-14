@@ -107,7 +107,13 @@ namespace S1API.Entities
         /// <summary>
         /// INTERNAL: Adds a new schedule action instance under this NPC's schedule manager and sets its start time.
         /// </summary>
-        internal T? AddActionInternal<T>(int startTime, string? name = null) where T : S1NPCsSchedules.NPCAction
+        /// <param name="startTime">The action's start time, in 24-hour time.</param>
+        /// <param name="name">The optional GameObject name of the action.</param>
+        /// <param name="configureBeforeActivate">
+        /// Runs before the pooled action's GameObject is activated. Activating it runs the action's Awake, so fields
+        /// that Awake validates must be set here.
+        /// </param>
+        internal T? AddActionInternal<T>(int startTime, string? name = null, Action<T>? configureBeforeActivate = null) where T : S1NPCsSchedules.NPCAction
         {
             EnsureManager();
             if (Manager == null)
@@ -149,6 +155,7 @@ namespace S1API.Entities
                 chosen.gameObject.name = name;
 
             chosen.SetStartTime(startTime);
+            configureBeforeActivate?.Invoke(chosen);
             if (!chosen.gameObject.activeSelf)
                 chosen.gameObject.SetActive(true);
             chosen.enabled = true;

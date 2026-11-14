@@ -1,7 +1,7 @@
 name: IL2CPP Build Check
 
 env:
-  IL2CPP_ASSEMBLIES_CACHE_VERSION: v6
+  IL2CPP_ASSEMBLIES_CACHE_VERSION: v7
 
 on:
   push:
@@ -60,7 +60,7 @@ jobs:
 
       # Try to restore assemblies from cache first (for external PRs)
       # Cache key includes assembly branch to separate beta from main
-      # Cache version allows invalidation when external assemblies update
+      # Keep the cache version aligned with assembly-cache.yml.
       # Only use cache for PR events to avoid stale assemblies after merges
       - name: Restore IL2CPP Game Assemblies from Cache
         id: cache-il2cpp-assemblies
@@ -72,6 +72,12 @@ jobs:
           restore-keys: |
             il2cpp-game-assemblies-${{ env.IL2CPP_ASSEMBLIES_CACHE_VERSION }}-${{ steps.assembly-branch.outputs.branch }}-
 
+      - name: Explain missing fork assembly cache
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && steps.cache-il2cpp-assemblies.outputs.cache-matched-key == ''
+        run: |
+          echo "::error::Game assembly cache unavailable. A maintainer must run: gh workflow run assembly-cache.yml --repo $GITHUB_REPOSITORY --ref ${{ github.event.repository.default_branch }}. After it succeeds, rerun this check."
+          exit 1
+
       # Only checkout IL2CPP assemblies if cache miss AND we have access to secrets
       - name: Checkout IL2CPP Game Assemblies
         uses: actions/checkout@v4
@@ -81,7 +87,7 @@ jobs:
           ref: ${{ steps.assembly-branch.outputs.branch }}
           path: il2cpp-scheduleone-assemblies
           fetch-depth: 1
-        if: steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: steps.cache-il2cpp-assemblies.outputs.cache-matched-key == '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         continue-on-error: false
 
       - name: Debug IL2CPP Assemblies Structure
@@ -94,7 +100,7 @@ jobs:
           echo ""
           echo "=== Looking for MelonLoader assemblies in net6 ==="
           find il2cpp-scheduleone-assemblies -path "*/net6/*.dll" -type f | head -10
-        if: steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: steps.cache-il2cpp-assemblies.outputs.cache-matched-key == '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
 
       - name: Copy IL2CPP Game Assemblies
         run: |
@@ -175,9 +181,10 @@ jobs:
             echo "Warning: Some Unity assemblies are missing. This may cause build failures."
             echo "Please ensure all required Unity assemblies are available in the IL2CPP assemblies repository."
           fi
-        if: steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: steps.cache-il2cpp-assemblies.outputs.cache-matched-key == '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
 
       - name: Verify IL2CPP Assembly Copies
+        id: verify-assemblies
         run: |
           echo "=== Verifying IL2CPP Assembly Structure ==="
           ls -la S1API/ScheduleOneAssemblies/
@@ -210,7 +217,7 @@ jobs:
           )
 
           for ASSEMBLY in "${REQUIRED_UNITY_ASSEMBLIES[@]}"; do
-            if [ -f "S1API/ScheduleOneAssemblies/Il2CppAssemblies/$ASSEMBLY" ]; then
+            if [ -s "S1API/ScheduleOneAssemblies/Il2CppAssemblies/$ASSEMBLY" ]; then
               echo "✓ Found $ASSEMBLY"
               ls -l "S1API/ScheduleOneAssemblies/Il2CppAssemblies/$ASSEMBLY" | awk '{print "  " $9 " (" $5 " bytes)"}'
             else
@@ -225,7 +232,7 @@ jobs:
           echo ""
           echo ""
           echo "=== MelonLoader Assembly Check ==="
-          if [ -f S1API/ScheduleOneAssemblies/MelonLoader/0Harmony.dll ]; then
+          if [ -s S1API/ScheduleOneAssemblies/MelonLoader/0Harmony.dll ]; then
             echo "✓ Found 0Harmony.dll (net6)"
             ls -l S1API/ScheduleOneAssemblies/MelonLoader/0Harmony.dll
           else
@@ -239,6 +246,7 @@ jobs:
           echo ""
           echo "=== Il2CppInterop Assembly Check ==="
           REQUIRED_IL2CPP_INTEROP_ASSEMBLIES=(
+            "MelonLoader.dll"
             "Il2CppInterop.Runtime.dll"
             "Il2CppInterop.Common.dll"
             "Il2CppInterop.HarmonySupport.dll"
@@ -247,7 +255,7 @@ jobs:
           )
 
           for ASSEMBLY in "${REQUIRED_IL2CPP_INTEROP_ASSEMBLIES[@]}"; do
-            if [ -f "S1API/ScheduleOneAssemblies/MelonLoader/$ASSEMBLY" ]; then
+            if [ -s "S1API/ScheduleOneAssemblies/MelonLoader/$ASSEMBLY" ]; then
               echo "✓ Found $ASSEMBLY"
               ls -l "S1API/ScheduleOneAssemblies/MelonLoader/$ASSEMBLY" | awk '{print "  " $9 " (" $5 " bytes)"}'
             else
@@ -270,19 +278,12 @@ jobs:
             exit 1
           fi
           echo ""
-          if [ "${{ steps.cache-il2cpp-assemblies.outputs.cache-hit }}" == "true" ]; then
+          if [ "${{ steps.cache-il2cpp-assemblies.outputs.cache-matched-key }}" != "" ]; then
             echo "✓ Using cached IL2CPP assemblies for build"
           else
             echo "✓ Using fresh IL2CPP assemblies from repository"
           fi
-
-      # Save only verified non-empty assembly caches.
-      - name: Save IL2CPP Game Assemblies to Cache
-        uses: actions/cache/save@v4
-        if: always() && steps.cache-il2cpp-assemblies.outputs.cache-hit != 'true' && hashFiles('S1API/ScheduleOneAssemblies/Il2CppAssemblies/Assembly-CSharp.dll') != '' && hashFiles('S1API/ScheduleOneAssemblies/MelonLoader/0Harmony.dll') != '' && hashFiles('S1API/ScheduleOneAssemblies/MelonLoader/Il2CppInterop.Runtime.dll') != '' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable' || github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/npc-prefabs')))
-        with:
-          path: S1API/ScheduleOneAssemblies
-          key: il2cpp-game-assemblies-${{ env.IL2CPP_ASSEMBLIES_CACHE_VERSION }}-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
+          echo "cache_ready=true" >> "$GITHUB_OUTPUT"
 
       - name: Create CI Build Properties
         run: |
@@ -404,6 +405,14 @@ jobs:
 
       - name: Build S1API (IL2CPP)
         run: dotnet build S1API/S1API.csproj --no-restore -c Il2CppMelon -v normal
+
+      # Save only verified non-empty assembly caches.
+      - name: Save IL2CPP Game Assemblies to Cache
+        uses: actions/cache/save@v4
+        if: success() && github.event_name != 'pull_request' && steps.verify-assemblies.outputs.cache_ready == 'true'
+        with:
+          path: S1API/ScheduleOneAssemblies
+          key: il2cpp-game-assemblies-${{ env.IL2CPP_ASSEMBLIES_CACHE_VERSION }}-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Upload S1API Il2Cpp Artifact
         uses: actions/upload-artifact@v4

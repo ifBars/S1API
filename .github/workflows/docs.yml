@@ -88,8 +88,8 @@ jobs:
 
       # Try to restore assemblies from cache first (for external PRs)
       # Cache key includes assembly branch to separate beta from main
-      # v4 includes Unity.Burst.dll, which the Mono test host needs while
-      # reflecting native test data.
+      # Keep the cache version aligned with assembly-cache.yml and coverage.yml.
+      # Unique suffixes allow fresh bundles after private assembly updates.
       # Only use cache for PR events to avoid stale assemblies after merges
       - name: Restore Game Assemblies from Cache
         id: cache-assemblies
@@ -97,9 +97,15 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: S1API/ScheduleOneAssemblies
-          key: game-assemblies-v5-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
+          key: game-assemblies-v6-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
           restore-keys: |
-            game-assemblies-v5-${{ steps.assembly-branch.outputs.branch }}-
+            game-assemblies-v6-${{ steps.assembly-branch.outputs.branch }}-
+
+      - name: Explain missing fork assembly cache
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && steps.cache-assemblies.outputs.cache-matched-key == ''
+        run: |
+          echo "::error::Game assembly cache unavailable. A maintainer must run: gh workflow run assembly-cache.yml --repo $GITHUB_REPOSITORY --ref ${{ github.event.repository.default_branch }}. After it succeeds, rerun this check."
+          exit 1
 
       # Only checkout game assemblies if cache miss AND we have access to secrets
       - name: Checkout Game Assemblies
@@ -110,7 +116,7 @@ jobs:
           ref: ${{ steps.assembly-branch.outputs.branch }}
           path: game-assemblies
           fetch-depth: 1
-        if: steps.cache-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: steps.cache-assemblies.outputs.cache-matched-key == '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
 
       - name: Debug Game Assemblies Structure
         run: |
@@ -119,7 +125,7 @@ jobs:
           echo ""
           echo "=== Looking for Assembly-CSharp.dll ==="
           find game-assemblies -name "Assembly-CSharp.dll" -type f
-        if: steps.cache-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: steps.cache-assemblies.outputs.cache-matched-key == '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
 
       - name: Copy Game Assemblies
         run: |
@@ -152,9 +158,10 @@ jobs:
               echo "This may cause build failures for files that use TMPro"
             fi
           fi
-        if: steps.cache-assemblies.outputs.cache-hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: steps.cache-assemblies.outputs.cache-matched-key == '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
 
       - name: Verify Assembly Copies
+        id: verify-assemblies
         run: |
           echo "=== Verifying Assembly Structure ==="
           ls -la S1API/ScheduleOneAssemblies/
@@ -166,7 +173,7 @@ jobs:
           ls -la S1API/ScheduleOneAssemblies/MelonLoader/ | head -10
           echo ""
           echo "=== Critical Assembly Check ==="
-          if [ -f S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll ]; then
+          if [ -s S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll ]; then
             echo "✓ Found Assembly-CSharp.dll"
             ls -l S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll
           else
@@ -178,7 +185,7 @@ jobs:
           fi
           echo ""
           echo "=== TextMeshPro Assembly Check ==="
-          if [ -f S1API/ScheduleOneAssemblies/Managed/Unity.TextMeshPro.dll ]; then
+          if [ -s S1API/ScheduleOneAssemblies/Managed/Unity.TextMeshPro.dll ]; then
             echo "✓ Found Unity.TextMeshPro.dll"
             ls -l S1API/ScheduleOneAssemblies/Managed/Unity.TextMeshPro.dll
           else
@@ -192,7 +199,7 @@ jobs:
           fi
           echo ""
           echo "=== Burst Assembly Check ==="
-          if [ -f S1API/ScheduleOneAssemblies/Managed/Unity.Burst.dll ]; then
+          if [ -s S1API/ScheduleOneAssemblies/Managed/Unity.Burst.dll ]; then
             echo "✓ Found Unity.Burst.dll"
             ls -l S1API/ScheduleOneAssemblies/Managed/Unity.Burst.dll
           else
@@ -201,7 +208,7 @@ jobs:
           fi
           echo ""
           echo "=== MelonLoader Assembly Check ==="
-          if [ -f S1API/ScheduleOneAssemblies/MelonLoader/0Harmony.dll ]; then
+          if [ -s S1API/ScheduleOneAssemblies/MelonLoader/0Harmony.dll ]; then
             echo "✓ Found 0Harmony.dll"
             ls -l S1API/ScheduleOneAssemblies/MelonLoader/0Harmony.dll
           else
@@ -212,19 +219,20 @@ jobs:
             fi
           fi
           echo ""
-          if [ "${{ steps.cache-assemblies.outputs.cache-hit }}" == "true" ]; then
+          if [ "${{ steps.cache-assemblies.outputs.cache-matched-key }}" != "" ]; then
             echo "✓ Using cached assemblies for build"
           else
             echo "✓ Using fresh assemblies from repository"
           fi
-
-      # Save only verified non-empty assembly caches.
-      - name: Save Game Assemblies to Cache
-        uses: actions/cache/save@v4
-        if: always() && steps.cache-assemblies.outputs.cache-hit != 'true' && hashFiles('S1API/ScheduleOneAssemblies/Managed/Assembly-CSharp.dll') != '' && hashFiles('S1API/ScheduleOneAssemblies/Managed/Unity.Burst.dll') != '' && hashFiles('S1API/ScheduleOneAssemblies/MelonLoader/0Harmony.dll') != '' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stable' || github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/npc-prefabs')))
-        with:
-          path: S1API/ScheduleOneAssemblies
-          key: game-assemblies-v5-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}
+          for assembly in Managed/Assembly-CSharp.dll Managed/ScheduleOne.Core.dll \
+            Managed/Unity.TextMeshPro.dll Managed/Unity.Burst.dll \
+            MelonLoader/0Harmony.dll MelonLoader/MelonLoader.dll; do
+            if [ ! -s "S1API/ScheduleOneAssemblies/$assembly" ]; then
+              echo "::error::Missing or empty required Mono assembly: $assembly"
+              exit 1
+            fi
+          done
+          echo "cache_ready=true" >> "$GITHUB_OUTPUT"
 
       - name: Create CI Build Properties
         run: |
@@ -287,6 +295,14 @@ jobs:
           --configuration MonoMelon
           --verbosity normal
           --property:AutomateLocalDeployment=false
+
+      # Save only verified non-empty assembly caches.
+      - name: Save Game Assemblies to Cache
+        uses: actions/cache/save@v4
+        if: success() && github.event_name != 'pull_request' && steps.verify-assemblies.outputs.cache_ready == 'true'
+        with:
+          path: S1API/ScheduleOneAssemblies
+          key: game-assemblies-v6-${{ steps.assembly-branch.outputs.branch }}-${{ hashFiles('S1API/S1API.csproj') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Upload S1API Mono Artifact
         uses: actions/upload-artifact@v4

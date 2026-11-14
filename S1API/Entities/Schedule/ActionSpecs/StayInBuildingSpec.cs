@@ -37,6 +37,15 @@ namespace S1API.Entities.Schedule
     public sealed class StayInBuildingSpec : IScheduleActionSpec
     {
         private static readonly Log Logger = new Log("StayInBuildingSpec");
+
+        // Every schedule action of every custom NPC can land here during a load.
+        private static readonly SceneObjectIndex<S1Map.NPCEnterableBuilding> SceneBuildingsByName =
+            new SceneObjectIndex<S1Map.NPCEnterableBuilding>(
+                () => UnityEngine.Object.FindObjectsOfType<S1Map.NPCEnterableBuilding>(true),
+                building => building.BuildingName,
+                building => building != null,
+                StringComparer.OrdinalIgnoreCase);
+
         private static readonly System.Collections.Generic.List<PendingAction> PendingActions = new System.Collections.Generic.List<PendingAction>();
 
         private sealed class PendingAction
@@ -394,30 +403,9 @@ namespace S1API.Entities.Schedule
         {
             try
             {
-#if IL2CPPMELON
-                var arr = UnityEngine.Object.FindObjectsOfType<Il2CppScheduleOne.Map.NPCEnterableBuilding>(includeInactive: true);
-#elif MONOMELON
-                var arr = UnityEngine.Object.FindObjectsOfType<ScheduleOne.Map.NPCEnterableBuilding>(true);
-#else
-                var arr = Array.Empty<UnityEngine.Object>();
-#endif
-                for (int i = 0; i < arr.Length; i++)
-                {
-                    var b = arr[i];
-                    if (b == null) continue;
-                    var type = b.GetType();
-                    var nameField = type.GetField("BuildingName", BindingFlags.Public | BindingFlags.Instance);
-                    string? name = nameField?.GetValue(b) as string;
-                    if (string.IsNullOrEmpty(name))
-                    {
-                        var nameProp = type.GetProperty("BuildingName", BindingFlags.Public | BindingFlags.Instance);
-                        name = nameProp?.GetValue(b) as string;
-                    }
-                    if (!string.IsNullOrEmpty(name) && string.Equals(name, buildingName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return b;
-                    }
-                }
+                var found = SceneBuildingsByName.Get(buildingName);
+                if (found.Count > 0)
+                    return found[0];
             }
             catch (Exception ex)
             {

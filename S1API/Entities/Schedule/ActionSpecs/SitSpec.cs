@@ -94,7 +94,19 @@ namespace S1API.Entities.Schedule
             if (schedule == null)
                 return;
 
-            var action = schedule.AddActionInternal<S1NPCsSchedules.NPCEvent_Sit>(StartTime, string.IsNullOrEmpty(Name) ? "Sit" : Name);
+            var seatSet = ResolveSeatSet(schedule);
+            if (seatSet == null)
+            {
+                var npcName = schedule.NPC?.gameObject != null ? schedule.NPC.gameObject.name : "Unknown";
+                Debug.LogWarning($"[S1API] SitSpec could not resolve a seat set (Name={SeatSetName}, Path={SeatSetPath}) for NPC '{npcName}'. Disabling action to prevent crash.");
+                return;
+            }
+
+            // NPCEvent_Sit.Awake logs an error when SeatSet is null, and activating the pooled action runs Awake.
+            var action = schedule.AddActionInternal<S1NPCsSchedules.NPCEvent_Sit>(
+                StartTime,
+                string.IsNullOrEmpty(Name) ? "Sit" : Name,
+                sit => sit.SeatSet = seatSet);
             if (action == null)
                 return;
 
@@ -103,20 +115,6 @@ namespace S1API.Entities.Schedule
                 action.NetworkInitializeIfDisabled();
             }
             catch { /* ignore */ }
-
-            var seatSet = ResolveSeatSet(schedule);
-            if (seatSet != null)
-            {
-                action.SeatSet = seatSet;
-            }
-            else
-            {
-                var npcName = schedule.NPC?.gameObject != null ? schedule.NPC.gameObject.name : "Unknown";
-                Debug.LogWarning($"[S1API] SitSpec could not resolve a seat set (Name={SeatSetName}, Path={SeatSetPath}) for NPC '{npcName}'. Disabling action to prevent crash.");
-                action.enabled = false;
-                action.gameObject.SetActive(false);
-                return;
-            }
 
             action.WarpIfSkipped = WarpIfSkipped;
             action.Duration = DurationMinutes > 0 ? DurationMinutes : 60;

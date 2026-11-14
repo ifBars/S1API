@@ -42,6 +42,30 @@ namespace S1API.Internal.Entities
             ?? throw new MissingFieldException(typeof(S1NPCs.NPC).FullName, "<NPCData>k__BackingField");
 #endif
 
+        // A pre-registration pass, the contract-load preparation and the pending spawn queue each touch every custom
+        // NPC in one frame. The movement preset and fallback dialogue database lookups scan all loaded objects, a set
+        // each new clone adds to, and a scan that finds nothing has nothing to cache, so every NPC paid for full scans
+        // that grew with the NPCs before it. Inside a lookup batch the first result, "none found" included, is reused
+        // until the batch ends.
+        private static int _lookupBatchDepth;
+        private static bool _batchMovementResolved;
+        private static S1NPCFramework.Movement? _batchMovement;
+        private static bool _batchDialogueResolved;
+        private static S1Dialogue.DialogueDatabase? _batchDialogue;
+
+        internal static void BeginLookupBatch() => _lookupBatchDepth++;
+
+        internal static void EndLookupBatch()
+        {
+            if (_lookupBatchDepth == 0 || --_lookupBatchDepth > 0)
+                return;
+
+            _batchMovementResolved = false;
+            _batchMovement = null;
+            _batchDialogueResolved = false;
+            _batchDialogue = null;
+        }
+
         internal static void AssignNewData(
             S1NPCs.NPC npc,
             NpcRootRole rootRole,
@@ -142,6 +166,17 @@ namespace S1API.Internal.Entities
         internal static bool ApplyIcon(S1NPCs.NPC npc, Sprite? icon)
         {
             return ApplyToData(npc, data => data.Appearance.Mugshot = icon);
+        }
+
+        internal static bool ApplyDefaultRelationshipValue(S1NPCs.NPC npc, float value)
+        {
+            return ApplyToData(npc, data =>
+            {
+                if (data.Relationship == null)
+                    throw new InvalidOperationException("The custom NPC data has no relationship settings.");
+
+                data.Relationship.DefaultRelationshipValue = value;
+            });
         }
 
         internal static Sprite? GetIcon(S1NPCs.NPC npc) =>
@@ -418,12 +453,26 @@ namespace S1API.Internal.Entities
             if (movement == null)
                 return;
 
-            S1NPCFramework.Movement? donor = FirstMovementValue();
-            if (donor == null)
+            S1NPCFramework.Movement? donor;
+            if (_lookupBatchDepth > 0 && _batchMovementResolved)
             {
-                // A preset may have loaded or initialised since the presets were indexed.
-                MovementPresets.Invalidate();
+                donor = _batchMovement;
+            }
+            else
+            {
                 donor = FirstMovementValue();
+                if (donor == null)
+                {
+                    // A preset may have loaded or initialised since the presets were indexed.
+                    MovementPresets.Invalidate();
+                    donor = FirstMovementValue();
+                }
+
+                if (_lookupBatchDepth > 0)
+                {
+                    _batchMovement = donor;
+                    _batchMovementResolved = true;
+                }
             }
 
             movement.WalkSpeed = donor?.WalkSpeed ?? 1.2f;
@@ -462,12 +511,7 @@ namespace S1API.Internal.Entities
             }
 
             if (data.Dialogue.DialogueDatabase == null)
-            {
-                S1Dialogue.DialogueDatabase[] databases =
-                    Resources.FindObjectsOfTypeAll<S1Dialogue.DialogueDatabase>();
-                if (databases.Length > 0)
-                    data.Dialogue.DialogueDatabase = databases[0];
-            }
+                data.Dialogue.DialogueDatabase = FirstLoadedDialogueDatabase();
 
             if (data.Dialogue.DialogueDatabase == null)
                 throw new InvalidOperationException("No dialogue database is loaded for the custom NPC.");
@@ -479,6 +523,27 @@ namespace S1API.Internal.Entities
                     $"'{sourceData?.Dialogue?.DialogueDatabase?.name ?? "<null>"}' to " +
                     $"'{data.Dialogue.DialogueDatabase.name}' for the replacement NPC data.");
             }
+        }
+
+        private static S1Dialogue.DialogueDatabase? FirstLoadedDialogueDatabase()
+        {
+            if (_lookupBatchDepth > 0 && _batchDialogueResolved)
+            {
+                if (ReferenceEquals(_batchDialogue, null))
+                    return null;
+                if (_batchDialogue != null)
+                    return _batchDialogue;
+            }
+
+            S1Dialogue.DialogueDatabase[] databases =
+                Resources.FindObjectsOfTypeAll<S1Dialogue.DialogueDatabase>();
+            S1Dialogue.DialogueDatabase? found = databases.Length > 0 ? databases[0] : null;
+            if (_lookupBatchDepth > 0)
+            {
+                _batchDialogue = found;
+                _batchDialogueResolved = true;
+            }
+            return found;
         }
 
         /// <summary>

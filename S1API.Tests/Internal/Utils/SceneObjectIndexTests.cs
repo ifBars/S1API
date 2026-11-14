@@ -170,6 +170,62 @@ public sealed class SceneObjectIndexTests
     }
 
     [Fact]
+    public void TrustedMissDoesNotScanAgain()
+    {
+        var scene = new List<Item> { new Item { Key = "a" } };
+        var index = new SceneObjectIndex<Item>(() => scene.ToArray(), i => i.Key, i => i != null && i.Alive,
+            trustMisses: true);
+        Assert.Empty(index.Get("b"));
+        Assert.Empty(index.Get("b"));
+        Assert.Empty(index.Get("c"));
+        Assert.Single(index.Get("a"));
+        Assert.Equal(1, index.Scans);
+    }
+
+    [Fact]
+    public void TrustedMissFindsAnObjectAfterItsNotification()
+    {
+        var scene = new List<Item>();
+        var index = new SceneObjectIndex<Item>(() => scene.ToArray(), i => i.Key, i => i != null && i.Alive,
+            trustMisses: true);
+        scene.Add(new Item { Key = "a" });
+        Assert.Single(index.Get("a"));
+        Assert.Empty(index.Get("late"));
+        var late = new Item { Key = "late" };
+        scene.Add(late);
+        index.NotifyChanged(late);
+        Assert.Same(late, Assert.Single(index.Get("late")));
+    }
+
+    [Fact]
+    public void TrustedMissFindsAnIndexedObjectRekeyedLater()
+    {
+        var item = new Item { Key = "old" };
+        var scene = new List<Item> { item };
+        var index = new SceneObjectIndex<Item>(() => scene.ToArray(), i => i.Key, i => i != null && i.Alive,
+            trustMisses: true);
+        Assert.Empty(index.Get("new"));
+        item.Key = "new";
+        Assert.Same(item, Assert.Single(index.Get("new")));
+    }
+
+    [Fact]
+    public void TrustedMissScansAgainAfterAnIndexedObjectWasDestroyed()
+    {
+        var old = new Item { Key = "a" };
+        var scene = new List<Item> { old };
+        var index = new SceneObjectIndex<Item>(() => scene.ToArray(), i => i.Key, i => i != null && i.Alive,
+            trustMisses: true);
+        Assert.Empty(index.Get("b"));
+        old.Alive = false;
+        scene.Remove(old);
+        var replacement = new Item { Key = "b" };
+        scene.Add(replacement);
+        Assert.Same(replacement, Assert.Single(index.Get("b")));
+        Assert.Equal(2, index.Scans);
+    }
+
+    [Fact]
     public void ResetAllClearsEveryIndex()
     {
         var (index, scene) = Make();
