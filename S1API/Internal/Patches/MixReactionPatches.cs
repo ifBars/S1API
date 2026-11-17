@@ -202,12 +202,26 @@ namespace S1API.Internal.Patches
                     new System.Collections.Generic.List<S1Effects.Effect>(properties.Count);
                 for (int i = 0; i < properties.Count; i++)
                     resolvedProperties.Add(properties[i]);
+                var effects = new System.Collections.Generic.List<ProductMixingEffect>(resolvedProperties.Count);
+                for (int i = 0; i < resolvedProperties.Count; i++)
+                {
+                    S1Effects.Effect property = resolvedProperties[i];
+                    effects.Add(new ProductMixingEffect(
+                        property.ID,
+                        property.Name,
+                        (int)property.Tier,
+                        property.ValueChange,
+                        property.ValueMultiplier));
+                }
+
                 var outputInput = new ProductMixingOutput(
                     mixID,
                     mixName,
                     productID,
                     metadata.ProductKind,
-                    source.BasePrice);
+                    source.BasePrice,
+                    effects,
+                    baseValue => S1Product.ProductManager.CalculateProductValue(baseValue, properties));
                 ProductMixingOutputDefinition output = profile!.OutputFactory(outputInput)
                     ?? throw new InvalidOperationException("The mixing output factory returned null.");
                 DrugType nativeDrugType = ProductMixingMapContract.GetNativeDrugType(profile.MixerMap);
@@ -337,6 +351,7 @@ namespace S1API.Internal.Patches
                 autoList: false);
             productManager.onNewProductCreated?.Invoke(generated);
         }
+
     }
 
     internal static class CustomProductMixingIngredientContract

@@ -17,15 +17,38 @@ rejects the mix before the unsupported native switch. Do not cast or invent
 native enum values.
 
 ```csharp
+const float MdmaBasePrice = 40f;
 var kind = new ProductKindBuilder("moredrugs:mdma").Build();
 
 var profile = new ProductMixingProfileBuilder(kind)
     .WithMixerMap(ProductMixingMap.Cocaine)
     .WithOutputFactoryCompatibility("moredrugs:mdma-mixing", 1)
     .WithOutputFactory(input => new ProductMixingOutputDefinition(
-        input.MixName, input.SourceKind, input.SourcePrice + 10f))
+        input.MixName,
+        input.SourceKind,
+        Math.Min(999f, Math.Max(1f, input.CalculateNativeValue(MdmaBasePrice)))))
     .Build();
 ```
+
+### Pricing a mix from its effects
+
+`ProductMixingOutput.Properties` lists the effects the output will carry, in
+native order, after the native mixing calculation and any registered mixing
+reactions. Each `ProductMixingEffect` exposes its `Id`, `Name`, `Tier`,
+`ValueChange`, and `ValueMultiplier`.
+
+`ProductMixingOutput.CalculateNativeValue(baseValue)` prices those effects with
+the game's own product-value calculation, so mods do not need a table of effect
+multipliers. Native mixes are priced from their family's fixed base price, so
+pass your kind's fixed base price rather than `SourcePrice`. `SourcePrice` is
+the source product's price; for a source that is itself a generated mix it is
+the price that mix's factory returned, so adding to it compounds across
+repeated mixes. Clamp the result to the 1 through 999 range that
+`ProductMixingOutputDefinition` accepts.
+
+The factory runs on every peer, and both members depend only on the mix's
+effects, so the result stays deterministic. When you change how a factory
+prices outputs, bump its `WithOutputFactoryCompatibility` version.
 
 Use the same output-factory compatibility identity and version on every peer.
 S1API includes it and the selected map in the multiplayer manifest, rejects a
