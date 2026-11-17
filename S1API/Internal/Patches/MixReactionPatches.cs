@@ -221,7 +221,7 @@ namespace S1API.Internal.Patches
                     metadata.ProductKind,
                     source.BasePrice,
                     effects,
-                    baseValue => CalculateNativeValue(resolvedProperties, baseValue));
+                    baseValue => S1Product.ProductManager.CalculateProductValue(baseValue, properties));
                 ProductMixingOutputDefinition output = profile!.OutputFactory(outputInput)
                     ?? throw new InvalidOperationException("The mixing output factory returned null.");
                 DrugType nativeDrugType = ProductMixingMapContract.GetNativeDrugType(profile.MixerMap);
@@ -352,27 +352,6 @@ namespace S1API.Internal.Patches
             productManager.onNewProductCreated?.Invoke(generated);
         }
 
-        private static float CalculateNativeValue(
-            System.Collections.Generic.List<S1Effects.Effect> properties,
-            float baseValue)
-        {
-            // The native calculation reads a definition's properties, so price a short-lived
-            // probe rather than copying the formula and drifting from the game.
-            S1Product.ProductDefinition probe =
-                UnityEngine.ScriptableObject.CreateInstance<S1Product.ProductDefinition>();
-            try
-            {
-                probe.Properties = new EffectList();
-                for (int i = 0; i < properties.Count; i++)
-                    probe.Properties.Add(properties[i]);
-
-                return S1Product.ProductManager.CalculateProductValue(probe, baseValue);
-            }
-            finally
-            {
-                CustomProductDefinitionFactory.Destroy(probe);
-            }
-        }
     }
 
     internal static class CustomProductMixingIngredientContract
