@@ -712,7 +712,7 @@ namespace S1API.Entities
 #endif
 
             if (repaired.Count > 0)
-                Logger.Msg($"Bound deal attendance for '{id}': set {string.Join(", ", repaired)}.");
+                Logger.Debug($"Bound deal attendance for '{id}': set {string.Join(", ", repaired)}.");
         }
 
         /// <summary>
