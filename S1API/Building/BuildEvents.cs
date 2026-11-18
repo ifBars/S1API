@@ -52,6 +52,50 @@ namespace S1API.Building
         public static event Action<BuildEventArgs>? OnBuildableItemInitialized;
 
         /// <summary>
+        /// Event raised when the placement ghost of a grid, surface or procedural grid item is created, before the
+        /// player sees it.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="BuildEventArgs.GameObject"/> is the ghost and <see cref="BuildEventArgs.IsGhost"/> is true.
+        /// <see cref="BuildEventArgs.ItemInstance"/> is null; filter by <see cref="BuildEventArgs.ItemId"/>.
+        /// Colliders, navigation and networking are already off on the ghost. Each handler runs on its own: one that
+        /// throws is logged and the others still run.
+        /// </remarks>
+        public static event Action<BuildEventArgs>? OnGhostCreated;
+
+        /// <summary>
+        /// INTERNAL: Receives handler errors instead of the MelonLoader log in unit tests.
+        /// </summary>
+        internal static Action<string>? ErrorSinkForTesting;
+
+        /// <summary>
+        /// INTERNAL: Raises the OnGhostCreated event, one handler at a time.
+        /// Called by Harmony patches in S1API.Internal.Patches.BuildingPatches.
+        /// </summary>
+        internal static void RaiseGhostCreated(BuildEventArgs args)
+        {
+            var handlers = OnGhostCreated;
+            if (args == null || handlers == null)
+                return;
+
+            foreach (var handler in handlers.GetInvocationList())
+            {
+                try
+                {
+                    ((Action<BuildEventArgs>)handler)(args);
+                }
+                catch (Exception ex)
+                {
+                    var message = $"Exception in OnGhostCreated handler {handler.Method.DeclaringType?.FullName}.{handler.Method.Name} for item '{args.ItemId}': {ex}";
+                    if (ErrorSinkForTesting != null)
+                        ErrorSinkForTesting(message);
+                    else
+                        Logger.Error(message);
+                }
+            }
+        }
+
+        /// <summary>
         /// INTERNAL: Raises the OnGridItemCreated event.
         /// Called by Harmony patches in S1API.Internal.Patches.BuildingPatches.
         /// </summary>

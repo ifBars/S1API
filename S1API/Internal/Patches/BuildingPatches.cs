@@ -71,6 +71,15 @@ namespace S1API.Internal.Patches
                 Logger.Error(
                     $"Failed to configure placement ghost for buildable '{itemDefinition.ID}': {ex}");
             }
+
+            try
+            {
+                BuildEvents.RaiseGhostCreated(new BuildEventArgs(itemDefinition.ID, ghost.gameObject));
+            }
+            catch (System.Exception ex)
+            {
+                Logger.Error($"Failed to raise OnGhostCreated for buildable '{itemDefinition.ID}': {ex}");
+            }
         }
 
         /// <summary>
