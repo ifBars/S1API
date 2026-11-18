@@ -74,6 +74,12 @@ namespace S1API.Internal.Patches
                 NpcAttackEvents.Warn($"NPC health without an NPC reported {what}; no event raised.");
                 return null;
             }
+            return ResolveNative(native, what);
+        }
+
+        /// <summary>Finds or builds the wrapper of a native NPC; warns once per NPC when none can be built.</summary>
+        internal static NPC? ResolveNative(S1NPCs.NPC native, string what)
+        {
             // Base-game NPCs get their wrapper on first use, so NPC.Get builds it when no mod asked for it yet.
             var npc = NPCPatches.FindWrapperForS1Npc(native) ?? NPC.Get(native.ID);
             if (npc == null && UnwrappedWarned.Add(native.ID))
