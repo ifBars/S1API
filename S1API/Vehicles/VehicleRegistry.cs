@@ -17,7 +17,7 @@ namespace S1API.Vehicles
     /// <summary>
     /// Registry utilities for discovering and resolving vehicles without exposing game types.
     /// </summary>
-    public static class VehicleRegistry
+    public static partial class VehicleRegistry
     {
         private static readonly Dictionary<object, LandVehicle> _cache = new Dictionary<object, LandVehicle>();
 
