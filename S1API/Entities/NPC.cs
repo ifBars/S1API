@@ -3536,9 +3536,10 @@ namespace S1API.Entities
                     return (NPC?)ctor.Invoke(null);
 #endif
             }
-            catch
+            catch (System.Exception ex)
             {
-                // Swallow exceptions to avoid breaking prefab configuration when base NPCs are not yet available.
+                // Not rethrown, so prefab configuration keeps working when base NPCs are not yet available.
+                Logger.Warning($"Creating the built-in NPC wrapper {npcType.Name} failed; no wrapper returned: {ex.Message}");
             }
 
             return null;

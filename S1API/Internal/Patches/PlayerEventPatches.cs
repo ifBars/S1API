@@ -67,11 +67,12 @@ namespace S1API.Internal.Patches
                 var vehicle = CurrentVehicle(__instance);
                 if (vehicle == null)
                     return;
-                __state = true;
                 var player = Resolve(__instance, "a vehicle exit");
-                var wrapped = VehicleRegistry.Wrap(vehicle);
                 if (player == null)
                     return;
+                // Set only for a resolved player, so the postfix does not resolve and warn a second time.
+                __state = true;
+                var wrapped = VehicleRegistry.Wrap(vehicle);
                 if (wrapped == null)
                 {
                     PlayerEvents.Warn($"{player.Name} exits a vehicle S1API has no wrapper for; OnExitingVehicle not raised.");
