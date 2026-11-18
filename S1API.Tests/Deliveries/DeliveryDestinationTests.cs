@@ -137,16 +137,87 @@ public sealed class DeliveryDestinationTests : IDisposable
     }
 
     [Fact]
-    public void PutBackRestoresOnlyTheEntriesThisCallPulled()
+    public void PutBackInsertsOnlyTheMissingEntriesThisCallPulled()
     {
         var deliveries = new List<string> { "vanilla", "pulled-1" };
         var pulled = new List<string> { "pulled-1", "pulled-2" };
+        var inserted = new List<string>();
 
-        int restored = DeliveryDestinationRuntime.PutBack<string>(pulled, deliveries.Contains, deliveries.Add);
+        int restored = DeliveryDestinationRuntime.PutBack<string>(
+            pulled,
+            new[] { 1, 2 },
+            deliveries.Contains,
+            (index, item) => { inserted.Add(item); deliveries.Insert(index, item); },
+            () => deliveries.Count);
 
         Assert.Equal(1, restored);
+        Assert.Equal(new[] { "pulled-2" }, inserted);
         Assert.Equal(new[] { "vanilla", "pulled-1", "pulled-2" }, deliveries);
-        Assert.DoesNotContain("held-by-another-call", deliveries);
+    }
+
+    [Fact]
+    public void PutBackKeepsTheListOrder()
+    {
+        var deliveries = new List<string> { "a", "c", "e" };
+        var pulled = new List<string> { "b", "d", "f" };
+
+        int restored = DeliveryDestinationRuntime.PutBack<string>(
+            pulled, new[] { 1, 3, 9 }, deliveries.Contains, deliveries.Insert, () => deliveries.Count);
+
+        Assert.Equal(3, restored);
+        Assert.Equal(new[] { "a", "b", "c", "d", "e", "f" }, deliveries);
+    }
+
+    [Fact]
+    public void ArrivalHoldRunsBeforeTheStateChange()
+    {
+        const BindingFlags flags = BindingFlags.Static | BindingFlags.NonPublic;
+        Type patches = typeof(global::S1API.Internal.Patches.DeliveryDestinationPatches);
+
+        MethodInfo? state = typeof(S1Delivery.DeliveryManager).GetMethod(
+            "SetDeliveryState", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+        Assert.NotNull(state);
+        Assert.Equal(
+            new[] { typeof(string), typeof(S1Delivery.EDeliveryStatus) },
+            Array.ConvertAll(state!.GetParameters(), p => p.ParameterType));
+
+        MethodInfo? prefix = patches.GetMethod("SetDeliveryStatePrefix", flags);
+        Assert.NotNull(prefix);
+        Assert.Equal(typeof(bool), prefix!.ReturnType);
+        string[] names = Array.ConvertAll(state.GetParameters(), p => p.Name!);
+        Assert.All(prefix.GetParameters(), p => Assert.True(p.Name == "__instance" || Array.IndexOf(names, p.Name) >= 0, p.Name));
+        Assert.NotNull(patches.GetMethod("SetDeliveryStateFinalizer", flags)!.GetCustomAttribute<HarmonyLib.HarmonyFinalizer>());
+    }
+
+    [Fact]
+    public void DeliveryShopDockPatchTargetsExist()
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+        Type shop = typeof(S1DeliveryUi.DeliveryShop);
+
+        Assert.NotNull(shop.GetMethod("RefreshLoadingDockUI", flags));
+        Assert.NotNull(shop.GetMethod("SubmitOrder", flags));
+        MethodInfo? selected = shop.GetMethod("LoadingDockDropdownSelected", flags);
+        Assert.NotNull(selected);
+        Assert.Equal("index", selected!.GetParameters().Single().Name);
+        Assert.NotNull((MemberInfo?)shop.GetField("loadingDockIndex", flags) ?? shop.GetProperty("loadingDockIndex", flags));
+        Assert.NotNull((MemberInfo?)shop.GetField("destinationProperty", flags) ?? shop.GetProperty("destinationProperty", flags));
+    }
+
+    [Fact]
+    public void DockDropdownSkipsReservedDocks()
+    {
+        // Docks #1 and #3 are live, dock #2 is a placeholder.
+        var offered = new[] { 0, 2 };
+
+        Assert.Equal(1, DeliveryDestinationRuntime.OptionOfDock(offered, 1));
+        Assert.Equal(2, DeliveryDestinationRuntime.OptionOfDock(offered, 3));
+        Assert.Equal(0, DeliveryDestinationRuntime.OptionOfDock(offered, 2));
+        Assert.Equal(0, DeliveryDestinationRuntime.OptionOfDock(offered, 0));
+        Assert.Equal(1, DeliveryDestinationRuntime.DockOfOption(offered, 1));
+        Assert.Equal(3, DeliveryDestinationRuntime.DockOfOption(offered, 2));
+        Assert.Equal(0, DeliveryDestinationRuntime.DockOfOption(offered, 0));
+        Assert.Equal(0, DeliveryDestinationRuntime.DockOfOption(offered, 3));
     }
 
     // --- held arrivals ---------------------------------------------------------------------------------
@@ -374,6 +445,34 @@ public sealed class DeliveryDestinationTests : IDisposable
         Assert.Equal(1, book.IndexOf("P", user));
         Assert.True(reloaded[1]!.IsPlaceholder);
         Assert.Contains(_log, line => line.StartsWith("warn: Loading dock slot #1 of 'P' is taken by a dock S1API did not add"));
+    }
+
+    [Fact]
+    public void AnotherSaveDropsTheReservedSlots()
+    {
+        var book = NewBook();
+        object user = new object();
+        Assert.False(book.UseSave("SaveGame_1"));
+        var docks = new List<FakeDock?> { new FakeDock("native") };
+        Apply(book, user, new FakeDock("a"), docks, out _);
+        book.Release("P", user, docks, Placeholder, out _);
+
+        book.ResetScene();
+        Assert.False(book.UseSave(""));
+        Assert.False(book.UseSave("savegame_1"));
+        var sameSave = new List<FakeDock?> { new FakeDock("native") };
+        Assert.True(book.Reserve("P", sameSave, Placeholder));
+        Assert.Equal(2, sameSave.Count);
+
+        book.ResetScene();
+        Assert.True(book.UseSave("SaveGame_2"));
+        var otherSave = new List<FakeDock?> { new FakeDock("native") };
+        Assert.False(book.Reserve("P", otherSave, Placeholder));
+        Assert.Single(otherSave);
+        Assert.Contains(_log, line => line.StartsWith("info: Another save is loaded: 1 loading dock slot(s)"));
+
+        Apply(book, new object(), new FakeDock("b"), otherSave, out int index);
+        Assert.Equal(1, index);
     }
 
     private global::S1API.Internal.Deliveries.DockSlotBook<FakeDock> NewBook() =>

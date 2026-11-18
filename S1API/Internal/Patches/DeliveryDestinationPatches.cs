@@ -11,15 +11,15 @@ using S1PropertyList = System.Collections.Generic.List<ScheduleOne.Property.Prop
 #endif
 
 using System;
-using System.Collections.Generic;
 using HarmonyLib;
 using S1API.Internal.Deliveries;
 
 namespace S1API.Internal.Patches
 {
     /// <summary>
-    /// Connects the delivery app's destination list, the loading bay check and the delivery tick to
-    /// <see cref="DeliveryDestinationRuntime"/>. The arrival hold itself runs in <see cref="DeliveryPatches"/>.
+    /// Connects the delivery app's destination and dock lists, the loading bay check, the delivery state change and
+    /// the delivery tick to <see cref="DeliveryDestinationRuntime"/>. The arrival hold itself runs in
+    /// <see cref="DeliveryPatches"/> and in <see cref="SetDeliveryStatePrefix"/>.
     /// </summary>
     [HarmonyPatch]
     internal static class DeliveryDestinationPatches
@@ -37,6 +37,59 @@ namespace S1API.Internal.Patches
             catch (Exception ex)
             {
                 Logger.Error($"Registered delivery destinations could not be added to the delivery app: {ex}");
+            }
+        }
+
+        [HarmonyPatch(typeof(S1DeliveryUi.DeliveryShop), nameof(S1DeliveryUi.DeliveryShop.RefreshLoadingDockUI))]
+        [HarmonyPrefix]
+        private static void RefreshLoadingDockUIPrefix() => DeliveryDestinationRuntime.BeginDockUiRefresh();
+
+        /// <summary>Runs also when vanilla threw, so the refresh counter always goes back down.</summary>
+        [HarmonyPatch(typeof(S1DeliveryUi.DeliveryShop), nameof(S1DeliveryUi.DeliveryShop.RefreshLoadingDockUI))]
+        [HarmonyFinalizer]
+        private static Exception? RefreshLoadingDockUIFinalizer(S1DeliveryUi.DeliveryShop __instance, Exception? __exception)
+        {
+            try
+            {
+                DeliveryDestinationRuntime.EndDockUiRefresh(__exception == null ? __instance : null);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Reserved loading docks could not be hidden in the delivery app: {ex}");
+            }
+
+            return __exception;
+        }
+
+        [HarmonyPatch(typeof(S1DeliveryUi.DeliveryShop), "LoadingDockDropdownSelected")]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static bool LoadingDockDropdownSelectedPrefix(S1DeliveryUi.DeliveryShop __instance, int index)
+        {
+            try
+            {
+                return !DeliveryDestinationRuntime.SelectDockOption(__instance, index);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Delivery app dock option {index} could not be mapped to a loading dock; vanilla runs it. {ex}");
+                return true;
+            }
+        }
+
+        [HarmonyPatch(typeof(S1DeliveryUi.DeliveryShop), nameof(S1DeliveryUi.DeliveryShop.SubmitOrder))]
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        private static bool SubmitOrderPrefix(S1DeliveryUi.DeliveryShop __instance)
+        {
+            try
+            {
+                return !DeliveryDestinationRuntime.BlockOrder(__instance);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Delivery order dock check failed; vanilla places the order. {ex}");
+                return true;
             }
         }
 
@@ -59,14 +112,41 @@ namespace S1API.Internal.Patches
             }
         }
 
-        [HarmonyPatch(typeof(S1Delivery.DeliveryManager), "OnTimePass")]
+        /// <summary>
+        /// Holds an arrival before vanilla sends it to the clients, shows the notification and activates the van.
+        /// </summary>
+        [HarmonyPatch(typeof(S1Delivery.DeliveryManager), "SetDeliveryState")]
         [HarmonyPrefix]
-        private static void OnTimePassPrefix(S1Delivery.DeliveryManager __instance, out List<S1Delivery.DeliveryInstance>? __state)
+        [HarmonyPriority(Priority.First)]
+        private static bool SetDeliveryStatePrefix(S1Delivery.DeliveryManager __instance, string deliveryID, S1Delivery.EDeliveryStatus status)
         {
-            __state = null;
             try
             {
-                __state = DeliveryDestinationRuntime.BeforeTimePass(__instance);
+                return !DeliveryDestinationRuntime.HoldStateChange(__instance, deliveryID, status);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Arrival hold check for delivery {deliveryID} failed; the state change runs normally. {ex}");
+                return true;
+            }
+        }
+
+        [HarmonyPatch(typeof(S1Delivery.DeliveryManager), "SetDeliveryState")]
+        [HarmonyFinalizer]
+        private static Exception? SetDeliveryStateFinalizer(Exception? __exception)
+        {
+            DeliveryDestinationRuntime.AfterStateChange();
+            return __exception;
+        }
+
+        [HarmonyPatch(typeof(S1Delivery.DeliveryManager), "OnTimePass")]
+        [HarmonyPrefix]
+        private static void OnTimePassPrefix(S1Delivery.DeliveryManager __instance, out DeliveryDestinationRuntime.TickState __state)
+        {
+            __state = new DeliveryDestinationRuntime.TickState();
+            try
+            {
+                DeliveryDestinationRuntime.BeforeTimePass(__instance, __state);
             }
             catch (Exception ex)
             {
@@ -82,7 +162,7 @@ namespace S1API.Internal.Patches
         [HarmonyFinalizer]
         private static Exception? OnTimePassFinalizer(
             S1Delivery.DeliveryManager __instance,
-            List<S1Delivery.DeliveryInstance>? __state,
+            DeliveryDestinationRuntime.TickState? __state,
             Exception? __exception)
         {
             try

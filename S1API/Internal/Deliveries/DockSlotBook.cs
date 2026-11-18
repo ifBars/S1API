@@ -46,7 +46,7 @@ namespace S1API.Internal.Deliveries
     /// that S1API added therefore never moves: it keeps its index across scene reloads, also while its provider still
     /// returns null, and after its registration is disposed. A slot without a live dock holds a placeholder, so
     /// vanilla code that walks the array never reads a null entry. A reserved slot is reused only by the dock it held
-    /// before (same object or same GUID). This class makes no Unity calls; the runtime injects dock comparison,
+    /// before (same object or same identity key). This class makes no Unity calls; the runtime injects dock comparison,
     /// liveness and placeholder creation.
     /// </remarks>
     internal sealed class DockSlotBook<TDock> where TDock : class
@@ -58,6 +58,7 @@ namespace S1API.Internal.Deliveries
         private readonly Func<TDock, bool> _isAlive;
         private readonly Action<string> _info;
         private readonly Action<string> _warn;
+        private string? _save;
 
         internal DockSlotBook(Func<TDock, TDock, bool> same, Func<TDock, bool> isAlive, Action<string> info, Action<string> warn)
         {
@@ -123,7 +124,7 @@ namespace S1API.Internal.Deliveries
         /// <param name="code">The property code.</param>
         /// <param name="user">The registration.</param>
         /// <param name="dock">The provider result, or null while the dock is unavailable.</param>
-        /// <param name="identity">The dock's GUID, or null when it has none.</param>
+        /// <param name="identity">A key that names the same dock again after a reload, or null when it has none.</param>
         /// <param name="docks">The property's dock list; changed in place.</param>
         /// <param name="placeholder">Creates the stand-in for an empty slot at the given index.</param>
         /// <param name="index">The registration's slot index, or -1.</param>
@@ -227,12 +228,42 @@ namespace S1API.Internal.Deliveries
             _restoredThisScene.Clear();
         }
 
+        /// <summary>
+        /// Drops every slot when <paramref name="save"/> differs from the save the slots belong to, so another save
+        /// does not inherit reserved dock numbers or placeholders. An empty key (no save loaded, or a co-op client)
+        /// keeps the slots. True when the slots were dropped.
+        /// </summary>
+        internal bool UseSave(string? save)
+        {
+            if (string.IsNullOrEmpty(save))
+                return false;
+            if (_save == null)
+            {
+                _save = save;
+                return false;
+            }
+
+            if (string.Equals(_save, save, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            int count = 0;
+            foreach (List<Slot> slots in _byCode.Values)
+                count += slots.Count;
+            _byCode.Clear();
+            _placeholders.Clear();
+            _restoredThisScene.Clear();
+            _save = save;
+            _info($"Another save is loaded: {count} loading dock slot(s) of the previous save dropped.");
+            return true;
+        }
+
         /// <summary>Removes every slot. Only for tests.</summary>
         internal void Clear()
         {
             _byCode.Clear();
             _placeholders.Clear();
             _restoredThisScene.Clear();
+            _save = null;
         }
 
         internal bool IsPlaceholder(TDock dock)
@@ -332,7 +363,7 @@ namespace S1API.Internal.Deliveries
             return null;
         }
 
-        /// <summary>An owned slot without users that last held this dock, matched by object or GUID.</summary>
+        /// <summary>An owned slot without users that last held this dock, matched by object or identity.</summary>
         private Slot? ReservedFor(string code, TDock dock, string? identity)
         {
             if (!_byCode.TryGetValue(code, out List<Slot>? slots))
