@@ -5,12 +5,14 @@ using S1Levelling = Il2CppScheduleOne.Levelling;
 using S1ContactsApp = Il2CppScheduleOne.UI.Phone.ContactsApp;
 using S1Persistence = Il2CppScheduleOne.Persistence;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
+using RegionList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.Map.EMapRegion>;
 #elif MONOMELON
 using S1Map = ScheduleOne.Map;
 using S1Cartel = ScheduleOne.Cartel;
 using S1Levelling = ScheduleOne.Levelling;
 using S1ContactsApp = ScheduleOne.UI.Phone.ContactsApp;
 using S1Persistence = ScheduleOne.Persistence;
+using RegionList = System.Collections.Generic.List<ScheduleOne.Map.EMapRegion>;
 #endif
 
 using System;
@@ -148,10 +150,23 @@ namespace S1API.Internal.Patches
             }
         }
 
-        /// <summary>The rank save loader sets the rank through this call; regions for a rank already held unlock then.</summary>
+        /// <summary>
+        /// The rank save loader sets the rank through this call; regions for a rank already held unlock then. The RPC
+        /// body below is patched as well, because a client receives the rank there and never runs this wrapper.
+        /// </summary>
         [HarmonyPatch(typeof(S1Levelling.LevelManager), "SetData")]
         [HarmonyPostfix]
-        private static void LevelSetData_Postfix(S1Levelling.ERank rank)
+        private static void LevelSetData_Postfix(S1Levelling.ERank rank) => UnlockForRank(rank);
+
+        /// <summary>
+        /// The body of the rank RPC: runs on the host through SetData and on a client when the host sends the rank.
+        /// Unlocking for the same rank a second time does nothing.
+        /// </summary>
+        [HarmonyPatch(typeof(S1Levelling.LevelManager), "RpcLogic___SetData_20965027")]
+        [HarmonyPostfix]
+        private static void LevelSetDataLogic_Postfix(S1Levelling.ERank rank) => UnlockForRank(rank);
+
+        private static void UnlockForRank(S1Levelling.ERank rank)
         {
             if (!CustomRegionRegistry.HasEntries) return;
             try
@@ -164,11 +179,47 @@ namespace S1API.Internal.Patches
             }
         }
 
+        /// <summary>
+        /// The host sends its unlocked regions, custom ones included, to every joining client. The game looks each one
+        /// up without a null check, so a region the client lacks would throw inside the RPC and FishNet would drop the
+        /// rest of the packet. Runs whether or not this machine has custom regions, since the host may have some.
+        /// </summary>
+        [HarmonyPatch(typeof(S1Levelling.LevelManager), "RpcLogic___SetUnlockedRegions_563230222")]
+        [HarmonyPrefix]
+        private static void SetUnlockedRegionsLogic_Prefix(RegionList unlockedRegions)
+        {
+            try
+            {
+                CustomRegionWorld.DropUnknownRegions(unlockedRegions);
+            }
+            catch (Exception ex)
+            {
+                CustomRegionRegistry.Error($"Checking the unlocked regions from the host failed; the game applies them unchecked: {ex}");
+            }
+        }
+
         [HarmonyPatch(typeof(S1Persistence.SaveManager), "Save", new Type[] { typeof(string) })]
         [HarmonyPostfix]
-        private static void SaveManagerSave_Postfix(string saveFolderPath)
+        private static void SaveManagerSave_Postfix(string saveFolderPath, bool __runOriginal)
         {
             if (!CustomRegionRegistry.HasEntries) return;
+            // The region file follows the game's save: nothing is written when a prefix skipped the save or the game
+            // returns before saving (client, no loaded game).
+            if (!__runOriginal)
+            {
+                CustomRegionRegistry.Info("The game save did not run; the custom region file is left as it is.");
+                return;
+            }
+            if (!CustomRegionWorld.IsServer())
+            {
+                CustomRegionRegistry.Info("Only the host saves; the custom region file is left as it is.");
+                return;
+            }
+            if (string.IsNullOrEmpty(S1Persistence.LoadManager.Instance?.LoadedGameFolderPath))
+            {
+                CustomRegionRegistry.Info("No game is loaded; the custom region file is not written.");
+                return;
+            }
             try
             {
                 var saveManager = S1Persistence.SaveManager.Instance;

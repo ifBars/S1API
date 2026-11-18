@@ -5,9 +5,16 @@ using S1API.Internal.Map;
 namespace S1API.Map
 {
     /// <summary>
-    /// Registry of custom map regions. A custom region works in the map, the cartel influence, the cartel
-    /// activities and the contacts app, and stays out of the game's own save data, so a save loads without the mod.
+    /// Registry of custom map regions. A custom region works in the map, the cartel influence, the regional cartel
+    /// activities (those of its <see cref="RegionDefinition.StandIn"/>) and the contacts app, and stays out of the
+    /// game's own save data, so a save loads without the mod. Global cartel activities never start in a custom region:
+    /// the game picks their region from its own vanilla regions only.
     /// </summary>
+    /// <remarks>
+    /// In co-op every player needs the same region mods. Regions are matched by number, and the numbers follow the
+    /// sorted ids on each machine. A client logs a warning and skips unlocked regions from the host that it does not
+    /// have; two different sets of the same size are not detected.
+    /// </remarks>
     /// <example>
     /// <code>
     /// Regions.Register(new RegionDefinition
@@ -28,7 +35,7 @@ namespace S1API.Map
         /// <param name="def">The region to add.</param>
         /// <returns>The handle of the region.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="def"/> is null.</exception>
-        /// <exception cref="ArgumentException">The id or name is empty, the polygon has fewer than three finite points, or the start influence is outside 0 to 1.</exception>
+        /// <exception cref="ArgumentException">The id or name is empty, the polygon has fewer than three finite points, or the start influence is outside 0 to 1, or the stand-in is not a vanilla region.</exception>
         public static RegionHandle Register(RegionDefinition def) => CustomRegionRegistry.Register(def);
 
         /// <summary>

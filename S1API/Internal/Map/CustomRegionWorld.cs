@@ -12,6 +12,7 @@ using S1Persistence = Il2CppScheduleOne.Persistence;
 using S1UI = Il2CppScheduleOne.UI;
 using S1UI_MapPanel = Il2CppScheduleOne.UIMapPanel;
 using S1TMP = Il2CppTMPro;
+using S1InstanceFinder = Il2CppFishNet.InstanceFinder;
 using RegionList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.Map.EMapRegion>;
 using Il2CppInterop.Runtime.InteropTypes;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
@@ -29,6 +30,7 @@ using S1Persistence = ScheduleOne.Persistence;
 using S1UI = ScheduleOne.UI;
 using S1UI_MapPanel = ScheduleOne.UIMapPanel;
 using S1TMP = TMPro;
+using S1InstanceFinder = FishNet.InstanceFinder;
 using RegionList = System.Collections.Generic.List<ScheduleOne.Map.EMapRegion>;
 #endif
 
@@ -64,14 +66,53 @@ namespace S1API.Internal.Map
 
         private static S1UI.RegionUnlockedCanvas? UnlockedCanvas => S1DevUtils.Singleton<S1UI.RegionUnlockedCanvas>.Instance;
 
-        /// <summary>Saved state of the loaded save, read once per world.</summary>
+        /// <summary>
+        /// Saved state of the loaded save, read once per world. The cache is keyed by the save folder as well, so a
+        /// world whose reset did not run still reads its own save. A co-op client has no save folder and starts from
+        /// the defaults; the host then sends the influence of every region when the client joins.
+        /// </summary>
         private static Dictionary<string, CustomRegionSavedState> Saved()
         {
-            if (_saved != null) return _saved;
             string? folder = S1Persistence.LoadManager.Instance?.LoadedGameFolderPath;
+            if (_saved != null && string.Equals(_savedFolder, folder, StringComparison.Ordinal)) return _saved;
             _saved = CustomRegionState.Read(folder, Warn);
+            _savedFolder = folder;
             Info($"{_saved.Count} saved custom region states read from '{folder}'.");
             return _saved;
+        }
+
+        private static string? _savedFolder;
+
+        /// <summary>
+        /// Resets the registry state of a finished world if the scene change reset did not run (an earlier subscriber
+        /// of the scene change event threw). The zone of the old world is destroyed with its scene, so a zone that is
+        /// set but gone marks a world that was not reset.
+        /// </summary>
+        private static void EnsureFreshWorld()
+        {
+            foreach (CustomRegionEntry entry in CustomRegionRegistry.Current())
+            {
+                if ((object?)entry.Zone != null && entry.Zone == null)
+                {
+                    Warn("The custom regions still hold the last world; the scene change reset did not run. Resetting now.");
+                    ResetWorld();
+                    return;
+                }
+            }
+        }
+
+        /// <summary>True on the host or in single player. A failed check counts as a client.</summary>
+        internal static bool IsServer()
+        {
+            try
+            {
+                return S1InstanceFinder.IsServer;
+            }
+            catch (Exception ex)
+            {
+                Warn($"The network role could not be read; treated as a client: {ex.Message}");
+                return false;
+            }
         }
 
         // ---- handle operations ----
@@ -88,9 +129,52 @@ namespace S1API.Internal.Map
                 Warn($"Region '{entry.Id}' cannot be unlocked while no world is loaded.");
                 return;
             }
-            if (entry.MapData.IsUnlocked) return;
+            if (entry.MapData.IsUnlocked)
+            {
+                Info($"Region '{entry.Id}' is already unlocked.");
+                return;
+            }
+            if (IsServer() && S1DevUtils.NetworkSingleton<S1Levelling.LevelManager>.InstanceExists)
+            {
+                // The game's unlocked-region RPC runs locally on the host and reaches every client that knows the region.
+                var list = new RegionList();
+                list.Add(entry.MapData.Region);
+                S1DevUtils.NetworkSingleton<S1Levelling.LevelManager>.Instance.SetUnlockedRegions(null, list);
+                Info($"Region '{entry.Id}' unlocked and sent to the clients (unlocked here: {entry.MapData.IsUnlocked}).");
+                return;
+            }
             entry.MapData.SetUnlocked();
-            Info($"Region '{entry.Id}' unlocked.");
+            Warn($"Region '{entry.Id}' unlocked on this machine only; only the host can unlock a region for the whole session.");
+        }
+
+        /// <summary>
+        /// Removes the regions this machine does not have from an unlocked-region list the host sent. The game looks up
+        /// each value without a null check, and a throw inside the RPC makes FishNet drop the rest of the packet.
+        /// </summary>
+        internal static void DropUnknownRegions(RegionList? unlocked)
+        {
+            if (unlocked == null)
+            {
+                Warn("Unlocked-region list is null; the game handles it.");
+                return;
+            }
+            S1Map.Map? map = S1DevUtils.Singleton<S1Map.Map>.Instance;
+            if (map == null)
+            {
+                Warn("Unlocked regions arrived without a map; the game handles them.");
+                return;
+            }
+            var dropped = new List<int>();
+            for (int i = unlocked.Count - 1; i >= 0; i--)
+            {
+                if (map.GetRegionData(unlocked[i]) != null) continue;
+                dropped.Add((int)unlocked[i]);
+                unlocked.RemoveAt(i);
+            }
+            if (dropped.Count == 0) return;
+            dropped.Reverse();
+            Warn($"Unlocked regions {string.Join(", ", dropped)} from the host are not on this map and were skipped. " +
+                 "The host has custom regions this machine has not registered, or numbers them differently; every player needs the same region mods.");
         }
 
         internal static void ChangeInfluence(CustomRegionEntry entry, float amount)
@@ -110,19 +194,28 @@ namespace S1API.Internal.Map
             int zones = 0;
             foreach (CustomRegionEntry entry in CustomRegionRegistry.Current())
             {
-                if (entry.Zone != null)
-                {
-                    Object.Destroy(entry.Zone.gameObject);
-                    zones++;
-                }
+                // The reference check keeps Unity's native calls out of a registry without a world.
+                if ((object?)entry.Zone != null && DestroyZone(entry.Zone)) zones++;
                 entry.Zone = null;
                 entry.MapData = null;
                 entry.InfluenceData = null;
             }
             _saved = null;
+            _savedFolder = null;
+            _missingActivitiesReported = false;
             CustomRegionRegistry.RemovePendingEntries();
             CustomRegionRegistry.Unfreeze();
             if (zones > 0) Info($"{zones} custom region zones removed.");
+        }
+
+        /// <summary>Destroys a zone that still exists. Kept out of line so the native Unity calls are compiled only when a zone is set.</summary>
+        /// <returns>False if the zone was already destroyed with its scene.</returns>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private static bool DestroyZone(S1Audio.PolygonalZone zone)
+        {
+            if (zone == null) return false;
+            Object.Destroy(zone.gameObject);
+            return true;
         }
 
         // ---- map ----
@@ -136,8 +229,11 @@ namespace S1API.Internal.Map
         }
 
         /// <summary>
-        /// Appends a map region for every custom region. The zone needs its points before it wakes, so it is built
-        /// inactive. The game takes the first region whose outline holds a point, so a region inside another comes first.
+        /// Adds a map region for every custom region. The zone needs its points before it wakes, so it is built
+        /// inactive. The game takes the first region whose outline holds a point (region lookup and the player's
+        /// current region), so the custom regions go before the vanilla ones, smallest first: a custom region drawn
+        /// inside a vanilla or another custom region is found. Positions outside every custom outline keep their
+        /// vanilla region, since the vanilla regions keep their order.
         /// </summary>
         internal static void AddToMap(S1Map.Map map)
         {
@@ -146,6 +242,7 @@ namespace S1API.Internal.Map
                 Info($"Map woke in scene '{map?.gameObject.scene.name}', not the main world; no custom regions added.");
                 return;
             }
+            EnsureFreshWorld();
             IReadOnlyList<CustomRegionEntry> entries = CustomRegionRegistry.Freeze();
             if (entries.Count == 0)
             {
@@ -153,12 +250,13 @@ namespace S1API.Internal.Map
                 return;
             }
             Dictionary<string, CustomRegionSavedState> saved = Saved();
+            var vanilla = new List<S1Map.MapRegionData>();
+            foreach (S1Map.MapRegionData r in map.Regions) vanilla.Add(r);
             var regions = new List<S1Map.MapRegionData>();
-            foreach (S1Map.MapRegionData r in map.Regions) regions.Add(r);
 
             foreach (CustomRegionEntry e in entries.OrderBy(x => Area(x.Definition.Polygon)))
             {
-                if (regions.Any(r => r != null && (int)r.Region == e.Value))
+                if (vanilla.Any(r => r != null && (int)r.Region == e.Value) || regions.Any(r => (int)r.Region == e.Value))
                 {
                     Warn($"Region '{e.Id}' ({e.Value}) is already on the map; not added twice.");
                     continue;
@@ -203,6 +301,7 @@ namespace S1API.Internal.Map
                 e.MapData = data;
                 Info($"Region '{e.Id}' is {e.Value} on the map, {def.Polygon.Length} points, unlocked {data.IsUnlocked}.");
             }
+            regions.AddRange(vanilla);
             map.Regions = MakeArray(regions);
             Info($"Map has {map.Regions.Length} regions including {entries.Count} custom ones.");
         }
@@ -257,6 +356,7 @@ namespace S1API.Internal.Map
                 Info("CartelInfluence woke outside the main world; no influence data added.");
                 return;
             }
+            EnsureFreshWorld();
             IReadOnlyList<CustomRegionEntry> entries = CustomRegionRegistry.Freeze();
             if (entries.Count == 0)
             {
@@ -299,9 +399,16 @@ namespace S1API.Internal.Map
                     Warn($"Influence change for region '{entry.Id}' without influence data; ignored.");
                     return true;
                 }
+                // Same checks as the game's change: skip a value equal to the current one, clamp, and report the
+                // clamped value only when it differs from the old one.
+                if (newInfluence == data.Influence)
+                {
+                    Info($"Region '{entry.Id}' cartel influence stays at {data.Influence:0.###}.");
+                    return true;
+                }
                 data.Influence = Mathf.Clamp01(newInfluence);
-                if (!Mathf.Approximately(oldInfluence, newInfluence))
-                    influence.OnInfluenceChanged?.Invoke(region, oldInfluence, newInfluence);
+                if (oldInfluence != data.Influence)
+                    influence.OnInfluenceChanged?.Invoke(region, oldInfluence, data.Influence);
                 Info($"Region '{entry.Id}' cartel influence {oldInfluence:0.###} -> {data.Influence:0.###}.");
             }
             catch (Exception ex)
@@ -538,8 +645,9 @@ namespace S1API.Internal.Map
                 S1Map.MapRegionData data = map.GetRegionData(region);
                 if (data == null)
                 {
-                    Error($"Region '{entry.Id}' has no map data; vanilla selects it.");
-                    return false;
+                    // Vanilla would look up the region after this one by number and throw, so it does not get the call.
+                    Error($"Region '{entry.Id}' has no map data; its tab is not selected.");
+                    return true;
                 }
                 S1UI_MapPanel panel = MapPanelOf(app);
                 app.SelectedRegion = region;
@@ -572,8 +680,9 @@ namespace S1API.Internal.Map
             }
             catch (Exception ex)
             {
-                Error($"Selecting region '{entry.Id}' in the contacts app failed; vanilla selects it: {ex}");
-                return false;
+                // Vanilla would look up the region after this one by number and throw, so it does not get the call.
+                Error($"Selecting region '{entry.Id}' in the contacts app failed; its tab stays as it is: {ex}");
+                return true;
             }
         }
 

@@ -330,8 +330,47 @@ public sealed class CustomRegionTests : IDisposable
     [InlineData(typeof(S1ContactsApp.ContactsApp), "SetSelectedRegion")]
     [InlineData(typeof(S1Levelling.LevelManager), "GetSaveString")]
     [InlineData(typeof(S1Levelling.LevelManager), "SetData")]
+    [InlineData(typeof(S1Levelling.LevelManager), "RpcLogic___SetData_20965027")]
+    [InlineData(typeof(S1Levelling.LevelManager), "RpcLogic___SetUnlockedRegions_563230222")]
     public void PatchTargetsExistInTargetRuntime(Type type, string method)
     {
         Assert.NotNull(type.GetMethods(Declared).FirstOrDefault(m => m.Name == method));
+    }
+
+    [Theory]
+    [InlineData("RpcLogic___SetData_20965027", "rank")]
+    [InlineData("RpcLogic___SetUnlockedRegions_563230222", "unlockedRegions")]
+    public void PatchedRpcBodiesHaveTheParametersThePatchesBindTo(string method, string parameter)
+    {
+        MethodInfo target = typeof(S1Levelling.LevelManager).GetMethods(Declared).First(m => m.Name == method);
+        Assert.Contains(target.GetParameters(), p => p.Name == parameter);
+    }
+
+    [Fact]
+    public void SavePostfixSkipsWhenTheGameSaveDidNotRun()
+    {
+        MethodInfo postfix = typeof(global::S1API.Internal.Patches.RegionPatches).GetMethod("SaveManagerSave_Postfix", Declared)!;
+        Assert.Contains(postfix.GetParameters(), p => p.Name == "__runOriginal" && p.ParameterType == typeof(bool));
+        Regions.Register(Def("x.region"));
+        _log.Clear();
+
+        postfix.Invoke(null, new object[] { "unused", false });
+
+        Assert.Contains(_log, l => l.Level == "info" && l.Message.Contains("did not run"));
+    }
+
+    [Fact]
+    public void WorldResetLetsTheNextWorldNumberBySortedIdAgain()
+    {
+        var a = Regions.Register(Def("b.region"));
+        CustomRegionRegistry.Freeze();
+        var late = Regions.Register(Def("a.region"));
+        Assert.Equal((int)a.Value + 1, (int)late.Value);
+
+        CustomRegionWorld.ResetWorld();
+        CustomRegionRegistry.Freeze();
+
+        Assert.Equal(CustomRegionRegistry.FirstValue, (int)late.Value);
+        Assert.Equal(CustomRegionRegistry.FirstValue + 1, (int)a.Value);
     }
 }

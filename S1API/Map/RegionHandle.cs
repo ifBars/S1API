@@ -57,7 +57,9 @@ namespace S1API.Map
         public float Influence => CustomRegionWorld.GetInfluence(Entry);
 
         /// <summary>
-        /// Unlocks the region. Does nothing and logs a warning while no world is loaded.
+        /// Unlocks the region. On the host (and in single player) the unlock goes through the game's networked
+        /// unlocked-region call and reaches every client. Called on a client, it unlocks the region on that client
+        /// only and logs a warning. Does nothing and logs a warning while no world is loaded.
         /// </summary>
         public void Unlock() => CustomRegionWorld.Unlock(Entry);
 
