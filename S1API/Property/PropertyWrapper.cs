@@ -189,6 +189,20 @@ namespace S1API.Property
         }
 
         /// <summary>
+        /// When true, the game no longer culls this property's content. Use it for content that moves away from the
+        /// property root, such as a property on a vehicle; vanilla culls by the distance to the root.
+        /// </summary>
+        /// <remarks>
+        /// Applies to every wrapper of the same property. A lock lasts until it is set to false or the scene changes.
+        /// Content that is culled while the lock is set stays culled until vanilla shows it again; set the lock first.
+        /// </remarks>
+        public bool ContentCullingLocked
+        {
+            get => global::S1API.Internal.Properties.PropertyHooks.IsCullingLocked(PropertyCode);
+            set => global::S1API.Internal.Properties.PropertyHooks.SetCullingLocked(PropertyCode, value);
+        }
+
+        /// <summary>
         /// Gets the number of employees currently assigned to this property.
         /// </summary>
         public int EmployeeCount =>

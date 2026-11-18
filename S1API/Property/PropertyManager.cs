@@ -69,5 +69,19 @@ namespace S1API.Property
             }
             return null;
         }
+
+        /// <summary>
+        /// Fired on the peer that loads the save (the host), once per saved property, after its base data is applied and before
+        /// its objects and employees load. The second argument is the number of employees in the save data.
+        /// </summary>
+        /// <remarks>
+        /// This is the last point to add build tiles, idle points or beds that saved objects and employees need. A
+        /// handler that throws is logged and the other handlers still run.
+        /// </remarks>
+        public static event System.Action<PropertyWrapper, int>? OnPropertyLoaded
+        {
+            add => global::S1API.Internal.Properties.PropertyHooks.Loaded += value;
+            remove => global::S1API.Internal.Properties.PropertyHooks.Loaded -= value;
+        }
     }
 }
