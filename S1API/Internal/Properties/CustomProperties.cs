@@ -185,6 +185,9 @@ namespace S1API.Internal.Properties
             return TimedOut.Contains(code) || HasPendingLoad(code);
         }
 
+        /// <summary>True while any registered property has a deferred or given-up load.</summary>
+        internal static bool HasUnfinishedLoads() => Registrations.Count > 0 && (TimedOut.Count > 0 || Loads.Count > 0);
+
         /// <summary>
         /// True when the heatmap started without this registered property, so vanilla has no temperature view for it and
         /// its heatmap calls must be skipped.

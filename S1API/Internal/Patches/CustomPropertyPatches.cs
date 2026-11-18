@@ -11,6 +11,7 @@ using S1Property = ScheduleOne.Property;
 #endif
 
 using System;
+using System.Collections.Generic;
 using HarmonyLib;
 using S1API.Internal.Properties;
 
@@ -150,28 +151,102 @@ namespace S1API.Internal.Patches
             }
         }
 
-        // A registered property whose load is deferred or was given up holds only part of its saved data. Vanilla skips
-        // properties that answer false here, so the save leaves the saved file alone instead of rewriting it without
-        // the objects and employees that never loaded.
-        [HarmonyPatch(typeof(S1Property.Property), nameof(S1Property.Property.ShouldSave))]
-        [HarmonyPostfix]
-        private static void ShouldSavePostfix(S1Property.Property __instance, ref bool __result)
+        // A registered property whose load is deferred or was given up holds only part of its saved data. The two
+        // WriteData methods write every property in the static lists, so such a property is taken out of the lists for
+        // the call and put back at its old index afterwards; the WriteData postfix then keeps its saved file.
+        // Property.ShouldSave is not patched: it is a bare "return true", and in IL2CPP a detour on it also caught
+        // other methods with the same native body and crashed the boot.
+        private static List<Action>? _pulledForSave;
+
+        [HarmonyPatch(typeof(S1Property.PropertyManager), nameof(S1Property.PropertyManager.WriteData))]
+        [HarmonyPrefix]
+        private static void PropertyWriteDataPrefix()
+        {
+            PullUnfinished(() =>
+            {
+                Pull(S1Property.Property.OwnedProperties, "owned properties");
+                Pull(S1Property.Property.UnownedProperties, "unowned properties");
+            });
+        }
+
+        [HarmonyPatch(typeof(S1Property.PropertyManager), nameof(S1Property.PropertyManager.WriteData))]
+        [HarmonyFinalizer]
+        private static void PropertyWriteDataFinalizer() => PutBackPulled();
+
+        [HarmonyPatch(typeof(S1Property.BusinessManager), nameof(S1Property.BusinessManager.WriteData))]
+        [HarmonyPrefix]
+        private static void BusinessWriteDataPrefix()
+        {
+            PullUnfinished(() =>
+            {
+                Pull(S1Property.Business.OwnedBusinesses, "owned businesses");
+                Pull(S1Property.Business.UnownedBusinesses, "unowned businesses");
+            });
+        }
+
+        [HarmonyPatch(typeof(S1Property.BusinessManager), nameof(S1Property.BusinessManager.WriteData))]
+        [HarmonyFinalizer]
+        private static void BusinessWriteDataFinalizer() => PutBackPulled();
+
+        private static void PullUnfinished(Action pull)
         {
             try
             {
-                if (!__result || __instance == null)
-                    return;
-                var code = __instance.PropertyCode;
-                if (CustomProperties.IsLoadUnfinished(code))
+                if (_pulledForSave != null)
                 {
-                    __result = false;
-                    Logger.Warning($"Custom property '{code}' is not saved now: its load has not finished, its saved file stays as it is.");
+                    Logger.Warning("Properties taken out for the previous save were not put back; putting them back now.");
+                    PutBackPulled();
                 }
+                if (!CustomProperties.HasUnfinishedLoads())
+                    return;
+                pull();
             }
             catch (Exception ex)
             {
-                Logger.Error($"Checking whether custom property can be saved failed, it is saved as vanilla does: {ex}");
+                Logger.Error($"Taking unfinished custom properties out of the save failed; they are saved as vanilla does: {ex}");
+                PutBackPulled();
             }
+        }
+
+#if IL2CPPMELON
+        private static void Pull<T>(Il2CppSystem.Collections.Generic.List<T> list, string what) where T : S1Property.Property
+#else
+        private static void Pull<T>(List<T> list, string what) where T : S1Property.Property
+#endif
+        {
+            if (list == null)
+            {
+                Logger.Warning($"The game's list of {what} is missing; unfinished custom properties in it are not protected.");
+                return;
+            }
+            for (int i = list.Count - 1; i >= 0; i--)
+            {
+                T property = list[i];
+                if (property == null)
+                    continue;
+                string code = property.PropertyCode;
+                if (!CustomProperties.IsLoadUnfinished(code))
+                    continue;
+                list.RemoveAt(i);
+                int index = i;
+                (_pulledForSave ??= new List<Action>()).Add(() => list.Insert(Math.Min(index, list.Count), property));
+                Logger.Warning($"Custom property '{code}' is not saved now: its load has not finished, its saved file stays as it is.");
+            }
+        }
+
+        private static void PutBackPulled()
+        {
+            var pulled = _pulledForSave;
+            _pulledForSave = null;
+            if (pulled == null)
+                return;
+            // Pulled from the end of each list, so the reverse order puts every entry back at its old index.
+            for (int i = pulled.Count - 1; i >= 0; i--)
+            {
+                try { pulled[i](); }
+                catch (Exception ex) { Logger.Error($"Putting an unfinished custom property back into its list failed: {ex}"); }
+            }
+            Logger.Msg($"{pulled.Count} unfinished custom propert(ies) put back after the save.");
         }
 
         // Start is protected in the Mono assembly, so it is invoked by name.

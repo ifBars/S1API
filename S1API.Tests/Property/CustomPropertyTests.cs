@@ -340,7 +340,6 @@ public sealed class CustomPropertyTests : IDisposable
             new[] { typeof(S1Datas.PropertyData), typeof(string) }, null));
         Assert.NotNull(typeof(S1Heatmap.HeatmapManager).GetMethod("Start", flags, null, Type.EmptyTypes, null));
         Assert.NotNull(typeof(S1Heatmap.HeatmapManager).GetMethod("ToggleHeatmapActive", flags, null, new[] { typeof(S1Property.Property) }, null));
-        Assert.NotNull(typeof(S1Property.Property).GetMethod("ShouldSave", flags, null, Type.EmptyTypes, null));
     }
 
     // ---- unfinished loads, heatmap cut-off, re-registration ----
@@ -355,6 +354,7 @@ public sealed class CustomPropertyTests : IDisposable
         // The property is in the world but its root is not ready, so the load is pending.
         Assert.Equal(1, CustomProperties.DeferredLoadCount);
         Assert.True(CustomProperties.IsLoadUnfinished("annex"));
+        Assert.True(CustomProperties.HasUnfinishedLoads());
         Assert.Equal(new[] { file }, Kept());
     }
 
@@ -371,6 +371,7 @@ public sealed class CustomPropertyTests : IDisposable
 
         Assert.Equal(0, CustomProperties.DeferredLoadCount);
         Assert.True(CustomProperties.IsLoadUnfinished("annex"));
+        Assert.True(CustomProperties.HasUnfinishedLoads());
         Assert.Equal(new[] { file }, Kept());
         Assert.Contains(_log, l => l.Level == "error" && l.Message.Contains("not saved until the next load"));
     }
@@ -384,6 +385,7 @@ public sealed class CustomPropertyTests : IDisposable
         CustomProperties.Pump();
 
         Assert.False(CustomProperties.IsLoadUnfinished("annex"));
+        Assert.False(CustomProperties.HasUnfinishedLoads());
         WriteSave("Annex.json", "annex");
         Assert.Empty(Kept());
     }
@@ -472,7 +474,11 @@ public sealed class CustomPropertyTests : IDisposable
             Assert.NotNull(typeof(CustomPropertyPatches).GetMethod(name, flags)!.GetCustomAttribute<HarmonyPostfix>());
         foreach (var name in new[] { "LoadFolderPrefix", "LoadDataPrefix", "HeatmapStartPrefix", "ToggleHeatmapPrefix" })
             Assert.NotNull(typeof(CustomPropertyPatches).GetMethod(name, flags)!.GetCustomAttribute<HarmonyPrefix>());
-        Assert.NotNull(typeof(CustomPropertyPatches).GetMethod("ShouldSavePostfix", flags)!.GetCustomAttribute<HarmonyPostfix>());
+        foreach (var name in new[] { "PropertyWriteDataPrefix", "BusinessWriteDataPrefix" })
+            Assert.NotNull(typeof(CustomPropertyPatches).GetMethod(name, flags)!.GetCustomAttribute<HarmonyPrefix>());
+        foreach (var name in new[] { "PropertyWriteDataFinalizer", "BusinessWriteDataFinalizer" })
+            Assert.NotNull(typeof(CustomPropertyPatches).GetMethod(name, flags)!.GetCustomAttribute<HarmonyFinalizer>());
+        Assert.Null(typeof(CustomPropertyPatches).GetMethod("ShouldSavePostfix", flags));
     }
 
     [Fact]
