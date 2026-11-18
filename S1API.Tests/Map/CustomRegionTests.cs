@@ -158,6 +158,33 @@ public sealed class CustomRegionTests : IDisposable
     }
 
     [Fact]
+    public void UnregisterRemovesARegionThatHasNoWorldYet()
+    {
+        var a = Regions.Register(Def("a.region"));
+        var b = Regions.Register(Def("b.region"));
+
+        Assert.True(Regions.Unregister(a));
+        Assert.False(Regions.Unregister(a));
+        Assert.Equal(new[] { b }, Regions.Custom.ToArray());
+        Assert.Null(Regions.Get("a.region"));
+        Assert.Throws<ArgumentNullException>(() => Regions.Unregister(null!));
+        CustomRegionRegistry.Freeze();
+        Assert.Equal(CustomRegionRegistry.FirstValue, (int)b.Value);
+    }
+
+    [Fact]
+    public void RegisteringAnUnregisteredIdAgainGivesANewHandle()
+    {
+        var first = Regions.Register(Def("a.region"));
+        Regions.Unregister(first);
+
+        var second = Regions.Register(Def("a.region"));
+
+        Assert.NotSame(first, second);
+        Assert.Single(Regions.Custom);
+    }
+
+    [Fact]
     public void RegistrationAfterTheFirstWorldGetsTheNextNumberAndWarns()
     {
         var a = Regions.Register(Def("a.region"));

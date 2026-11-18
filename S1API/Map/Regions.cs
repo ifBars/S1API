@@ -32,6 +32,15 @@ namespace S1API.Map
         public static RegionHandle Register(RegionDefinition def) => CustomRegionRegistry.Register(def);
 
         /// <summary>
+        /// Removes a custom region, for a mod whose regions depend on the save. In a loaded world the region stays
+        /// until that world ends and is gone from the next one.
+        /// </summary>
+        /// <param name="handle">The handle returned by <see cref="Register"/>.</param>
+        /// <returns>False if the region was not registered or is already removed.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="handle"/> is null.</exception>
+        public static bool Unregister(RegionHandle handle) => CustomRegionRegistry.Unregister(handle);
+
+        /// <summary>
         /// All registered custom regions, in registration order.
         /// </summary>
         public static IReadOnlyList<RegionHandle> Custom => CustomRegionRegistry.Handles();

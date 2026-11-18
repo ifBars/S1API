@@ -42,6 +42,9 @@ namespace S1API.Internal.Map
         internal S1Map.MapRegionData? MapData;
         internal S1Cartel.CartelInfluence.RegionInfluenceData? InfluenceData;
         internal S1Audio.PolygonalZone? Zone;
+
+        /// <summary>Set by Unregister while the world is built; the entry leaves the registry when that world ends.</summary>
+        internal bool RemovePending;
     }
 
     /// <summary>
@@ -110,6 +113,7 @@ namespace S1API.Internal.Map
                         return existing.Handle;
                     existing.Definition = snapshot;
                     existing.Source = def;
+                    existing.RemovePending = false;
                     if (existing.MapData != null)
                         Warn($"Region '{existing.Id}' was registered again while its world is running; the new definition applies after the next world load.");
                     else
@@ -203,7 +207,41 @@ namespace S1API.Internal.Map
 
         internal static IReadOnlyList<RegionHandle> Handles()
         {
-            lock (Gate) return Entries.Select(e => e.Handle).ToList();
+            lock (Gate) return Entries.Where(e => !e.RemovePending).Select(e => e.Handle).ToList();
+        }
+
+        /// <summary>
+        /// Takes a region out of the registry. A region of a built world stays in that world and leaves the registry
+        /// when the world ends, so the vanilla code that already holds it keeps working until then.
+        /// </summary>
+        internal static bool Unregister(RegionHandle handle)
+        {
+            if (handle == null) throw new ArgumentNullException(nameof(handle));
+            lock (Gate)
+            {
+                CustomRegionEntry entry = handle.Entry;
+                if (!Entries.Contains(entry) || entry.RemovePending) return false;
+                if (entry.MapData != null)
+                {
+                    entry.RemovePending = true;
+                    Info($"Region '{entry.Id}' unregistered; it leaves the registry when its world ends.");
+                    return true;
+                }
+                Entries.Remove(entry);
+                if (!_frozen) AssignSortedLocked();
+                Info($"Region '{entry.Id}' unregistered.");
+                return true;
+            }
+        }
+
+        /// <summary>Drops the entries that were unregistered while their world was built.</summary>
+        internal static void RemovePendingEntries()
+        {
+            lock (Gate)
+            {
+                int removed = Entries.RemoveAll(e => e.RemovePending);
+                if (removed > 0) Info($"{removed} unregistered regions left the registry.");
+            }
         }
 
         /// <summary>The entries in number order, after fixing the numbers if that has not happened yet.</summary>
@@ -213,6 +251,7 @@ namespace S1API.Internal.Map
             {
                 if (!_frozen)
                 {
+                    Entries.RemoveAll(e => e.RemovePending);
                     AssignSortedLocked();
                     _frozen = true;
                     Info($"{Entries.Count} custom regions numbered from {FirstValue}: " +

@@ -120,6 +120,7 @@ namespace S1API.Internal.Map
                 entry.InfluenceData = null;
             }
             _saved = null;
+            CustomRegionRegistry.RemovePendingEntries();
             CustomRegionRegistry.Unfreeze();
             if (zones > 0) Info($"{zones} custom region zones removed.");
         }
