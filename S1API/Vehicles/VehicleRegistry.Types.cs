@@ -14,7 +14,8 @@ namespace S1API.Vehicles
         /// <summary>
         /// Registers a new vehicle type cloned from a vanilla vehicle. Call it once, for example in
         /// <c>OnInitializeMelon</c>. The type is built when the game's vehicle manager wakes up, or at once when a
-        /// world is already loaded.
+        /// world is already loaded. In co-op, register in <c>OnInitializeMelon</c>: a type registered after the world
+        /// loaded can get a different FishNet prefab ID on host and client, and S1API logs a warning for it.
         /// </summary>
         /// <param name="definition">The type to add.</param>
         /// <returns>False when the definition is invalid or its code is taken; the reason is logged as an error.</returns>

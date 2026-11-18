@@ -97,6 +97,8 @@ namespace S1API.Internal.Vehicles
 
             if (ApplyNowForTesting != null)
             {
+                if (CoopAfterLoadForTesting?.Invoke() == true)
+                    WarnLateInCoop(code);
                 ApplyNowForTesting(code);
                 return true;
             }
@@ -104,7 +106,11 @@ namespace S1API.Internal.Vehicles
             // A mod that registers after the world loaded still gets its type, without waiting for the next load.
             S1Vehicles.VehicleManager? manager = CurrentManager();
             if (manager != null)
+            {
+                if (InCoopSession())
+                    WarnLateInCoop(code);
                 Apply(manager);
+            }
             return true;
         }
 
@@ -290,6 +296,30 @@ namespace S1API.Internal.Vehicles
             }
         }
 
+        // A late type joins FishNet's spawnable prefabs at a later index than on a peer that registered it at
+        // startup, so the prefab ID that spawns it can point at another prefab on the other side.
+        private static void WarnLateInCoop(string code) =>
+            Warn($"Vehicle type '{code}' was registered after the world loaded in a co-op session; FishNet prefab IDs may differ between host and client. Register it in OnInitializeMelon.");
+
+        // Co-op means a client connected to a remote host, or a host with at least one remote client.
+        private static bool InCoopSession()
+        {
+            try
+            {
+                var nm = FishNetInstanceFinder.NetworkManager;
+                if (nm == null)
+                    return false;
+                if (nm.IsClientOnly)
+                    return true;
+                return nm.IsServer && nm.ServerManager != null && nm.ServerManager.Clients.Count > 1;
+            }
+            catch (Exception ex)
+            {
+                Warn($"The co-op state could not be read; no prefab ID warning for a late type. {ex.Message}");
+                return false;
+            }
+        }
+
         private static Entry? Find(string code)
         {
             foreach (Entry entry in Entries)
@@ -319,6 +349,11 @@ namespace S1API.Internal.Vehicles
         /// INTERNAL: Called with the code instead of touching the game after a registration. Only for tests.
         /// </summary>
         internal static Action<string>? ApplyNowForTesting { get; set; }
+
+        /// <summary>
+        /// INTERNAL: Stands in for "a world is loaded and this is a co-op session" while ApplyNowForTesting is set. Only for tests.
+        /// </summary>
+        internal static Func<bool>? CoopAfterLoadForTesting { get; set; }
 
         /// <summary>
         /// INTERNAL: Receives log lines instead of MelonLoader while set. Only for tests, which run without MelonLoader.

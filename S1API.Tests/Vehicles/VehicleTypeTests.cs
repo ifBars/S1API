@@ -27,6 +27,7 @@ public sealed class VehicleTypeTests : IDisposable
         VehicleTypeRuntime.ResetForTesting();
         VehicleTypeRuntime.LogSinkForTesting = null;
         VehicleTypeRuntime.ApplyNowForTesting = null;
+        VehicleTypeRuntime.CoopAfterLoadForTesting = null;
     }
 
     [Fact]
@@ -129,6 +130,28 @@ public sealed class VehicleTypeTests : IDisposable
 
         Assert.True(secondRan);
         Assert.Single(_log, line => line.StartsWith("error: OnTypesRegistered handler of S1API.Tests threw."));
+    }
+
+    [Fact]
+    public void LateRegistrationInCoopWarnsAboutPrefabIds()
+    {
+        VehicleTypeRuntime.CoopAfterLoadForTesting = () => true;
+
+        Assert.True(VehicleRegistry.RegisterType(new VehicleTypeDefinition { Code = "test_car", BaseCode = "hounddog" }));
+
+        Assert.Single(_log, line => line.StartsWith("warn: Vehicle type 'test_car' was registered after the world loaded in a co-op session")
+            && line.Contains("Register it in OnInitializeMelon."));
+        Assert.Equal(new[] { "test_car" }, _applied);
+    }
+
+    [Fact]
+    public void RegistrationOutsideCoopDoesNotWarn()
+    {
+        VehicleTypeRuntime.CoopAfterLoadForTesting = () => false;
+
+        Assert.True(VehicleRegistry.RegisterType(new VehicleTypeDefinition { Code = "test_car", BaseCode = "hounddog" }));
+
+        Assert.DoesNotContain(_log, line => line.StartsWith("warn: "));
     }
 
     [Fact]
