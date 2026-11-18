@@ -61,21 +61,9 @@ namespace S1API.Internal.Patches
             return __exception;
         }
 
-        [HarmonyPatch(typeof(S1DeliveryUi.DeliveryShop), "LoadingDockDropdownSelected")]
-        [HarmonyPrefix]
-        [HarmonyPriority(Priority.First)]
-        private static bool LoadingDockDropdownSelectedPrefix(S1DeliveryUi.DeliveryShop __instance, int index)
-        {
-            try
-            {
-                return !DeliveryDestinationRuntime.SelectDockOption(__instance, index);
-            }
-            catch (Exception ex)
-            {
-                Logger.Error($"Delivery app dock option {index} could not be mapped to a loading dock; vanilla runs it. {ex}");
-                return true;
-            }
-        }
+        // DeliveryShop.LoadingDockDropdownSelected is not patched: it is a one-line field setter, and in IL2CPP a detour
+        // on such a body can also catch other methods with the same native code. EndDockUiRefresh adds a dropdown
+        // listener instead.
 
         [HarmonyPatch(typeof(S1DeliveryUi.DeliveryShop), nameof(S1DeliveryUi.DeliveryShop.SubmitOrder))]
         [HarmonyPrefix]

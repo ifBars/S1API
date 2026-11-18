@@ -197,9 +197,10 @@ public sealed class DeliveryDestinationTests : IDisposable
 
         Assert.NotNull(shop.GetMethod("RefreshLoadingDockUI", flags));
         Assert.NotNull(shop.GetMethod("SubmitOrder", flags));
-        MethodInfo? selected = shop.GetMethod("LoadingDockDropdownSelected", flags);
-        Assert.NotNull(selected);
-        Assert.Equal("index", selected!.GetParameters().Single().Name);
+        Assert.NotNull((MemberInfo?)shop.GetField("LoadingDockDropdown", flags) ?? shop.GetProperty("LoadingDockDropdown", flags));
+        // The one-line setter LoadingDockDropdownSelected must stay unpatched (IL2CPP folds identical bodies).
+        Assert.Null(typeof(global::S1API.Internal.Patches.DeliveryDestinationPatches).GetMethod("LoadingDockDropdownSelectedPrefix",
+            BindingFlags.Static | BindingFlags.NonPublic));
         Assert.NotNull((MemberInfo?)shop.GetField("loadingDockIndex", flags) ?? shop.GetProperty("loadingDockIndex", flags));
         Assert.NotNull((MemberInfo?)shop.GetField("destinationProperty", flags) ?? shop.GetProperty("destinationProperty", flags));
     }

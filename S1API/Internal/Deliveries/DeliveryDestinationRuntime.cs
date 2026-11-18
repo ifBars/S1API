@@ -58,6 +58,8 @@ namespace S1API.Internal.Deliveries
         private static bool _lifecycleHooked;
         private static int _tickDepth;
         private static int _dockUiRefreshDepth;
+        // Instance IDs of the dock dropdowns that already carry the S1API listener.
+        private static readonly HashSet<int> ListenedDropdowns = new HashSet<int>();
         // Arrival already checked by the SetDeliveryState prefix; the SetStatus prefix of the same call skips the holds.
         private static string? _checkedArrivalId;
 #if MONOMELON
@@ -255,6 +257,7 @@ namespace S1API.Internal.Deliveries
                 WarnOnce("shop:nodropdown", "The delivery app has no loading dock dropdown; reserved docks are not filtered.");
                 return;
             }
+            ListenToDropdown(shop, dropdown);
 
             int current = ShopDockNumber(shop);
             int option = OptionOfDock(offered, current);
@@ -271,9 +274,29 @@ namespace S1API.Internal.Deliveries
             Debug($"Delivery app offers {offered.Count} of {DockLength(property)} loading dock(s) of '{property.PropertyCode}'; reserved docks are hidden.");
         }
 
+        // Vanilla adds its own listener in DeliveryShop.Initialize, before the first dock refresh, so this one runs
+        // after it and overwrites the option index vanilla stored with the dock the option stands for.
+        private static void ListenToDropdown(S1DeliveryUi.DeliveryShop shop, UnityEngine.UI.Dropdown dropdown)
+        {
+            if (!ListenedDropdowns.Add(dropdown.GetInstanceID()))
+                return;
+            dropdown.onValueChanged.AddListener((UnityEngine.Events.UnityAction<int>)delegate (int option)
+            {
+                try
+                {
+                    SelectDockOption(shop, option);
+                }
+                catch (Exception ex)
+                {
+                    Fail($"Delivery app dock option {option} could not be mapped to a loading dock; the order uses the option as vanilla does. {ex}");
+                }
+            });
+            Debug("Delivery app dock dropdown listener added.");
+        }
+
         /// <summary>
-        /// DeliveryShop.LoadingDockDropdownSelected prefix: true when the selection was mapped to a live dock and
-        /// vanilla must not run.
+        /// Dock dropdown listener: true when the selection was mapped to a live dock, false when the destination has
+        /// no reserved docks and the vanilla value stands.
         /// </summary>
         internal static bool SelectDockOption(S1DeliveryUi.DeliveryShop? shop, int option)
         {
@@ -1141,6 +1164,7 @@ namespace S1API.Internal.Deliveries
             Warned.Clear();
             _tickDepth = 0;
             _dockUiRefreshDepth = 0;
+            ListenedDropdowns.Clear();
             _checkedArrivalId = null;
             // Slot indexes stay: saved deliveries keep pointing at them after the reload. Another save drops them
             // at its first dock attach (DockSlotBook.UseSave).
@@ -1169,6 +1193,7 @@ namespace S1API.Internal.Deliveries
             Slots.Clear();
             _tickDepth = 0;
             _dockUiRefreshDepth = 0;
+            ListenedDropdowns.Clear();
             _checkedArrivalId = null;
             if (_lifecycleHooked)
             {
