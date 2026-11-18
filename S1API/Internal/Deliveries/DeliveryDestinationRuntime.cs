@@ -1603,7 +1603,12 @@ namespace S1API.Internal.Deliveries
                 if (folder.Length > 0)
                 {
                     S1Persistence.SaveInfo? info = manager.ActiveSaveInfo;
-                    return info == null ? folder : folder + "|" + info.DateCreated.Ticks;
+                    if (info != null)
+                        return folder + "|" + info.DateCreated.Ticks;
+                    // ExitToMenu clears ActiveSaveInfo but keeps the folder, so a folder without save info while no game
+                    // is loaded is the way out of a save, not another save. A game loaded without save info (the
+                    // tutorial) is keyed by its folder.
+                    return manager.IsGameLoaded ? folder : string.Empty;
                 }
 
                 return InstanceFinder.IsClient && !InstanceFinder.IsServer ? "client#" + _sceneGeneration : string.Empty;
