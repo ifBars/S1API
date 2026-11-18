@@ -58,7 +58,9 @@ namespace S1API.Internal.Deliveries
         private readonly Func<TDock, bool> _isAlive;
         private readonly Action<string> _info;
         private readonly Action<string> _warn;
+        private readonly List<DockSlotMove> _pendingMoves = new List<DockSlotMove>();
         private string? _save;
+        private int _moves;
 
         internal DockSlotBook(Func<TDock, TDock, bool> same, Func<TDock, bool> isAlive, Action<string> info, Action<string> warn)
         {
@@ -102,15 +104,19 @@ namespace S1API.Internal.Deliveries
                     changed = true;
             }
 
+            // The dock S1API did not add stays where it is. Deliveries saved to the old index belong to the moved slot;
+            // TakeMoves tells the runtime where they go now.
             foreach (Slot slot in displaced)
             {
                 int previous = slot.Index;
                 slot.Index = docks.Count;
+                _pendingMoves.Add(new DockSlotMove(code, previous, slot.Index));
                 slot.Live = null;
                 slot.Placeholder = null;
                 Place(slot, docks, null, placeholder);
                 changed = true;
-                _warn($"Loading dock slot #{previous + 1} of '{code}' is taken by a dock S1API did not add; that registration moves to dock #{slot.Index + 1}.");
+                _moves++;
+                _warn($"Loading dock slot #{previous + 1} of '{code}' is taken by a dock S1API did not add; that registration and the deliveries saved to it move to dock #{slot.Index + 1}.");
             }
 
             if (restored > 0 && _restoredThisScene.Add(code))
@@ -147,6 +153,19 @@ namespace S1API.Internal.Deliveries
             }
 
             int existing = IndexOf(docks, dock);
+            if (slot != null && !slot.Owned && existing != slot.Index)
+            {
+                // The registration shared a dock S1API did not add and now returns another dock: it leaves that slot
+                // and the new dock is placed like a first answer.
+                int left = slot.Index;
+                slot.Users.Remove(user);
+                if (slot.Users.Count == 0)
+                    _byCode[code].Remove(slot);
+                _info($"A loading dock registration of '{code}' no longer returns dock #{left + 1}, which S1API did not add; its new dock gets a slot of its own.");
+                slot = null;
+                index = -1;
+            }
+
             if (slot != null)
             {
                 if (existing == slot.Index)
@@ -158,7 +177,12 @@ namespace S1API.Internal.Deliveries
                     return DockSlotChange.None;
                 }
 
-                if (existing >= 0 || !slot.Owned)
+                if (existing >= 0)
+                    return DockSlotChange.Conflict;
+
+                // Another registration of this slot still provides a different live dock; the slot keeps that one.
+                TDock? held = LiveDockOfOthers(slot, user);
+                if (held != null && !_same(held, dock))
                     return DockSlotChange.Conflict;
 
                 slot.Users[user] = dock;
@@ -210,11 +234,15 @@ namespace S1API.Internal.Deliveries
             return slot.Users.Count > 0 ? DockSlotRelease.StillUsed : DockSlotRelease.Reserved;
         }
 
-        /// <summary>Forgets this scene's dock objects. Slots, their indexes and their users stay.</summary>
+        /// <summary>
+        /// Forgets this scene's dock objects. Owned slots, their indexes and their users stay. Slots of docks S1API did
+        /// not add are dropped: the next scene's dock list decides where those docks are.
+        /// </summary>
         internal void ResetScene()
         {
             foreach (List<Slot> slots in _byCode.Values)
             {
+                slots.RemoveAll(slot => !slot.Owned);
                 foreach (Slot slot in slots)
                 {
                     slot.Live = null;
@@ -230,8 +258,8 @@ namespace S1API.Internal.Deliveries
 
         /// <summary>
         /// Drops every slot when <paramref name="save"/> differs from the save the slots belong to, so another save
-        /// does not inherit reserved dock numbers or placeholders. An empty key (no save loaded, or a co-op client)
-        /// keeps the slots. True when the slots were dropped.
+        /// does not inherit reserved dock numbers or placeholders. An empty key (no save loaded) keeps the slots.
+        /// True when the slots were dropped.
         /// </summary>
         internal bool UseSave(string? save)
         {
@@ -252,6 +280,7 @@ namespace S1API.Internal.Deliveries
             _byCode.Clear();
             _placeholders.Clear();
             _restoredThisScene.Clear();
+            _pendingMoves.Clear();
             _save = save;
             _info($"Another save is loaded: {count} loading dock slot(s) of the previous save dropped.");
             return true;
@@ -263,6 +292,7 @@ namespace S1API.Internal.Deliveries
             _byCode.Clear();
             _placeholders.Clear();
             _restoredThisScene.Clear();
+            _pendingMoves.Clear();
             _save = null;
         }
 
@@ -278,6 +308,20 @@ namespace S1API.Internal.Deliveries
         }
 
         internal int IndexOf(string code, object user) => SlotOf(code, user)?.Index ?? -1;
+
+        /// <summary>True when S1API keeps a slot for <paramref name="code"/>, also one without a registration.</summary>
+        internal bool HasSlots(string code) => _byCode.TryGetValue(code, out List<Slot>? slots) && slots.Count > 0;
+
+        /// <summary>Counts every slot move; the runtime compares it to notice a new move.</summary>
+        internal int Moves => _moves;
+
+        /// <summary>Returns the slot moves since the last call, oldest first, and forgets them.</summary>
+        internal List<DockSlotMove> TakeMoves()
+        {
+            var moves = new List<DockSlotMove>(_pendingMoves);
+            _pendingMoves.Clear();
+            return moves;
+        }
 
         private bool Place(Slot slot, List<TDock?> docks, TDock? live, Func<int, TDock> placeholder)
         {
@@ -325,6 +369,17 @@ namespace S1API.Internal.Deliveries
             return null;
         }
 
+        private TDock? LiveDockOfOthers(Slot slot, object user)
+        {
+            foreach (KeyValuePair<object, TDock?> pair in slot.Users)
+            {
+                if (!ReferenceEquals(pair.Key, user) && pair.Value != null && _isAlive(pair.Value))
+                    return pair.Value;
+            }
+
+            return null;
+        }
+
         private int IndexOf(List<TDock?> docks, TDock dock)
         {
             for (int i = 0; i < docks.Count; i++)
@@ -363,18 +418,21 @@ namespace S1API.Internal.Deliveries
             return null;
         }
 
-        /// <summary>An owned slot without users that last held this dock, matched by object or identity.</summary>
+        /// <summary>
+        /// An owned slot without a live dock that last held this dock, matched by object or by one of its identity
+        /// keys. Registrations whose provider returns null do not keep the dock from taking its slot again.
+        /// </summary>
         private Slot? ReservedFor(string code, TDock dock, string? identity)
         {
             if (!_byCode.TryGetValue(code, out List<Slot>? slots))
                 return null;
             foreach (Slot slot in slots)
             {
-                if (!slot.Owned || slot.Users.Count > 0)
+                if (!slot.Owned || LiveDockOf(slot) != null)
                     continue;
                 bool sameObject = slot.LastDock != null && _same(slot.LastDock, dock);
-                bool sameGuid = !string.IsNullOrEmpty(identity) && string.Equals(slot.Identity, identity, StringComparison.OrdinalIgnoreCase);
-                if (sameObject || sameGuid)
+                bool sameKey = !string.IsNullOrEmpty(identity) && slot.Identities.Contains(identity!);
+                if (sameObject || sameKey)
                     return slot;
             }
 
@@ -394,11 +452,15 @@ namespace S1API.Internal.Deliveries
             return slot;
         }
 
+        /// <summary>
+        /// Records the slot's dock. Identity keys are added, never replaced: a second mod that shares the dock adds its
+        /// own key, and the key that made the reservation still matches after both registrations are gone.
+        /// </summary>
         private static void Remember(Slot slot, TDock dock, string? identity)
         {
             slot.LastDock = dock;
             if (!string.IsNullOrEmpty(identity))
-                slot.Identity = identity;
+                slot.Identities.Add(identity!);
         }
 
         private sealed class Slot
@@ -420,7 +482,127 @@ namespace S1API.Internal.Deliveries
             internal TDock? Live { get; set; }
             internal TDock? Placeholder { get; set; }
             internal TDock? LastDock { get; set; }
-            internal string? Identity { get; set; }
+
+            /// <summary>Every identity key a registration of this slot's dock reported.</summary>
+            internal HashSet<string> Identities { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         }
+    }
+
+    /// <summary>A reserved slot moved from <see cref="From"/> to <see cref="To"/> because a dock S1API did not add took its index.</summary>
+    internal readonly struct DockSlotMove
+    {
+        internal DockSlotMove(string code, int from, int to)
+        {
+            Code = code;
+            From = from;
+            To = to;
+        }
+
+        internal string Code { get; }
+        internal int From { get; }
+        internal int To { get; }
+    }
+
+    /// <summary>A delivery as <see cref="DockMoveFollower"/> sees it: its ID, destination code and dock index.</summary>
+    internal readonly struct DockTarget
+    {
+        internal DockTarget(string id, string code, int index)
+        {
+            Id = id;
+            Code = code;
+            Index = index;
+        }
+
+        internal string Id { get; }
+        internal string Code { get; }
+        internal int Index { get; }
+    }
+
+    /// <summary>One dock index change <see cref="DockMoveFollower.Apply"/> asks for: the delivery at position <see cref="Position"/> goes to <see cref="To"/>.</summary>
+    internal readonly struct DockFollow
+    {
+        internal DockFollow(int position, int from, int to)
+        {
+            Position = position;
+            From = from;
+            To = to;
+        }
+
+        internal int Position { get; }
+        internal int From { get; }
+        internal int To { get; }
+    }
+
+    /// <summary>
+    /// Remembers which deliveries follow a moved dock slot, by delivery ID, for as long as the same save is played.
+    /// </summary>
+    /// <remarks>
+    /// A move applies to the deliveries that target the old index when the runtime first sees the move. Deliveries
+    /// ordered later to the dock that now sits at that index are not redirected. The ID map outlives scene reloads, so a
+    /// reload of a save written before the move still sends those deliveries to the moved slot. This class makes no
+    /// Unity calls.
+    /// </remarks>
+    internal sealed class DockMoveFollower
+    {
+        private readonly List<DockSlotMove> _pending = new List<DockSlotMove>();
+        private readonly Dictionary<string, DockTarget> _followed = new Dictionary<string, DockTarget>(StringComparer.Ordinal);
+
+        /// <summary>True when a move waits to be applied or a delivery follows a move.</summary>
+        internal bool HasWork => _pending.Count > 0 || _followed.Count > 0;
+
+        /// <summary>Moves not applied yet.</summary>
+        internal int PendingCount => _pending.Count;
+
+        /// <summary>Deliveries that follow a move.</summary>
+        internal int FollowedCount => _followed.Count;
+
+        internal void Add(IEnumerable<DockSlotMove> moves) => _pending.AddRange(moves);
+
+        /// <summary>Forgets every move and every followed delivery, for another save.</summary>
+        internal void Clear()
+        {
+            _pending.Clear();
+            _followed.Clear();
+        }
+
+        /// <summary>
+        /// Applies the pending moves to <paramref name="deliveries"/> in move order and returns the index changes for
+        /// every delivery that follows a move and does not target its slot's index yet.
+        /// </summary>
+        internal List<DockFollow> Apply(IReadOnlyList<DockTarget> deliveries)
+        {
+            foreach (DockSlotMove move in _pending)
+            {
+                // A delivery that already follows a slot keeps following it when that slot moves again.
+                foreach (KeyValuePair<string, DockTarget> pair in new List<KeyValuePair<string, DockTarget>>(_followed))
+                {
+                    if (pair.Value.Index == move.From && SameCode(pair.Value.Code, move.Code))
+                        _followed[pair.Key] = new DockTarget(pair.Key, move.Code, move.To);
+                }
+
+                foreach (DockTarget delivery in deliveries)
+                {
+                    if (string.IsNullOrEmpty(delivery.Id) || _followed.ContainsKey(delivery.Id))
+                        continue;
+                    if (delivery.Index == move.From && SameCode(delivery.Code, move.Code))
+                        _followed[delivery.Id] = new DockTarget(delivery.Id, move.Code, move.To);
+                }
+            }
+
+            _pending.Clear();
+            var changes = new List<DockFollow>();
+            for (int i = 0; i < deliveries.Count; i++)
+            {
+                DockTarget delivery = deliveries[i];
+                if (string.IsNullOrEmpty(delivery.Id) || !_followed.TryGetValue(delivery.Id, out DockTarget target))
+                    continue;
+                if (SameCode(delivery.Code, target.Code) && delivery.Index != target.Index)
+                    changes.Add(new DockFollow(i, delivery.Index, target.Index));
+            }
+
+            return changes;
+        }
+
+        private static bool SameCode(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
     }
 }

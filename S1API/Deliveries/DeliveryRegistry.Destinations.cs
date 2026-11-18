@@ -33,8 +33,12 @@ namespace S1API.Deliveries
         /// S1API asks the provider whenever the property's docks matter: the destination list, the bay check, an
         /// arrival and <see cref="RefreshLoadingDocks"/>. Return null while the dock does not exist. The dock gets its
         /// own slot at the end of the property's dock list and keeps that number while the same save is played, also
-        /// across reloads of it, because deliveries and saves store the dock number. Loading another save drops the
-        /// slots. While the provider returns null, and after the handle is disposed, the slot stays reserved: it never
+        /// across reloads of it in the same game process, because deliveries and saves store the dock number. A game
+        /// restart forgets the slots: the docks get their numbers again in the order they appear, so docks that appear
+        /// in another order than before get other numbers. Loading another save drops the slots. When a dock that
+        /// S1API did not add takes a reserved number after a reload, the registration and the deliveries saved to that
+        /// number move to a new number at the end of the list. While the provider returns null, and after the handle
+        /// is disposed, the slot stays reserved: it never
         /// counts as free, the delivery app does not offer it, and only the same dock can take it again (the same
         /// object, or a dock from the same mod with the same GUID, or with the same hierarchy path when it has no
         /// GUID). A mod that builds its dock again after a reload should give it the same GUID every time, or it gets a
@@ -52,9 +56,16 @@ namespace S1API.Deliveries
         /// </summary>
         /// <remarks>
         /// A held delivery keeps the status "arrived", so a save stores it as arrived, but its van does not appear
-        /// yet. S1API retries held deliveries every game minute, after <see cref="RefreshLoadingDocks"/> and when a
-        /// hold is disposed. An arrival whose loading dock does not exist is held the same way without a
-        /// registered hold. Runs on every peer.
+        /// yet. The van keeps the delivered items, and a save keeps them. S1API retries held deliveries every game
+        /// minute, after <see cref="RefreshLoadingDocks"/> and when a hold is disposed. An arrival whose loading dock
+        /// does not exist is held the same way without a registered hold. A hold that disposes itself while it runs
+        /// does not hold.
+        /// <para>
+        /// Runs on every peer, so a hold must give the same answer on the host and on every client. In co-op the host
+        /// decides: a hold on the host keeps the arrival, its notification and the van back for everyone. A hold that
+        /// only a client applies keeps only that client's van back; the host's status change and notification still
+        /// reach that client.
+        /// </para>
         /// </remarks>
         /// <param name="hold">Return true to hold this delivery's arrival.</param>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="hold"/> is null.</exception>
@@ -65,7 +76,12 @@ namespace S1API.Deliveries
         /// Asks every registered loading dock provider again, attaches the docks that exist now and retries
         /// held arrivals.
         /// </summary>
-        /// <remarks>Call it when a mod has just built a dock, so waiting deliveries do not wait for the next game minute.</remarks>
+        /// <remarks>
+        /// Call it when a mod has just built or removed a dock, so waiting deliveries do not wait for the next game
+        /// minute. Called from inside a dock provider, it does not ask that provider again; the provider's own return
+        /// value counts. Called from inside an arrival hold, it does not check the delivery that hold is deciding;
+        /// the hold's own return value counts.
+        /// </remarks>
         public static void RefreshLoadingDocks() => DeliveryDestinationRuntime.Refresh("RefreshLoadingDocks");
     }
 }

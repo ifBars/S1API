@@ -3,11 +3,13 @@ using S1Delivery = Il2CppScheduleOne.Delivery;
 using S1DeliveryUi = Il2CppScheduleOne.UI.Phone.Delivery;
 using S1Property = Il2CppScheduleOne.Property;
 using S1PropertyList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.Property.Property>;
+using S1Vehicles = Il2CppScheduleOne.Vehicles;
 #elif MONOMELON
 using S1Delivery = ScheduleOne.Delivery;
 using S1DeliveryUi = ScheduleOne.UI.Phone.Delivery;
 using S1Property = ScheduleOne.Property;
 using S1PropertyList = System.Collections.Generic.List<ScheduleOne.Property.Property>;
+using S1Vehicles = ScheduleOne.Vehicles;
 #endif
 
 using System;
@@ -28,15 +30,75 @@ namespace S1API.Internal.Patches
 
         [HarmonyPatch(typeof(S1DeliveryUi.DeliveryShop), "GetPotentialDestinations")]
         [HarmonyPostfix]
-        private static void GetPotentialDestinationsPostfix(S1PropertyList __result)
+        private static void GetPotentialDestinationsPostfix(S1DeliveryUi.DeliveryShop __instance, S1PropertyList __result)
         {
             try
             {
-                DeliveryDestinationRuntime.AppendDestinations(__result);
+                DeliveryDestinationRuntime.AppendDestinations(__result, __instance);
             }
             catch (Exception ex)
             {
                 Logger.Error($"Registered delivery destinations could not be added to the delivery app: {ex}");
+            }
+        }
+
+        [HarmonyPatch(typeof(S1DeliveryUi.DeliveryShop), nameof(S1DeliveryUi.DeliveryShop.RefreshDestinationUI))]
+        [HarmonyPrefix]
+        private static void RefreshDestinationUIPrefix() => DeliveryDestinationRuntime.BeginDestinationUiRefresh();
+
+        /// <summary>Runs also when vanilla threw, so the refresh counter always goes back down.</summary>
+        [HarmonyPatch(typeof(S1DeliveryUi.DeliveryShop), nameof(S1DeliveryUi.DeliveryShop.RefreshDestinationUI))]
+        [HarmonyFinalizer]
+        private static Exception? RefreshDestinationUIFinalizer(Exception? __exception)
+        {
+            DeliveryDestinationRuntime.EndDestinationUiRefresh();
+            return __exception;
+        }
+
+        /// <summary>Lends the shop van to every held arrival for the save, so the van's items are saved.</summary>
+        [HarmonyPatch(typeof(S1Delivery.DeliveryManager), nameof(S1Delivery.DeliveryManager.GetSaveString))]
+        [HarmonyPrefix]
+        private static void GetSaveStringPrefix(S1Delivery.DeliveryManager __instance, out System.Collections.Generic.List<S1Delivery.DeliveryInstance>? __state)
+        {
+            __state = null;
+            try
+            {
+                __state = DeliveryDestinationRuntime.LendVansForSave(__instance);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"The vans of held delivery arrivals could not be added to the save; their items are not saved. {ex}");
+            }
+        }
+
+        /// <summary>Takes the lent vans back, also when the save threw.</summary>
+        [HarmonyPatch(typeof(S1Delivery.DeliveryManager), nameof(S1Delivery.DeliveryManager.GetSaveString))]
+        [HarmonyFinalizer]
+        private static Exception? GetSaveStringFinalizer(System.Collections.Generic.List<S1Delivery.DeliveryInstance>? __state, Exception? __exception)
+        {
+            try
+            {
+                DeliveryDestinationRuntime.ReturnVansAfterSave(__state);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"The vans lent to the delivery save could not be taken back from held arrivals. {ex}");
+            }
+
+            return __exception;
+        }
+
+        [HarmonyPatch(typeof(S1Vehicles.LandVehicle), nameof(S1Vehicles.LandVehicle.Load))]
+        [HarmonyPostfix]
+        private static void LandVehicleLoadPostfix(S1Vehicles.LandVehicle __instance)
+        {
+            try
+            {
+                DeliveryDestinationRuntime.AfterVehicleLoad(__instance);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"A delivery van saved while its arrival was held could not be parked again. {ex}");
             }
         }
 
