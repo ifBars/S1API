@@ -51,6 +51,27 @@ public sealed class PhoneAppRegistrationTests : IDisposable
     }
 
     [Fact]
+    public void SecondAppWithTheSameNameIsRejected()
+    {
+        var first = new RuntimeApp("notes");
+        var second = new RuntimeApp("notes");
+        PhoneAppBase.Register(first);
+        PhoneAppBase.Register(second);
+
+        Assert.True(PhoneAppRuntime.Contains(first));
+        Assert.False(PhoneAppRuntime.Contains(second));
+        Assert.Single(_log, l => l.Level == "warn" && l.Message.Contains("uses the same AppName"));
+    }
+
+    [Fact]
+    public void RegisteredTypeIsKnownToTheHomeScreenScan()
+    {
+        Assert.False(PhoneAppRuntime.HasInstanceOf(typeof(RuntimeApp)));
+        PhoneAppBase.Register(new RuntimeApp("probe"));
+        Assert.True(PhoneAppRuntime.HasInstanceOf(typeof(RuntimeApp)));
+    }
+
+    [Fact]
     public void UnregisterUnknownAppReturnsFalseWithWarning()
     {
         Assert.False(PhoneAppBase.Unregister(new RuntimeApp("ghost")));

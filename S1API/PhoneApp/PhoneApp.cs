@@ -211,6 +211,18 @@ namespace S1API.PhoneApp
 
             if (_appPanel != null)
             {
+                // An open app is closed first, so the phone does not keep a destroyed panel as its active app.
+                if (IsOpen())
+                {
+                    try { CloseApp(); }
+                    catch (Exception ex) { Logger.Warning($"Closing {AppName} before its removal failed: {ex}"); }
+                }
+                // Object.Destroy runs at the end of the frame. Until then the panel must neither be found by name
+                // by a new build of this app nor tear that build down from its button handler.
+                var handler = _appPanel.GetComponent<PhoneAppButtonHandler>();
+                if (handler != null)
+                    handler.phoneApp = null;
+                _appPanel.name = AppName + " (removed)";
                 Object.Destroy(_appPanel);
                 _appPanel = null;
             }

@@ -56,6 +56,12 @@ namespace S1API.Internal.Patches
                     continue;
                 }
 
+                if (PhoneAppRuntime.HasInstanceOf(type))
+                {
+                    Logger.Msg($"Phone app type {type.FullName} has an instance registered through PhoneApp.Register; it is not created again.");
+                    continue;
+                }
+
                 Logger.Msg($"Initializing phone app: {type.FullName}");
 
                 try

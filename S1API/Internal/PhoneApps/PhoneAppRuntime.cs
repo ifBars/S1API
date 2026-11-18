@@ -36,6 +36,15 @@ namespace S1API.Internal.PhoneApps
                 Warn($"Phone app {app.RuntimeName} is already registered; the second call does nothing.");
                 return false;
             }
+            // The app panel is found by AppName, so a second app with the same name would draw into the first one.
+            foreach (var other in Apps)
+            {
+                if (string.Equals(other.RuntimeName, app.RuntimeName, StringComparison.Ordinal))
+                {
+                    Warn($"Phone app {app.RuntimeName} is not registered: another registered app uses the same AppName.");
+                    return false;
+                }
+            }
             Apps.Add(app);
             Info($"Phone app {app.RuntimeName} registered at runtime.");
             return true;
@@ -78,14 +87,51 @@ namespace S1API.Internal.PhoneApps
                 Spawn(app, home, "on the home screen start");
         }
 
+        /// <summary>True when a registered instance has exactly this type, so the home screen does not create another.</summary>
+        internal static bool HasInstanceOf(Type type)
+        {
+            foreach (var app in Apps)
+            {
+                if (app.GetType() == type)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>A live app other than <paramref name="app"/> that already uses its AppName, if any.</summary>
+        internal static PhoneApp.PhoneApp? FindNameClash(PhoneApp.PhoneApp app)
+        {
+            foreach (var other in Patches.PhoneAppRegistry.RegisteredApps)
+            {
+                if (!ReferenceEquals(other, app) && !other.IsDestroying &&
+                    string.Equals(other.RuntimeName, app.RuntimeName, StringComparison.Ordinal))
+                    return other;
+            }
+            return null;
+        }
+
         internal static void Spawn(PhoneApp.PhoneApp app, HomeScreen home, string when)
         {
             try
             {
+                var clash = FindNameClash(app);
+                if (clash != null)
+                {
+                    Warn($"Phone app {app.RuntimeName} is not shown: {clash.GetType().FullName} already uses that AppName.");
+                    return;
+                }
+                // A build whose panel was not destroyed with the old scene still holds its handlers; tear it down
+                // first so OnDestroyed runs once for every OnCreated.
+                if (app.RuntimeBuilt && !app.IsDestroying)
+                {
+                    Info($"Phone app {app.RuntimeName}: removing its earlier build before building it again.");
+                    app.DestroyInternal();
+                }
                 app.PrepareRespawn();
                 ((IRegisterable)app).CreateInternal();
                 app.SpawnUI(home);
                 app.SpawnIcon(home);
+                app.RuntimeBuilt = true;
                 Info($"Phone app {app.RuntimeName} shown {when}.");
             }
             catch (Exception ex)
