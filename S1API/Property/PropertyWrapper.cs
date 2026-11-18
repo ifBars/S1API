@@ -33,10 +33,41 @@ namespace S1API.Property
         /// operations to the actual property instance.
         /// </summary>
 #if IL2CPPMELON
-        internal readonly Il2CppScheduleOne.Property.Property InnerProperty;
+        private Il2CppScheduleOne.Property.Property? _innerProperty;
+        internal Il2CppScheduleOne.Property.Property InnerProperty => _innerProperty ??= ResolveInnerProperty();
 #else
-        internal readonly ScheduleOne.Property.Property InnerProperty;
+        private ScheduleOne.Property.Property? _innerProperty;
+        internal ScheduleOne.Property.Property InnerProperty => _innerProperty ??= ResolveInnerProperty();
 #endif
+        private readonly string? _registeredCode;
+
+        /// <summary>
+        /// Wrapper of a registered custom property that may not be in the world yet. The property is looked up by its code
+        /// on first use.
+        /// </summary>
+        internal PropertyWrapper(string registeredCode)
+        {
+            _registeredCode = registeredCode;
+        }
+
+#if IL2CPPMELON
+        private Il2CppScheduleOne.Property.Property ResolveInnerProperty()
+#else
+        private ScheduleOne.Property.Property ResolveInnerProperty()
+#endif
+        {
+            var found = _registeredCode != null ? global::S1API.Internal.Properties.CustomPropertyWorld.Find(_registeredCode) : null;
+            if (found == null)
+                throw new System.InvalidOperationException($"Property '{_registeredCode}' is not in the world yet. Check IsInWorld first.");
+            return found;
+        }
+
+        /// <summary>
+        /// True when the property object exists in the world. Always true for a wrapper made from an existing property;
+        /// a wrapper returned by <see cref="PropertyManager.Register"/> is false until the mod has built the property.
+        /// </summary>
+        public bool IsInWorld => _registeredCode == null || global::S1API.Internal.Properties.CustomProperties.Exists(_registeredCode);
+
         /// <summary>
         /// A wrapper class that extends the functionality of <see cref="BaseProperty"/>
         /// and acts as a bridge to interact with an inner property implementation
@@ -48,7 +79,7 @@ namespace S1API.Property
         public PropertyWrapper(ScheduleOne.Property.Property property)
 #endif
         {
-            InnerProperty = property;
+            _innerProperty = property;
         }
 
         /// <summary>
@@ -62,7 +93,7 @@ namespace S1API.Property
         /// for distinguishing the property in the system and is typically defined in the internal
         /// implementation of the property.
         /// </summary>
-        public override string PropertyCode => InnerProperty.PropertyCode;
+        public override string PropertyCode => _registeredCode ?? InnerProperty.PropertyCode;
 
         /// <summary>
         /// Gets the price of the property.
