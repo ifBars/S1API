@@ -74,7 +74,8 @@ namespace S1API.Internal.Patches
                 NpcAttackEvents.Warn($"NPC health without an NPC reported {what}; no event raised.");
                 return null;
             }
-            var npc = NPCPatches.FindWrapperForS1Npc(native);
+            // Base-game NPCs get their wrapper on first use, so NPC.Get builds it when no mod asked for it yet.
+            var npc = NPCPatches.FindWrapperForS1Npc(native) ?? NPC.Get(native.ID);
             if (npc == null && UnwrappedWarned.Add(native.ID))
                 NpcAttackEvents.Warn($"{native.ID} has no S1API wrapper; {what} raises no event for it.");
             return npc;
