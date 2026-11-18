@@ -118,4 +118,291 @@ public sealed class DeliveryDestinationTests : IDisposable
     {
         Assert.False(DeliveryDestinationRuntime.TryHold(null, default));
     }
+
+    // --- delivery tick ---------------------------------------------------------------------------------
+
+    [Fact]
+    public void TickRestoresHeldDeliveriesInAFinalizer()
+    {
+        const BindingFlags flags = BindingFlags.Static | BindingFlags.NonPublic;
+        Type patches = typeof(global::S1API.Internal.Patches.DeliveryDestinationPatches);
+
+        MethodInfo? finalizer = patches.GetMethod("OnTimePassFinalizer", flags);
+        Assert.NotNull(finalizer);
+        Assert.NotNull(finalizer!.GetCustomAttribute<HarmonyLib.HarmonyFinalizer>());
+        Assert.Equal(typeof(Exception), finalizer.ReturnType);
+        Assert.Contains(finalizer.GetParameters(), p => p.Name == "__exception");
+        Assert.Contains(finalizer.GetParameters(), p => p.Name == "__state");
+        Assert.Null(patches.GetMethod("OnTimePassPostfix", flags));
+    }
+
+    [Fact]
+    public void PutBackRestoresOnlyTheEntriesThisCallPulled()
+    {
+        var deliveries = new List<string> { "vanilla", "pulled-1" };
+        var pulled = new List<string> { "pulled-1", "pulled-2" };
+
+        int restored = DeliveryDestinationRuntime.PutBack<string>(pulled, deliveries.Contains, deliveries.Add);
+
+        Assert.Equal(1, restored);
+        Assert.Equal(new[] { "vanilla", "pulled-1", "pulled-2" }, deliveries);
+        Assert.DoesNotContain("held-by-another-call", deliveries);
+    }
+
+    // --- held arrivals ---------------------------------------------------------------------------------
+
+    [Fact]
+    public void HeldArrivalInstallsTheSceneHookAndIsClearedOnSceneChange()
+    {
+        Assert.False(DeliveryDestinationRuntime.LifecycleHookedForTesting);
+
+        DeliveryDestinationRuntime.Remember("d1", NewArrival());
+
+        Assert.True(DeliveryDestinationRuntime.LifecycleHookedForTesting);
+        Assert.Equal(1, DeliveryDestinationRuntime.HeldCount);
+        DeliveryDestinationRuntime.SceneChangeForTesting();
+        Assert.Equal(0, DeliveryDestinationRuntime.HeldCount);
+        Assert.Contains(_log, line => line.StartsWith("info: Scene change: 1 held delivery arrival(s) dropped"));
+    }
+
+    [Fact]
+    public void OnlyOneRetryClaimsAHeldArrival()
+    {
+        var arrival = NewArrival();
+        DeliveryDestinationRuntime.Remember("d1", arrival);
+
+        Assert.True(DeliveryDestinationRuntime.Claim("d1", arrival));
+        Assert.False(DeliveryDestinationRuntime.Claim("d1", arrival));
+
+        var replacement = NewArrival();
+        DeliveryDestinationRuntime.Remember("d1", replacement);
+        Assert.False(DeliveryDestinationRuntime.Claim("d1", arrival));
+        Assert.True(DeliveryDestinationRuntime.IsCurrent("d1", replacement));
+    }
+
+    [Fact]
+    public void FailedArrivalStaysHeldOnlyWhenItDidNotGoThrough()
+    {
+        var arrival = NewArrival();
+        var error = new InvalidOperationException("boom");
+
+        Assert.True(DeliveryDestinationRuntime.AfterFailedArrival("d1", arrival, arrived: false, "test", error));
+        Assert.True(DeliveryDestinationRuntime.IsCurrent("d1", arrival));
+
+        Assert.True(DeliveryDestinationRuntime.Claim("d1", arrival));
+        Assert.False(DeliveryDestinationRuntime.AfterFailedArrival("d1", arrival, arrived: true, "test", error));
+        Assert.Equal(0, DeliveryDestinationRuntime.HeldCount);
+
+        var heldAgain = NewArrival();
+        DeliveryDestinationRuntime.Remember("d1", heldAgain);
+        Assert.False(DeliveryDestinationRuntime.AfterFailedArrival("d1", arrival, arrived: false, "test", error));
+        Assert.True(DeliveryDestinationRuntime.IsCurrent("d1", heldAgain));
+        Assert.Equal(3, _log.Count(line => line.StartsWith("error: Held delivery d1")));
+    }
+
+    // --- dock slots ------------------------------------------------------------------------------------
+
+    [Fact]
+    public void DisposedDockKeepsTheIndexesOfLaterDocks()
+    {
+        var book = NewBook();
+        var native = new FakeDock("native");
+        var a = new FakeDock("a");
+        var b = new FakeDock("b");
+        object userA = new object(), userB = new object();
+        var docks = new List<FakeDock?> { native };
+
+        Assert.Equal(global::S1API.Internal.Deliveries.DockSlotChange.Attached, Apply(book, userA, a, docks, out int indexA));
+        Assert.Equal(global::S1API.Internal.Deliveries.DockSlotChange.Attached, Apply(book, userB, b, docks, out int indexB));
+        Assert.Equal(1, indexA);
+        Assert.Equal(2, indexB);
+
+        Assert.Equal(global::S1API.Internal.Deliveries.DockSlotRelease.Reserved, book.Release("P", userA, docks, Placeholder, out int released));
+
+        Assert.Equal(1, released);
+        Assert.Equal(3, docks.Count);
+        Assert.Same(native, docks[0]);
+        Assert.True(docks[1]!.IsPlaceholder);
+        Assert.True(book.IsPlaceholder(docks[1]!));
+        Assert.Same(b, docks[2]);
+    }
+
+    [Fact]
+    public void ReservedSlotIsReusedOnlyByTheSameDock()
+    {
+        var book = NewBook();
+        var a = new FakeDock("a");
+        var docks = new List<FakeDock?>();
+        object userA = new object();
+        Apply(book, userA, a, docks, out _);
+        Apply(book, new object(), new FakeDock("b"), docks, out _);
+        book.Release("P", userA, docks, Placeholder, out _);
+
+        Apply(book, new object(), new FakeDock("c"), docks, out int other);
+        Apply(book, new object(), a, docks, out int same);
+
+        Assert.Equal(2, other);
+        Assert.Equal(0, same);
+        Assert.Same(a, docks[0]);
+        Assert.Equal(3, docks.Count);
+    }
+
+    [Fact]
+    public void ReservedSlotRecognizesTheDockByGuid()
+    {
+        var book = NewBook();
+        var docks = new List<FakeDock?>();
+        object user = new object();
+        book.Apply("P", user, new FakeDock("a"), "guid-a", docks, Placeholder, out _);
+        book.Apply("P", new object(), new FakeDock("b"), "guid-b", docks, Placeholder, out _);
+        book.Release("P", user, docks, Placeholder, out _);
+
+        book.Apply("P", new object(), new FakeDock("a again"), "GUID-A", docks, Placeholder, out int index);
+
+        Assert.Equal(0, index);
+        Assert.Equal("a again", docks[0]!.Name);
+    }
+
+    [Fact]
+    public void ReloadKeepsEverySlotWhateverTheProviderOrder()
+    {
+        var book = NewBook();
+        var native = new FakeDock("native");
+        object userA = new object(), userB = new object();
+        var docks = new List<FakeDock?> { native };
+        Apply(book, userA, new FakeDock("a"), docks, out _);
+        Apply(book, userB, new FakeDock("b"), docks, out _);
+
+        book.ResetScene();
+        var reloaded = new List<FakeDock?> { new FakeDock("native after reload") };
+        var b2 = new FakeDock("b after reload");
+
+        // B's provider is ready first, A's provider still returns null.
+        Assert.True(book.Reserve("P", reloaded, Placeholder));
+        Assert.Equal(global::S1API.Internal.Deliveries.DockSlotChange.Attached, Apply(book, userB, b2, reloaded, out int indexB));
+        Assert.Equal(global::S1API.Internal.Deliveries.DockSlotChange.None, Apply(book, userA, null, reloaded, out int indexA));
+
+        Assert.Equal(2, indexB);
+        Assert.Equal(1, indexA);
+        Assert.Equal(3, reloaded.Count);
+        Assert.True(reloaded[1]!.IsPlaceholder);
+        Assert.Same(b2, reloaded[2]);
+        Assert.Contains(_log, line => line == "info: Loading dock slots of 'P' restored: 2 reserved slot(s) keep their dock numbers.");
+    }
+
+    [Fact]
+    public void ProviderResultIsReconciledWithTheSlot()
+    {
+        var book = NewBook();
+        var a = new FakeDock("a");
+        var a2 = new FakeDock("a rebuilt");
+        object user = new object();
+        var docks = new List<FakeDock?>();
+
+        Assert.Equal(global::S1API.Internal.Deliveries.DockSlotChange.Attached, Apply(book, user, a, docks, out _));
+        Assert.Equal(global::S1API.Internal.Deliveries.DockSlotChange.None, Apply(book, user, a, docks, out _));
+        Assert.Equal(global::S1API.Internal.Deliveries.DockSlotChange.Released, Apply(book, user, null, docks, out int released));
+        Assert.True(docks[released]!.IsPlaceholder);
+        Assert.Equal(global::S1API.Internal.Deliveries.DockSlotChange.Attached, Apply(book, user, a2, docks, out int attached));
+
+        Assert.Equal(released, attached);
+        Assert.Same(a2, docks[attached]);
+        Assert.Single(docks);
+    }
+
+    [Fact]
+    public void DestroyedDockIsReplacedByAPlaceholder()
+    {
+        var book = NewBook();
+        var a = new FakeDock("a");
+        object user = new object();
+        var docks = new List<FakeDock?>();
+        Apply(book, user, a, docks, out _);
+
+        a.Destroyed = true;
+
+        Assert.True(book.Reserve("P", docks, Placeholder));
+        Assert.True(docks[0]!.IsPlaceholder);
+    }
+
+    [Fact]
+    public void DockTheBookDidNotAddIsNeverRemoved()
+    {
+        var book = NewBook();
+        var native = new FakeDock("native");
+        object user = new object();
+        var docks = new List<FakeDock?> { native };
+
+        Assert.Equal(global::S1API.Internal.Deliveries.DockSlotChange.Shared, Apply(book, user, native, docks, out int index));
+        Assert.Equal(0, index);
+        Assert.Equal(global::S1API.Internal.Deliveries.DockSlotRelease.NotOwned, book.Release("P", user, docks, Placeholder, out _));
+
+        Assert.Single(docks);
+        Assert.Same(native, docks[0]);
+    }
+
+    [Fact]
+    public void SharedModDockStaysUntilItsLastRegistrationIsDisposed()
+    {
+        var book = NewBook();
+        var shared = new FakeDock("shared");
+        object first = new object(), second = new object();
+        var docks = new List<FakeDock?>();
+
+        Assert.Equal(global::S1API.Internal.Deliveries.DockSlotChange.Attached, Apply(book, first, shared, docks, out int a));
+        Assert.Equal(global::S1API.Internal.Deliveries.DockSlotChange.None, Apply(book, second, shared, docks, out int b));
+        Assert.Equal(a, b);
+
+        Assert.Equal(global::S1API.Internal.Deliveries.DockSlotRelease.StillUsed, book.Release("P", first, docks, Placeholder, out _));
+        Assert.Same(shared, docks[a]);
+        Assert.Equal(global::S1API.Internal.Deliveries.DockSlotRelease.Reserved, book.Release("P", second, docks, Placeholder, out _));
+        Assert.True(docks[a]!.IsPlaceholder);
+    }
+
+    [Fact]
+    public void SlotTakenByAForeignDockMovesToTheEnd()
+    {
+        var book = NewBook();
+        object user = new object();
+        var docks = new List<FakeDock?>();
+        Apply(book, user, new FakeDock("a"), docks, out _);
+
+        book.ResetScene();
+        var reloaded = new List<FakeDock?> { new FakeDock("new native dock") };
+
+        Assert.True(book.Reserve("P", reloaded, Placeholder));
+        Assert.Equal(1, book.IndexOf("P", user));
+        Assert.True(reloaded[1]!.IsPlaceholder);
+        Assert.Contains(_log, line => line.StartsWith("warn: Loading dock slot #1 of 'P' is taken by a dock S1API did not add"));
+    }
+
+    private global::S1API.Internal.Deliveries.DockSlotBook<FakeDock> NewBook() =>
+        new global::S1API.Internal.Deliveries.DockSlotBook<FakeDock>(
+            (x, y) => ReferenceEquals(x, y),
+            dock => !dock.Destroyed,
+            message => _log.Add("info: " + message),
+            message => _log.Add("warn: " + message));
+
+    private static global::S1API.Internal.Deliveries.DockSlotChange Apply(
+        global::S1API.Internal.Deliveries.DockSlotBook<FakeDock> book, object user, FakeDock? dock, List<FakeDock?> docks, out int index) =>
+        book.Apply("P", user, dock, null, docks, Placeholder, out index);
+
+    private static FakeDock Placeholder(int index) => new FakeDock("placeholder #" + (index + 1)) { IsPlaceholder = true };
+
+    private static DeliveryDestinationRuntime.HeldArrival NewArrival() =>
+        new DeliveryDestinationRuntime.HeldArrival(
+            TestObjectFactory.CreateUninitialized<S1Delivery.DeliveryInstance>(),
+            S1Delivery.EDeliveryStatus.InTransit);
+
+    private sealed class FakeDock
+    {
+        public FakeDock(string name)
+        {
+            Name = name;
+        }
+
+        public string Name { get; }
+        public bool IsPlaceholder { get; init; }
+        public bool Destroyed { get; set; }
+    }
 }

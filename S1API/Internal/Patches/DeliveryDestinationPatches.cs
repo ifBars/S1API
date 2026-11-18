@@ -11,6 +11,7 @@ using S1PropertyList = System.Collections.Generic.List<ScheduleOne.Property.Prop
 #endif
 
 using System;
+using System.Collections.Generic;
 using HarmonyLib;
 using S1API.Internal.Deliveries;
 
@@ -60,11 +61,12 @@ namespace S1API.Internal.Patches
 
         [HarmonyPatch(typeof(S1Delivery.DeliveryManager), "OnTimePass")]
         [HarmonyPrefix]
-        private static void OnTimePassPrefix(S1Delivery.DeliveryManager __instance)
+        private static void OnTimePassPrefix(S1Delivery.DeliveryManager __instance, out List<S1Delivery.DeliveryInstance>? __state)
         {
+            __state = null;
             try
             {
-                DeliveryDestinationRuntime.BeforeTimePass(__instance);
+                __state = DeliveryDestinationRuntime.BeforeTimePass(__instance);
             }
             catch (Exception ex)
             {
@@ -72,18 +74,27 @@ namespace S1API.Internal.Patches
             }
         }
 
+        /// <summary>
+        /// Runs after the tick also when it threw, so the deliveries the prefix took out always go back.
+        /// Returns the tick's own exception unchanged, so Harmony rethrows it.
+        /// </summary>
         [HarmonyPatch(typeof(S1Delivery.DeliveryManager), "OnTimePass")]
-        [HarmonyPostfix]
-        private static void OnTimePassPostfix(S1Delivery.DeliveryManager __instance)
+        [HarmonyFinalizer]
+        private static Exception? OnTimePassFinalizer(
+            S1Delivery.DeliveryManager __instance,
+            List<S1Delivery.DeliveryInstance>? __state,
+            Exception? __exception)
         {
             try
             {
-                DeliveryDestinationRuntime.AfterTimePass(__instance);
+                DeliveryDestinationRuntime.AfterTimePass(__instance, __state, __exception);
             }
             catch (Exception ex)
             {
                 Logger.Error($"Held delivery arrivals could not be put back after the delivery tick: {ex}");
             }
+
+            return __exception;
         }
     }
 }

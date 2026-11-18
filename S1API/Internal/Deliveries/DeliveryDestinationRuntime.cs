@@ -14,6 +14,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using S1API.Deliveries;
 using S1API.Lifecycle;
 using S1API.Logging;
@@ -30,6 +31,8 @@ namespace S1API.Internal.Deliveries
     /// bounds check in the bay check and on arrival, and activates the delivery van as soon as the status turns
     /// "arrived". A held arrival keeps that status but leaves the van inactive; it is taken out of
     /// <c>DeliveryManager.OnTimePass</c> while held, because that tick reads the van of every arrived delivery.
+    /// Mod docks keep their index for the session through <see cref="DockSlotBook{TDock}"/>, because deliveries and
+    /// saves store the dock as an index.
     /// </remarks>
     internal static class DeliveryDestinationRuntime
     {
@@ -41,11 +44,15 @@ namespace S1API.Internal.Deliveries
         private static readonly List<S1Delivery.DeliveryInstance> PulledFromTick = new List<S1Delivery.DeliveryInstance>();
         private static readonly HashSet<string> Offered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private static readonly HashSet<string> Warned = new HashSet<string>(StringComparer.Ordinal);
+        private static readonly DockSlotBook<S1Delivery.LoadingDock> Slots =
+            new DockSlotBook<S1Delivery.LoadingDock>(SameDock, IsAlive, message => Info(message), message => Warn(message));
         private static bool _lifecycleHooked;
 
         internal static int DestinationCount => Destinations.Count;
         internal static int DockCount => Docks.Count;
         internal static int HoldCount => Holds.Count;
+        internal static int HeldCount => Held.Count;
+        internal static bool LifecycleHookedForTesting => _lifecycleHooked;
 
         // --- registration ---------------------------------------------------------------------------------
 
@@ -158,6 +165,13 @@ namespace S1API.Internal.Deliveries
                 }
 
                 AttachDocksFor(entry.Code);
+                // The availability check and the dock providers may have disposed this registration.
+                if (!Destinations.Contains(entry))
+                {
+                    Info($"Delivery destination '{entry.Code}' from {entry.Owner} was removed during its availability check; it is not offered.");
+                    continue;
+                }
+
                 if (!Contains(list, entry.Code))
                     list.Add(property);
                 if (Offered.Add(entry.Code))
@@ -213,7 +227,7 @@ namespace S1API.Internal.Deliveries
 
             if (!Held.ContainsKey(id))
             {
-                Held[id] = new HeldArrival(delivery, delivery.Status);
+                Remember(id, new HeldArrival(delivery, delivery.Status));
                 string line = $"Delivery {id} to '{delivery.DestinationCode}' dock #{delivery.LoadingDockIndex + 1} held: {reason}.";
                 if (missingDock) Warn(line);
                 else Info(line);
@@ -223,26 +237,77 @@ namespace S1API.Internal.Deliveries
             return true;
         }
 
-        /// <summary>DeliveryManager.OnTimePass prefix: retries held arrivals and takes the rest out of the tick.</summary>
-        internal static void BeforeTimePass(S1Delivery.DeliveryManager? manager)
+        /// <summary>
+        /// DeliveryManager.OnTimePass prefix: retries held arrivals and takes the rest out of the tick.
+        /// Returns the deliveries this call took out, or null.
+        /// </summary>
+        internal static List<S1Delivery.DeliveryInstance>? BeforeTimePass(S1Delivery.DeliveryManager? manager)
         {
-            RestorePulled(manager);
-            if (Held.Count == 0 || manager?.Deliveries == null)
-                return;
+            if (Held.Count == 0)
+                return null;
+            if (manager?.Deliveries == null)
+            {
+                WarnOnce("tick:nomanager", $"The delivery tick ran without a delivery list; {Held.Count} held arrival(s) are not retried this minute.");
+                return null;
+            }
 
             RetryHeld("game minute");
+            List<S1Delivery.DeliveryInstance>? pulled = null;
             foreach (HeldArrival held in Held.Values.ToArray())
             {
                 if (manager.Deliveries.Contains(held.Delivery))
                 {
                     manager.Deliveries.Remove(held.Delivery);
                     PulledFromTick.Add(held.Delivery);
+                    (pulled ??= new List<S1Delivery.DeliveryInstance>()).Add(held.Delivery);
                 }
             }
+
+            if (pulled != null)
+                Debug($"{pulled.Count} held delivery(ies) taken out of the delivery tick.");
+            return pulled;
         }
 
-        /// <summary>DeliveryManager.OnTimePass postfix: puts the held arrivals back.</summary>
-        internal static void AfterTimePass(S1Delivery.DeliveryManager? manager) => RestorePulled(manager);
+        /// <summary>
+        /// DeliveryManager.OnTimePass finalizer: puts back exactly the deliveries <see cref="BeforeTimePass"/> took
+        /// out in the same call, also when the tick threw.
+        /// </summary>
+        internal static void AfterTimePass(S1Delivery.DeliveryManager? manager, List<S1Delivery.DeliveryInstance>? pulled, Exception? thrown)
+        {
+            if (pulled == null || pulled.Count == 0)
+                return;
+
+            foreach (S1Delivery.DeliveryInstance delivery in pulled)
+                PulledFromTick.Remove(delivery);
+
+            var deliveries = manager?.Deliveries;
+            if (deliveries == null)
+            {
+                Fail($"{pulled.Count} held delivery(ies) could not be put back after the delivery tick: the delivery manager is gone.");
+                return;
+            }
+
+            int restored = PutBack(pulled, deliveries.Contains, deliveries.Add);
+            if (thrown != null)
+                Warn($"{restored} held delivery(ies) put back after the delivery tick threw {thrown.GetType().Name}.");
+            else
+                Debug($"{restored} held delivery(ies) put back after the delivery tick.");
+        }
+
+        /// <summary>Adds every pulled item that is not in the list yet. Returns how many were added.</summary>
+        internal static int PutBack<T>(IReadOnlyList<T> pulled, Func<T, bool> contains, Action<T> add)
+        {
+            int restored = 0;
+            foreach (T item in pulled)
+            {
+                if (contains(item))
+                    continue;
+                add(item);
+                restored++;
+            }
+
+            return restored;
+        }
 
         // --- internals ------------------------------------------------------------------------------------
 
@@ -279,6 +344,20 @@ namespace S1API.Internal.Deliveries
                 }
             }
 
+            // A hold callback may have disposed the dock or unloaded the destination while it ran.
+            destination = FindProperty(delivery.DestinationCode);
+            if (destination == null)
+            {
+                missingDock = true;
+                return "its destination property is not loaded";
+            }
+
+            if (!DockExists(destination, delivery.LoadingDockIndex))
+            {
+                missingDock = true;
+                return "its loading dock does not exist yet";
+            }
+
             return null;
         }
 
@@ -289,11 +368,15 @@ namespace S1API.Internal.Deliveries
 
             foreach (KeyValuePair<string, HeldArrival> pair in Held.ToArray())
             {
+                // A nested retry from a callback may already have released or replaced this entry.
+                if (!IsCurrent(pair.Key, pair.Value))
+                    continue;
+
                 S1Delivery.DeliveryInstance delivery = pair.Value.Delivery;
                 if (!IsActive(delivery))
                 {
-                    Held.Remove(pair.Key);
-                    Info($"Held delivery {pair.Key} is no longer active; it is no longer held.");
+                    if (Claim(pair.Key, pair.Value))
+                        Info($"Held delivery {pair.Key} is no longer active; it is no longer held.");
                     continue;
                 }
 
@@ -301,18 +384,95 @@ namespace S1API.Internal.Deliveries
                 if (HoldReason(delivery, out _) != null)
                     continue;
 
-                Held.Remove(pair.Key);
+                if (!Claim(pair.Key, pair.Value))
+                {
+                    Debug($"Held delivery {pair.Key} was handled by a nested retry; this retry skips it.");
+                    continue;
+                }
+
                 try
                 {
                     // Back to the status before the hold, so the status event reports the real change.
                     delivery.Status = pair.Value.PreviousStatus;
                     delivery.SetStatus(S1Delivery.EDeliveryStatus.Arrived);
-                    Info($"Held delivery {pair.Key} to '{delivery.DestinationCode}' arrives now ({why}).");
+                    if (Held.ContainsKey(pair.Key))
+                        Info($"Held delivery {pair.Key} to '{delivery.DestinationCode}' was held again during its arrival ({why}).");
+                    else
+                        Info($"Held delivery {pair.Key} to '{delivery.DestinationCode}' arrives now ({why}).");
                 }
                 catch (Exception ex)
                 {
-                    Fail($"Held delivery {pair.Key} could not arrive ({why}). {ex}");
+                    bool arrived = ArrivalWentThrough(delivery);
+                    if (AfterFailedArrival(pair.Key, pair.Value, arrived, why, ex))
+                        RestoreArrivedStatus(delivery);
                 }
+            }
+        }
+
+        /// <summary>True while <paramref name="arrival"/> is still the held entry for <paramref name="id"/>.</summary>
+        internal static bool IsCurrent(string id, HeldArrival arrival) =>
+            Held.TryGetValue(id, out HeldArrival? current) && ReferenceEquals(current, arrival);
+
+        /// <summary>Removes the held entry only when it is still <paramref name="arrival"/>. True when this call removed it.</summary>
+        internal static bool Claim(string id, HeldArrival arrival) =>
+            IsCurrent(id, arrival) && Held.Remove(id);
+
+        /// <summary>
+        /// Handles a SetStatus call that threw for a claimed arrival. Returns true when the arrival is held again
+        /// and will be retried; false when it already went through or another call holds it.
+        /// </summary>
+        internal static bool AfterFailedArrival(string id, HeldArrival arrival, bool arrived, string why, Exception ex)
+        {
+            if (Held.ContainsKey(id))
+            {
+                Fail($"Held delivery {id} threw while it was held again ({why}); it stays held. {ex}");
+                return false;
+            }
+
+            if (arrived)
+            {
+                Fail($"Held delivery {id} arrived, but a later step threw ({why}); it is not retried. {ex}");
+                return false;
+            }
+
+            Remember(id, arrival);
+            Fail($"Held delivery {id} could not arrive ({why}); it stays held and is retried. {ex}");
+            return true;
+        }
+
+        /// <summary>Stores a held arrival and makes sure a scene change clears it.</summary>
+        internal static void Remember(string id, HeldArrival arrival)
+        {
+            EnsureLifecycleHook();
+            Held[id] = arrival;
+        }
+
+        /// <summary>Vanilla assigns the delivery van before it activates it, so a set van means the arrival ran.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static bool ArrivalWentThrough(S1Delivery.DeliveryInstance delivery)
+        {
+            try
+            {
+                return delivery.ActiveVehicle != null;
+            }
+            catch (Exception ex)
+            {
+                Warn($"Could not read the delivery van of {delivery.DeliveryID}; the arrival counts as not done. {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>A held arrival keeps the status "arrived", so the save and the tick treat it as held.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void RestoreArrivedStatus(S1Delivery.DeliveryInstance delivery)
+        {
+            try
+            {
+                delivery.Status = S1Delivery.EDeliveryStatus.Arrived;
+            }
+            catch (Exception ex)
+            {
+                Fail($"Status of held delivery {delivery.DeliveryID} could not be set back to arrived. {ex}");
             }
         }
 
@@ -348,26 +508,6 @@ namespace S1API.Internal.Deliveries
             return false;
         }
 
-        private static void RestorePulled(S1Delivery.DeliveryManager? manager)
-        {
-            if (PulledFromTick.Count == 0)
-                return;
-            if (manager?.Deliveries == null)
-            {
-                Warn($"{PulledFromTick.Count} held delivery(ies) could not be put back: the delivery manager is gone.");
-                PulledFromTick.Clear();
-                return;
-            }
-
-            foreach (S1Delivery.DeliveryInstance delivery in PulledFromTick)
-            {
-                if (!manager.Deliveries.Contains(delivery))
-                    manager.Deliveries.Add(delivery);
-            }
-
-            PulledFromTick.Clear();
-        }
-
         private static void AttachDocksFor(string code)
         {
             if (Docks.Count == 0 || string.IsNullOrEmpty(code))
@@ -384,7 +524,10 @@ namespace S1API.Internal.Deliveries
                 Debug($"Loading docks of '{code}' refreshed.");
         }
 
-        /// <summary>Asks the provider and appends its dock to the property. True when a dock was attached now.</summary>
+        /// <summary>
+        /// Asks the provider and reconciles its answer with the registration's dock slot: the same dock keeps the
+        /// slot, a new dock replaces it, null leaves a placeholder. True when a dock was attached now.
+        /// </summary>
         private static bool Attach(DockEntry entry)
         {
             S1Property.Property? property = entry.Resolve();
@@ -393,9 +536,6 @@ namespace S1API.Internal.Deliveries
                 Debug($"Loading dock for '{entry.Code}' not attached: the property is not loaded.");
                 return false;
             }
-
-            if (entry.Attached != null && IndexOf(property, entry.Attached) >= 0)
-                return false;
 
             Transform? transform;
             try
@@ -408,60 +548,144 @@ namespace S1API.Internal.Deliveries
                 return false;
             }
 
-            if (transform == null)
-                return false;
-
-            S1Delivery.LoadingDock? dock = transform.GetComponent<S1Delivery.LoadingDock>();
-            if (dock == null)
-                dock = transform.GetComponentInChildren<S1Delivery.LoadingDock>(true);
-            if (dock == null)
+            // The provider may have disposed its own registration while it ran.
+            if (!Docks.Contains(entry))
             {
-                WarnOnce("nodock:" + entry.Code + ":" + transform.GetInstanceID(),
-                    $"Loading dock provider for '{entry.Code}' from {entry.Owner} returned '{transform.name}', which has no LoadingDock; nothing attached.");
+                Info($"Loading dock provider for '{entry.Code}' from {entry.Owner} was removed while it ran; its dock is not attached.");
                 return false;
             }
 
-            entry.Attached = dock;
-            int existing = IndexOf(property, dock);
-            if (existing >= 0)
+            S1Delivery.LoadingDock? dock = null;
+            if (transform != null)
             {
-                Debug($"Loading dock '{dock.name}' is already dock #{existing + 1} of '{entry.Code}'.");
-                return false;
+                dock = FindDock(transform);
+                if (dock == null)
+                {
+                    WarnOnce("nodock:" + entry.Code + ":" + transform.GetInstanceID(),
+                        $"Loading dock provider for '{entry.Code}' from {entry.Owner} returned '{transform.name}', which has no LoadingDock; nothing attached.");
+                    return false;
+                }
             }
 
-            List<S1Delivery.LoadingDock> docks = CopyDocks(property);
-            docks.Add(dock);
-            dock.ParentProperty = property;
-            property.LoadingDocks = docks.ToArray();
-            Info($"Loading dock '{dock.name}' attached to '{entry.Code}' as dock #{docks.Count} (from {entry.Owner}).");
-            return true;
+            List<S1Delivery.LoadingDock?> docks = CopyDocks(property);
+            Func<int, S1Delivery.LoadingDock> placeholder = index => CreatePlaceholder(property, entry.Code, index);
+            bool changed = Slots.Reserve(entry.Code, docks, placeholder);
+            DockSlotChange change = Slots.Apply(entry.Code, entry, dock, dock == null ? null : IdentityOf(dock), docks, placeholder, out int slot);
+            if (change == DockSlotChange.Attached || change == DockSlotChange.Released)
+                changed = true;
+            if (changed)
+            {
+                if (dock != null && change == DockSlotChange.Attached)
+                    dock.ParentProperty = property;
+                property.LoadingDocks = docks.ToArray();
+            }
+
+            switch (change)
+            {
+                case DockSlotChange.Attached:
+                    Info($"Loading dock '{dock?.name}' attached to '{entry.Code}' as dock #{slot + 1} (from {entry.Owner}).");
+                    return true;
+                case DockSlotChange.Released:
+                    Info($"Loading dock #{slot + 1} of '{entry.Code}' from {entry.Owner} is unavailable; its slot stays reserved.");
+                    return false;
+                case DockSlotChange.Shared:
+                    Debug($"Loading dock '{dock?.name}' is already dock #{slot + 1} of '{entry.Code}'; {entry.Owner} uses it without owning it.");
+                    return false;
+                case DockSlotChange.Conflict:
+                    WarnOnce("conflict:" + entry.Code + ":" + slot,
+                        $"Loading dock provider for '{entry.Code}' from {entry.Owner} returned '{dock?.name}', which already is another dock of the property; it keeps dock #{slot + 1}.");
+                    return false;
+                default:
+                    return false;
+            }
         }
 
         private static void Detach(DockEntry entry)
         {
-            S1Delivery.LoadingDock? dock = entry.Attached;
-            entry.Attached = null;
             S1Property.Property? property = entry.Resolve();
-            if (dock == null || property == null)
-                return;
+            List<S1Delivery.LoadingDock?>? docks = null;
+            Func<int, S1Delivery.LoadingDock> placeholder = index => CreatePlaceholder(property!, entry.Code, index);
+            bool changed = false;
+            if (property != null)
+            {
+                docks = CopyDocks(property);
+                changed = Slots.Reserve(entry.Code, docks, placeholder);
+            }
 
-            int index = IndexOf(property, dock);
-            if (index < 0)
-                return;
+            DockSlotRelease release = Slots.Release(entry.Code, entry, docks, placeholder, out int slot);
+            if (property != null && docks != null && (changed || release == DockSlotRelease.Reserved || release == DockSlotRelease.StillUsed))
+                property.LoadingDocks = docks.ToArray();
 
-            List<S1Delivery.LoadingDock> docks = CopyDocks(property);
-            docks.RemoveAt(index);
-            property.LoadingDocks = docks.ToArray();
-            if (index < docks.Count)
-                Warn($"Loading dock #{index + 1} of '{entry.Code}' removed; the docks after it moved up one index.");
-            else
-                Info($"Loading dock #{index + 1} of '{entry.Code}' removed.");
+            switch (release)
+            {
+                case DockSlotRelease.Reserved:
+                    Info($"Loading dock #{slot + 1} of '{entry.Code}' from {entry.Owner} removed; the slot stays reserved so later dock numbers do not move.");
+                    break;
+                case DockSlotRelease.StillUsed:
+                    Info($"Loading dock #{slot + 1} of '{entry.Code}' from {entry.Owner} removed; another registration still uses that dock.");
+                    break;
+                case DockSlotRelease.NotOwned:
+                    Info($"Loading dock #{slot + 1} of '{entry.Code}' from {entry.Owner} removed; S1API did not add that dock, so it stays.");
+                    break;
+                default:
+                    Debug($"Loading dock provider for '{entry.Code}' from {entry.Owner} never had a dock slot.");
+                    break;
+            }
         }
 
-        /// <summary>Copies the dock array, null entries included, so existing indexes stay valid.</summary>
-        private static List<S1Delivery.LoadingDock> CopyDocks(S1Property.Property property)
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static S1Delivery.LoadingDock? FindDock(Transform transform)
         {
-            var docks = new List<S1Delivery.LoadingDock>();
+            S1Delivery.LoadingDock? dock = transform.GetComponent<S1Delivery.LoadingDock>();
+            if (dock == null)
+                dock = transform.GetComponentInChildren<S1Delivery.LoadingDock>(true);
+            return dock == null ? null : dock;
+        }
+
+        /// <summary>The dock's GUID as text, or null when it has none, so a reserved slot can recognize it.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static string? IdentityOf(S1Delivery.LoadingDock dock)
+        {
+            try
+            {
+                string guid = dock.GUID.ToString();
+                return string.IsNullOrEmpty(guid) || guid == Guid.Empty.ToString() ? null : guid;
+            }
+            catch (Exception ex)
+            {
+                Debug($"Loading dock '{dock.name}' has no readable GUID; its slot is matched by object only. {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Builds the stand-in for an empty dock slot: an inactive GameObject under the property with a LoadingDock
+        /// that never runs Awake. Vanilla can read it like a dock (Name, IsInUse, VehicleDetector.Clear); the bay
+        /// check and the arrival hold treat it as a missing dock, so no delivery is sent to it.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static S1Delivery.LoadingDock CreatePlaceholder(S1Property.Property property, string code, int index)
+        {
+            var go = new GameObject($"S1API reserved loading dock #{index + 1}");
+            go.SetActive(false);
+            go.transform.SetParent(property.transform, false);
+            S1Delivery.LoadingDock dock = go.AddComponent<S1Delivery.LoadingDock>();
+            dock.ParentProperty = property;
+            dock.VehicleDetector = go.AddComponent<S1DevUtilities.VehicleDetector>();
+            Debug($"Placeholder created for reserved loading dock #{index + 1} of '{code}'.");
+            return dock;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static bool SameDock(S1Delivery.LoadingDock a, S1Delivery.LoadingDock b) => a == b;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static bool IsAlive(S1Delivery.LoadingDock dock) => dock != null;
+
+        /// <summary>Copies the dock array, null entries included, so existing indexes stay valid.</summary>
+        private static List<S1Delivery.LoadingDock?> CopyDocks(S1Property.Property property)
+        {
+            var docks = new List<S1Delivery.LoadingDock?>();
             if (property.LoadingDocks == null)
                 return docks;
             for (int i = 0; i < property.LoadingDocks.Length; i++)
@@ -469,21 +693,13 @@ namespace S1API.Internal.Deliveries
             return docks;
         }
 
-        private static int IndexOf(S1Property.Property property, S1Delivery.LoadingDock dock)
+        private static bool DockExists(S1Property.Property property, int index)
         {
-            if (property.LoadingDocks == null)
-                return -1;
-            for (int i = 0; i < property.LoadingDocks.Length; i++)
-            {
-                if (property.LoadingDocks[i] == dock)
-                    return i;
-            }
-
-            return -1;
+            if (IsDockMissing(DockLength(property), index))
+                return false;
+            S1Delivery.LoadingDock dock = property.LoadingDocks[index];
+            return IsAlive(dock) && !Slots.IsPlaceholder(dock);
         }
-
-        private static bool DockExists(S1Property.Property property, int index) =>
-            !IsDockMissing(DockLength(property), index) && property.LoadingDocks[index] != null;
 
         private static int DockLength(S1Property.Property property) => property.LoadingDocks?.Length ?? 0;
 
@@ -531,8 +747,8 @@ namespace S1API.Internal.Deliveries
             PulledFromTick.Clear();
             Offered.Clear();
             Warned.Clear();
-            foreach (DockEntry entry in Docks)
-                entry.Attached = null;
+            // Slot indexes stay: saved deliveries keep pointing at them after the reload.
+            Slots.ResetScene();
         }
 
         internal static string OwnerOf(Delegate handler)
@@ -553,7 +769,16 @@ namespace S1API.Internal.Deliveries
             PulledFromTick.Clear();
             Offered.Clear();
             Warned.Clear();
+            Slots.Clear();
+            if (_lifecycleHooked)
+            {
+                GameLifecycle.OnPreSceneChange -= ResetSceneState;
+                _lifecycleHooked = false;
+            }
         }
+
+        /// <summary>INTERNAL: Runs the scene change cleanup. Only for tests.</summary>
+        internal static void SceneChangeForTesting() => ResetSceneState();
 
         /// <summary>INTERNAL: Receives log lines instead of MelonLoader while set. Only for tests.</summary>
         internal static Action<string>? LogSinkForTesting { get; set; }
@@ -634,7 +859,6 @@ namespace S1API.Internal.Deliveries
             }
 
             internal Func<Transform?> Provider { get; }
-            internal S1Delivery.LoadingDock? Attached { get; set; }
         }
 
         private sealed class HoldEntry
@@ -649,7 +873,7 @@ namespace S1API.Internal.Deliveries
             internal string Owner { get; }
         }
 
-        private sealed class HeldArrival
+        internal sealed class HeldArrival
         {
             internal HeldArrival(S1Delivery.DeliveryInstance delivery, S1Delivery.EDeliveryStatus previousStatus)
             {

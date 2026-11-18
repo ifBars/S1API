@@ -17,7 +17,10 @@ namespace S1API.Deliveries
         /// Dispose the returned handle to stop offering the property.
         /// </remarks>
         /// <param name="property">The property to offer.</param>
-        /// <param name="available">Called each time the list is built; return false to hide the property.</param>
+        /// <param name="available">
+        /// Called each time the list is built; return false to stop S1API from adding the property. A property that
+        /// vanilla already lists (an owned property that accepts deliveries) stays listed.
+        /// </param>
         /// <exception cref="ArgumentNullException">Thrown when an argument is null.</exception>
         public static IDisposable AddDestination(PropertyWrapper property, Func<bool> available) =>
             DeliveryDestinationRuntime.AddDestination(property, available);
@@ -28,8 +31,13 @@ namespace S1API.Deliveries
         /// </summary>
         /// <remarks>
         /// S1API asks the provider whenever the property's docks matter: the destination list, the bay check, an
-        /// arrival and <see cref="RefreshLoadingDocks"/>. Return null while the dock does not exist yet. The dock is
-        /// appended to the property's dock list, so its index stays stable while it is registered.
+        /// arrival and <see cref="RefreshLoadingDocks"/>. Return null while the dock does not exist. The dock gets its
+        /// own slot at the end of the property's dock list and keeps that number for the game session, also across
+        /// reloads, because deliveries and saves store the dock number. While the provider returns null, and after the
+        /// handle is disposed, the slot stays reserved: it never counts as free and only the same dock (same object or
+        /// GUID) can take it again. A mod that builds its dock again after a reload and registers it again should give
+        /// the dock the same GUID every time, or it gets a new dock number. A dock the property already lists is used
+        /// as it is and never removed.
         /// Dispose the returned handle to remove the dock again.
         /// </remarks>
         /// <param name="property">The property that owns the dock.</param>
