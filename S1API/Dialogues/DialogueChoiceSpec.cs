@@ -6,13 +6,18 @@ namespace S1API.Dialogues
     /// Describes a dialogue choice that S1API adds to a vanilla NPC menu each time the menu is built.
     /// </summary>
     /// <remarks>
-    /// Register a spec with <see cref="DialogueChoices.Add"/>. All properties are read when the menu opens,
-    /// so a mod can change <see cref="Text"/> or the callbacks after registration.
+    /// Register a spec with <see cref="DialogueChoices.Add"/>. <see cref="Label"/>, <see cref="Text"/>, the insert
+    /// position and <see cref="IsShown"/> are read each time the menu is built. The row stays bound to its
+    /// registration until the menu is built again or the registration is disposed, so a changed
+    /// <see cref="Label"/> applies from the next menu. <see cref="IsEnabled"/>, <see cref="DisabledReason"/> and
+    /// <see cref="OnChosen"/> are read when the player hovers or picks the row.
     /// </remarks>
     public sealed class DialogueChoiceSpec
     {
         /// <summary>
-        /// Unique label of the choice. Used to find it again when it is chosen or checked.
+        /// Label of the choice. Must not be blank. A label of a row the vanilla menu shows is not inserted:
+        /// the vanilla row stays as it is. A row vanilla hides at that moment, such as an owned property,
+        /// does not block the label.
         /// </summary>
         public string Label { get; set; } = string.Empty;
 
@@ -34,7 +39,8 @@ namespace S1API.Dialogues
         public string? TargetNodeLabel { get; set; }
 
         /// <summary>
-        /// Label of the choice to insert after. When it is missing from the menu, the choice is appended.
+        /// Label of the choice to insert after. When it is missing from the menu, the choice goes before the last one
+        /// if <see cref="InsertBeforeLastChoice"/> is true, otherwise at the end.
         /// </summary>
         public string? InsertAfterLabel { get; set; }
 

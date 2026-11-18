@@ -24,7 +24,10 @@ namespace S1API.Internal.Patches
     /// inline them into the overrides, so a detour on the base never runs, and trivial ones such as
     /// <c>ShouldChoiceBeShown</c> can be folded into one native function shared with unrelated methods. Hidden
     /// choices are therefore removed from the built list, and <c>CheckChoice</c> and <c>ChoiceCallback</c> are
-    /// patched on each override, which the game reaches through virtual dispatch.
+    /// patched on each override, which the game reaches through virtual dispatch. Both receive only the label, so
+    /// each row S1API inserts is bound to its registration when the list is built; vanilla rows stay unbound and
+    /// are never changed, even when an added choice uses the same label. <c>ChoiceSelected</c> records which row
+    /// was picked, so two added rows that share a label reach their own callback.
     /// </remarks>
     [HarmonyPatch]
     internal static class DialogueChoicePatches
@@ -50,8 +53,10 @@ namespace S1API.Internal.Patches
 
             try
             {
+                object handlerKey = KeyOf(__instance);
+                DialogueChoices.ClearBindings(handlerKey);
                 string? conversationName = S1Dialogue.DialogueHandler.ActiveDialogue?.name;
-                AddShown(npcId, conversationName, dialogueLabel, existingChoices);
+                AddShown(handlerKey, npcId, conversationName, dialogueLabel, existingChoices);
                 RemoveHidden(npcId, existingChoices);
             }
             catch (Exception ex)
@@ -92,17 +97,13 @@ namespace S1API.Internal.Patches
             return found;
         }
 
-        internal static DialogueChoiceSpec? FindActive(S1Dialogue.DialogueHandler handler, string choiceLabel)
+        internal static object KeyOf(S1Dialogue.DialogueHandler handler)
         {
-            if (string.IsNullOrEmpty(choiceLabel))
-                return null;
-
-            string? npcId = NpcIdOf(handler);
-            S1Dialogue.DialogueNodeData? node = S1Dialogue.DialogueHandler.ActiveDialogueNode;
-            if (npcId == null || node == null)
-                return null;
-
-            return DialogueChoices.Find(npcId, S1Dialogue.DialogueHandler.ActiveDialogue?.name, node.DialogueNodeLabel, choiceLabel);
+#if (IL2CPPMELON)
+            return handler.Pointer;
+#else
+            return handler;
+#endif
         }
 
         private static void RemoveHidden(string npcId, ChoiceList choices)
@@ -115,23 +116,26 @@ namespace S1API.Internal.Patches
             }
         }
 
-        private static void AddShown(string npcId, string? conversationName, string nodeLabel, ChoiceList choices)
+        private static void AddShown(object handlerKey, string npcId, string? conversationName, string nodeLabel, ChoiceList choices)
         {
             List<DialogueChoiceSpec> shown = DialogueChoices.ShownChoices(npcId, conversationName, nodeLabel);
+            var insertedGuids = new HashSet<string>();
             foreach (DialogueChoiceSpec spec in shown)
             {
                 var labels = new List<string?>(choices.Count);
-                bool present = false;
+                bool vanillaHasLabel = false;
                 for (int i = 0; i < choices.Count; i++)
                 {
                     string? label = choices[i]?.ChoiceLabel;
                     labels.Add(label);
-                    present |= label == spec.Label;
+                    // Rows inserted for other registrations may share the label; only rows from the game block it.
+                    if (label == spec.Label && !insertedGuids.Contains(choices[i]?.Guid ?? string.Empty))
+                        vanillaHasLabel = true;
                 }
 
-                if (present)
+                if (vanillaHasLabel)
                 {
-                    Logger.Warning($"Choice '{spec.Label}' is already in {npcId}/{nodeLabel}; not added twice.");
+                    Logger.Warning($"Choice '{spec.Label}' is already a row of {npcId}/{nodeLabel}; the added choice is skipped and the row stays unchanged.");
                     continue;
                 }
 
@@ -142,6 +146,8 @@ namespace S1API.Internal.Patches
                     ChoiceText = spec.Text
                 };
                 choices.Insert(DialogueChoices.InsertIndex(labels, spec), choice);
+                insertedGuids.Add(choice.Guid);
+                DialogueChoices.Bind(handlerKey, choice.Guid, spec.Label, spec);
             }
         }
 
@@ -174,15 +180,72 @@ namespace S1API.Internal.Patches
             if (!__result)
                 return;
 
-            DialogueChoiceSpec? spec = DialogueChoicePatches.FindActive(__instance, choiceLabel);
-            if (spec == null)
+            if (string.IsNullOrEmpty(choiceLabel))
                 return;
 
-            if (!DialogueChoices.CheckEnabled(spec, out string reason))
+            // The game passes only the label. Rows that share one label from several mods are enabled while
+            // any of them is; a vanilla row has no binding and stays untouched.
+            List<DialogueChoiceSpec> bound = DialogueChoices.FindBoundByLabel(DialogueChoicePatches.KeyOf(__instance), choiceLabel);
+            if (bound.Count == 0)
+                return;
+
+            string firstReason = string.Empty;
+            for (int i = 0; i < bound.Count; i++)
             {
-                __result = false;
-                invalidReason = reason;
+                if (DialogueChoices.CheckEnabled(bound[i], out string reason))
+                    return;
+
+                if (i == 0)
+                    firstReason = reason;
             }
+
+            __result = false;
+            invalidReason = firstReason;
+        }
+    }
+
+    /// <summary>
+    /// INTERNAL: Records which row of the menu was picked, since ChoiceCallback receives only its label.
+    /// </summary>
+    [HarmonyPatch(typeof(S1Dialogue.DialogueHandler), "ChoiceSelected", new[] { typeof(int) })]
+    internal static class DialogueChoiceSelectionPatches
+    {
+        private static readonly Log Logger = new Log("DialogueChoicePatches");
+        private static object? _handler;
+        private static string? _guid;
+        private static int _frame = -1;
+
+        [HarmonyPrefix]
+        private static void Prefix(S1Dialogue.DialogueHandler __instance, int choiceIndex)
+        {
+            try
+            {
+                var choices = __instance.CurrentChoices;
+                if (choices == null || choiceIndex < 0 || choiceIndex >= choices.Count)
+                {
+                    Logger.Warning($"Choice index {choiceIndex} is outside the current menu; the label decides which added choice runs.");
+                    _frame = -1;
+                    return;
+                }
+
+                _handler = DialogueChoicePatches.KeyOf(__instance);
+                _guid = choices[choiceIndex]?.Guid;
+                _frame = UnityEngine.Time.frameCount;
+            }
+            catch (Exception ex)
+            {
+                _frame = -1;
+                Logger.Error($"Picked row could not be recorded: {ex}");
+            }
+        }
+
+        /// <summary>
+        /// The row picked in this frame for this handler, or false when no pick was recorded.
+        /// </summary>
+        internal static bool TryGetPicked(object handlerKey, out string? guid)
+        {
+            guid = _guid;
+            return _frame == UnityEngine.Time.frameCount && Equals(handlerKey, _handler) && guid != null;
         }
     }
 
@@ -204,12 +267,25 @@ namespace S1API.Internal.Patches
         [HarmonyPostfix]
         private static void Postfix(S1Dialogue.DialogueHandler __instance, string choiceLabel)
         {
-            DialogueChoiceSpec? spec = DialogueChoicePatches.FindActive(__instance, choiceLabel);
+            if (string.IsNullOrEmpty(choiceLabel))
+                return;
+
+            object handlerKey = DialogueChoicePatches.KeyOf(__instance);
+            int frame = UnityEngine.Time.frameCount;
+            DialogueChoiceSpec? spec;
+            if (DialogueChoiceSelectionPatches.TryGetPicked(handlerKey, out string? pickedGuid))
+            {
+                spec = DialogueChoices.FindBoundByRow(handlerKey, pickedGuid!);
+            }
+            else
+            {
+                List<DialogueChoiceSpec> bound = DialogueChoices.FindBoundByLabel(handlerKey, choiceLabel);
+                spec = bound.Count > 0 ? bound[0] : null;
+            }
+
             if (spec == null)
                 return;
 
-            object handlerKey = KeyOf(__instance);
-            int frame = UnityEngine.Time.frameCount;
             if (frame == _lastFrame && choiceLabel == _lastLabel && Equals(handlerKey, _lastHandler))
                 return;
 
@@ -245,15 +321,6 @@ namespace S1API.Internal.Patches
             {
                 Logger.Error($"Choice '{spec.Label}': node '{spec.TargetNodeLabel}' could not be shown: {ex}");
             }
-        }
-
-        private static object KeyOf(S1Dialogue.DialogueHandler handler)
-        {
-#if (IL2CPPMELON)
-            return handler.Pointer;
-#else
-            return handler;
-#endif
         }
 
         private static bool SameNode(S1Dialogue.DialogueNodeData? a, S1Dialogue.DialogueNodeData? b)

@@ -90,6 +90,7 @@ public sealed class DialogueChoicesTests : IDisposable
     [InlineData(null, true, 2)]
     [InlineData("buy_business", false, 2)]
     [InlineData("buy_business", true, 2)]
+    [InlineData("buy_property", true, 1)]
     [InlineData("missing", true, 2)]
     [InlineData("missing", false, 3)]
     public void InsertIndexUsesAnchorThenBeforeLastThenEnd(string? after, bool beforeLast, int expected)
@@ -121,7 +122,7 @@ public sealed class DialogueChoicesTests : IDisposable
     }
 
     [Fact]
-    public void FindReturnsTheSpecOnlyInItsMenuAndRunChosenSwallowsAThrow()
+    public void RunChosenRunsTheCallbackAndSwallowsAThrow()
     {
         int runs = 0;
         var spec = new DialogueChoiceSpec { Label = "pick", OnChosen = () => runs++ };
@@ -129,11 +130,98 @@ public sealed class DialogueChoicesTests : IDisposable
         DialogueChoices.Add("ray_hoffman", "ENTRY", spec);
         DialogueChoices.Add("ray_hoffman", "ENTRY", broken);
 
-        Assert.Same(spec, DialogueChoices.Find("ray_hoffman", null, "ENTRY", "pick"));
-        Assert.Null(DialogueChoices.Find("ray_hoffman", null, "CONFIRM", "pick"));
         DialogueChoices.RunChosen(spec);
         DialogueChoices.RunChosen(broken);
+
         Assert.Equal(1, runs);
+        Assert.Contains(_log, line => line.StartsWith("error: S1API.Tests: OnChosen of choice 'boom' threw"));
+    }
+
+    [Fact]
+    public void OwnerIsStillNamedWhenTheCallbackDisposesItsOwnRegistrationAndThrows()
+    {
+        IDisposable? handle = null;
+        handle = DialogueChoices.Add("ray_hoffman", "ENTRY", new DialogueChoiceSpec
+        {
+            Label = "once",
+            OnChosen = () =>
+            {
+                handle!.Dispose();
+                throw new InvalidOperationException();
+            }
+        });
+        DialogueChoiceSpec spec = DialogueChoices.ShownChoices("ray_hoffman", null, "ENTRY").Single();
+
+        DialogueChoices.RunChosen(spec);
+
+        Assert.Contains(_log, line => line.StartsWith("error: S1API.Tests: OnChosen of choice 'once' threw"));
+        Assert.DoesNotContain(_log, line => line.Contains("unknown mod"));
+    }
+
+    [Fact]
+    public void ARowStaysBoundToItsRegistrationSoAVanillaRowWithTheSameLabelIsNeverTouched()
+    {
+        var disabled = new DialogueChoiceSpec { Label = "buy_property", IsEnabled = () => false };
+        DialogueChoices.Add("ray_hoffman", "ENTRY", disabled);
+        object handler = new object();
+
+        // The vanilla row owns the label, so the patch inserts and binds nothing for it.
+        Assert.Empty(DialogueChoices.FindBoundByLabel(handler, "buy_property"));
+        Assert.Null(DialogueChoices.FindBoundByRow(handler, "vanilla-row"));
+
+        DialogueChoices.Bind(handler, "mod-row", "other_label", disabled);
+        Assert.Same(disabled, DialogueChoices.FindBoundByRow(handler, "mod-row"));
+        Assert.Empty(DialogueChoices.FindBoundByLabel(handler, "buy_property"));
+        Assert.Null(DialogueChoices.FindBoundByRow(handler, "vanilla-row"));
+    }
+
+    [Fact]
+    public void TwoRegistrationsWithOneLabelStayBoundToTheirOwnRows()
+    {
+        int runsA = 0, runsB = 0;
+        var a = new DialogueChoiceSpec { Label = "shared", OnChosen = () => runsA++ };
+        var b = new DialogueChoiceSpec { Label = "shared", OnChosen = () => runsB++ };
+        DialogueChoices.Add("ray_hoffman", "ENTRY", a);
+        DialogueChoices.Add("ray_hoffman", "ENTRY", b);
+        object handler = new object();
+        DialogueChoices.Bind(handler, "row-a", "shared", a);
+        DialogueChoices.Bind(handler, "row-b", "shared", b);
+
+        DialogueChoices.RunChosen(DialogueChoices.FindBoundByRow(handler, "row-b")!);
+
+        Assert.Equal(0, runsA);
+        Assert.Equal(1, runsB);
+        Assert.Equal(new[] { a, b }, DialogueChoices.FindBoundByLabel(handler, "shared"));
+    }
+
+    [Fact]
+    public void BindingsEndWithTheMenuRebuildOrTheRegistration()
+    {
+        var spec = new DialogueChoiceSpec { Label = "temp" };
+        IDisposable handle = DialogueChoices.Add("ray_hoffman", "ENTRY", spec);
+        object handler = new object();
+        DialogueChoices.Bind(handler, "row", "temp", spec);
+
+        DialogueChoices.ClearBindings(new object());
+        Assert.Same(spec, DialogueChoices.FindBoundByRow(handler, "row"));
+        DialogueChoices.ClearBindings(handler);
+        Assert.Null(DialogueChoices.FindBoundByRow(handler, "row"));
+
+        DialogueChoices.Bind(handler, "row", "temp", spec);
+        handle.Dispose();
+        Assert.Null(DialogueChoices.FindBoundByRow(handler, "row"));
+    }
+
+    [Fact]
+    public void ALabelThatTurnsBlankAfterAddIsSkippedAndWarnedOnce()
+    {
+        var spec = new DialogueChoiceSpec { Label = "fine" };
+        DialogueChoices.Add("ray_hoffman", "ENTRY", spec);
+        spec.Label = "  ";
+
+        Assert.Empty(DialogueChoices.ShownChoices("ray_hoffman", null, "ENTRY"));
+        Assert.Empty(DialogueChoices.ShownChoices("ray_hoffman", null, "ENTRY"));
+        Assert.Single(_log, line => line.StartsWith("warn: ") && line.Contains("blank label"));
     }
 
     [Fact]
@@ -143,5 +231,6 @@ public sealed class DialogueChoicesTests : IDisposable
         Assert.Throws<ArgumentException>(() => DialogueChoices.Add("ray_hoffman", "", new DialogueChoiceSpec { Label = "x" }));
         Assert.Throws<ArgumentNullException>(() => DialogueChoices.Add("ray_hoffman", "ENTRY", null!));
         Assert.Throws<ArgumentException>(() => DialogueChoices.Add("ray_hoffman", "ENTRY", new DialogueChoiceSpec()));
+        Assert.Throws<ArgumentException>(() => DialogueChoices.Add("ray_hoffman", "ENTRY", new DialogueChoiceSpec { Label = " \t" }));
     }
 }

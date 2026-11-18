@@ -13,6 +13,8 @@ namespace S1API.Dialogues
     /// Several mods can add to the same menu: S1API applies every registration in one place, so no mod
     /// overwrites another one's entries. Each callback runs in its own try/catch; a failure is logged with the
     /// name of the mod that registered it and does not stop the other registrations.
+    /// Each row S1API inserts is bound to its registration until the menu is built again or the registration is
+    /// disposed, so a vanilla row is never touched, even when an added choice uses the same label.
     /// Registrations survive save loads. Register once, for example in <c>OnInitializeMelon</c>.
     /// </remarks>
     public static class DialogueChoices
@@ -20,13 +22,14 @@ namespace S1API.Dialogues
         private static readonly Log Logger = new Log("DialogueChoices");
         private static readonly List<ChoiceRegistration> _choices = new List<ChoiceRegistration>();
         private static readonly List<HideRegistration> _hides = new List<HideRegistration>();
+        private static readonly List<RowBinding> _bindings = new List<RowBinding>();
 
         /// <summary>
         /// Adds a choice to a node of an NPC's menu.
         /// </summary>
         /// <param name="npcId">ID of the NPC, for example <c>ray_hoffman</c>.</param>
         /// <param name="nodeLabel">Label of the dialogue node whose choices get the entry, for example <c>ENTRY</c>.</param>
-        /// <param name="spec">The choice. Its properties are read each time the menu is built.</param>
+        /// <param name="spec">The choice. Label, text, position and <c>IsShown</c> are read each time the menu is built; <c>IsEnabled</c> and <c>OnChosen</c> when the player hovers or picks the row.</param>
         /// <returns>Dispose it to remove the choice again.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static IDisposable Add(string npcId, string nodeLabel, DialogueChoiceSpec spec)
@@ -37,8 +40,8 @@ namespace S1API.Dialogues
                 throw new ArgumentException("A node label is required.", nameof(nodeLabel));
             if (spec == null)
                 throw new ArgumentNullException(nameof(spec));
-            if (string.IsNullOrEmpty(spec.Label))
-                throw new ArgumentException("The choice needs a label.", nameof(spec));
+            if (string.IsNullOrWhiteSpace(spec.Label))
+                throw new ArgumentException("The choice needs a label that is not blank.", nameof(spec));
 
             var registration = new ChoiceRegistration(npcId, nodeLabel, spec, OwnerOf(Assembly.GetCallingAssembly()));
             _choices.Add(registration);
@@ -46,7 +49,10 @@ namespace S1API.Dialogues
             return new Registration(() =>
             {
                 if (_choices.Remove(registration))
+                {
+                    _bindings.RemoveAll(b => ReferenceEquals(b.Spec, registration.Spec));
                     Info($"{registration.Owner} removed choice '{spec.Label}' from {npcId}/{nodeLabel}.");
+                }
             });
         }
 
@@ -87,6 +93,18 @@ namespace S1API.Dialogues
             {
                 if (!registration.Matches(npcId, conversationName, nodeLabel))
                     continue;
+
+                // Label is mutable, so a blank one is caught again here; the row would have no usable identity.
+                if (string.IsNullOrWhiteSpace(registration.Spec.Label))
+                {
+                    if (!registration.BlankLabelReported)
+                    {
+                        registration.BlankLabelReported = true;
+                        Warn($"{registration.Owner}: a choice for {registration.NpcId}/{registration.NodeLabel} has a blank label; it is skipped.");
+                    }
+
+                    continue;
+                }
 
                 Func<bool>? isShown = registration.Spec.IsShown;
                 if (isShown == null)
@@ -154,17 +172,45 @@ namespace S1API.Dialogues
         }
 
         /// <summary>
-        /// INTERNAL: Finds the added choice behind a label in this menu.
+        /// INTERNAL: Forgets the rows bound for a handler. Called before its menu is built again.
         /// </summary>
-        internal static DialogueChoiceSpec? Find(string npcId, string? conversationName, string nodeLabel, string choiceLabel)
+        internal static void ClearBindings(object handlerKey) =>
+            _bindings.RemoveAll(b => Equals(b.HandlerKey, handlerKey));
+
+        /// <summary>
+        /// INTERNAL: Binds an inserted row of a handler's menu to the registration behind <paramref name="spec"/>.
+        /// The label is kept as it was when the row was inserted.
+        /// </summary>
+        internal static void Bind(object handlerKey, string rowGuid, string label, DialogueChoiceSpec spec) =>
+            _bindings.Add(new RowBinding(handlerKey, rowGuid, label, spec));
+
+        /// <summary>
+        /// INTERNAL: Finds the registration bound to one row. Null for vanilla rows.
+        /// </summary>
+        internal static DialogueChoiceSpec? FindBoundByRow(object handlerKey, string rowGuid)
         {
-            foreach (ChoiceRegistration registration in _choices.ToArray())
+            foreach (RowBinding binding in _bindings.ToArray())
             {
-                if (registration.Spec.Label == choiceLabel && registration.Matches(npcId, conversationName, nodeLabel))
-                    return registration.Spec;
+                if (Equals(binding.HandlerKey, handlerKey) && binding.RowGuid == rowGuid)
+                    return binding.Spec;
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// INTERNAL: Finds the registrations bound to rows with this label, in menu order. Empty for vanilla rows.
+        /// </summary>
+        internal static List<DialogueChoiceSpec> FindBoundByLabel(object handlerKey, string label)
+        {
+            var found = new List<DialogueChoiceSpec>();
+            foreach (RowBinding binding in _bindings.ToArray())
+            {
+                if (Equals(binding.HandlerKey, handlerKey) && binding.Label == label)
+                    found.Add(binding.Spec);
+            }
+
+            return found;
         }
 
         /// <summary>
@@ -201,13 +247,16 @@ namespace S1API.Dialogues
             if (onChosen == null)
                 return;
 
+            // Captured first: the callback may dispose its own registration, after which the owner is lost.
+            string owner = OwnerOfSpec(spec);
+
             try
             {
                 onChosen();
             }
             catch (Exception ex)
             {
-                Fail($"{OwnerOfSpec(spec)}: OnChosen of choice '{spec.Label}' threw. {ex}");
+                Fail($"{owner}: OnChosen of choice '{spec.Label}' threw. {ex}");
             }
         }
 
@@ -218,6 +267,7 @@ namespace S1API.Dialogues
         {
             _choices.Clear();
             _hides.Clear();
+            _bindings.Clear();
         }
 
         /// <summary>
@@ -231,6 +281,14 @@ namespace S1API.Dialogues
                 LogSinkForTesting("info: " + message);
             else
                 Logger.Msg(message);
+        }
+
+        private static void Warn(string message)
+        {
+            if (LogSinkForTesting != null)
+                LogSinkForTesting("warn: " + message);
+            else
+                Logger.Warning(message);
         }
 
         private static void Fail(string message)
@@ -269,11 +327,28 @@ namespace S1API.Dialogues
             internal string NodeLabel { get; }
             internal DialogueChoiceSpec Spec { get; }
             internal string Owner { get; }
+            internal bool BlankLabelReported { get; set; }
 
             internal bool Matches(string npcId, string? conversationName, string nodeLabel) =>
                 NpcId == npcId &&
                 NodeLabel == nodeLabel &&
                 (Spec.ConversationName == null || Spec.ConversationName == conversationName);
+        }
+
+        private sealed class RowBinding
+        {
+            internal RowBinding(object handlerKey, string rowGuid, string label, DialogueChoiceSpec spec)
+            {
+                HandlerKey = handlerKey;
+                RowGuid = rowGuid;
+                Label = label;
+                Spec = spec;
+            }
+
+            internal object HandlerKey { get; }
+            internal string RowGuid { get; }
+            internal string Label { get; }
+            internal DialogueChoiceSpec Spec { get; }
         }
 
         private sealed class HideRegistration
