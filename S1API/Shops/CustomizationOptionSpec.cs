@@ -11,7 +11,7 @@ namespace S1API.Shops
     {
         /// <summary>
         /// Name of the shop category to list the option in, as the shop shows it (for example "Chest").
-        /// Compared ignoring case. Required.
+        /// Compared ignoring case, spaces and underscores. Required.
         /// </summary>
         public string Category = string.Empty;
 

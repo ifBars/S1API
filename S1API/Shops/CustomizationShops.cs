@@ -69,7 +69,7 @@ namespace S1API.Shops
                 foreach (var existing in Entries)
                 {
                     if (existing.Shop == shop
-                        && string.Equals(existing.Category, entry.Category, StringComparison.OrdinalIgnoreCase)
+                        && existing.CategoryKey == entry.CategoryKey
                         && string.Equals(existing.AvatarObjectId, entry.AvatarObjectId, StringComparison.OrdinalIgnoreCase))
                     {
                         Write("warn", $"Option '{spec.Label}' ({spec.AvatarObjectId}) is already registered for {shop}/{spec.Category}; the second registration is ignored.");
@@ -153,6 +153,7 @@ namespace S1API.Shops
             {
                 Shop = shop;
                 Category = spec.Category.Trim();
+                CategoryKey = KeyOf(spec.Category);
                 Label = spec.Label;
                 Price = spec.Price;
                 AvatarObjectId = spec.AvatarObjectId.Trim();
@@ -161,11 +162,18 @@ namespace S1API.Shops
 
             internal CustomizationShop Shop { get; }
             internal string Category { get; }
+            internal string CategoryKey { get; }
             internal string Label { get; }
             internal float Price { get; }
             internal string AvatarObjectId { get; }
             internal Action<BasicAvatarSettings>? Apply { get; }
         }
+
+        /// <summary>
+        /// INTERNAL: Category names compare ignoring case, spaces and underscores ("Left Arm" equals "leftarm").
+        /// </summary>
+        internal static string KeyOf(string? name) =>
+            (name ?? string.Empty).Replace(" ", string.Empty).Replace("_", string.Empty).ToLowerInvariant();
 
         private sealed class Handle : IDisposable
         {

@@ -175,7 +175,7 @@ namespace S1API.Internal.Shops
         }
 
         private static bool CategoryMatches(S1UICustomization.CharacterCustomizationCategory category, CustomizationShops.Entry entry) =>
-            string.Equals((category.CategoryName ?? string.Empty).Trim(), entry.Category, StringComparison.OrdinalIgnoreCase);
+            CustomizationShops.KeyOf(category.CategoryName) == entry.CategoryKey;
 
         private static bool IsTracked(int instanceId)
         {

@@ -97,6 +97,18 @@ public sealed class CustomizationShopsTests : IDisposable
         Assert.Equal(3, CustomizationShops.ActiveCountForTesting);
     }
 
+    [Theory]
+    [InlineData("Left Arm", "leftarm")]
+    [InlineData("LEFT_ARM", "Left Arm")]
+    public void CategoryNamesCompareIgnoringCaseSpacesAndUnderscores(string a, string b)
+    {
+        Assert.Equal(CustomizationShops.KeyOf(a), CustomizationShops.KeyOf(b));
+        using var first = CustomizationShops.AddOption(CustomizationShop.Tattoo, Spec(a));
+        using var second = CustomizationShops.AddOption(CustomizationShop.Tattoo, Spec(b));
+
+        Assert.Equal(1, CustomizationShops.ActiveCountForTesting);
+    }
+
     [Fact]
     public void UnsupportedShopWarnsAndListsNothing()
     {
