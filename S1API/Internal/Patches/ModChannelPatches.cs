@@ -67,8 +67,9 @@ namespace S1API.Internal.Patches
         [HarmonyPrefix]
         private static void Prefix(S1NetworkConnection __2) => ModChannelTransport.CurrentSender = __2;
 
-        [HarmonyPostfix]
-        private static void Postfix() => ModChannelTransport.CurrentSender = null;
+        // A finalizer runs even when the reader throws, so the sender never leaks into the next frame.
+        [HarmonyFinalizer]
+        private static void Finalizer() => ModChannelTransport.CurrentSender = null;
     }
 
     /// <summary>
