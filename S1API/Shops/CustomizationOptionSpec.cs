@@ -38,9 +38,11 @@ namespace S1API.Shops
         public Sprite? Icon;
 
         /// <summary>
-        /// Optional. Called when the player selects the option, with a snapshot of the player's current
-        /// appearance. The shop itself applies <see cref="AvatarObjectId"/>; changes made to the snapshot are
-        /// not written back.
+        /// Optional. Called each time the shop marks the option as selected, with a snapshot of the appearance
+        /// the shop is previewing (it already contains this option). That happens on a click or controller focus,
+        /// when the category opens with the option applied or when the option is purchased, so it can run without a
+        /// click and more than once per visit. The shop itself applies <see cref="AvatarObjectId"/>; changes made to
+        /// the snapshot are not written back.
         /// </summary>
         public Action<BasicAvatarSettings>? Apply;
     }

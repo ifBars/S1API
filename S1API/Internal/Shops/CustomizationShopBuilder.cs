@@ -257,15 +257,18 @@ namespace S1API.Internal.Shops
                 clone.SetActive(true);
 
             // The option's own Awake rewrites its labels from the avatar object; when that Awake has not run yet
-            // (the shop is closed) the labels are set again once it has.
+            // (the shop is closed) the labels are set again once it has. The Apply listener is added after the
+            // category wired its own listeners, so it runs after the shop has updated its previewed appearance.
             if (!clone.activeInHierarchy)
-                MelonCoroutines.Start(ReapplyLabelsAfterAwake(cloneOption, entry));
-
-            if (entry.Apply != null)
-                cloneOption.onSelect.AddListener((UnityAction)(() => InvokeApply(entry)));
+                MelonCoroutines.Start(ReapplyLabelsAfterAwake(cloneOption, late ? null : category, entry));
+            else if (!late)
+                AddApplyListener(cloneOption, category, entry);
 
             if (late)
+            {
                 WireToCategory(category, cloneOption);
+                AddApplyListener(cloneOption, category, entry);
+            }
 
             Built.Add(new BuiltOption
             {
@@ -286,7 +289,7 @@ namespace S1API.Internal.Shops
                 option.PriceLabel.text = FormatPrice(entry.Price);
         }
 
-        private static IEnumerator ReapplyLabelsAfterAwake(S1UICustomization.CharacterCustomizationOption option, CustomizationShops.Entry entry)
+        private static IEnumerator ReapplyLabelsAfterAwake(S1UICustomization.CharacterCustomizationOption option, S1UICustomization.CharacterCustomizationCategory? category, CustomizationShops.Entry entry)
         {
             while (option != null && !option.gameObject.activeInHierarchy)
                 yield return new WaitForSeconds(0.25f);
@@ -296,6 +299,30 @@ namespace S1API.Internal.Shops
                 yield break;
 
             ApplyLabels(option, entry);
+            if (category != null)
+                AddApplyListener(option, category, entry);
+        }
+
+        private static void AddApplyListener(S1UICustomization.CharacterCustomizationOption option, S1UICustomization.CharacterCustomizationCategory category, CustomizationShops.Entry entry)
+        {
+            if (entry.Apply == null)
+                return;
+            option.onSelect.AddListener((UnityAction)(() => InvokeApply(entry, category)));
+        }
+
+        // The appearance the shop is previewing, which already holds the option that was just selected. Null when
+        // the shop UI or its field is not reachable.
+        private static S1Avatar.Player.PlayerAppearance? PreviewedAppearance(S1UICustomization.CharacterCustomizationCategory category)
+        {
+            var ui = category.GetComponentInParent<S1UICustomization.CharacterCustomizationUI>(true);
+            if (ui == null)
+                return null;
+#if (IL2CPPMELON)
+            return ui.currentAppearance;
+#else
+            return AccessTools.Field(typeof(S1UICustomization.CharacterCustomizationUI), "currentAppearance")
+                .GetValue(ui) as S1Avatar.Player.PlayerAppearance;
+#endif
         }
 
         // Matches the "$250" the vanilla option shows (MoneyManager.FormatAmount); formatted locally with the
@@ -303,11 +330,16 @@ namespace S1API.Internal.Shops
         private static string FormatPrice(float price) =>
             price > 0f ? "$" + Mathf.RoundToInt(price).ToString("N0", CultureInfo.InvariantCulture) : "Free";
 
-        private static void InvokeApply(CustomizationShops.Entry entry)
+        private static void InvokeApply(CustomizationShops.Entry entry, S1UICustomization.CharacterCustomizationCategory category)
         {
             try
             {
-                var appearance = S1PlayerScripts.Player.Local != null ? S1PlayerScripts.Player.Local.CurrentAppearance : null;
+                var appearance = PreviewedAppearance(category);
+                if (appearance == null)
+                {
+                    Logger.Warning($"Option '{entry.Label}': the shop has no previewed appearance; using the player's current one.");
+                    appearance = S1PlayerScripts.Player.Local != null ? S1PlayerScripts.Player.Local.CurrentAppearance : null;
+                }
                 if (appearance == null)
                 {
                     Logger.Warning($"Option '{entry.Label}' was selected but the local player has no appearance; Apply skipped.");
