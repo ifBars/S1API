@@ -10,6 +10,8 @@ namespace S1API.Building
     /// </summary>
     public class BuildEventArgs
     {
+        private readonly string? _itemId;
+
         /// <summary>
         /// The item instance that was built.
         /// </summary>
@@ -17,14 +19,12 @@ namespace S1API.Building
         /// Null for <see cref="BuildEvents.OnGhostCreated"/>: the game builds the ghost from the item definition.
         /// Use <see cref="ItemId"/> there.
         /// </remarks>
-        public ItemInstance ItemInstance { get; internal set; }
+        public ItemInstance? ItemInstance { get; internal set; }
 
         /// <summary>
         /// True when <see cref="GameObject"/> is the placement ghost shown while the player places the item.
         /// </summary>
         public bool IsGhost { get; internal set; }
-
-        private readonly string? _itemId;
 
         /// <summary>
         /// The GameObject created in the world.
@@ -63,7 +63,7 @@ namespace S1API.Building
         /// </summary>
         internal BuildEventArgs(string itemId, GameObject ghost)
         {
-            ItemInstance = null!;
+            ItemInstance = null;
             GameObject = ghost;
             IsGhost = true;
             _itemId = itemId;

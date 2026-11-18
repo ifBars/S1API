@@ -59,8 +59,17 @@ namespace S1API.Internal.Patches
             S1ItemFramework.BuildableItemDefinition itemDefinition,
             S1EntityFramework.BuildableItem ghost)
         {
-            if (itemDefinition == null || ghost == null)
+            if (itemDefinition == null)
+            {
+                Logger.Warning("A placement ghost was created without an item definition; ghost configuration and OnGhostCreated skipped.");
                 return;
+            }
+
+            if (ghost == null)
+            {
+                Logger.Warning($"No placement ghost was created for buildable '{itemDefinition.ID}'; ghost configuration and OnGhostCreated skipped.");
+                return;
+            }
 
             try
             {
