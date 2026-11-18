@@ -72,6 +72,44 @@ public sealed class SaveLoadGateTests : IDisposable
     }
 
     [Fact]
+    public void SaveThroughShortOverloadAsksVetoesOnce()
+    {
+        const BindingFlags flags = BindingFlags.Static | BindingFlags.NonPublic;
+        var patches = typeof(SaveLoadGatePatches);
+        int asked = 0;
+        GameLifecycle.AddSaveVeto("Counter", () => { asked++; return null; });
+
+        Assert.True((bool)patches.GetMethod("SavePrefix", flags)!.Invoke(null, null)!);
+        Assert.True((bool)patches.GetMethod("SaveToFolderPrefix", flags)!.Invoke(null, null)!);
+        patches.GetMethod("SaveFinalizer", flags)!.Invoke(null, null);
+        Assert.Equal(1, asked);
+
+        Assert.True((bool)patches.GetMethod("SaveToFolderPrefix", flags)!.Invoke(null, null)!);
+        Assert.Equal(2, asked);
+    }
+
+    [Fact]
+    public void VetoThatDisposesAnotherDoesNotSkipOrCrash()
+    {
+        IDisposable? second = null;
+        GameLifecycle.AddSaveVeto("First", () => { second?.Dispose(); return null; });
+        second = GameLifecycle.AddSaveVeto("Second", () => "never asked");
+
+        Assert.True(SaveLoadGates.AllowSave("Save"));
+    }
+
+    [Fact]
+    public void ThrowingVetoIsLoggedAgainForTheNextLoad()
+    {
+        GameLifecycle.AddSaveVeto("Faulty", () => throw new InvalidOperationException("boom"));
+        SaveLoadGates.AllowSave("Save");
+        SaveLoadGates.TryDefer("StartGame", () => { });
+        SaveLoadGates.AllowSave("Save");
+
+        Assert.Equal(2, _log.Count(l => l.Level == "error" && l.Message.StartsWith("Save veto from Faulty threw")));
+    }
+
+    [Fact]
     public void SaveRunsWithoutVetoes()
     {
         Assert.True(SaveLoadGates.AllowSave("Save"));

@@ -14,9 +14,11 @@ namespace S1API.Lifecycle
         /// <param name="reason">Returns why the save must not run, or <c>null</c>.</param>
         /// <returns>A handle that removes the veto when disposed.</returns>
         /// <remarks>
-        /// Covers <c>SaveManager.Save()</c> and <c>SaveManager.Save(string)</c>. A blocked save also skips the modded
-        /// data S1API writes (saveables, quests, custom products), so the save on disk stays as it was. A veto that
-        /// throws is logged once and skipped. No notice is shown to the player; use <see cref="OnSaveBlocked"/>.
+        /// Covers <c>SaveManager.Save()</c> and <c>SaveManager.Save(string)</c>, which write the world save, and the
+        /// modded data S1API adds to it (saveables, quests, custom products). Other writes are not gated, for example
+        /// a client's player data (<c>Player.RequestSavePlayer</c>) and files that other mods write themselves. A veto
+        /// that throws is logged once per loaded game and skipped. No notice is shown to the player; use
+        /// <see cref="OnSaveBlocked"/>.
         /// </remarks>
         /// <example>
         /// <code>
@@ -45,7 +47,7 @@ namespace S1API.Lifecycle
         /// <param name="timeoutSeconds">After this many seconds of waiting the gate is logged as an error and the load continues without it.</param>
         /// <returns>A handle that removes the gate when disposed. A deferred load continues if this was the last closed gate.</returns>
         /// <remarks>
-        /// A gate that throws is logged once and treated as open. Patches of other mods on these two methods also run
+        /// A gate that throws is logged once per loaded game and treated as open. Patches of other mods on these two methods also run
         /// for the deferred call; they can check <c>__runOriginal</c> to see whether the load really starts.
         /// </remarks>
         /// <example>

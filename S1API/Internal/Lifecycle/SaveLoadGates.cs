@@ -97,9 +97,12 @@ namespace S1API.Internal.Lifecycle
         /// </summary>
         internal static bool AllowSave(string what)
         {
-            for (int i = 0; i < Vetoes.Count; i++)
+            // A veto may dispose registrations while it runs; walk a snapshot and skip entries removed meanwhile.
+            foreach (var veto in Vetoes.ToArray())
             {
-                var veto = Vetoes[i];
+                if (!Vetoes.Contains(veto))
+                    continue;
+
                 string? reason;
                 try
                 {
@@ -133,7 +136,9 @@ namespace S1API.Internal.Lifecycle
             if (_resuming)
                 return false;
 
+            // A new load starts a new session: a faulty veto or gate is reported again.
             TimedOut.Clear();
+            Faulted.Clear();
             var closed = ClosedGates(0f);
             if (closed.Count == 0)
                 return false;
@@ -231,9 +236,10 @@ namespace S1API.Internal.Lifecycle
         private static List<string> ClosedGates(float waited)
         {
             var closed = new List<string>();
-            for (int i = 0; i < Gates.Count; i++)
+            foreach (var gate in Gates.ToArray())
             {
-                var gate = Gates[i];
+                if (!Gates.Contains(gate))
+                    continue;
                 if (TimedOut.Contains(gate))
                     continue;
 
