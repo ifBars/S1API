@@ -39,6 +39,10 @@ namespace S1API.Internal.Shops
         private const string ClonePrefix = "S1API_Custom_";
 
         private static readonly Log Logger = new Log("CustomizationShops");
+
+        // Category methods called from option listeners, looked up once per name; a missing method stays null.
+        private static readonly Dictionary<string, System.Reflection.MethodInfo?> CategoryMethods =
+            new Dictionary<string, System.Reflection.MethodInfo?>();
         private static readonly List<TrackedCategory> Categories = new List<TrackedCategory>();
         private static readonly List<BuiltOption> Built = new List<BuiltOption>();
 
@@ -395,8 +399,12 @@ namespace S1API.Internal.Shops
         {
             try
             {
-                var info = AccessTools.Method(typeof(S1UICustomization.CharacterCustomizationCategory), method,
-                    new[] { typeof(S1UICustomization.CharacterCustomizationOption) });
+                if (!CategoryMethods.TryGetValue(method, out var info))
+                {
+                    info = AccessTools.Method(typeof(S1UICustomization.CharacterCustomizationCategory), method,
+                        new[] { typeof(S1UICustomization.CharacterCustomizationOption) });
+                    CategoryMethods[method] = info;
+                }
                 if (info == null)
                 {
                     Logger.Error($"CharacterCustomizationCategory.{method} was not found; option '{option.Name}' is not wired.");
