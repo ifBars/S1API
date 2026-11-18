@@ -172,6 +172,18 @@ namespace S1API.Entities
         }
 
         /// <summary>
+        /// Keeps this NPC's dialogue from advancing or ending on continue while <paramref name="hold"/> returns true.
+        /// </summary>
+        /// <remarks>
+        /// Applies to the player's continue key and to <see cref="S1API.Dialogues.DialogueFlow.TryContinue"/>. Choices
+        /// still work. A hold that throws is logged once and treated as released. Dispose the result to remove the hold.
+        /// </remarks>
+        /// <param name="hold">Asked on every continue press of this NPC's dialogue.</param>
+        /// <returns>A handle that removes the hold when disposed.</returns>
+        public IDisposable HoldContinue(Func<bool> hold) =>
+            global::S1API.Internal.Dialogues.DialogueHolds.Add(this, NPC?.ID ?? "an NPC", hold);
+
+        /// <summary>
         /// Shows worldspace dialogue text at the NPC for a duration.
         /// </summary>
         public void ShowWorldText(string text, float durationSeconds)
