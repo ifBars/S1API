@@ -72,7 +72,10 @@ namespace S1API.Internal.Shops
 
                 CustomizationShop? shop = ResolveShop(category);
                 if (shop == null)
+                {
+                    Logger.Msg($"Category '{category.CategoryName}' is not in a tattoo or barber shop; no options listed.");
                     return;
+                }
 
                 Prune();
                 int id = category.GetInstanceID();
