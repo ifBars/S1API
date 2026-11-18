@@ -42,12 +42,33 @@ namespace S1API.Internal.Patches
             }
         }
 
+        // Number of NPCHealth.Load calls in progress. Load calls KnockOut for an NPC saved at 0 health, which
+        // restores state and must not raise OnKnockedOut again on every load.
+        private static int _loadDepth;
+
+        [HarmonyPatch(typeof(S1NPCs.NPCHealth), nameof(S1NPCs.NPCHealth.Load))]
+        [HarmonyPrefix]
+        private static void LoadPrefix() => _loadDepth++;
+
+        [HarmonyPatch(typeof(S1NPCs.NPCHealth), nameof(S1NPCs.NPCHealth.Load))]
+        [HarmonyFinalizer]
+        private static void LoadFinalizer()
+        {
+            if (_loadDepth > 0)
+                _loadDepth--;
+        }
+
         [HarmonyPatch(typeof(S1NPCs.NPCHealth), nameof(S1NPCs.NPCHealth.KnockOut))]
         [HarmonyPostfix]
         private static void KnockOutPostfix(S1NPCs.NPCHealth __instance)
         {
             try
             {
+                if (_loadDepth > 0)
+                {
+                    NpcAttackEvents.Info("KnockOut during NPC health load; OnKnockedOut not raised.");
+                    return;
+                }
                 if (!__instance.IsKnockedOut)
                 {
                     NpcAttackEvents.Info("KnockOut on an invincible NPC; OnKnockedOut not raised.");

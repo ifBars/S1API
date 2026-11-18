@@ -11,6 +11,7 @@ using S1NetObject = FishNet.Object.NetworkObject;
 #endif
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using HarmonyLib;
 using S1API.Entities;
@@ -104,8 +105,9 @@ namespace S1API.Internal.Patches
 
         /// <summary>
         /// Raises <see cref="Player.OnVehicleChanged"/> for a remote player when the synced vehicle arrives.
-        /// The game skips the owner here (its own enter and exit calls cover that) and calls this once per side
-        /// on a host, so only the client call counts.
+        /// The game skips the owner here (its own enter and exit calls cover that). A host may receive the
+        /// change as a server call, a client call or both, so the first call per change raises and the last known
+        /// vehicle per player drops the repeat.
         /// </summary>
         [HarmonyPatch(typeof(S1PlayerScripts.Player), "CurrentVehicleChanged")]
         [HarmonyPostfix]
@@ -113,8 +115,14 @@ namespace S1API.Internal.Patches
         {
             try
             {
-                if (asServer || __instance.IsOwner || oldVeh == newVeh)
+                if (__instance.IsOwner || oldVeh == newVeh)
                     return;
+                if (RemoteVehicles.TryGetValue(__instance, out var known) ? known == newVeh : newVeh == null)
+                    return;
+                if (newVeh == null)
+                    RemoteVehicles.Remove(__instance);
+                else
+                    RemoteVehicles[__instance] = newVeh;
                 var vehicle = newVeh != null ? newVeh.GetComponent<S1Vehicles.LandVehicle>() : null;
                 RaiseChanged(__instance, vehicle, "a synced vehicle change");
             }
@@ -123,6 +131,9 @@ namespace S1API.Internal.Patches
                 PlayerEvents.Error($"Raising OnVehicleChanged for a synced change failed: {ex}");
             }
         }
+
+        private static readonly Dictionary<S1PlayerScripts.Player, S1NetObject> RemoteVehicles =
+            new Dictionary<S1PlayerScripts.Player, S1NetObject>();
 
         private static void RaiseChanged(S1PlayerScripts.Player native, S1Vehicles.LandVehicle? vehicle, string what)
         {
