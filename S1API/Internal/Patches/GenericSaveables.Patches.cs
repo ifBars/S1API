@@ -39,8 +39,9 @@ namespace S1API.Internal.Patches
 	{
 		[HarmonyPatch(typeof(S1Persistence.SaveManager), "Save", new Type[] { typeof(string) })]
 		[HarmonyPostfix]
-		private static void SaveManager_Save_Postfix(string saveFolderPath)
+		private static void SaveManager_Save_Postfix(string saveFolderPath, bool __runOriginal)
 		{
+			if (!__runOriginal) { MelonLoader.MelonLogger.Msg("[Saveables] Save was blocked; modded saveables are not written."); return; }
 			try
 			{
 				// Ensure top-level Modded paths are whitelisted so the game's cleanup doesn't delete our files
