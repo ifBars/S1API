@@ -175,8 +175,11 @@ namespace S1API.Entities
         /// Keeps this NPC's dialogue from advancing or ending on continue while <paramref name="hold"/> returns true.
         /// </summary>
         /// <remarks>
-        /// Applies to the player's continue key and to <see cref="S1API.Dialogues.DialogueFlow.TryContinue"/>. Choices
-        /// still work. A hold that throws is logged once and treated as released. Dispose the result to remove the hold.
+        /// Applies to the player's continue key and to <see cref="S1API.Dialogues.DialogueFlow.TryContinue"/> at the
+        /// continue prompt; skipping the text rollout still works, and so do choices. The continue prompt stays while
+        /// held, and the first press after <paramref name="hold"/> returns false advances the dialogue. A hold that
+        /// throws is logged once and treated as released. Holds are removed when the scene changes. Dispose the result
+        /// to remove the hold earlier.
         /// </remarks>
         /// <param name="hold">Asked on every continue press of this NPC's dialogue.</param>
         /// <returns>A handle that removes the hold when disposed.</returns>

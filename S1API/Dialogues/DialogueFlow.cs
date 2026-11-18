@@ -26,7 +26,8 @@ namespace S1API.Dialogues
         /// </summary>
         /// <remarks>
         /// The press is applied on the next dialogue canvas update: it skips the text rollout or answers the continue
-        /// prompt, as the player's key would. A continue hold (<c>NPCDialogue.HoldContinue</c>) still applies.
+        /// prompt, as the player's key would. A continue hold (<c>NPCDialogue.HoldContinue</c>) applies at the continue
+        /// prompt, not to skipping the rollout. A press that is held is dropped, not kept for later.
         /// Returns false and logs a warning when no dialogue is open.
         /// </remarks>
         /// <returns>True when the press was queued.</returns>

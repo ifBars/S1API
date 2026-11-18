@@ -19,6 +19,8 @@ namespace S1API.Internal.Dialogues
             internal readonly string Name;
             internal readonly Func<bool> Condition;
             internal bool Faulted;
+            // True after a press was blocked by this hold, so the block is logged once and the release once.
+            internal bool Blocking;
 
             internal Hold(object owner, string name, Func<bool> condition)
             {
@@ -71,10 +73,10 @@ namespace S1API.Internal.Dialogues
                 catch (Exception ex) { Error($"Matching the continue hold on {hold.Name} failed: {ex}"); continue; }
                 if (!owned || hold.Faulted)
                     continue;
+                bool held;
                 try
                 {
-                    if (!hold.Condition())
-                        continue;
+                    held = hold.Condition();
                 }
                 catch (Exception ex)
                 {
@@ -82,7 +84,20 @@ namespace S1API.Internal.Dialogues
                     Error($"Continue hold on {hold.Name} threw and is treated as released: {ex}");
                     continue;
                 }
-                Info($"Continue on {hold.Name} is held; the dialogue stays open.");
+                if (!held)
+                {
+                    if (hold.Blocking)
+                    {
+                        hold.Blocking = false;
+                        Info($"Continue hold on {hold.Name} released; the press goes through.");
+                    }
+                    continue;
+                }
+                if (!hold.Blocking)
+                {
+                    hold.Blocking = true;
+                    Info($"Continue on {hold.Name} is held; the dialogue stays open.");
+                }
                 return true;
             }
             return false;
@@ -98,6 +113,28 @@ namespace S1API.Internal.Dialogues
             return true;
         }
 
+        /// <summary>Drops a requested press because the dialogue closed before the next canvas update.</summary>
+        internal static void DropPendingContinue()
+        {
+            if (!PendingContinue)
+                return;
+            PendingContinue = false;
+            Info("Continue from code dropped: the dialogue closed before the press was applied.");
+        }
+
+        /// <summary>
+        /// Removes every hold and the pending press. Holds match the NPC dialogue of the world they were added in,
+        /// so after a scene change they could never match again.
+        /// </summary>
+        internal static void ClearForSceneChange()
+        {
+            int count = Holds.Count;
+            Holds.Clear();
+            PendingContinue = false;
+            if (count > 0)
+                Info($"Continue holds removed on the scene change: {count}.");
+        }
+
         internal static void ResetForTesting()
         {
             Holds.Clear();
@@ -110,12 +147,7 @@ namespace S1API.Internal.Dialogues
             if (_lifecycleHooked)
                 return;
             _lifecycleHooked = true;
-            GameLifecycle.OnPreSceneChange += () =>
-            {
-                if (Holds.Count > 0)
-                    Info($"Continue holds kept across the scene change: {Holds.Count}.");
-                PendingContinue = false;
-            };
+            GameLifecycle.OnPreSceneChange += ClearForSceneChange;
         }
 
         internal static void Info(string message)
