@@ -85,15 +85,13 @@ public sealed class CustomPropertyTests : IDisposable
     }
 
     [Fact]
-    public void RegisterRefusesNullEmptyAndDuplicate()
+    public void RegisterRefusesNullAndEmptyCode()
     {
         Assert.Throws<ArgumentNullException>(() => PropertyManager.Register(null!));
         Assert.Throws<ArgumentException>(() => PropertyManager.Register(Def("")));
-        PropertyManager.Register(Def("annex"));
-        Assert.Throws<InvalidOperationException>(() => PropertyManager.Register(Def("annex")));
 
-        Assert.Equal(1, CustomProperties.RegisteredCount);
-        Assert.Equal(2, _log.Count(l => l.Level == "error"));
+        Assert.Equal(0, CustomProperties.RegisteredCount);
+        Assert.Equal(1, _log.Count(l => l.Level == "error"));
     }
 
     [Fact]
@@ -341,6 +339,129 @@ public sealed class CustomPropertyTests : IDisposable
         Assert.NotNull(typeof(S1Loaders.PropertyLoader).GetMethod("Load", flags, null,
             new[] { typeof(S1Datas.PropertyData), typeof(string) }, null));
         Assert.NotNull(typeof(S1Heatmap.HeatmapManager).GetMethod("Start", flags, null, Type.EmptyTypes, null));
+        Assert.NotNull(typeof(S1Heatmap.HeatmapManager).GetMethod("ToggleHeatmapActive", flags, null, new[] { typeof(S1Property.Property) }, null));
+        Assert.NotNull(typeof(S1Property.Property).GetMethod("ShouldSave", flags, null, Type.EmptyTypes, null));
+    }
+
+    // ---- unfinished loads, heatmap cut-off, re-registration ----
+
+    [Fact]
+    public void PropertyWithPendingLoadKeepsItsFileAndIsNotSaved()
+    {
+        PropertyManager.Register(Def("annex", () => null));
+        _inWorld.Add("annex");
+        var file = WriteSave("Annex.json", "annex");
+        Assert.True(CustomProperties.TryDeferLoad("annex", "test", () => { }));
+        // The property is in the world but its root is not ready, so the load is pending.
+        Assert.Equal(1, CustomProperties.DeferredLoadCount);
+        Assert.True(CustomProperties.IsLoadUnfinished("annex"));
+        Assert.Equal(new[] { file }, Kept());
+    }
+
+    [Fact]
+    public void PropertyWhoseLoadTimedOutKeepsItsFileUntilTheNextWorld()
+    {
+        PropertyManager.Register(Def("annex", () => null));
+        _inWorld.Add("annex");
+        var file = WriteSave("Annex.json", "annex");
+        CustomProperties.TryDeferLoad("annex", "test", () => { });
+
+        _now = CustomProperties.WaitSeconds + 1f;
+        CustomProperties.Pump();
+
+        Assert.Equal(0, CustomProperties.DeferredLoadCount);
+        Assert.True(CustomProperties.IsLoadUnfinished("annex"));
+        Assert.Equal(new[] { file }, Kept());
+        Assert.Contains(_log, l => l.Level == "error" && l.Message.Contains("not saved until the next load"));
+    }
+
+    [Fact]
+    public void FinishedLoadIsSavedAgain()
+    {
+        PropertyManager.Register(Def("annex"));
+        CustomProperties.TryDeferLoad("annex", "test", () => { });
+        _inWorld.Add("annex");
+        CustomProperties.Pump();
+
+        Assert.False(CustomProperties.IsLoadUnfinished("annex"));
+        WriteSave("Annex.json", "annex");
+        Assert.Empty(Kept());
+    }
+
+    [Fact]
+    public void ReadyLoadsReplayInArrivalOrder()
+    {
+        PropertyManager.Register(Def("annex"));
+        var order = new List<string>();
+        CustomProperties.TryDeferLoad("annex", "property", () => order.Add("property"));
+        CustomProperties.TryDeferLoad("annex", "business", () => order.Add("business"));
+        _inWorld.Add("annex");
+
+        CustomProperties.Pump();
+
+        Assert.Equal(new[] { "property", "business" }, order);
+    }
+
+    [Fact]
+    public void HeatmapStopsWaitingForAbsentPropertyOnceTheSaveLoaded()
+    {
+        PropertyManager.Register(Def("annex"));
+        int starts = 0;
+        CustomProperties.TryDeferHeatmap(() => starts++);
+
+        CustomProperties.Pump();
+        Assert.Equal(0, starts);
+
+        CustomProperties.MarkLoadComplete();
+        CustomProperties.Pump();
+
+        Assert.Equal(1, starts);
+        Assert.True(CustomProperties.IsMissingFromHeatmap("annex"));
+        Assert.False(CustomProperties.IsMissingFromHeatmap("other"));
+    }
+
+    [Fact]
+    public void HeatmapKeepsWaitingWhenTheSaveHasDataForTheProperty()
+    {
+        PropertyManager.Register(Def("annex"));
+        int starts = 0;
+        CustomProperties.TryDeferHeatmap(() => starts++);
+        CustomProperties.TryDeferLoad("annex", "test", () => { });
+
+        CustomProperties.MarkLoadComplete();
+        CustomProperties.Pump();
+
+        Assert.Equal(0, starts);
+    }
+
+    [Fact]
+    public void DeferredHeatmapOfADestroyedHeatmapIsDropped()
+    {
+        PropertyManager.Register(Def("annex"));
+        bool alive = true;
+        int starts = 0;
+        CustomProperties.TryDeferHeatmap(() => starts++, () => alive);
+        alive = false;
+        _inWorld.Add("annex");
+
+        CustomProperties.Pump();
+
+        Assert.Equal(0, starts);
+        Assert.False(CustomProperties.HeatmapDeferred);
+        Assert.Contains(_log, l => l.Level == "warn" && l.Message.Contains("no longer exists"));
+    }
+
+    [Fact]
+    public void RegisteringTheSameCodeAgainReplacesTheDefinition()
+    {
+        PropertyManager.Register(Def("annex", () => null));
+        _inWorld.Add("annex");
+        Assert.True(CustomProperties.TryDeferLoad("annex", "before", () => { }));
+        PropertyManager.Register(Def("annex"));
+
+        Assert.Equal(1, CustomProperties.RegisteredCount);
+        Assert.Contains(_log, l => l.Level == "info" && l.Message.Contains("registered again"));
+        Assert.False(CustomProperties.TryDeferLoad("annex", "after", () => { }));
     }
 
     [Fact]
@@ -349,8 +470,9 @@ public sealed class CustomPropertyTests : IDisposable
         const BindingFlags flags = BindingFlags.Static | BindingFlags.NonPublic;
         foreach (var name in new[] { "PropertyWriteDataPostfix", "BusinessWriteDataPostfix" })
             Assert.NotNull(typeof(CustomPropertyPatches).GetMethod(name, flags)!.GetCustomAttribute<HarmonyPostfix>());
-        foreach (var name in new[] { "LoadFolderPrefix", "LoadDataPrefix", "HeatmapStartPrefix" })
+        foreach (var name in new[] { "LoadFolderPrefix", "LoadDataPrefix", "HeatmapStartPrefix", "ToggleHeatmapPrefix" })
             Assert.NotNull(typeof(CustomPropertyPatches).GetMethod(name, flags)!.GetCustomAttribute<HarmonyPrefix>());
+        Assert.NotNull(typeof(CustomPropertyPatches).GetMethod("ShouldSavePostfix", flags)!.GetCustomAttribute<HarmonyPostfix>());
     }
 
     [Fact]

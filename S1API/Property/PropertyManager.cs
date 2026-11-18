@@ -83,7 +83,10 @@ namespace S1API.Property
         /// </returns>
         /// <exception cref="System.ArgumentNullException"><paramref name="def"/> is null.</exception>
         /// <exception cref="System.ArgumentException">The definition has no code.</exception>
-        /// <exception cref="System.InvalidOperationException">The code is registered already.</exception>
+        /// <remarks>
+        /// Registering in <c>GameLifecycle.OnPreLoad</c> is fine, it runs once per save load. Registering a code again
+        /// replaces its definition (and its <c>Root</c>) and returns a wrapper for the same property.
+        /// </remarks>
         public static PropertyWrapper Register(CustomPropertyDefinition def) =>
             global::S1API.Internal.Properties.CustomProperties.Register(def);
 
@@ -93,8 +96,7 @@ namespace S1API.Property
         /// </summary>
         /// <remarks>
         /// This is the last point to add build tiles, idle points or beds that saved objects and employees need. A
-        /// handler that throws is logged and the other handlers still run.
-        /// </remarks>
+        /// handler that throws is logged and the other handlers still run.        /// </remarks>
         public static event System.Action<PropertyWrapper, int>? OnPropertyLoaded
         {
             add => global::S1API.Internal.Properties.PropertyHooks.Loaded += value;

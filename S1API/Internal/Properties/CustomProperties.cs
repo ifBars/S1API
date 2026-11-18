@@ -50,8 +50,12 @@ namespace S1API.Internal.Properties
 
         private static readonly Dictionary<string, Registration> Registrations = new Dictionary<string, Registration>(StringComparer.Ordinal);
         private static readonly List<DeferredLoad> Loads = new List<DeferredLoad>();
+        private static readonly HashSet<string> TimedOut = new HashSet<string>(StringComparer.Ordinal);
+        private static readonly HashSet<string> HeatmapMissing = new HashSet<string>(StringComparer.Ordinal);
         private static Action? _heatmapStart;
+        private static Func<bool>? _heatmapAlive;
         private static float _heatmapDeadline;
+        private static bool _loadComplete;
         private static bool _startingHeatmap;
         private static bool _pumpRunning;
         private static bool _lifecycleHooked;
@@ -80,25 +84,30 @@ namespace S1API.Internal.Properties
                 Error("Register needs a property code; the definition was refused.");
                 throw new ArgumentException("A custom property needs a Code.", nameof(def));
             }
-            if (Registrations.ContainsKey(def.Code))
-            {
-                Error($"Property '{def.Code}' is registered already; the second registration was refused.");
-                throw new InvalidOperationException($"Property '{def.Code}' is already registered.");
-            }
-
             // A copy, so later edits of the caller's object do not change what was registered.
-            Registrations[def.Code] = new Registration
+            var copy = new CustomPropertyDefinition
             {
-                Def = new CustomPropertyDefinition
-                {
-                    Code = def.Code,
-                    Name = def.Name,
-                    Price = def.Price,
-                    Root = def.Root,
-                    EmployeeCapacity = def.EmployeeCapacity,
-                    KeepSaveWhenMissing = def.KeepSaveWhenMissing,
-                },
+                Code = def.Code,
+                Name = def.Name,
+                Price = def.Price,
+                Root = def.Root,
+                EmployeeCapacity = def.EmployeeCapacity,
+                KeepSaveWhenMissing = def.KeepSaveWhenMissing,
             };
+            if (Registrations.TryGetValue(def.Code, out var existing))
+            {
+                // A mod that registers in OnPreLoad registers once per save load; the latest definition (and its Root,
+                // which usually captures the new world) replaces the old one.
+                var old = existing.Def;
+                if (old.Name != copy.Name || old.Price != copy.Price || old.EmployeeCapacity != copy.EmployeeCapacity || old.KeepSaveWhenMissing != copy.KeepSaveWhenMissing)
+                    Warning($"Property '{def.Code}' is registered again with a different definition; the new one replaces the old one.");
+                else
+                    Info($"Property '{def.Code}' is registered again; its root is replaced.");
+                existing.Def = copy;
+                existing.RootErrorLogged = false;
+                return new PropertyWrapper(def.Code);
+            }
+            Registrations[def.Code] = new Registration { Def = copy };
             Info($"Registered custom property '{def.Code}' (save kept while missing: {def.KeepSaveWhenMissing}, waits for root: {def.Root != null}).");
             EnsureLifecycleHook();
             StartPump();
@@ -143,10 +152,18 @@ namespace S1API.Internal.Properties
                     if (!match.Success)
                         continue;
                     var code = match.Groups[1].Value;
-                    if (!Registrations.TryGetValue(code, out var reg) || !reg.Def.KeepSaveWhenMissing || Exists(code))
+                    if (!Registrations.TryGetValue(code, out var reg))
                         continue;
-                    keep(name);
-                    Info($"Custom {kind} '{code}' is not in the world; its saved file '{name}' is kept unchanged.");
+                    if (IsLoadUnfinished(code))
+                    {
+                        keep(name);
+                        Info($"Custom {kind} '{code}' has a load that has not finished; its saved file '{name}' is kept unchanged.");
+                    }
+                    else if (reg.Def.KeepSaveWhenMissing && !Exists(code))
+                    {
+                        keep(name);
+                        Info($"Custom {kind} '{code}' is not in the world; its saved file '{name}' is kept unchanged.");
+                    }
                 }
             }
             catch (Exception ex)
@@ -156,6 +173,29 @@ namespace S1API.Internal.Properties
         }
 
         // ---- deferred loads and heatmap ----
+
+        /// <summary>
+        /// True while a load of this registered property is deferred or was given up. The save must neither rewrite nor
+        /// delete the property then, because the world holds only part of what the file contains.
+        /// </summary>
+        internal static bool IsLoadUnfinished(string? code)
+        {
+            if (code == null || Registrations.Count == 0)
+                return false;
+            return TimedOut.Contains(code) || HasPendingLoad(code);
+        }
+
+        /// <summary>
+        /// True when the heatmap started without this registered property, so vanilla has no temperature view for it and
+        /// its heatmap calls must be skipped.
+        /// </summary>
+        internal static bool IsMissingFromHeatmap(string? code) => code != null && HeatmapMissing.Contains(code);
+
+        /// <summary>
+        /// Called when the save has finished loading. From then on a property that is still absent and has no pending
+        /// load is not part of this save, and the heatmap stops waiting for it.
+        /// </summary>
+        internal static void MarkLoadComplete() => _loadComplete = true;
 
         /// <summary>The property code in a legacy property folder, read from its Property or Business file; null when there is none.</summary>
         internal static string? ReadSavedCode(string mainPath)
@@ -190,21 +230,59 @@ namespace S1API.Internal.Properties
         /// Holds the heatmap start back while a registered property is not ready, because the heatmap reads the property
         /// list once. Returns true when the start was deferred; <paramref name="start"/> runs it later.
         /// </summary>
-        internal static bool TryDeferHeatmap(Action start)
+        internal static bool TryDeferHeatmap(Action start, Func<bool>? isAlive = null)
         {
             if (_startingHeatmap || Registrations.Count == 0)
                 return false;
-            var waiting = new List<string>();
-            foreach (var reg in Registrations.Values)
-                if (!IsReady(reg))
-                    waiting.Add(reg.Def.Code);
+            var waiting = HeatmapWaitList(out var unready);
             if (waiting.Count == 0)
+            {
+                RecordHeatmapMissing(unready);
                 return false;
+            }
             _heatmapStart = start;
+            _heatmapAlive = isAlive;
             _heatmapDeadline = Now() + WaitSeconds;
             Info($"Heatmap start waits for {waiting.Count} custom propert(ies): {string.Join(", ", waiting)}.");
             StartPump();
             return true;
+        }
+
+        // Registered properties the heatmap start still waits for. Once the save has loaded, a property that is absent and
+        // has no saved data pending is not part of this save, so waiting longer would only delay the heatmap.
+        private static List<string> HeatmapWaitList(out List<string> unready)
+        {
+            var waiting = new List<string>();
+            unready = new List<string>();
+            foreach (var reg in Registrations.Values)
+            {
+                if (IsReady(reg))
+                    continue;
+                var code = reg.Def.Code;
+                unready.Add(code);
+                if (!_loadComplete || Exists(code) || HasPendingLoad(code))
+                    waiting.Add(code);
+            }
+            return waiting;
+        }
+
+        private static bool HasPendingLoad(string code)
+        {
+            for (int i = 0; i < Loads.Count; i++)
+                if (Loads[i].Code == code)
+                    return true;
+            return false;
+        }
+
+        // Vanilla indexes its heatmap data by property code; the patch on ToggleHeatmapActive uses this list to skip the
+        // properties the heatmap does not know.
+        private static void RecordHeatmapMissing(List<string> unready)
+        {
+            HeatmapMissing.Clear();
+            foreach (var code in unready)
+                HeatmapMissing.Add(code);
+            if (unready.Count > 0)
+                Info($"Heatmap starts without {string.Join(", ", unready)}; their temperature view is not available.");
         }
 
         /// <summary>
@@ -224,36 +302,59 @@ namespace S1API.Internal.Properties
                     waiting = true;
             }
 
-            for (int i = Loads.Count - 1; i >= 0; i--)
+            // Ready loads run in the order they arrived, so a property loads before the business that depends on it.
+            var ready = new List<DeferredLoad>();
+            for (int i = 0; i < Loads.Count; i++)
             {
                 var load = Loads[i];
                 if (Registrations.TryGetValue(load.Code, out var reg) && IsReady(reg))
                 {
-                    Loads.RemoveAt(i);
-                    Info($"Loading '{load.Code}' runs now ({load.What}).");
-                    try { load.Replay(); }
-                    catch (Exception ex) { Error($"Deferred load of '{load.Code}' ({load.What}) threw: {ex}"); }
+                    Loads.RemoveAt(i--);
+                    ready.Add(load);
                 }
                 else if (Now() >= load.Deadline)
                 {
-                    Loads.RemoveAt(i);
-                    Error($"Gave up loading '{load.Code}' ({load.What}) after {WaitSeconds:0} s: the property was not built. Its saved file is kept.");
+                    Loads.RemoveAt(i--);
+                    TimedOut.Add(load.Code);
+                    Error($"Gave up loading '{load.Code}' ({load.What}) after {WaitSeconds:0} s: the property was not built. Its objects and employees are not loaded; the saved file is kept and the property is not saved until the next load.");
+                }
+            }
+            foreach (var load in ready)
+            {
+                Info($"Loading '{load.Code}' runs now ({load.What}).");
+                try { load.Replay(); }
+                catch (Exception ex) { Error($"Deferred load of '{load.Code}' ({load.What}) threw: {ex}"); }
+            }
+
+            if (_heatmapStart != null)
+            {
+                bool alive;
+                try { alive = _heatmapAlive == null || _heatmapAlive(); }
+                catch (Exception ex)
+                {
+                    Warning($"Could not check whether the deferred heatmap still exists; it is dropped: {ex.Message}");
+                    alive = false;
+                }
+                if (!alive)
+                {
+                    _heatmapStart = null;
+                    _heatmapAlive = null;
+                    Warning("The deferred heatmap start was dropped because its heatmap no longer exists.");
                 }
             }
 
             if (_heatmapStart != null)
             {
-                var pending = new List<string>();
-                foreach (var reg in Registrations.Values)
-                    if (!IsReady(reg))
-                        pending.Add(reg.Def.Code);
+                var pending = HeatmapWaitList(out var unready);
                 if (pending.Count == 0 || Now() >= _heatmapDeadline)
                 {
                     var start = _heatmapStart;
                     _heatmapStart = null;
+                    _heatmapAlive = null;
+                    RecordHeatmapMissing(unready);
                     if (pending.Count > 0)
                         Warning($"Heatmap starts after {WaitSeconds:0} s without {string.Join(", ", pending)}; those properties have no temperature view.");
-                    else
+                    else if (unready.Count == 0)
                         Info("Heatmap starts now; every custom property is ready.");
                     _startingHeatmap = true;
                     try { start(); }
@@ -369,6 +470,10 @@ namespace S1API.Internal.Properties
                 return;
             _lifecycleHooked = true;
             GameLifecycle.OnPreSceneChange += ClearSceneState;
+            // OnPreSceneChange shares one try/catch with every other subscriber, so a throwing subscriber can skip the
+            // cleanup. The next world's OnPreLoad repeats the part that is safe at that point.
+            GameLifecycle.OnPreLoad += ClearLoadState;
+            GameLifecycle.OnLoadComplete += MarkLoadComplete;
         }
 
         // Property objects, deferred loads and the heatmap belong to the loaded world; registrations belong to the mod.
@@ -376,8 +481,21 @@ namespace S1API.Internal.Properties
         {
             if (Loads.Count > 0 || _heatmapStart != null)
                 Warning($"Scene change dropped {Loads.Count} deferred load(s){(_heatmapStart != null ? " and the deferred heatmap start" : string.Empty)}.");
-            Loads.Clear();
             _heatmapStart = null;
+            _heatmapAlive = null;
+            HeatmapMissing.Clear();
+            ClearLoadState();
+        }
+
+        // The state a load of a new world must not inherit. The heatmap start is not touched: the heatmap of the new
+        // world starts before OnPreLoad and may already be waiting; a stale one is dropped by its liveness check.
+        private static void ClearLoadState()
+        {
+            if (Loads.Count > 0)
+                Warning($"A new world loads; {Loads.Count} deferred load(s) of the previous one were dropped.");
+            Loads.Clear();
+            TimedOut.Clear();
+            _loadComplete = false;
             foreach (var reg in Registrations.Values)
                 reg.Bound = false;
             if (Registrations.Count > 0)
@@ -388,7 +506,11 @@ namespace S1API.Internal.Properties
         {
             Registrations.Clear();
             Loads.Clear();
+            TimedOut.Clear();
+            HeatmapMissing.Clear();
             _heatmapStart = null;
+            _heatmapAlive = null;
+            _loadComplete = false;
             _startingHeatmap = false;
             _pumpRunning = false;
             _lifecycleHooked = true;

@@ -34,11 +34,25 @@ namespace S1API.Property
         /// </summary>
 #if IL2CPPMELON
         private Il2CppScheduleOne.Property.Property? _innerProperty;
-        internal Il2CppScheduleOne.Property.Property InnerProperty => _innerProperty ??= ResolveInnerProperty();
+        internal Il2CppScheduleOne.Property.Property InnerProperty => CurrentInnerProperty();
 #else
         private ScheduleOne.Property.Property? _innerProperty;
-        internal ScheduleOne.Property.Property InnerProperty => _innerProperty ??= ResolveInnerProperty();
+        internal ScheduleOne.Property.Property InnerProperty => CurrentInnerProperty();
 #endif
+
+        // The cached property belongs to one world. Unity's == tells a destroyed object from a live one (??= does not), so
+        // a registered wrapper that outlives its world looks the property up again by code.
+#if IL2CPPMELON
+        private Il2CppScheduleOne.Property.Property CurrentInnerProperty()
+#else
+        private ScheduleOne.Property.Property CurrentInnerProperty()
+#endif
+        {
+            var cached = _innerProperty;
+            if (cached == null)
+                _innerProperty = cached = ResolveInnerProperty();
+            return cached;
+        }
         private readonly string? _registeredCode;
 
         /// <summary>
@@ -57,6 +71,8 @@ namespace S1API.Property
 #endif
         {
             var found = _registeredCode != null ? global::S1API.Internal.Properties.CustomPropertyWorld.Find(_registeredCode) : null;
+            if (_registeredCode == null)
+                throw new System.InvalidOperationException("The property object of this wrapper was destroyed, for example by a scene change.");
             if (found == null)
                 throw new System.InvalidOperationException($"Property '{_registeredCode}' is not in the world yet. Check IsInWorld first.");
             return found;
@@ -224,7 +240,8 @@ namespace S1API.Property
         /// property root, such as a property on a vehicle; vanilla culls by the distance to the root.
         /// </summary>
         /// <remarks>
-        /// Applies to every wrapper of the same property. A lock lasts until it is set to false or the scene changes.
+        /// Applies to every wrapper of the same property. The lock is local to this peer: in co-op each peer sets it
+        /// itself, the host's lock does not reach clients. A lock lasts until it is set to false or the scene changes.
         /// Content that is culled while the lock is set stays culled until vanilla shows it again; set the lock first.
         /// </remarks>
         public bool ContentCullingLocked

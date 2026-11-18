@@ -115,12 +115,62 @@ namespace S1API.Internal.Patches
             {
                 if (CustomProperties.IsStartingHeatmap)
                     return true;
-                return !CustomProperties.TryDeferHeatmap(() => StartHeatmap(__instance));
+                return !CustomProperties.TryDeferHeatmap(() => StartHeatmap(__instance), () => __instance != null);
             }
             catch (Exception ex)
             {
                 Logger.Error($"Checking the heatmap start failed, vanilla starts it now: {ex}");
                 return true;
+            }
+        }
+
+        // Vanilla indexes its heatmap data by property code without a check. A registered property the heatmap started
+        // without (or that is still waiting for it) would throw, so its toggle is skipped.
+        [HarmonyPatch(typeof(S1Heatmap.HeatmapManager), nameof(S1Heatmap.HeatmapManager.ToggleHeatmapActive))]
+        [HarmonyPrefix]
+        private static bool ToggleHeatmapPrefix(S1Property.Property property)
+        {
+            try
+            {
+                if (property == null)
+                    return true;
+                var code = property.PropertyCode;
+                if (CustomProperties.HeatmapDeferred || CustomProperties.IsMissingFromHeatmap(code))
+                {
+                    if (CustomProperties.IsRegistered(code))
+                        Logger.Warning($"Heatmap toggle for '{code}' skipped: the heatmap has no temperature view for it.");
+                    return !CustomProperties.IsRegistered(code);
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Checking the heatmap toggle failed, vanilla runs it: {ex}");
+                return true;
+            }
+        }
+
+        // A registered property whose load is deferred or was given up holds only part of its saved data. Vanilla skips
+        // properties that answer false here, so the save leaves the saved file alone instead of rewriting it without
+        // the objects and employees that never loaded.
+        [HarmonyPatch(typeof(S1Property.Property), nameof(S1Property.Property.ShouldSave))]
+        [HarmonyPostfix]
+        private static void ShouldSavePostfix(S1Property.Property __instance, ref bool __result)
+        {
+            try
+            {
+                if (!__result || __instance == null)
+                    return;
+                var code = __instance.PropertyCode;
+                if (CustomProperties.IsLoadUnfinished(code))
+                {
+                    __result = false;
+                    Logger.Warning($"Custom property '{code}' is not saved now: its load has not finished, its saved file stays as it is.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Checking whether custom property can be saved failed, it is saved as vanilla does: {ex}");
             }
         }
 
