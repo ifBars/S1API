@@ -32,12 +32,13 @@ namespace S1API.Deliveries
         /// <remarks>
         /// S1API asks the provider whenever the property's docks matter: the destination list, the bay check, an
         /// arrival and <see cref="RefreshLoadingDocks"/>. Return null while the dock does not exist. The dock gets its
-        /// own slot at the end of the property's dock list and keeps that number for the game session, also across
-        /// reloads, because deliveries and saves store the dock number. While the provider returns null, and after the
-        /// handle is disposed, the slot stays reserved: it never counts as free and only the same dock (same object or
-        /// GUID) can take it again. A mod that builds its dock again after a reload and registers it again should give
-        /// the dock the same GUID every time, or it gets a new dock number. A dock the property already lists is used
-        /// as it is and never removed.
+        /// own slot at the end of the property's dock list and keeps that number while the same save is played, also
+        /// across reloads of it, because deliveries and saves store the dock number. Loading another save drops the
+        /// slots. While the provider returns null, and after the handle is disposed, the slot stays reserved: it never
+        /// counts as free, the delivery app does not offer it, and only the same dock can take it again (the same
+        /// object, or a dock from the same mod with the same GUID, or with the same hierarchy path when it has no
+        /// GUID). A mod that builds its dock again after a reload should give it the same GUID every time, or it gets a
+        /// new dock number. A dock the property already lists is used as it is and never removed.
         /// Dispose the returned handle to remove the dock again.
         /// </remarks>
         /// <param name="property">The property that owns the dock.</param>
