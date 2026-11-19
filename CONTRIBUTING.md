@@ -80,6 +80,11 @@ other runtime evidence local; do not commit anything under `tests/Smoke/`.
 Summarize the smoke scenario and results in the pull request instead.
 
 ## PR Preparations
+
+The required `documentation` job checks existing consumer signatures against the Mono assembly baseline used by ApiCompat. It reports changes to nullable reference types, including generic arguments, and differences in parameter names, optional defaults, and `params` modifiers. New members are allowed. Some signature changes are safe for particular callers, so the report shows both signatures for review. Overload resolution and runtime behavior still need focused consumer tests.
+
+For an intentional source contract change, explain the impact on existing mods and their migration in the PR. The failed job summary gives an `/approve-source-break` command. Only a standalone PR comment from ifBars with that exact command accepts the reported changes. Rerun the failed job after approval. A new head commit or changed comparison report needs fresh approval. The exception applies only to this comparison. The existing binary compatibility, build, and test checks still run.
+
 Verify your changes will successfully build for all **two** build configurations prior to PR please.
 Ultimately, this just saves you time and gets your changes into the API faster.
 
