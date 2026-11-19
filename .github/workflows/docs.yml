@@ -444,6 +444,7 @@ jobs:
           python3 -B tools/S1APISourceCompatibility/test_approval.py
           dotnet build tools/S1APISourceCompatibility --configuration Release --output "$RUNNER_TEMP/source-compatibility-tool"
           python3 tools/S1APISourceCompatibility/test_review.py "$RUNNER_TEMP/source-compatibility-tool/S1APISourceCompatibility.dll"
+          python3 tools/S1APISourceCompatibility/test_contracts.py "$RUNNER_TEMP/source-compatibility-tool/S1APISourceCompatibility.dll"
           python3 tools/S1APISourceCompatibility/check.py \
             "$RUNNER_TEMP/s1api-api-compat/baseline.dll" \
             "$RUNNER_TEMP/s1api-api-compat/current.dll" \

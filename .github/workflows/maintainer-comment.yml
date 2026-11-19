@@ -13,6 +13,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      checks: read
       pull-requests: write
     concurrency:
       group: maintainer-comment-${{ github.event.workflow_run.head_repository.id }}-${{ github.event.workflow_run.head_branch }}

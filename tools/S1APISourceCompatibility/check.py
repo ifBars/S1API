@@ -10,6 +10,13 @@ import sys
 IFBARS_ID = 114284668
 
 
+def annotate(report):
+    # Escape workflow-command data before emitting compiler-derived symbol names.
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        message = report[:2400].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        print(f"::error title=S1API consumer contract::{message}")
+
+
 def approved(pages, command):
     return any(
         comment["user"]["id"] == IFBARS_ID and comment["body"].strip() == command
@@ -24,7 +31,9 @@ def main():
     if result.returncode == 0:
         return 0
     if result.returncode == 3:
-        print(result.stdout.decode("utf-8"))
+        report = result.stdout.decode("utf-8")
+        print(report)
+        annotate(report)
         sys.exit("Expose a managed S1API wrapper for the new native game type.")
     if result.returncode != 2 or not result.stdout.strip():
         sys.exit("Source compatibility comparison could not complete.")
@@ -39,6 +48,7 @@ def main():
         print("ifBars approved the reported changes for this PR head.")
         return 0
 
+    annotate(report)
     with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
         summary.write("### Source compatibility review required\n\n")
         summary.write("To accept these changes, ifBars can post this command as a PR comment and rerun the failed job.\n\n")

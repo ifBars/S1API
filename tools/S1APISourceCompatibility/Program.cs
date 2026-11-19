@@ -67,11 +67,10 @@ Dictionary<string, (string Signature, bool Native)> ReadContracts(string path)
             var signature = member switch
             {
                 IMethodSymbol method => string.Join(" | ", method.Parameters.Select(p => p.ToDisplayString(ParameterFormat()))
-                    .Prepend(method.ReturnType.ToDisplayString(TypeFormat()))),
+                    .Prepend(method.ReturnType.ToDisplayString(TypeFormat())).Concat(method.TypeParameters.Select(Constraint))),
                 IFieldSymbol field => field.Type.ToDisplayString(TypeFormat()),
                 IEventSymbol evt => evt.Type.ToDisplayString(TypeFormat()),
-                INamedTypeSymbol type => string.Join(" | ", TypeContracts(type).Select(t => t.ToDisplayString(TypeFormat()))
-                    .Order(StringComparer.Ordinal)),
+                INamedTypeSymbol type => string.Join(" | ", type.TypeParameters.Select(Constraint)),
                 _ => null
             };
             if (signature != null && member.GetDocumentationCommentId() is string id)
@@ -86,6 +85,15 @@ Dictionary<string, (string Signature, bool Native)> ReadContracts(string path)
                     _ => false
                 };
                 contracts.Add(id, (signature, native));
+                if (member is INamedTypeSymbol named)
+                {
+                    foreach (var parent in named.Interfaces.Cast<ITypeSymbol>().Concat(
+                        named.BaseType == null ? Array.Empty<ITypeSymbol>() : new[] { named.BaseType }))
+                    {
+                        var key = id + " -> " + parent.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                        contracts.Add(key, (parent.ToDisplayString(TypeFormat()), ContainsGameType(parent)));
+                    }
+                }
             }
 
             if (member is INamedTypeSymbol nested)
@@ -101,8 +109,21 @@ static IEnumerable<ITypeSymbol> TypeContracts(INamedTypeSymbol type)
     foreach (var constraint in type.TypeParameters.SelectMany(t => t.ConstraintTypes)) yield return constraint;
 }
 
-static SymbolDisplayFormat TypeFormat() => SymbolDisplayFormat.FullyQualifiedFormat
-    .AddMiscellaneousOptions(SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+static string Constraint(ITypeParameterSymbol parameter)
+{
+    var parts = parameter.ConstraintTypes.Select(t => t.ToDisplayString(TypeFormat())).Order(StringComparer.Ordinal).ToList();
+    if (parameter.HasReferenceTypeConstraint)
+        parts.Add("class:" + parameter.ReferenceTypeConstraintNullableAnnotation);
+    if (parameter.HasNotNullConstraint) parts.Add("notnull");
+    if (parameter.HasUnmanagedTypeConstraint) parts.Add("unmanaged");
+    if (parameter.HasValueTypeConstraint) parts.Add("struct");
+    if (parameter.HasConstructorConstraint) parts.Add("new()");
+    return $"{parameter.Name}[{string.Join(", ", parts)}]";
+}
+
+static SymbolDisplayFormat TypeFormat() => SymbolDisplayFormat.FullyQualifiedFormat.AddMiscellaneousOptions(
+    SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier |
+    SymbolDisplayMiscellaneousOptions.IncludeNotNullableReferenceTypeModifier);
 
 static SymbolDisplayFormat ParameterFormat() => TypeFormat().WithParameterOptions(
     SymbolDisplayParameterOptions.IncludeType | SymbolDisplayParameterOptions.IncludeName |

@@ -26,13 +26,22 @@ module.exports = async ({github, context}) => {
   if (pr.state !== 'open' || pr.head.sha !== run.head_sha) return;
   const findings = JSON.parse(fs.readFileSync(report, 'utf8'));
   const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {owner, repo, run_id: run.id, filter: 'latest'});
-  const steps = jobs.find(job => job.name === 'documentation')?.steps || [];
+  const docJob = jobs.find(job => job.name === 'documentation');
+  const steps = docJob?.steps || [];
   const marker = '<!-- s1api-maintainer-review -->';
   const lines = [marker, '### S1API maintainer review', '',
     'Reviewed ' + pr.head.sha.slice(0, 8) + '. [CI results and approval instructions](' + run.html_url + ')'];
   for (const name of ['Check public API compatibility', 'Compare existing consumer source contracts', 'Check maintainer review policy']) {
     const step = steps.find(s => s.name === name);
     lines.push('- ' + name + ' — ' + (step?.conclusion || 'unavailable'));
+  }
+  if (docJob?.check_run_url && steps.some(step => step.name === 'Compare existing consumer source contracts' && step.conclusion === 'failure')) {
+    const checkId = Number(docJob.check_run_url.split('/').pop());
+    const annotations = await github.paginate(github.rest.checks.listAnnotations, {owner, repo, check_run_id: checkId});
+    for (const annotation of annotations.filter(a => a.title === 'S1API consumer contract').slice(0, 1)) {
+      lines.push('', 'Consumer contract changes reported by CI', '');
+      for (const line of annotation.message.slice(0, 2400).split(/\r?\n/)) lines.push('    ' + line);
+    }
   }
   for (const group of ['Contributor action', 'Maintainer cleanup', 'Review in context']) {
     const relevant = Object.entries(rules).filter(([key, [section]]) => section === group && findings.some(f => f.rule === key));
