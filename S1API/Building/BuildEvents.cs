@@ -56,12 +56,14 @@ namespace S1API.Building
         /// player sees it.
         /// </summary>
         /// <remarks>
-        /// <see cref="BuildEventArgs.GameObject"/> is the ghost and <see cref="BuildEventArgs.IsGhost"/> is true.
-        /// <see cref="BuildEventArgs.ItemInstance"/> is null; filter by <see cref="BuildEventArgs.ItemId"/>.
-        /// Colliders, navigation and networking are already off on the ghost. Each handler runs on its own: one that
-        /// throws is logged and the others still run.
+        /// <see cref="GhostCreatedEventArgs.GameObject"/> is the ghost; filter by
+        /// <see cref="GhostCreatedEventArgs.ItemId"/>.
+        /// The game has already disabled colliders, navigation and networking on the ghost hierarchy that exists when
+        /// the handler runs. A part a handler adds is not covered: the mod must disable those components on that part
+        /// itself.
+        /// Each handler runs on its own: one that throws is logged and the others still run.
         /// </remarks>
-        public static event Action<BuildEventArgs>? OnGhostCreated;
+        public static event Action<GhostCreatedEventArgs>? OnGhostCreated;
 
         /// <summary>
         /// INTERNAL: Receives handler errors instead of the MelonLoader log in unit tests.
@@ -72,7 +74,7 @@ namespace S1API.Building
         /// INTERNAL: Raises the OnGhostCreated event, one handler at a time.
         /// Called by Harmony patches in S1API.Internal.Patches.BuildingPatches.
         /// </summary>
-        internal static void RaiseGhostCreated(BuildEventArgs args)
+        internal static void RaiseGhostCreated(GhostCreatedEventArgs args)
         {
             var handlers = OnGhostCreated;
             if (args == null || handlers == null)
@@ -82,7 +84,7 @@ namespace S1API.Building
             {
                 try
                 {
-                    ((Action<BuildEventArgs>)handler)(args);
+                    ((Action<GhostCreatedEventArgs>)handler)(args);
                 }
                 catch (Exception ex)
                 {

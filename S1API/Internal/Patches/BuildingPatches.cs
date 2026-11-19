@@ -83,7 +83,7 @@ namespace S1API.Internal.Patches
 
             try
             {
-                BuildEvents.RaiseGhostCreated(new BuildEventArgs(itemDefinition.ID, ghost.gameObject));
+                BuildEvents.RaiseGhostCreated(new GhostCreatedEventArgs(itemDefinition.ID, ghost.gameObject));
             }
             catch (System.Exception ex)
             {

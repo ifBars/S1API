@@ -25,14 +25,12 @@ public sealed class GhostCreatedTests
     }
 
     [Fact]
-    public void GhostArgsCarryTheDefinitionIdWithoutInstance()
+    public void GhostArgsCarryTheDefinitionIdAndGhost()
     {
-        var args = new BuildEventArgs("my_folder", null!);
+        var args = new GhostCreatedEventArgs("my_folder", null!);
 
-        Assert.True(args.IsGhost);
         Assert.Equal("my_folder", args.ItemId);
-        Assert.Null(args.ItemInstance);
-        Assert.Null(args.Storage);
+        Assert.Null(args.GameObject);
     }
 
     [Fact]
@@ -41,13 +39,13 @@ public sealed class GhostCreatedTests
         var seen = new List<string?>();
         var errors = new List<string>();
         BuildEvents.ErrorSinkForTesting = errors.Add;
-        Action<BuildEventArgs> bad = _ => throw new InvalidOperationException("boom");
-        Action<BuildEventArgs> good = a => seen.Add(a.ItemId);
+        Action<GhostCreatedEventArgs> bad = _ => throw new InvalidOperationException("boom");
+        Action<GhostCreatedEventArgs> good = a => seen.Add(a.ItemId);
         BuildEvents.OnGhostCreated += bad;
         BuildEvents.OnGhostCreated += good;
         try
         {
-            BuildEvents.RaiseGhostCreated(new BuildEventArgs("rack", null!));
+            BuildEvents.RaiseGhostCreated(new GhostCreatedEventArgs("rack", null!));
         }
         finally
         {
@@ -64,6 +62,6 @@ public sealed class GhostCreatedTests
     [Fact]
     public void RaiseWithoutHandlersDoesNothing()
     {
-        BuildEvents.RaiseGhostCreated(new BuildEventArgs("rack", null!));
+        BuildEvents.RaiseGhostCreated(new GhostCreatedEventArgs("rack", null!));
     }
 }

@@ -10,21 +10,10 @@ namespace S1API.Building
     /// </summary>
     public class BuildEventArgs
     {
-        private readonly string? _itemId;
-
         /// <summary>
         /// The item instance that was built.
         /// </summary>
-        /// <remarks>
-        /// Null for <see cref="BuildEvents.OnGhostCreated"/>: the game builds the ghost from the item definition.
-        /// Use <see cref="ItemId"/> there.
-        /// </remarks>
-        public ItemInstance? ItemInstance { get; internal set; }
-
-        /// <summary>
-        /// True when <see cref="GameObject"/> is the placement ghost shown while the player places the item.
-        /// </summary>
-        public bool IsGhost { get; internal set; }
+        public ItemInstance ItemInstance { get; internal set; }
 
         /// <summary>
         /// The GameObject created in the world.
@@ -36,7 +25,7 @@ namespace S1API.Building
         /// The item definition ID.
         /// Convenience property for filtering events by item type.
         /// </summary>
-        public string? ItemId => ItemInstance?.Definition?.ID ?? _itemId;
+        public string? ItemId => ItemInstance?.Definition?.ID;
 
         /// <summary>
         /// The storage entity if this item is a storage container.
@@ -56,17 +45,6 @@ namespace S1API.Building
             ItemInstance = itemInstance;
             GameObject = gameObject;
             Storage = storage;
-        }
-
-        /// <summary>
-        /// INTERNAL: Constructor for a placement ghost, which has a definition but no item instance.
-        /// </summary>
-        internal BuildEventArgs(string itemId, GameObject ghost)
-        {
-            ItemInstance = null;
-            GameObject = ghost;
-            IsGhost = true;
-            _itemId = itemId;
         }
     }
 }
