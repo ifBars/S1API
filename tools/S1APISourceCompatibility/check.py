@@ -23,6 +23,9 @@ def main():
     result = subprocess.run(["dotnet", checker, *sys.argv[1:]], stdout=subprocess.PIPE)
     if result.returncode == 0:
         return 0
+    if result.returncode == 3:
+        print(result.stdout.decode("utf-8"))
+        sys.exit("Expose a managed S1API wrapper for the new native game type.")
     if result.returncode != 2 or not result.stdout.strip():
         sys.exit("Source compatibility comparison could not complete.")
 

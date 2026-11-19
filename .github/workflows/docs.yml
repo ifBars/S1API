@@ -443,10 +443,21 @@ jobs:
         run: |
           python3 -B tools/S1APISourceCompatibility/test_approval.py
           dotnet build tools/S1APISourceCompatibility --configuration Release --output "$RUNNER_TEMP/source-compatibility-tool"
+          python3 tools/S1APISourceCompatibility/test_review.py "$RUNNER_TEMP/source-compatibility-tool/S1APISourceCompatibility.dll"
           python3 tools/S1APISourceCompatibility/check.py \
             "$RUNNER_TEMP/s1api-api-compat/baseline.dll" \
             "$RUNNER_TEMP/s1api-api-compat/current.dll" \
             S1API/ScheduleOneAssemblies/Managed S1API/ScheduleOneAssemblies/MelonLoader
+
+      - name: Check maintainer review policy
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          dotnet run --project tools/S1APISourceCompatibility --configuration Release -- \
+            --review "$base" "$HEAD_SHA" "$RUNNER_TEMP/review.json"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
