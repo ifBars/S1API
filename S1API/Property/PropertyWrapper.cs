@@ -19,7 +19,7 @@ namespace S1API.Property
     /// <summary>
     /// Provides an abstraction for interacting with in game player properties.
     /// </summary>
-    public class PropertyWrapper : BaseProperty
+    public partial class PropertyWrapper : BaseProperty
     {
         private static readonly Log Logger = new Log("PropertyWrapper");
         private static readonly IReadOnlyList<LoadingDock> EmptyLoadingDocks =
@@ -96,11 +96,16 @@ namespace S1API.Property
         /// Represents the maximum number of employees that can be allocated to the property.
         /// This property is both readable and writable, allowing for dynamic configuration
         /// of employee capacity based on the property's current requirements or constraints.
+        /// Raising it adds employee idle points first, so the next hire has one (see <see cref="EnsureEmployeeIdlePoints"/>).
         /// </summary>
         public override int EmployeeCapacity
         {
             get => InnerProperty.EmployeeCapacity;
-            set => InnerProperty.EmployeeCapacity = value;
+            set
+            {
+                Internal.Properties.EmployeeIdlePointsRuntime.Ensure(InnerProperty, value, "EmployeeCapacity " + value);
+                InnerProperty.EmployeeCapacity = value;
+            }
         }
 
         /// <summary>
