@@ -28,7 +28,7 @@ namespace S1API.Entities
     /// <summary>
     /// Represents a player within the game.
     /// </summary>
-    public class Player : IEntity, IHealth
+    public partial class Player : IEntity, IHealth
     {
         /// <summary>
         /// Health when the player is invincible.

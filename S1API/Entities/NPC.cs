@@ -125,7 +125,7 @@ namespace S1API.Entities
     /// <see cref="Customer"/>, <see cref="Relationship"/>, <see cref="Inventory"/>, and <see cref="Movement"/>.
     /// Customer, relationship, and schedule configuration must be done in <see cref="ConfigurePrefab"/> for proper save/load behavior.
     /// </remarks>
-    public abstract class NPC : Saveable, IEntity, IHealth
+    public abstract partial class NPC : Saveable, IEntity, IHealth
     {
         private static readonly Log Logger = new Log("NPC");
         // Protected members intended to be used by modders.
@@ -3536,9 +3536,10 @@ namespace S1API.Entities
                     return (NPC?)ctor.Invoke(null);
 #endif
             }
-            catch
+            catch (System.Exception ex)
             {
-                // Swallow exceptions to avoid breaking prefab configuration when base NPCs are not yet available.
+                // Not rethrown, so prefab configuration keeps working when base NPCs are not yet available.
+                Logger.Warning($"Creating the built-in NPC wrapper {npcType.Name} failed; no wrapper returned: {ex.Message}");
             }
 
             return null;
