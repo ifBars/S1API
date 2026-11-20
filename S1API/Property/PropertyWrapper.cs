@@ -33,10 +33,57 @@ namespace S1API.Property
         /// operations to the actual property instance.
         /// </summary>
 #if IL2CPPMELON
-        internal readonly Il2CppScheduleOne.Property.Property InnerProperty;
+        private Il2CppScheduleOne.Property.Property? _innerProperty;
+        internal Il2CppScheduleOne.Property.Property InnerProperty => CurrentInnerProperty();
 #else
-        internal readonly ScheduleOne.Property.Property InnerProperty;
+        private ScheduleOne.Property.Property? _innerProperty;
+        internal ScheduleOne.Property.Property InnerProperty => CurrentInnerProperty();
 #endif
+
+        // The cached property belongs to one world. Unity's == tells a destroyed object from a live one (??= does not), so
+        // a registered wrapper that outlives its world looks the property up again by code.
+#if IL2CPPMELON
+        private Il2CppScheduleOne.Property.Property CurrentInnerProperty()
+#else
+        private ScheduleOne.Property.Property CurrentInnerProperty()
+#endif
+        {
+            var cached = _innerProperty;
+            if (cached == null)
+                _innerProperty = cached = ResolveInnerProperty();
+            return cached;
+        }
+        private readonly string? _registeredCode;
+
+        /// <summary>
+        /// Wrapper of a registered custom property that may not be in the world yet. The property is looked up by its code
+        /// on first use.
+        /// </summary>
+        internal PropertyWrapper(string registeredCode)
+        {
+            _registeredCode = registeredCode;
+        }
+
+#if IL2CPPMELON
+        private Il2CppScheduleOne.Property.Property ResolveInnerProperty()
+#else
+        private ScheduleOne.Property.Property ResolveInnerProperty()
+#endif
+        {
+            var found = _registeredCode != null ? global::S1API.Internal.Properties.CustomPropertyWorld.Find(_registeredCode) : null;
+            if (_registeredCode == null)
+                throw new System.InvalidOperationException("The property object of this wrapper was destroyed, for example by a scene change.");
+            if (found == null)
+                throw new System.InvalidOperationException($"Property '{_registeredCode}' is not in the world yet. Check IsInWorld first.");
+            return found;
+        }
+
+        /// <summary>
+        /// True when the property object exists in the world. Always true for a wrapper made from an existing property;
+        /// a wrapper returned by <see cref="PropertyManager.Register"/> is false until the mod has built the property.
+        /// </summary>
+        public bool IsInWorld => _registeredCode == null || global::S1API.Internal.Properties.CustomProperties.Exists(_registeredCode);
+
         /// <summary>
         /// A wrapper class that extends the functionality of <see cref="BaseProperty"/>
         /// and acts as a bridge to interact with an inner property implementation
@@ -48,7 +95,7 @@ namespace S1API.Property
         public PropertyWrapper(ScheduleOne.Property.Property property)
 #endif
         {
-            InnerProperty = property;
+            _innerProperty = property;
         }
 
         /// <summary>
@@ -62,7 +109,7 @@ namespace S1API.Property
         /// for distinguishing the property in the system and is typically defined in the internal
         /// implementation of the property.
         /// </summary>
-        public override string PropertyCode => InnerProperty.PropertyCode;
+        public override string PropertyCode => _registeredCode ?? InnerProperty.PropertyCode;
 
         /// <summary>
         /// Gets the price of the property.
@@ -186,6 +233,21 @@ namespace S1API.Property
         {
             get => InnerProperty.IsContentCulled;
             set => InnerProperty.SetContentCulled(value);
+        }
+
+        /// <summary>
+        /// When true, the game no longer culls this property's content. Use it for content that moves away from the
+        /// property root, such as a property on a vehicle; vanilla culls by the distance to the root.
+        /// </summary>
+        /// <remarks>
+        /// Applies to every wrapper of the same property. The lock is local to this peer: in co-op each peer sets it
+        /// itself, the host's lock does not reach clients. A lock lasts until it is set to false or the scene changes.
+        /// Content that is culled while the lock is set stays culled until vanilla shows it again; set the lock first.
+        /// </remarks>
+        public bool ContentCullingLocked
+        {
+            get => global::S1API.Internal.Properties.PropertyHooks.IsCullingLocked(PropertyCode);
+            set => global::S1API.Internal.Properties.PropertyHooks.SetCullingLocked(PropertyCode, value);
         }
 
         /// <summary>

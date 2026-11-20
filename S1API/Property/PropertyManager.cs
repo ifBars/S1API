@@ -69,5 +69,38 @@ namespace S1API.Property
             }
             return null;
         }
+
+        /// <summary>
+        /// Registers a property the vanilla game does not know and that the calling mod builds itself. S1API then keeps
+        /// its save file when the property is not in the world, delays loading its saved objects and employees and the
+        /// start of the heatmap until the property and its root exist, and raises <see cref="OnPropertyLoaded"/> for it.
+        /// </summary>
+        /// <param name="def">What to register. Register only properties the mod actually builds.</param>
+        /// <returns>
+        /// A wrapper for the property. It stays usable before the property exists: <see cref="PropertyWrapper.PropertyCode"/>
+        /// and <see cref="PropertyWrapper.ContentCullingLocked"/> work at once, everything else needs
+        /// <see cref="PropertyWrapper.IsInWorld"/>.
+        /// </returns>
+        /// <exception cref="System.ArgumentNullException"><paramref name="def"/> is null.</exception>
+        /// <exception cref="System.ArgumentException">The definition has no code.</exception>
+        /// <remarks>
+        /// Registering in <c>GameLifecycle.OnPreLoad</c> is fine, it runs once per save load. Registering a code again
+        /// replaces its definition (and its <c>Root</c>) and returns a wrapper for the same property.
+        /// </remarks>
+        public static PropertyWrapper Register(CustomPropertyDefinition def) =>
+            global::S1API.Internal.Properties.CustomProperties.Register(def);
+
+        /// <summary>
+        /// Fired on the peer that loads the save (the host), once per saved property, after its base data is applied and before
+        /// its objects and employees load. The second argument is the number of employees in the save data.
+        /// </summary>
+        /// <remarks>
+        /// This is the last point to add build tiles, idle points or beds that saved objects and employees need. A
+        /// handler that throws is logged and the other handlers still run.        /// </remarks>
+        public static event System.Action<PropertyWrapper, int>? OnPropertyLoaded
+        {
+            add => global::S1API.Internal.Properties.PropertyHooks.Loaded += value;
+            remove => global::S1API.Internal.Properties.PropertyHooks.Loaded -= value;
+        }
     }
 }
