@@ -54,8 +54,13 @@ namespace S1API.Internal.Patches
         /// <param name="saveFolderPath">The path to the save folder where quests are being stored.</param>
         [HarmonyPatch(typeof(S1Persistence.SaveManager), nameof(S1Persistence.SaveManager.Save), typeof(string))]
         [HarmonyPostfix]
-        private static void SaveManager_Save_Postfix(string saveFolderPath)
+        private static void SaveManager_Save_Postfix(string saveFolderPath, bool __runOriginal)
         {
+            if (!__runOriginal)
+            {
+                MelonLoader.MelonLogger.Msg("[Quests] Save was blocked; modded quests are not written.");
+                return;
+            }
             try
             {
                 var saveManager = S1Persistence.SaveManager.Instance;

@@ -21,15 +21,17 @@ namespace S1API.Internal.Patches
     {
         [HarmonyPatch(typeof(S1Persistence.LoadManager), nameof(S1Persistence.LoadManager.StartGame))]
         [HarmonyPrefix]
-        private static void StartGamePrefix()
+        private static void StartGamePrefix(bool __runOriginal)
         {
+            if (!__runOriginal) return; // deferred or skipped; the prefix runs again for the real load
             CustomProductManifestRuntime.BeginHostSession();
         }
 
         [HarmonyPatch(typeof(S1Persistence.LoadManager), nameof(S1Persistence.LoadManager.LoadAsClient))]
         [HarmonyPrefix]
-        private static void LoadAsClientPrefix()
+        private static void LoadAsClientPrefix(bool __runOriginal)
         {
+            if (!__runOriginal) return; // deferred or skipped; the prefix runs again for the real load
             CustomProductManifestRuntime.BeginClientSession();
         }
 

@@ -27,7 +27,7 @@ namespace S1API.Lifecycle
     /// };
     /// </code>
     /// </example>
-    public static class GameLifecycle
+    public static partial class GameLifecycle
     {
         private static bool _initialized;
         private static S1Persistence.LoadManager? _loadManager;

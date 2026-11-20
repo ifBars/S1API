@@ -16,8 +16,9 @@ namespace S1API.Internal.Patches
     {
         [HarmonyPatch(typeof(S1Persistence.SaveManager), "Save", new Type[] { typeof(string) })]
         [HarmonyPostfix]
-        private static void SavePostfix(string saveFolderPath)
+        private static void SavePostfix(string saveFolderPath, bool __runOriginal)
         {
+            if (!__runOriginal) { MelonLoader.MelonLogger.Msg("[CustomProductSave] Save was blocked; custom products are not written."); return; }
             try { CustomProductSavePersistence.Save(saveFolderPath); }
             catch (Exception exception) { MelonLoader.MelonLogger.Warning("[CustomProductSave] save failed: " + exception.Message); }
         }
