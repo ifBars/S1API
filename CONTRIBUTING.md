@@ -80,7 +80,18 @@ other runtime evidence local; do not commit anything under `tests/Smoke/`.
 Summarize the smoke scenario and results in the pull request instead.
 
 ## PR Preparations
+
+The required `documentation` job checks existing consumer signatures against the Mono assembly baseline used by ApiCompat. It reports changes to nullable reference types, including generic arguments, and differences in parameter names, optional defaults, and `params` modifiers. New members are allowed. Some signature changes are safe for particular callers, so the report shows both signatures for review. Overload resolution and runtime behavior still need focused consumer tests.
+
+For an intentional source contract change, explain the impact on existing mods and their migration in the PR. The failed job summary gives an `/approve-source-break` command. Only a standalone PR comment from ifBars with that exact command accepts the reported changes. Rerun the failed job after approval. A new head commit or changed comparison report needs fresh approval. The exception applies only to this comparison. The existing binary compatibility, build, and test checks still run.
+
 Verify your changes will successfully build for all **two** build configurations prior to PR please.
+
+GitHub Actions maintains one review comment per PR after the documentation workflow finishes. It groups changes that need contributor action, minor maintainer cleanup, and questions that need a reviewer. Links point to the reviewed head. A source match is a prompt to inspect the code. Compile results, game-host results, and the contributor's evidence remain distinct.
+
+Keep ordinary MelonLoader output to one startup message where possible and three at most across an S1API run. Use default-off debug for discovery and routine successes. A warning per save load is fine. Report a continuing failure in a short retry or frame loop once. Check Unity's Player.log and the MelonLoader console separately. CI compares changed call sites under both build symbols. It blocks direct frame-by-frame console calls it recognizes and four straight-line informational calls in a recognized startup path. Runtime frequency across callbacks still needs review.
+
+New public signatures exposing native game types fail the Mono assembly check. The comment also flags relevant changes for human review of wrapper identity, compatibility, API restrictions, lifecycle ownership, fallback behavior, performance, tests, and scope. Keep stable save/network IDs and mod-author capabilities. Trivial forwarders can use existing compile gates. Match live checks to the reported behavior on each affected runtime.
 Ultimately, this just saves you time and gets your changes into the API faster.
 
 | Build Type    | Description                                    |

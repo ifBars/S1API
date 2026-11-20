@@ -1,0 +1,66 @@
+name: Comment on maintainer review
+on:
+  workflow_run:
+    workflows: ["Build and Deploy Documentation"]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  comment:
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: write
+    concurrency:
+      group: maintainer-comment-${{ github.event.workflow_run.head_repository.id }}-${{ github.event.workflow_run.head_branch }}
+    steps:
+      - name: Identify the open PR at the reviewed revision
+        id: target
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const {owner, repo} = context.repo;
+            const candidates = await github.paginate(github.rest.pulls.list, {
+              owner, repo, head: run.head_repository.owner.login + ':' + run.head_branch, state: 'open'
+            });
+            const matches = candidates.filter(pr => pr.head.repo?.id === run.head_repository.id && pr.head.sha === run.head_sha);
+            if (matches.length !== 1) return;
+            core.setOutput('number', matches[0].number);
+            core.setOutput('base', matches[0].base.sha);
+      - uses: actions/checkout@v4
+        if: steps.target.outputs.number
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        if: steps.target.outputs.number
+        with:
+          dotnet-version: 8.0.x
+      - name: Inspect PR source as data using the default branch checker
+        if: steps.target.outputs.number
+        env:
+          PR_NUMBER: ${{ steps.target.outputs.number }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          BASE_SHA: ${{ steps.target.outputs.base }}
+        run: |
+          git fetch --no-tags origin "refs/pull/$PR_NUMBER/head"
+          if [[ "$(git rev-parse FETCH_HEAD)" != "$HEAD_SHA" ]]; then exit 0; fi
+          base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          dotnet build tools/S1APISourceCompatibility -c Release -o "$RUNNER_TEMP/review-tool"
+          result=0
+          dotnet "$RUNNER_TEMP/review-tool/S1APISourceCompatibility.dll" --review "$base" "$HEAD_SHA" "$RUNNER_TEMP/review.json" || result=$?
+          if [[ "$result" -gt 1 ]]; then exit "$result"; fi
+      - name: Update the Actions review comment
+        if: steps.target.outputs.number
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ steps.target.outputs.number }}
+        with:
+          script: |
+            await require('./.github/scripts/maintainer-comment.cjs')({github, context});
