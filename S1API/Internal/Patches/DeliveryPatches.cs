@@ -66,9 +66,23 @@ namespace S1API.Internal.Patches
             out StatusPatchState __state)
         {
             DeliveryStatus previousStatus = DeliveryEventBridge.BeforeStatusChange(__instance);
-            bool deferred = SupplierDeliveryRecovery.TryDeferStatus(__instance, status);
+            bool deferred = SupplierDeliveryRecovery.TryDeferStatus(__instance, status)
+                || TryHoldArrival(__instance, status);
             __state = new StatusPatchState(previousStatus, deferred);
             return !deferred;
+        }
+
+        private static bool TryHoldArrival(S1Delivery.DeliveryInstance delivery, S1Delivery.EDeliveryStatus status)
+        {
+            try
+            {
+                return DeliveryDestinationRuntime.TryHold(delivery, status);
+            }
+            catch (System.Exception ex)
+            {
+                Logger.Error($"Arrival hold check for delivery {delivery?.DeliveryID} failed; the delivery arrives normally. {ex}");
+                return false;
+            }
         }
 
         [HarmonyPatch(typeof(S1Delivery.DeliveryInstance), nameof(S1Delivery.DeliveryInstance.SetStatus))]

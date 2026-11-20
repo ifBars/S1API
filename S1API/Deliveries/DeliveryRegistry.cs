@@ -23,7 +23,7 @@ namespace S1API.Deliveries
     /// This API intentionally does not create, mutate, or complete deliveries. Those operations
     /// are server-authoritative native flows and are not exposed until they can be represented safely.
     /// </remarks>
-    public static class DeliveryRegistry
+    public static partial class DeliveryRegistry
     {
         private static readonly Log Logger = new Log("DeliveryRegistry");
         private static readonly IReadOnlyList<Delivery> EmptyDeliveries =
