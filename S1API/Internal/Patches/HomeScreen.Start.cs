@@ -6,6 +6,7 @@ using S1API.Internal.Abstraction;
 using S1API.PhoneApp;
 using S1API.Logging;
 using S1API.ExternalHosting;
+using S1API.Internal.PhoneApps;
 
 #if (IL2CPPMELON)
 using Il2CppScheduleOne.UI.Phone;
@@ -51,7 +52,13 @@ namespace S1API.Internal.Patches
             {
                 if (type.GetConstructor(Type.EmptyTypes) == null)
                 {
-                    Logger.Warning($"Skipping phone app {type.FullName}: a public parameterless constructor is required.");
+                    Logger.Msg($"Phone app type {type.FullName} has no public parameterless constructor; it is shown only through PhoneApp.Register.");
+                    continue;
+                }
+
+                if (PhoneAppRuntime.HasInstanceOf(type))
+                {
+                    Logger.Msg($"Phone app type {type.FullName} has an instance registered through PhoneApp.Register; it is not created again.");
                     continue;
                 }
 
@@ -69,6 +76,9 @@ namespace S1API.Internal.Patches
                     Logger.Warning($"Failed to register phone app {type.FullName}: {e}");
                 }
             }
+
+            // Apps registered with PhoneApp.Register outlive the scene and are built again on every home screen.
+            PhoneAppRuntime.SpawnAll(__instance);
         }
     }
 }

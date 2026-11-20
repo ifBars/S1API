@@ -37,7 +37,7 @@ namespace S1API.PhoneApp
     /// This class provides an extensible framework for defining application behaviors, user interface elements,
     /// and registration mechanics for integration into the phone's ecosystem.
     /// </remarks>
-    public abstract class PhoneApp : Registerable
+    public abstract partial class PhoneApp : Registerable
     {
         /// <summary>
         /// Logger instance used for logging messages, warnings, or errors
@@ -68,6 +68,11 @@ namespace S1API.PhoneApp
         /// Cached reference to the icon <see cref="Image"/> component for quick sprite updates.
         /// </summary>
         private Image? _iconImage;
+
+        /// <summary>
+        /// The home screen icon this app created, removed with the app.
+        /// </summary>
+        private GameObject? _iconObject;
         
         /// <summary>
         /// If set before the icon exists, this sprite will be applied once the icon spawns.
@@ -176,7 +181,8 @@ namespace S1API.PhoneApp
         /// </summary>
         protected override void OnCreated()
         {
-            PhoneAppRegistry.Register(this);
+            if (!PhoneAppRegistry.RegisteredApps.Contains(this))
+                PhoneAppRegistry.Register(this);
             ExternalAppCatalog.Register(ExternalAppFamily.Phone, this, () => AppName, () => AppTitle,
                 ResolveExternalIcon);
         }
@@ -205,11 +211,27 @@ namespace S1API.PhoneApp
 
             if (_appPanel != null)
             {
+                // An open app is closed first, so the phone does not keep a destroyed panel as its active app.
+                if (IsOpen())
+                {
+                    try { CloseApp(); }
+                    catch (Exception ex) { Logger.Warning($"Closing {AppName} before its removal failed: {ex}"); }
+                }
+                // Object.Destroy runs at the end of the frame. Until then the panel must neither be found by name
+                // by a new build of this app nor tear that build down from its button handler.
+                var handler = _appPanel.GetComponent<PhoneAppButtonHandler>();
+                if (handler != null)
+                    handler.phoneApp = null;
+                _appPanel.name = AppName + " (removed)";
                 Object.Destroy(_appPanel);
                 _appPanel = null;
             }
 
             _appContainer = null;
+
+            if (_iconObject != null)
+                Object.Destroy(_iconObject);
+            _iconObject = null;
 
             _iconModified = false;
             _iconImage = null;
@@ -353,6 +375,7 @@ namespace S1API.PhoneApp
             }
 
             iconObj.name = AppName;
+            _iconObject = iconObj;
             
             // Cache icon image for future updates
             Transform imageTransform = iconObj.transform.Find("Mask/Image");
