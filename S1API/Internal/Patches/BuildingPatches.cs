@@ -59,8 +59,17 @@ namespace S1API.Internal.Patches
             S1ItemFramework.BuildableItemDefinition itemDefinition,
             S1EntityFramework.BuildableItem ghost)
         {
-            if (itemDefinition == null || ghost == null)
+            if (itemDefinition == null)
+            {
+                Logger.Warning("A placement ghost was created without an item definition; ghost configuration and OnGhostCreated skipped.");
                 return;
+            }
+
+            if (ghost == null)
+            {
+                Logger.Warning($"No placement ghost was created for buildable '{itemDefinition.ID}'; ghost configuration and OnGhostCreated skipped.");
+                return;
+            }
 
             try
             {
@@ -70,6 +79,15 @@ namespace S1API.Internal.Patches
             {
                 Logger.Error(
                     $"Failed to configure placement ghost for buildable '{itemDefinition.ID}': {ex}");
+            }
+
+            try
+            {
+                BuildEvents.RaiseGhostCreated(new GhostCreatedEventArgs(itemDefinition.ID, ghost.gameObject));
+            }
+            catch (System.Exception ex)
+            {
+                Logger.Error($"Failed to raise OnGhostCreated for buildable '{itemDefinition.ID}': {ex}");
             }
         }
 
