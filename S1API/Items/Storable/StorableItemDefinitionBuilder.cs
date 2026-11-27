@@ -461,6 +461,7 @@ namespace S1API.Items.Storable
                 }
             }
 
+            ReplaceBarePlaceholder();
             ApplyTrashPrefab();
 
             // Register with the game's registry
@@ -469,6 +470,23 @@ namespace S1API.Items.Storable
 
             // Return wrapper
             return CreateWrapper(Definition);
+        }
+
+        /// <summary>
+        /// The bare placeholder from the constructor has no footprint tiles, and storages throw when they draw it.
+        /// While the definition still holds it (no <see cref="WithStoredItem"/>, no StoredItem copied from a source
+        /// item, none set by a subclass), it is swapped for a copy of a vanilla StoredItem that shows the item icon.
+        /// </summary>
+        private void ReplaceBarePlaceholder()
+        {
+            if (_hasCustomStoredItem || _storedItemPlaceholder == null || Definition.StoredItem == null)
+                return;
+            if (Definition.StoredItem.gameObject != _storedItemPlaceholder)
+                return;
+
+            var placeholder = StoredItemPlaceholder.Create(Definition.ID, Definition.Name, Definition.Icon);
+            if (placeholder != null)
+                Definition.StoredItem = placeholder;
         }
 
         private void ApplyTrashPrefab()
