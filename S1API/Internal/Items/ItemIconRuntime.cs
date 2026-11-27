@@ -26,6 +26,7 @@ namespace S1API.Internal.Items
             Sprite icon)
         {
             definition.Icon = icon;
+            StoredItemPlaceholder.RefreshIcon(definition.ID, icon);
             RefreshVisibleUis(definition);
         }
 
